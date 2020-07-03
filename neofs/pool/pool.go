@@ -122,7 +122,7 @@ func New(l *zap.Logger, v *viper.Viper, key *ecdsa.PrivateKey) (Pool, error) {
 	p.reqHealth = new(state.HealthRequest)
 	p.reqHealth.SetTTL(service.NonForwardingTTL)
 
-	if err := service.SignDataWithSessionToken(key, p.reqHealth); err != nil {
+	if err := service.SignRequestData(key, p.reqHealth); err != nil {
 		return nil, errors.Wrap(err, "could not sign `HealthRequest`")
 	}
 

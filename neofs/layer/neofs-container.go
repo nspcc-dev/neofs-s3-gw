@@ -15,7 +15,7 @@ func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
 
-	err := service.SignDataWithSessionToken(n.key, req)
+	err := service.SignRequestData(n.key, req)
 	if err != nil {
 		return nil, err
 	}
