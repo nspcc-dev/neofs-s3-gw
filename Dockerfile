@@ -1,36 +1,30 @@
-FROM golang:1.13-alpine
+FROM golang:1 as builder
 
-LABEL maintainer="MinIO Inc <dev@min.io>"
+COPY . /src
 
-ENV GOPATH /go
-ENV CGO_ENABLED 0
-ENV GO111MODULE on
+WORKDIR /src
 
-RUN  \
-     apk add --no-cache git && \
-     git clone https://github.com/minio/minio && cd minio && \
-     go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)"
+ARG VERSION=dev
 
+# https://github.com/golang/go/wiki/Modules#how-do-i-use-vendoring-with-modules-is-vendoring-going-away
+# go build -mod=vendor
+# The -gcflags "all=-N -l" flag helps us get a better debug experience
+RUN set -x \
+    && export BUILD=$(date -u +%s%N) \
+    && export REPO=$(go list -m) \
+    && export LDFLAGS="-X ${REPO}/misc.Version=${VERSION} -X ${REPO}/misc.Build=${BUILD}" \
+    && export GOGC=off \
+    && export CGO_ENABLED=0 \
+    && [ -d "./vendor" ] || go mod vendor \
+    && go build -v -mod=vendor -trimpath -gcflags "all=-N -l" -ldflags "${LDFLAGS}" -o /go/bin/neofs-s3 ./main.go
+
+# Executable image
 FROM alpine:3.10
 
-ENV MINIO_UPDATE off
-ENV MINIO_ACCESS_KEY_FILE=access_key \
-    MINIO_SECRET_KEY_FILE=secret_key \
-    MINIO_KMS_MASTER_KEY_FILE=kms_master_key \
-    MINIO_SSE_MASTER_KEY_FILE=sse_master_key
+WORKDIR /
 
-EXPOSE 9000
+COPY --from=builder /go/bin/neofs-s3 /usr/bin/neofs-s3
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=0 /go/bin/minio /usr/bin/minio
-COPY --from=0 /go/minio/CREDITS /third_party/
-COPY --from=0 /go/minio/dockerscripts/docker-entrypoint.sh /usr/bin/
-
-RUN  \
-     apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
-     echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
-
-ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
-
-VOLUME ["/data"]
-
-CMD ["minio"]
+# Run delve
+CMD ["/usr/bin/neofs-s3"]

@@ -25,14 +25,14 @@
 package main // import "github.com/minio/minio"
 
 import (
-	"os"
+	"fmt"
 
-	minio "github.com/minio/minio/cmd"
-
+	"github.com/minio/minio/misc"
 	// Import gateway
-	_ "github.com/minio/minio/cmd/gateway"
+	// _ "github.com/minio/minio/cmd/gateway"
 )
 
 func main() {
-	minio.Main(os.Args)
+	fmt.Println(misc.Build)
+	fmt.Println(misc.Version)
 }
