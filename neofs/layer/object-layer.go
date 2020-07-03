@@ -219,7 +219,7 @@ func (n *neofsObject) GetObjectNInfo(ctx context.Context, bucket, object string,
 
 	pipeCloser := func() { _ = pr.Close() }
 
-	return minio.NewGetObjectReaderFromReader(pr, oi, opts.CheckCopyPrecondFn, pipeCloser)
+	return minio.NewGetObjectReaderFromReader(pr, oi, opts, pipeCloser)
 }
 
 // GetObject from storage.
