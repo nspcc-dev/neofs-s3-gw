@@ -13,7 +13,7 @@ func (n *neofsObject) statusHealth(ctx context.Context) bool {
 	req.SetTTL(service.NonForwardingTTL)
 	req.SetVersion(APIVersion)
 
-	err := service.SignDataWithSessionToken(n.key, req)
+	err := service.SignRequestData(n.key, req)
 	if err != nil {
 		return false
 	}

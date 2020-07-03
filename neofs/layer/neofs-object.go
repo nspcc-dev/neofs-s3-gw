@@ -72,7 +72,7 @@ func (n *neofsObject) objectSearchContainer(ctx context.Context, cid refs.CID) (
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name strin
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return id, err
 	}
@@ -232,7 +232,7 @@ func (n *neofsObject) objectHead(ctx context.Context, addr refs.Address) (*objec
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (n *neofsObject) objectGet(ctx context.Context, p getParams) (*object.Objec
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +388,7 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +409,7 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 			req.SetTTL(service.SingleForwardingTTL)
 			req.SetVersion(APIVersion)
 
-			err = service.SignDataWithSessionToken(n.key, req)
+			err = service.SignRequestData(n.key, req)
 			if err != nil {
 				return nil, err
 			}
@@ -478,7 +478,7 @@ func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return nil, err
 	}
@@ -514,7 +514,7 @@ func (n *neofsObject) objectDelete(ctx context.Context, p delParams) error {
 	req.SetVersion(APIVersion)
 	req.SetToken(token)
 
-	err = service.SignDataWithSessionToken(n.key, req)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		return err
 	}
