@@ -1,79 +1,39 @@
-PWD := $(shell pwd)
-GOPATH := $(shell go env GOPATH)
-LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
+VERSION ?= "$(shell git describe --tags 2>/dev/null | sed 's/^v//')"
+BUILD_VERSION ?= "$(shell git describe --abbrev=0 --tags | sed 's/^v//')"
 
-GOARCH := $(shell go env GOARCH)
-GOOS := $(shell go env GOOS)
+.PHONY: help format deps
 
-VERSION ?= $(shell git describe --tags)
-TAG ?= "minio/minio:$(VERSION)"
+# Show this help prompt
+help:
+	@echo '  Usage:'
+	@echo ''
+	@echo '    make <target>'
+	@echo ''
+	@echo '  Targets:'
+	@echo ''
+	@awk '/^#/{ comment = substr($$0,3) } comment && /^[a-zA-Z][a-zA-Z0-9_-]+ ?:/{ print "   ", $$1, comment }' $(MAKEFILE_LIST) | column -t -s ':' | grep -v 'IGNORE' | sort | uniq
 
-all: build
+# Reformat code
+format:
+	@[ ! -z `which goimports` ] || (echo "install goimports" && exit 2)
+	@for f in `find . -type f -name '*.go' -not -path './vendor/*' -not -name '*.pb.go' -prune`; do \
+		echo "⇒ Processing $$f"; \
+		goimports -w $$f; \
+	done
 
-checks:
-	@echo "Checking dependencies"
-	@(env bash $(PWD)/buildscripts/checkdeps.sh)
+# Make sure that all files added to commit
+deps:
+	@printf "⇒ Ensure vendor: "
+	@go mod tidy -v && echo OK || (echo fail && exit 2)
+	@printf "⇒ Download requirements: "
+	@go mod download && echo OK || (echo fail && exit 2)
+	@printf "⇒ Store vendor localy: "
+	@go mod vendor && echo OK || (echo fail && exit 2)
 
-getdeps:
-	@mkdir -p ${GOPATH}/bin
-	@which golangci-lint 1>/dev/null || (echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.27.0)
-
-crosscompile:
-	@(env bash $(PWD)/buildscripts/cross-compile.sh)
-
-verifiers: getdeps fmt lint
-
-fmt:
-	@echo "Running $@ check"
-	@GO111MODULE=on gofmt -d cmd/
-	@GO111MODULE=on gofmt -d pkg/
-
-lint:
-	@echo "Running $@ check"
-	@GO111MODULE=on ${GOPATH}/bin/golangci-lint cache clean
-	@GO111MODULE=on ${GOPATH}/bin/golangci-lint run --timeout=5m --config ./.golangci.yml
-
-# Builds minio, runs the verifiers then runs the tests.
-check: test
-test: verifiers build
-	@echo "Running unit tests"
-	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
-
-test-race: verifiers build
-	@echo "Running unit tests under -race"
-	@(env bash $(PWD)/buildscripts/race.sh)
-
-# Verify minio binary
-verify:
-	@echo "Verifying build with race"
-	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
-	@(env bash $(PWD)/buildscripts/verify-build.sh)
-
-# Verify healing of disks with minio binary
-verify-healing:
-	@echo "Verify healing build with race"
-	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
-	@(env bash $(PWD)/buildscripts/verify-healing.sh)
-
-# Builds minio locally.
-build: checks
-	@echo "Building minio binary to './minio'"
-	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
-
-docker: build
-	@docker build -t $(TAG) . -f Dockerfile.dev
-
-# Builds minio and installs it to $GOPATH/bin.
-install: build
-	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
-	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
-	@echo "Installation successful. To learn more, try \"minio --help\"."
-
-clean:
-	@echo "Cleaning up all the generated files"
-	@find . -name '*.test' | xargs rm -fv
-	@find . -name '*~' | xargs rm -fv
-	@rm -rvf minio
-	@rm -rvf build
-	@rm -rvf release
-	@rm -rvf .verify*
+# Build current docker image
+image-build:
+	@echo "⇒ Build docker-image"
+	@docker build \
+		--build-arg VERSION=$(VERSION) \
+		 -f Dockerfile \
+		 -t nspccdev/neofs-s3-gate:$(VERSION) .

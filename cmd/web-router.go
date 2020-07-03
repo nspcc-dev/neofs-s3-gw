@@ -17,15 +17,16 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/minio/browser"
 )
 
 // webAPI container for Web API.
@@ -48,9 +49,9 @@ const assetPrefix = "production"
 
 func assetFS() *assetfs.AssetFS {
 	return &assetfs.AssetFS{
-		Asset:     browser.Asset,
-		AssetDir:  browser.AssetDir,
-		AssetInfo: browser.AssetInfo,
+		Asset:     func(path string) ([]byte, error) { return nil, errors.New("no ui") },
+		AssetDir:  func(path string) ([]string, error) { return nil, errors.New("no ui") },
+		AssetInfo: func(path string) (os.FileInfo, error) { return nil, errors.New("no ui") },
 		Prefix:    assetPrefix,
 	}
 }
