@@ -44,7 +44,7 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.10
-	github.com/klauspost/compress v1.10.3
+	github.com/klauspost/compress v1.10.4
 	github.com/klauspost/cpuid v1.3.0
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
@@ -88,6 +88,7 @@ require (
 	github.com/secure-io/sio-go v0.3.0
 	github.com/shirou/gopsutil v2.20.3-0.20200314133625-53cec6b37e6a+incompatible
 	github.com/smartystreets/assertions v0.0.0-20190401211740-f487f9de1cd3 // indirect
+	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.7.0
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/stretchr/testify v1.5.1
