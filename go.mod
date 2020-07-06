@@ -3,9 +3,7 @@ module github.com/minio/minio
 go 1.13
 
 require (
-	cloud.google.com/go/storage v1.0.0
 	contrib.go.opencensus.io/exporter/ocagent v0.5.0 // indirect
-	github.com/Azure/azure-pipeline-go v0.2.1
 	github.com/Azure/azure-storage-blob-go v0.8.0
 	github.com/Azure/go-autorest v11.7.1+incompatible // indirect
 	github.com/Shopify/sarama v1.24.1
@@ -15,7 +13,6 @@ require (
 	github.com/beevik/ntp v0.2.0
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/cheggaaa/pb v1.0.28
-	github.com/colinmarc/hdfs/v2 v2.1.1
 	github.com/coredns/coredns v1.4.0
 	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.13+incompatible
@@ -109,7 +106,7 @@ require (
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
 	gopkg.in/ini.v1 v1.57.0 // indirect
-	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
+	gopkg.in/jcmturner/gokrb5.v7 v7.3.0 // indirect
 	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.8
