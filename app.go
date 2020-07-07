@@ -103,8 +103,8 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 }
 
 func (a *App) Wait(ctx context.Context) {
+	defer a.log.Info("application finished")
 	a.log.Info("application started")
-
 	select {
 	case <-a.wrkDone: // wait for worker is stopped
 		<-a.webDone
