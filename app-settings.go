@@ -158,15 +158,9 @@ func newSettings() *viper.Viper {
 	peers := flags.StringArrayP("peers", "p", nil, "NeoFS nodes")
 
 	// set prefers:
-<<<<<<< Updated upstream
-	v.Set("app.name", misc.ApplicationName)
-	v.Set("app.version", misc.Version)
-	v.Set("app.build_time", misc.Build)
-=======
-	v.Set(cfgApplicationName, "neofs-gw")
+	v.Set(cfgApplicationName, misc.ApplicationName)
 	v.Set(cfgApplicationVersion, misc.Version)
 	v.Set(cfgApplicationBuildTime, misc.Build)
->>>>>>> Stashed changes
 
 	// set defaults:
 
