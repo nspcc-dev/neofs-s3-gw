@@ -3,7 +3,6 @@ package layer
 import (
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"math"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
 	crypto "github.com/nspcc-dev/neofs-crypto"
+	"github.com/pkg/errors"
 )
 
 type (
@@ -67,7 +67,7 @@ func NewLayer(cli pool.Client, cred auth.Credentials) (minio.ObjectLayer, error)
 		until: math.MaxInt64,
 	})
 	if err != nil {
-		return nil, errors.New("can't establish neofs session with remote host")
+		return nil, errors.Wrap(err, "can't establish neofs session with remote host")
 	}
 
 	return &neofsObject{
