@@ -111,4 +111,5 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.8
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
+	github.com/google/brotli/go/cbrotli v0.0.0-20200702174557-fc823290a76a
 )
