@@ -69,21 +69,21 @@ func newLogger(v *viper.Viper) *zap.Logger {
 			Thereafter: defaultSamplingThereafter,
 		}
 
-		if val := v.GetInt("logger.sampling.initial"); val > 0 {
+		if val := v.GetInt(cfgLoggerSamplingInitial); val > 0 {
 			c.Sampling.Initial = val
 		}
 
-		if val := v.GetInt("logger.sampling.thereafter"); val > 0 {
+		if val := v.GetInt(cfgLoggerSamplingThereafter); val > 0 {
 			c.Sampling.Thereafter = val
 		}
 	}
 
 	// logger level
-	c.Level = safeLevel(v.GetString("logger.level"))
-	traceLvl := safeLevel(v.GetString("logger.trace_level"))
+	c.Level = safeLevel(v.GetString(cfgLoggerLevel))
+	traceLvl := safeLevel(v.GetString(cfgLoggerTraceLevel))
 
 	// logger format
-	switch f := v.GetString("logger.format"); strings.ToLower(f) {
+	switch f := v.GetString(cfgLoggerFormat); strings.ToLower(f) {
 	case formatConsole:
 		c.Encoding = formatConsole
 	default:
@@ -100,12 +100,12 @@ func newLogger(v *viper.Viper) *zap.Logger {
 		panic(err)
 	}
 
-	if v.GetBool("logger.no_disclaimer") {
+	if v.GetBool(cfgLoggerNoDisclaimer) {
 		return l
 	}
 
-	name := v.GetString("app.name")
-	version := v.GetString("app.version")
+	name := v.GetString(cfgApplicationName)
+	version := v.GetString(cfgApplicationVersion)
 
 	return l.With(
 		zap.String("app_name", name),

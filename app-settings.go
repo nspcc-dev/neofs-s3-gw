@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/neofs/pool"
+
 	"github.com/minio/minio/misc"
 
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -36,6 +38,41 @@ const (
 
 	defaultKeepaliveTime    = 10 * time.Second
 	defaultKeepaliveTimeout = 10 * time.Second
+)
+
+const ( // settings
+	// Logger:
+	cfgLoggerLevel              = "logger.level"
+	cfgLoggerFormat             = "logger.format"
+	cfgLoggerTraceLevel         = "logger.trace_level"
+	cfgLoggerNoDisclaimer       = "logger.no_disclaimer"
+	cfgLoggerSamplingInitial    = "logger.sampling.initial"
+	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
+
+	// KeepAlive
+	cfgKeepaliveTime                = "keepalive.time"
+	cfgKeepaliveTimeout             = "keepalive.timeout"
+	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
+
+	// Timeouts
+	cfgConnectionTTL  = "con_ttl"
+	cfgConnectTimeout = "connect_timeout"
+	cfgRequestTimeout = "request_timeout"
+	cfgRebalanceTimer = "rebalance_timer"
+
+	// gRPC
+	cfgGRPCVerbose    = "verbose"
+	cfgGRPCPrivateKey = "key"
+
+	// Metrics / Profiler / Web
+	cfgEnableMetrics  = "metrics"
+	cfgEnableProfiler = "pprof"
+	cfgListenAddress  = "listen_address"
+
+	// Application
+	cfgApplicationName      = "app.name"
+	cfgApplicationVersion   = "app.version"
+	cfgApplicationBuildTime = "app.build_time"
 )
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
@@ -66,6 +103,30 @@ func fetchKey(l *zap.Logger, v *viper.Viper) *ecdsa.PrivateKey {
 		return key
 	}
 }
+
+func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
+	peers := make([]pool.Peer, 0)
+
+	for i := 0; ; i++ {
+
+		key := "peers." + strconv.Itoa(i) + "."
+		address := v.GetString(key + "address")
+		weight := v.GetFloat64(key + "weight")
+
+		if address == "" {
+			l.Warn("skip, empty address")
+			break
+		}
+
+		peers = append(peers, pool.Peer{
+			Address: address,
+			Weight:  weight,
+		})
+	}
+
+	return peers
+}
+
 func newSettings() *viper.Viper {
 	v := viper.New()
 
@@ -78,44 +139,50 @@ func newSettings() *viper.Viper {
 	flags := pflag.NewFlagSet("commandline", pflag.ExitOnError)
 	flags.SortFlags = false
 
-	flags.Bool("pprof", false, "enable pprof")
-	flags.Bool("metrics", false, "enable prometheus")
+	flags.Bool(cfgEnableProfiler, false, "enable pprof")
+	flags.Bool(cfgEnableMetrics, false, "enable prometheus")
 
 	help := flags.BoolP("help", "h", false, "show help")
 	version := flags.BoolP("version", "v", false, "show version")
 
-	flags.String("key", generated, `"`+generated+`" to generate key, path to private key file, hex string or wif`)
+	flags.String(cfgGRPCPrivateKey, generated, `"`+generated+`" to generate key, path to private key file, hex string or wif`)
 
-	flags.Bool("verbose", false, "debug gRPC connections")
-	flags.Duration("request_timeout", defaultRequestTimeout, "gRPC request timeout")
-	flags.Duration("connect_timeout", defaultConnectTimeout, "gRPC connect timeout")
-	flags.Duration("rebalance_timer", defaultRebalanceTimer, "gRPC connection rebalance timer")
+	flags.Bool(cfgGRPCVerbose, false, "debug gRPC connections")
+	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "gRPC request timeout")
+	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "gRPC connect timeout")
+	flags.Duration(cfgRebalanceTimer, defaultRebalanceTimer, "gRPC connection rebalance timer")
 
-	ttl := flags.DurationP("conn_ttl", "t", defaultTTL, "gRPC connection time to live")
+	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "gRPC connection time to live")
 
-	flags.String("listen_address", "0.0.0.0:8080", "S3 Gateway listen address")
+	flags.String(cfgListenAddress, "0.0.0.0:8080", "S3 Gateway listen address")
 	peers := flags.StringArrayP("peers", "p", nil, "NeoFS nodes")
 
 	// set prefers:
+<<<<<<< Updated upstream
 	v.Set("app.name", misc.ApplicationName)
 	v.Set("app.version", misc.Version)
 	v.Set("app.build_time", misc.Build)
+=======
+	v.Set(cfgApplicationName, "neofs-gw")
+	v.Set(cfgApplicationVersion, misc.Version)
+	v.Set(cfgApplicationBuildTime, misc.Build)
+>>>>>>> Stashed changes
 
 	// set defaults:
 
 	// logger:
-	v.SetDefault("logger.level", "debug")
-	v.SetDefault("logger.format", "console")
-	v.SetDefault("logger.trace_level", "fatal")
-	v.SetDefault("logger.no_disclaimer", true)
-	v.SetDefault("logger.sampling.initial", 1000)
-	v.SetDefault("logger.sampling.thereafter", 1000)
+	v.SetDefault(cfgLoggerLevel, "debug")
+	v.SetDefault(cfgLoggerFormat, "console")
+	v.SetDefault(cfgLoggerTraceLevel, "fatal")
+	v.SetDefault(cfgLoggerNoDisclaimer, true)
+	v.SetDefault(cfgLoggerSamplingInitial, 1000)
+	v.SetDefault(cfgLoggerSamplingThereafter, 1000)
 
 	// keepalive:
 	// If set below 10s, a minimum value of 10s will be used instead.
-	v.SetDefault("keepalive.time", defaultKeepaliveTime)
-	v.SetDefault("keepalive.timeout", defaultKeepaliveTimeout)
-	v.SetDefault("keepalive.permit_without_stream", true)
+	v.SetDefault(cfgKeepaliveTime, defaultKeepaliveTime)
+	v.SetDefault(cfgKeepaliveTimeout, defaultKeepaliveTimeout)
+	v.SetDefault(cfgKeepalivePermitWithoutStream, true)
 
 	if err := v.BindPFlags(flags); err != nil {
 		panic(err)

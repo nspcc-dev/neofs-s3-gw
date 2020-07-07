@@ -7,14 +7,14 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/grpclog"
 
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-api-go/state"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -43,6 +43,27 @@ type (
 		ReBalance(ctx context.Context)
 	}
 
+	Peer struct {
+		Address string
+		Weight  float64
+	}
+
+	Config struct {
+		keepalive.ClientParameters
+
+		ConnectionTTL  time.Duration
+		ConnectTimeout time.Duration
+		RequestTimeout time.Duration
+
+		Peers []Peer
+
+		GRPCVerbose bool
+		GRPCLogger  grpclog.LoggerV2
+
+		Logger     *zap.Logger
+		PrivateKey *ecdsa.PrivateKey
+	}
+
 	pool struct {
 		log *zap.Logger
 
@@ -66,48 +87,33 @@ type (
 	}
 )
 
-const (
-	minimumTTLInMinutes = 5
-
-	defaultTTL = minimumTTLInMinutes * time.Minute
-
-	defaultRequestTimeout = 15 * time.Second
-	defaultConnectTimeout = 30 * time.Second
-
-	defaultKeepaliveTime    = 10 * time.Second
-	defaultKeepaliveTimeout = 10 * time.Second
-)
-
 var (
 	errBootstrapping        = errors.New("bootstrapping")
 	errEmptyConnection      = errors.New("empty connection")
 	errNoHealthyConnections = errors.New("no active connections")
-
-	_ = New
 )
 
-func New(l *zap.Logger, v *viper.Viper, key *ecdsa.PrivateKey) (Pool, error) {
+func New(cfg *Config) (Pool, error) {
 	p := &pool{
-		log:   l,
+		log:   cfg.Logger,
 		Mutex: new(sync.Mutex),
 		keys:  make([]uint32, 0),
 		nodes: make([]*node, 0),
 		conns: make(map[uint32][]*node),
 
-		ttl: defaultTTL,
-
 		currentIdx: atomic.NewInt32(-1),
 
-		// fill with defaults:
-		reqTimeout: defaultRequestTimeout,
-		conTimeout: defaultConnectTimeout,
-		opts: keepalive.ClientParameters{
-			Time:                defaultKeepaliveTime,
-			Timeout:             defaultKeepaliveTimeout,
-			PermitWithoutStream: true,
-		},
+		ttl: cfg.ConnectionTTL,
+
+		conTimeout: cfg.ConnectTimeout,
+		reqTimeout: cfg.RequestTimeout,
+		opts:       cfg.ClientParameters,
 
 		unhealthy: atomic.NewError(errBootstrapping),
+	}
+
+	if cfg.GRPCVerbose {
+		grpclog.SetLoggerV2(cfg.GRPCLogger)
 	}
 
 	buf := make([]byte, 8)
@@ -117,56 +123,28 @@ func New(l *zap.Logger, v *viper.Viper, key *ecdsa.PrivateKey) (Pool, error) {
 
 	seed := binary.BigEndian.Uint64(buf)
 	rand.Seed(int64(seed))
-	l.Info("used random seed", zap.Uint64("seed", seed))
+	cfg.Logger.Info("used random seed", zap.Uint64("seed", seed))
 
 	p.reqHealth = new(state.HealthRequest)
 	p.reqHealth.SetTTL(service.NonForwardingTTL)
 
-	if err := service.SignRequestData(key, p.reqHealth); err != nil {
+	if err := service.SignRequestData(cfg.PrivateKey, p.reqHealth); err != nil {
 		return nil, errors.Wrap(err, "could not sign `HealthRequest`")
 	}
 
-	if val := v.GetDuration("conn_ttl"); val > 0 {
-		p.ttl = val
-	}
-
-	if val := v.GetDuration("request_timeout"); val > 0 {
-		p.reqTimeout = val
-	}
-
-	if val := v.GetDuration("connect_timeout"); val > 0 {
-		p.conTimeout = val
-	}
-
-	if val := v.GetDuration("keepalive.time"); val > 0 {
-		p.opts.Time = val
-	}
-
-	if val := v.GetDuration("keepalive.timeout"); val > 0 {
-		p.opts.Timeout = val
-	}
-
-	if v.IsSet("keepalive.permit_without_stream") {
-		p.opts.PermitWithoutStream = v.GetBool("keepalive.permit_without_stream")
-	}
-
-	for i := 0; ; i++ {
-		key := "peers." + strconv.Itoa(i) + "."
-		address := v.GetString(key + "address")
-		weight := v.GetFloat64(key + "weight")
-
-		if address == "" {
-			l.Warn("skip, empty address")
+	for i := range cfg.Peers {
+		if cfg.Peers[i].Address == "" {
+			cfg.Logger.Warn("skip, empty address")
 			break
 		}
 
 		p.nodes = append(p.nodes, &node{
 			index:   int32(i),
-			address: address,
-			weight:  uint32(weight * 100),
+			address: cfg.Peers[i].Address,
+			weight:  uint32(cfg.Peers[i].Weight * 100),
 		})
 
-		l.Info("add new peer",
+		cfg.Logger.Info("add new peer",
 			zap.String("address", p.nodes[i].address),
 			zap.Uint32("weight", p.nodes[i].weight))
 	}
