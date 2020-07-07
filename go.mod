@@ -30,6 +30,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible
+	github.com/google/brotli/go/cbrotli v0.0.0-20200702174557-fc823290a76a
 	github.com/google/uuid v1.1.1
 	github.com/gopherjs/gopherjs v0.0.0-20190328170749-bb2674552d8f // indirect
 	github.com/gorilla/handlers v1.4.2
@@ -41,7 +42,7 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.10
-	github.com/klauspost/compress v1.10.4
+	github.com/klauspost/compress v1.10.10
 	github.com/klauspost/cpuid v1.3.0
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
@@ -111,5 +112,4 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.8
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
-	github.com/google/brotli/go/cbrotli v0.0.0-20200702174557-fc823290a76a
 )
