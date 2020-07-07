@@ -4,16 +4,15 @@ import (
 	"context"
 	"time"
 
-	crypto "github.com/nspcc-dev/neofs-crypto"
-
+	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/neofs/layer"
+	"github.com/minio/minio/neofs/pool"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/nspcc-dev/neofs-api-go/refs"
-
-	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/neofs/pool"
+	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/keepalive"
 )
 
 type (
@@ -45,15 +44,31 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		reqTimeout = defaultRequestTimeout
 	)
 
-	if v := v.GetDuration("connect_timeout"); v > 0 {
+	if v := v.GetDuration(cfgConnectTimeout); v > 0 {
 		conTimeout = v
 	}
 
-	if v := v.GetDuration("request_timeout"); v > 0 {
+	if v := v.GetDuration(cfgRequestTimeout); v > 0 {
 		reqTimeout = v
 	}
 
-	if cli, err = pool.New(l, v, key); err != nil {
+	poolConfig := &pool.Config{
+		ConnectionTTL:  v.GetDuration(cfgConnectionTTL),
+		ConnectTimeout: v.GetDuration(cfgConnectTimeout),
+		RequestTimeout: v.GetDuration(cfgRequestTimeout),
+
+		Peers: fetchPeers(l, v),
+
+		Logger:     l,
+		PrivateKey: key,
+
+		GRPCLogger:  gRPCLogger(l),
+		GRPCVerbose: v.GetBool(cfgGRPCVerbose),
+
+		ClientParameters: keepalive.ClientParameters{},
+	}
+
+	if cli, err = pool.New(poolConfig); err != nil {
 		l.Fatal("could not prepare pool connections",
 			zap.Error(err))
 	}

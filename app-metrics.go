@@ -7,7 +7,7 @@ import (
 )
 
 func attachMetrics(v *viper.Viper, r *mux.Router) {
-	if !v.GetBool("metrics") {
+	if !v.GetBool(cfgEnableMetrics) {
 		return
 	}
 

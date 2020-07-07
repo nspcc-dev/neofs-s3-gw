@@ -8,7 +8,7 @@ import (
 )
 
 func attachProfiler(v *viper.Viper, r *mux.Router) {
-	if !v.GetBool("pprof") {
+	if !v.GetBool(cfgEnableProfiler) {
 		return
 	}
 
