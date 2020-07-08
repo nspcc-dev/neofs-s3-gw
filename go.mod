@@ -73,7 +73,7 @@ require (
 	github.com/nats-io/stan.go v0.4.5
 	github.com/ncw/directio v1.0.5
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
-	github.com/nspcc-dev/neofs-api-go v1.1.1-0.20200708070405-494a52c35a2e
+	github.com/nspcc-dev/neofs-api-go v1.2.0
 	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/philhofer/fwd v1.0.0 // indirect
