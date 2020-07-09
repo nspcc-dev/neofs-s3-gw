@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	minio "github.com/minio/minio/cmd"
+	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/nspcc-dev/neofs-api-go/object"
 	"github.com/nspcc-dev/neofs-api-go/refs"
