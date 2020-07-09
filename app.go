@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	minio "github.com/minio/minio/cmd"
+	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/layer"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/minio/minio/pkg/auth"
