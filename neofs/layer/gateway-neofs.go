@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	minio "github.com/minio/minio/cmd"
+	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/nspcc-dev/neofs-api-go/chain"
