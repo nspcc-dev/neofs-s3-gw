@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/layer"
 	"github.com/minio/minio/neofs/pool"
@@ -19,11 +22,14 @@ type (
 	App struct {
 		cli pool.Pool
 		log *zap.Logger
+		web *mux.Router
 		cfg *viper.Viper
 		obj minio.ObjectLayer
 
 		conTimeout time.Duration
 		reqTimeout time.Duration
+
+		reBalance time.Duration
 
 		webDone chan struct{}
 		wrkDone chan struct{}
@@ -39,6 +45,8 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		obj minio.ObjectLayer
 
 		key = fetchKey(l, v)
+
+		reBalance = defaultRebalanceTimer
 
 		conTimeout = defaultConnectTimeout
 		reqTimeout = defaultRequestTimeout
@@ -66,6 +74,10 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		GRPCVerbose: v.GetBool(cfgGRPCVerbose),
 
 		ClientParameters: keepalive.ClientParameters{},
+	}
+
+	if v := v.GetDuration(cfgRebalanceTimer); v > 0 {
+		reBalance = v
 	}
 
 	if cli, err = pool.New(poolConfig); err != nil {
@@ -108,38 +120,90 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		cli: cli,
 		log: l,
 		cfg: v,
+		web: minio.NewRouter(obj),
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
+
+		reBalance: reBalance,
 
 		conTimeout: conTimeout,
 		reqTimeout: reqTimeout,
 	}
 }
 
-func (a *App) Wait(ctx context.Context) {
-	defer a.log.Info("application finished")
+func (a *App) Wait() {
 	a.log.Info("application started")
+
 	select {
 	case <-a.wrkDone: // wait for worker is stopped
 		<-a.webDone
 	case <-a.webDone: // wait for web-server is stopped
 		<-a.wrkDone
 	}
+
+	a.log.Info("application finished")
 }
 
 func (a *App) Server(ctx context.Context) {
-	defer func() {
-		<-ctx.Done()
-		a.log.Info("stopping server")
-		close(a.webDone)
+	var (
+		err  error
+		lis  net.Listener
+		lic  net.ListenConfig
+		srv  = http.Server{Handler: a.web}
+		addr = a.cfg.GetString(cfgListenAddress)
+	)
+
+	if lis, err = lic.Listen(ctx, "tcp", addr); err != nil {
+		a.log.Fatal("could not prepare listener",
+			zap.Error(err))
+	}
+
+	// Attach app-specific routes:
+	attachHealthy(a.web, a.cli)
+	attachMetrics(a.cfg, a.log, a.web)
+	attachProfiler(a.cfg, a.log, a.web)
+
+	go func() {
+		a.log.Info("starting server",
+			zap.String("bind", addr))
+
+		if err = srv.Serve(lis); err != nil && err != http.ErrServerClosed {
+			a.log.Warn("listen and serve",
+				zap.Error(err))
+		}
 	}()
+
+	<-ctx.Done()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	defer cancel()
+
+	a.log.Info("stopping server",
+		zap.Error(srv.Shutdown(ctx)))
+
+	close(a.webDone)
 }
 
 func (a *App) Worker(ctx context.Context) {
-	defer func() {
-		<-ctx.Done()
-		a.log.Info("stopping worker")
-		close(a.wrkDone)
-	}()
+	tick := time.NewTimer(a.reBalance)
+
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		case <-tick.C:
+			ctx, cancel := context.WithTimeout(ctx, a.conTimeout)
+			a.cli.ReBalance(ctx)
+			cancel()
+
+			tick.Reset(a.reBalance)
+		}
+	}
+
+	tick.Stop()
+	a.cli.Close()
+	a.log.Info("stopping worker")
+	close(a.wrkDone)
 }

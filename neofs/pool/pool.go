@@ -182,7 +182,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 
 	keys := make(map[uint32]struct{})
 
-	p.log.Info("re-balancing connections")
+	p.log.Debug("re-balancing connections")
 
 	for i := range p.nodes {
 		var (

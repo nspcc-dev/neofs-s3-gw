@@ -32,9 +32,10 @@ const (
 
 	defaultTTL = minimumTTLInMinutes * time.Minute
 
-	defaultRebalanceTimer = 15 * time.Second
-	defaultRequestTimeout = 15 * time.Second
-	defaultConnectTimeout = 30 * time.Second
+	defaultRebalanceTimer  = 15 * time.Second
+	defaultRequestTimeout  = 15 * time.Second
+	defaultConnectTimeout  = 30 * time.Second
+	defaultShutdownTimeout = 15 * time.Second
 
 	defaultKeepaliveTime    = 10 * time.Second
 	defaultKeepaliveTimeout = 10 * time.Second
