@@ -11,5 +11,5 @@ func main() {
 	go a.Server(g)
 	go a.Worker(g)
 
-	a.Wait(g)
+	a.Wait()
 }
