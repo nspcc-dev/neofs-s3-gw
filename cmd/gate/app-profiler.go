@@ -8,16 +8,25 @@ import (
 	"go.uber.org/zap"
 )
 
-func attachProfiler(v *viper.Viper, l *zap.Logger, r *mux.Router) {
+func attachProfiler(r *mux.Router, v *viper.Viper, l *zap.Logger) {
 	if !v.GetBool(cfgEnableProfiler) {
 		return
 	}
 
 	l.Info("enable profiler")
 
-	r.HandleFunc("/debug/pprof/", pprof.Index)
-	r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	r.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	r.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	profiler := r.PathPrefix(systemPath + "/debug/pprof").
+		Subrouter().
+		StrictSlash(true)
+
+	profiler.HandleFunc("/", pprof.Index)
+	profiler.HandleFunc("/cmdline", pprof.Cmdline)
+	profiler.HandleFunc("/profile", pprof.Profile)
+	profiler.HandleFunc("/symbol", pprof.Symbol)
+	profiler.HandleFunc("/trace", pprof.Trace)
+
+	// Manually add support for paths linked to by index page at /debug/pprof/
+	for _, item := range []string{"allocs", "block", "heap", "goroutine", "mutex", "threadcreate"} {
+		profiler.Handle("/"+item, pprof.Handler(item))
+	}
 }

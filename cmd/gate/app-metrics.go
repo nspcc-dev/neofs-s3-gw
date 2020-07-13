@@ -7,11 +7,14 @@ import (
 	"go.uber.org/zap"
 )
 
-func attachMetrics(v *viper.Viper, l *zap.Logger, r *mux.Router) {
+func attachMetrics(r *mux.Router, v *viper.Viper, l *zap.Logger) {
 	if !v.GetBool(cfgEnableMetrics) {
 		return
 	}
 
 	l.Info("enable metrics")
-	r.Handle("/metrics", promhttp.Handler())
+	r.PathPrefix(systemPath+"/metrics").
+		Subrouter().
+		StrictSlash(true).
+		Handle("", promhttp.Handler())
 }
