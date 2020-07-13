@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/layer"
 	"github.com/minio/minio/neofs/pool"
@@ -22,7 +21,6 @@ type (
 	App struct {
 		cli pool.Pool
 		log *zap.Logger
-		web *mux.Router
 		cfg *viper.Viper
 		obj minio.ObjectLayer
 
@@ -108,19 +106,21 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 				zap.Error(err))
 		}
 
+		l.Info("credentials",
+			zap.String("AccessKey", uid.String()),
+			zap.String("SecretKey", wif))
+
 		if obj, err = layer.NewLayer(cli, auth.Credentials{AccessKey: uid.String(), SecretKey: wif}); err != nil {
 			l.Fatal("could not prepare ObjectLayer",
 				zap.Error(err))
 		}
-
-		_ = obj
 	}
 
 	return &App{
 		cli: cli,
 		log: l,
 		cfg: v,
-		web: minio.NewRouter(obj),
+		obj: obj,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -150,7 +150,7 @@ func (a *App) Server(ctx context.Context) {
 		err  error
 		lis  net.Listener
 		lic  net.ListenConfig
-		srv  = http.Server{Handler: a.web}
+		srv  = new(http.Server)
 		addr = a.cfg.GetString(cfgListenAddress)
 	)
 
@@ -159,10 +159,18 @@ func (a *App) Server(ctx context.Context) {
 			zap.Error(err))
 	}
 
+	router := newS3Router()
+
 	// Attach app-specific routes:
-	attachHealthy(a.web, a.cli)
-	attachMetrics(a.cfg, a.log, a.web)
-	attachProfiler(a.cfg, a.log, a.web)
+	attachHealthy(router, a.cli)
+	attachMetrics(router, a.cfg, a.log)
+	attachProfiler(router, a.cfg, a.log)
+
+	// Attach S3 API:
+	minio.AttachS3API(router, a.obj)
+
+	// Use mux.Router as http.Handler
+	srv.Handler = router
 
 	go func() {
 		a.log.Info("starting server",

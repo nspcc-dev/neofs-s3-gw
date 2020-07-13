@@ -4,20 +4,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(obj ObjectLayer) *mux.Router {
-	// Initialize router. `SkipClean(true)` stops gorilla/mux from
-	// normalizing URL path minio/minio#3256
-	// avoid URL path encoding minio/minio#8950
-	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
-
+func AttachS3API(r *mux.Router, obj ObjectLayer) {
 	// Add healthcheck router
-	registerHealthCheckRouter(router)
+	registerHealthCheckRouter(r)
 
 	// Add server metrics router
-	registerMetricsRouter(router)
+	registerMetricsRouter(r)
 
 	// Add API router.
-	registerAPIRouter(router, true, true)
+	registerAPIRouter(r, true, true)
 
 	layer := NewGatewayLayerWithLocker(obj)
 
@@ -39,6 +34,4 @@ func NewRouter(obj ObjectLayer) *mux.Router {
 	globalObjLayerMutex.Lock()
 	globalSafeMode = false
 	globalObjLayerMutex.Unlock()
-
-	return router
 }

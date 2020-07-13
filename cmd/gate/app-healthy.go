@@ -17,12 +17,16 @@ const (
 )
 
 func attachHealthy(r *mux.Router, h Healthy) {
-	r.HandleFunc("/-/ready", func(w http.ResponseWriter, r *http.Request) {
+	healthy := r.PathPrefix(systemPath + "/-").
+		Subrouter().
+		StrictSlash(true)
+
+	healthy.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintln(w, healthyState+"ready")
 	})
 
-	r.HandleFunc("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
+	healthy.HandleFunc("/healthy", func(w http.ResponseWriter, r *http.Request) {
 		code := http.StatusOK
 		msg := "healthy"
 
