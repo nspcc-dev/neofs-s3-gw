@@ -24,6 +24,7 @@ type (
 		cli pool.Pool
 		log *zap.Logger
 		cfg *viper.Viper
+		tls *tlsConfig
 		obj minio.ObjectLayer
 
 		conTimeout time.Duration
@@ -34,6 +35,11 @@ type (
 		webDone chan struct{}
 		wrkDone chan struct{}
 	}
+
+	tlsConfig struct {
+		KeyFile  string
+		CertFile string
+	}
 )
 
 func newApp(l *zap.Logger, v *viper.Viper) *App {
@@ -41,6 +47,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		err error
 		wif string
 		cli pool.Pool
+		tls *tlsConfig
 		uid refs.OwnerID
 		obj minio.ObjectLayer
 
@@ -51,6 +58,13 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		conTimeout = defaultConnectTimeout
 		reqTimeout = defaultRequestTimeout
 	)
+
+	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
+		tls = &tlsConfig{
+			KeyFile:  v.GetString(cfgTLSKeyFile),
+			CertFile: v.GetString(cfgTLSCertFile),
+		}
+	}
 
 	if v := v.GetDuration(cfgConnectTimeout); v > 0 {
 		conTimeout = v
@@ -133,6 +147,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		log: l,
 		cfg: v,
 		obj: obj,
+		tls: tls,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -188,14 +203,21 @@ func (a *App) Server(ctx context.Context) {
 		a.log.Info("starting server",
 			zap.String("bind", addr))
 
-		// var (
-		// 	keyPath  string
-		// 	certPath string
-		// )
+		switch a.tls {
+		case nil:
+			if err = srv.Serve(lis); err != nil && err != http.ErrServerClosed {
+				a.log.Fatal("listen and serve",
+					zap.Error(err))
+			}
+		default:
+			a.log.Info("using certificate",
+				zap.String("key", a.tls.KeyFile),
+				zap.String("cert", a.tls.CertFile))
 
-		if err = srv.Serve(lis); err != nil && err != http.ErrServerClosed {
-			a.log.Fatal("listen and serve",
-				zap.Error(err))
+			if err = srv.ServeTLS(lis, a.tls.CertFile, a.tls.KeyFile); err != nil && err != http.ErrServerClosed {
+				a.log.Fatal("listen and serve",
+					zap.Error(err))
+			}
 		}
 	}()
 
