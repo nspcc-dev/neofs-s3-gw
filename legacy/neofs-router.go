@@ -2,9 +2,10 @@ package legacy
 
 import (
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
-func AttachS3API(r *mux.Router, obj ObjectLayer) {
+func AttachS3API(r *mux.Router, obj ObjectLayer, l *zap.Logger) {
 	// Add healthcheck router
 	registerHealthCheckRouter(r)
 
@@ -34,4 +35,13 @@ func AttachS3API(r *mux.Router, obj ObjectLayer) {
 	globalObjLayerMutex.Lock()
 	globalSafeMode = false
 	globalObjLayerMutex.Unlock()
+
+	// Handle gateway specific env
+	gatewayHandleEnvVars()
+
+	// Set system resources to maximum.
+	if err := setMaxResources(); err != nil {
+		l.Warn("could not set max resources",
+			zap.Error(err))
+	}
 }

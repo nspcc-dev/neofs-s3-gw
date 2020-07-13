@@ -4,9 +4,11 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	minio "github.com/minio/minio/legacy"
+	"github.com/minio/minio/legacy/config"
 	"github.com/minio/minio/neofs/layer"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/minio/minio/pkg/auth"
@@ -106,9 +108,19 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 				zap.Error(err))
 		}
 
-		l.Info("credentials",
-			zap.String("AccessKey", uid.String()),
-			zap.String("SecretKey", wif))
+		{ // Temporary solution, to resolve problems with MinIO GW access/secret keys:
+			if err = os.Setenv(config.EnvAccessKey, uid.String()); err != nil {
+				l.Fatal("could not set "+config.EnvAccessKey,
+					zap.Error(err))
+			} else if err = os.Setenv(config.EnvSecretKey, wif); err != nil {
+				l.Fatal("could not set "+config.EnvSecretKey,
+					zap.Error(err))
+			}
+
+			l.Info("used credentials",
+				zap.String("AccessKey", uid.String()),
+				zap.String("SecretKey", wif))
+		}
 
 		if obj, err = layer.NewLayer(cli, auth.Credentials{AccessKey: uid.String(), SecretKey: wif}); err != nil {
 			l.Fatal("could not prepare ObjectLayer",
@@ -167,7 +179,7 @@ func (a *App) Server(ctx context.Context) {
 	attachProfiler(router, a.cfg, a.log)
 
 	// Attach S3 API:
-	minio.AttachS3API(router, a.obj)
+	minio.AttachS3API(router, a.obj, a.log)
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router
