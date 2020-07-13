@@ -122,7 +122,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 				zap.String("SecretKey", wif))
 		}
 
-		if obj, err = layer.NewLayer(cli, auth.Credentials{AccessKey: uid.String(), SecretKey: wif}); err != nil {
+		if obj, err = layer.NewLayer(cli, l, auth.Credentials{AccessKey: uid.String(), SecretKey: wif}); err != nil {
 			l.Fatal("could not prepare ObjectLayer",
 				zap.Error(err))
 		}
@@ -188,8 +188,13 @@ func (a *App) Server(ctx context.Context) {
 		a.log.Info("starting server",
 			zap.String("bind", addr))
 
+		// var (
+		// 	keyPath  string
+		// 	certPath string
+		// )
+
 		if err = srv.Serve(lis); err != nil && err != http.ErrServerClosed {
-			a.log.Warn("listen and serve",
+			a.log.Fatal("listen and serve",
 				zap.Error(err))
 		}
 	}()

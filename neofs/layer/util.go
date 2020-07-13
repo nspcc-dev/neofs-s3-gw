@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/nspcc-dev/neofs-api-go/object"
@@ -104,7 +103,22 @@ func generateToken(ctx context.Context, p tokenParams) (*service.Token, error) {
 }
 
 func prepareToken(t *service.Token, p queryParams) (*service.Token, error) {
-	token := proto.Clone(t).(*service.Token)
+	sig := make([]byte, len(t.Signature))
+	copy(sig, t.Signature)
+
+	token := &service.Token{
+		Token_Info: service.Token_Info{
+			ID:            t.ID,
+			OwnerID:       t.OwnerID,
+			Verb:          t.Verb,
+			Address:       t.Address,
+			TokenLifetime: t.TokenLifetime,
+			SessionKey:    t.SessionKey,
+			OwnerKey:      t.OwnerKey,
+		},
+		Signature: sig,
+	}
+
 	token.SetAddress(p.addr)
 	token.SetVerb(p.verb)
 

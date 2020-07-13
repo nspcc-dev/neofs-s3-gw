@@ -6,6 +6,40 @@ import (
 )
 
 func AttachS3API(r *mux.Router, obj ObjectLayer, l *zap.Logger) {
+	{ // should be removed in feature
+		// Initialize all help
+		initHelp()
+
+		globalGatewayName = "NeoFS GW"
+
+		// Set when gateway is enabled
+		globalIsGateway = true
+
+		// Handle gateway specific env
+		gatewayHandleEnvVars()
+
+		// Set system resources to maximum.
+		if err := setMaxResources(); err != nil {
+			l.Warn("could not set max resources",
+				zap.Error(err))
+		}
+
+		// TODO: We need to move this code with globalConfigSys.Init()
+		// for now keep it here such that "s3" gateway layer initializes
+		// itself properly when KMS is set.
+
+		// Initialize server config.
+		srvCfg := newServerConfig()
+
+		// Override any values from ENVs.
+		lookupConfigs(srvCfg)
+
+		// hold the mutex lock before a new config is assigned.
+		globalServerConfigMu.Lock()
+		globalServerConfig = srvCfg
+		globalServerConfigMu.Unlock()
+	}
+
 	// Add healthcheck router
 	registerHealthCheckRouter(r)
 
@@ -35,13 +69,4 @@ func AttachS3API(r *mux.Router, obj ObjectLayer, l *zap.Logger) {
 	globalObjLayerMutex.Lock()
 	globalSafeMode = false
 	globalObjLayerMutex.Unlock()
-
-	// Handle gateway specific env
-	gatewayHandleEnvVars()
-
-	// Set system resources to maximum.
-	if err := setMaxResources(); err != nil {
-		l.Warn("could not set max resources",
-			zap.Error(err))
-	}
 }

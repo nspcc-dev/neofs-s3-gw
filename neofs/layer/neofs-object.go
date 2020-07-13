@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-api-go/storagegroup"
+	"go.uber.org/zap"
 )
 
 const (
@@ -350,11 +351,15 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 		verb: service.Token_Info_Put,
 	})
 	if err != nil {
+		n.log.Error("could not prepare token",
+			zap.Error(err))
 		return nil, err
 	}
 
 	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
+		n.log.Error("could not prepare connection",
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -362,6 +367,8 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 	// todo: think about timeout
 	putClient, err := client.Put(ctx)
 	if err != nil {
+		n.log.Error("could not prepare PutClient",
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -390,17 +397,23 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 
 	err = service.SignRequestData(n.key, req)
 	if err != nil {
+		n.log.Error("could not prepare request",
+			zap.Error(err))
 		return nil, err
 	}
 
 	err = putClient.Send(req)
 	if err != nil {
+		n.log.Error("could not send request",
+			zap.Error(err))
 		return nil, err
 	}
 
 	read, err := p.r.Read(readBuffer)
 	for read > 0 {
 		if err != nil && err != io.EOF {
+			n.log.Error("something went wrong",
+				zap.Error(err))
 			return nil, err
 		}
 
@@ -411,11 +424,15 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 
 			err = service.SignRequestData(n.key, req)
 			if err != nil {
+				n.log.Error("could not sign chunk request",
+					zap.Error(err))
 				return nil, err
 			}
 
 			err = putClient.Send(req)
 			if err != nil && err != io.EOF {
+				n.log.Error("could not send chunk",
+					zap.Error(err))
 				return nil, err
 			}
 		}
@@ -425,6 +442,8 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 
 	_, err = putClient.CloseAndRecv()
 	if err != nil {
+		n.log.Error("could not finish request",
+			zap.Error(err))
 		return nil, err
 	}
 

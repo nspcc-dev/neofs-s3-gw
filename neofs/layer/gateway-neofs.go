@@ -14,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/service"
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type (
@@ -23,6 +24,7 @@ type (
 		minio.GatewayUnsupported // placeholder for unimplemented functions
 
 		cli   pool.Client
+		log   *zap.Logger
 		key   *ecdsa.PrivateKey
 		owner refs.OwnerID
 		token *service.Token
@@ -40,7 +42,7 @@ type (
 
 // NewGatewayLayer creates instance of neofsObject. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(cli pool.Client, cred auth.Credentials) (minio.ObjectLayer, error) {
+func NewLayer(cli pool.Client, log *zap.Logger, cred auth.Credentials) (minio.ObjectLayer, error) {
 	// check if wif is correct
 	key, err := crypto.WIFDecode(cred.SecretKey)
 	if err != nil {
@@ -73,6 +75,7 @@ func NewLayer(cli pool.Client, cred auth.Credentials) (minio.ObjectLayer, error)
 	return &neofsObject{
 		cli:   cli,
 		key:   key,
+		log:   log,
 		owner: owner,
 		token: token,
 	}, nil
