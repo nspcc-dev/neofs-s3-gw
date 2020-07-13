@@ -55,6 +55,10 @@ const ( // settings
 	cfgKeepaliveTimeout             = "keepalive.timeout"
 	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
 
+	// HTTPS/TLS:
+	cfgTLSKeyFile  = "tls.key_file"
+	cfgTLSCertFile = "tls.cert_file"
+
 	// Timeouts
 	cfgConnectionTTL  = "con_ttl"
 	cfgConnectTimeout = "connect_timeout"
