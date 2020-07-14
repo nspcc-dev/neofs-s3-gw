@@ -1,8 +1,12 @@
 FROM golang:1 as builder
 
-COPY . /src
-
 WORKDIR /src
+
+RUN set -x \
+    && apt update \
+    && apt install -y upx-ucl
+
+COPY . /src
 
 ARG VERSION=dev
 
@@ -16,10 +20,11 @@ RUN set -x \
     && export GOGC=off \
     && export CGO_ENABLED=0 \
     && [ -d "./vendor" ] || go mod vendor \
-    && go build -v -mod=vendor -trimpath -gcflags "all=-N -l" -ldflags "${LDFLAGS}" -o /go/bin/neofs-s3 ./main.go
+    && go build -v -mod=vendor -trimpath -gcflags "all=-N -l" -ldflags "${LDFLAGS}" -o /go/bin/neofs-s3 ./cmd/gate \
+    && upx -3 /go/bin/neofs-s3
 
 # Executable image
-FROM alpine:3.10
+FROM scratch
 
 WORKDIR /
 
