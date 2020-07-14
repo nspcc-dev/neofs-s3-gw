@@ -1,4 +1,4 @@
-VERSION ?= "$(shell git describe --tags 2>/dev/null | sed 's/^v//')"
+VERSION ?= "$(shell git describe --tags 2>/dev/null || git rev-parse --short HEAD | sed 's/^v//')"
 BUILD_VERSION ?= "$(shell git describe --abbrev=0 --tags | sed 's/^v//')"
 
 .PHONY: help format deps
@@ -12,6 +12,10 @@ help:
 	@echo '  Targets:'
 	@echo ''
 	@awk '/^#/{ comment = substr($$0,3) } comment && /^[a-zA-Z][a-zA-Z0-9_-]+ ?:/{ print "   ", $$1, comment }' $(MAKEFILE_LIST) | column -t -s ':' | grep -v 'IGNORE' | sort | uniq
+
+# Show current version
+version:
+	@echo $(VERSION)
 
 # Reformat code
 format:
