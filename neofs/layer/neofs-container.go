@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/nspcc-dev/neofs-api-go/container"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
@@ -17,11 +19,15 @@ func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 
 	err := service.SignRequestData(n.key, req)
 	if err != nil {
+		n.log.Error("could not prepare request",
+			zap.Error(err))
 		return nil, err
 	}
 
 	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
+		n.log.Error("could not prepare client",
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -31,6 +37,8 @@ func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 
 	res, err := container.NewServiceClient(conn).List(ctx, req)
 	if err != nil {
+		n.log.Error("could not list buckets",
+			zap.Error(err))
 		return nil, err
 	}
 
