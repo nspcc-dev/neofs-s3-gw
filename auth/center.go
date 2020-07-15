@@ -8,45 +8,48 @@ import (
 	"github.com/pkg/errors"
 )
 
-var _debug = false
-
-func SetDebug() {
-	_debug = true
-}
-
 // Center is a central app's authentication/authorization management unit.
 type Center struct {
+	enclave     *secureEnclave
 	zstdEncoder *zstd.Encoder
 	zstdDecoder *zstd.Decoder
 }
 
-// NewAuthCenter creates an instance of AuthCenter.
-func NewCenter() (*Center, error) {
+// NewCenter creates an instance of AuthCenter.
+func NewCenter(pathToRSAKey, pathToECDSAKey string) (*Center, error) {
 	zstdEncoder, _ := zstd.NewWriter(nil)
 	zstdDecoder, _ := zstd.NewReader(nil)
-	ac := &Center{zstdEncoder: zstdEncoder, zstdDecoder: zstdDecoder}
-	return ac, nil
+	enclave, err := newSecureEnclave(pathToRSAKey, pathToECDSAKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create secure enclave")
+	}
+	center := &Center{
+		enclave:     enclave,
+		zstdEncoder: zstdEncoder,
+		zstdDecoder: zstdDecoder,
+	}
+	return center, nil
 }
 
-func (ac *Center) PackBearerToken(bearerToken *service.BearerTokenMsg) ([]byte, error) {
+func (center *Center) PackBearerToken(bearerToken *service.BearerTokenMsg) ([]byte, error) {
 	data, err := bearerToken.Marshal()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal bearer token")
 	}
-	encryptedKeyID, err := globalEnclave.Encrypt(gateUserAuthKey, ac.compress(data))
+	encryptedKeyID, err := center.enclave.Encrypt(gateUserAuthKey, center.compress(data))
 	if err != nil {
 		return nil, errors.Wrap(err, "")
 	}
 	return append(sha256Hash(data), encryptedKeyID...), nil
 }
 
-func (ac *Center) UnpackBearerToken(packedBearerToken []byte) (*service.BearerTokenMsg, error) {
+func (center *Center) UnpackBearerToken(packedBearerToken []byte) (*service.BearerTokenMsg, error) {
 	compressedKeyID := packedBearerToken[32:]
-	encryptedKeyID, err := ac.decompress(compressedKeyID)
+	encryptedKeyID, err := center.decompress(compressedKeyID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decompress key ID")
 	}
-	keyID, err := globalEnclave.Decrypt(gateUserAuthKey, encryptedKeyID)
+	keyID, err := center.enclave.Decrypt(gateUserAuthKey, encryptedKeyID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decrypt key ID")
 	}
@@ -57,17 +60,17 @@ func (ac *Center) UnpackBearerToken(packedBearerToken []byte) (*service.BearerTo
 	return bearerToken, nil
 }
 
-func (ac *Center) compress(data []byte) []byte {
-	ac.zstdEncoder.Reset(nil)
+func (center *Center) compress(data []byte) []byte {
+	center.zstdEncoder.Reset(nil)
 	var compressedData []byte
-	ac.zstdEncoder.EncodeAll(data, compressedData)
+	center.zstdEncoder.EncodeAll(data, compressedData)
 	return compressedData
 }
 
-func (ac *Center) decompress(data []byte) ([]byte, error) {
-	ac.zstdDecoder.Reset(nil)
+func (center *Center) decompress(data []byte) ([]byte, error) {
+	center.zstdDecoder.Reset(nil)
 	var decompressedData []byte
-	if _, err := ac.zstdDecoder.DecodeAll(data, decompressedData); err != nil {
+	if _, err := center.zstdDecoder.DecodeAll(data, decompressedData); err != nil {
 		return nil, err
 	}
 	return decompressedData, nil
