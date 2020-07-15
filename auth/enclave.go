@@ -14,15 +14,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// const (
-// 	// PathToUserAuthPrivateKeyFile is a linux-specific predefined path
-// 	// to a persisted RSA private key for authenticating at S3 server.
-// 	PathToUserAuthPrivateKeyFile = "/etc/neofs/1.pem"
-// 	// PathToNeoFSECDSAPrivateKeyFile is a linux-specific predefined path
-// 	// to a persisted ECDSA private key for accessing NeoFS network.
-// 	PathToNeoFSECDSAPrivateKeyFile = "/etc/neofs/2.pem"
-// )
-
 const (
 	gatewayEncryptionKeySize = 4096
 )
