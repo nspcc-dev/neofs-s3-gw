@@ -7,13 +7,12 @@ import (
 	"os"
 	"time"
 
+	s3auth "github.com/minio/minio/auth"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/legacy/config"
 	"github.com/minio/minio/neofs/layer"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/nspcc-dev/neofs-api-go/refs"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/keepalive"
@@ -21,11 +20,12 @@ import (
 
 type (
 	App struct {
-		cli pool.Pool
-		log *zap.Logger
-		cfg *viper.Viper
-		tls *tlsConfig
-		obj minio.ObjectLayer
+		center *s3auth.Center
+		cli    pool.Pool
+		log    *zap.Logger
+		cfg    *viper.Viper
+		tls    *tlsConfig
+		obj    minio.ObjectLayer
 
 		conTimeout time.Duration
 		reqTimeout time.Duration
@@ -44,20 +44,21 @@ type (
 
 func newApp(l *zap.Logger, v *viper.Viper) *App {
 	var (
-		err error
-		wif string
-		cli pool.Pool
-		tls *tlsConfig
-		uid refs.OwnerID
-		obj minio.ObjectLayer
-
-		key = fetchKey(l, v)
-
-		reBalance = defaultRebalanceTimer
-
+		err        error
+		cli        pool.Pool
+		tls        *tlsConfig
+		obj        minio.ObjectLayer
+		reBalance  = defaultRebalanceTimer
 		conTimeout = defaultConnectTimeout
 		reqTimeout = defaultRequestTimeout
 	)
+
+	center, err := fetchAuthCenter(l, v)
+	if err != nil {
+		l.Fatal("failed to initialize auth center", zap.Error(err))
+	}
+	uid := center.GetOwnerID()
+	wif := center.GetWIFString()
 
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
 		tls = &tlsConfig{
@@ -82,7 +83,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		Peers: fetchPeers(l, v),
 
 		Logger:     l,
-		PrivateKey: key,
+		PrivateKey: center.GetNeoFSKeyPrivateKey(),
 
 		GRPCLogger:  gRPCLogger(l),
 		GRPCVerbose: v.GetBool(cfgGRPCVerbose),
@@ -95,8 +96,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	if cli, err = pool.New(poolConfig); err != nil {
-		l.Fatal("could not prepare pool connections",
-			zap.Error(err))
+		l.Fatal("could not prepare pool connections", zap.Error(err))
 	}
 
 	{ // should establish connection with NeoFS Storage Nodes
@@ -112,42 +112,27 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	{ // should prepare object layer
-		if uid, err = refs.NewOwnerID(&key.PublicKey); err != nil {
-			l.Fatal("could not fetch OwnerID",
-				zap.Error(err))
-		}
-
-		if wif, err = crypto.WIFEncode(key); err != nil {
-			l.Fatal("could not encode key to WIF",
-				zap.Error(err))
-		}
-
 		{ // Temporary solution, to resolve problems with MinIO GW access/secret keys:
 			if err = os.Setenv(config.EnvAccessKey, uid.String()); err != nil {
-				l.Fatal("could not set "+config.EnvAccessKey,
-					zap.Error(err))
+				l.Fatal("could not set "+config.EnvAccessKey, zap.Error(err))
 			} else if err = os.Setenv(config.EnvSecretKey, wif); err != nil {
-				l.Fatal("could not set "+config.EnvSecretKey,
-					zap.Error(err))
+				l.Fatal("could not set "+config.EnvSecretKey, zap.Error(err))
 			}
-
-			l.Info("used credentials",
-				zap.String("AccessKey", uid.String()),
-				zap.String("SecretKey", wif))
+			l.Info("used credentials", zap.String("AccessKey", uid.String()), zap.String("SecretKey", wif))
 		}
 
 		if obj, err = layer.NewLayer(cli, l, auth.Credentials{AccessKey: uid.String(), SecretKey: wif}); err != nil {
-			l.Fatal("could not prepare ObjectLayer",
-				zap.Error(err))
+			l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 		}
 	}
 
 	return &App{
-		cli: cli,
-		log: l,
-		cfg: v,
-		obj: obj,
-		tls: tls,
+		center: center,
+		cli:    cli,
+		log:    l,
+		cfg:    v,
+		obj:    obj,
+		tls:    tls,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),

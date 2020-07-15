@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"io"
 	"os"
@@ -11,18 +12,17 @@ import (
 	"strings"
 	"time"
 
+	s3auth "github.com/minio/minio/auth"
 	"github.com/minio/minio/neofs/pool"
+	"github.com/pkg/errors"
 
 	"github.com/minio/minio/misc"
 
-	"github.com/nspcc-dev/neofs-api-go/refs"
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
-
-type empty int
 
 const (
 	devNull   = empty(0)
@@ -55,7 +55,11 @@ const ( // settings
 	cfgKeepaliveTimeout             = "keepalive.timeout"
 	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
 
-	// HTTPS/TLS:
+	// Keys
+	cfgNeoFSPrivateKey    = "neofs-ecdsa-key"
+	cfgUserAuthPrivateKey = "userauth-rsa-key"
+
+	// HTTPS/TLS
 	cfgTLSKeyFile  = "tls.key_file"
 	cfgTLSCertFile = "tls.cert_file"
 
@@ -66,8 +70,7 @@ const ( // settings
 	cfgRebalanceTimer = "rebalance_timer"
 
 	// gRPC
-	cfgGRPCVerbose    = "verbose"
-	cfgGRPCPrivateKey = "key"
+	cfgGRPCVerbose = "verbose"
 
 	// Metrics / Profiler / Web
 	cfgEnableMetrics  = "metrics"
@@ -80,33 +83,37 @@ const ( // settings
 	cfgApplicationBuildTime = "app.build_time"
 )
 
+type empty int
+
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchKey(l *zap.Logger, v *viper.Viper) *ecdsa.PrivateKey {
-	switch val := v.GetString("key"); val {
+func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*s3auth.Center, error) {
+	var (
+		err                error
+		neofsPrivateKey    *ecdsa.PrivateKey
+		userAuthPrivateKey *rsa.PrivateKey
+	)
+	switch nfspk := v.GetString(cfgNeoFSPrivateKey); nfspk {
 	case generated:
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		neofsPrivateKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
-			l.Fatal("could not generate private key", zap.Error(err))
+			return nil, errors.Wrap(err, "could not generate NeoFS private key")
 		}
-
-		id, err := refs.NewOwnerID(&key.PublicKey)
-		l.Info("generate new key",
-			zap.Stringer("key", id),
-			zap.Error(err))
-
-		return key
-
 	default:
-		key, err := crypto.LoadPrivateKey(val)
+		neofsPrivateKey, err = crypto.LoadPrivateKey(nfspk)
 		if err != nil {
-			l.Fatal("could not load private key",
-				zap.String("key", v.GetString("key")),
-				zap.Error(err))
+			return nil, errors.Wrap(err, "could not load NeoFS private key")
 		}
-
-		return key
 	}
+	uapk := v.GetString(cfgUserAuthPrivateKey)
+	userAuthPrivateKey, err = s3auth.ReadRSAPrivateKeyFromPEMFile(uapk)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load UserAuth private key")
+	}
+	center := s3auth.NewCenter()
+	center.SetUserAuthKeys(userAuthPrivateKey)
+	center.SetNeoFSKeys(neofsPrivateKey)
+	return center, nil
 }
 
 func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
@@ -145,22 +152,23 @@ func newSettings() *viper.Viper {
 	flags.SortFlags = false
 
 	flags.Bool(cfgEnableProfiler, false, "enable pprof")
-	flags.Bool(cfgEnableMetrics, false, "enable prometheus")
+	flags.Bool(cfgEnableMetrics, false, "enable prometheus metrics")
 
 	help := flags.BoolP("help", "h", false, "show help")
 	version := flags.BoolP("version", "v", false, "show version")
 
-	flags.String(cfgGRPCPrivateKey, generated, `"`+generated+`" to generate key, path to private key file, hex string or wif`)
+	flags.String(cfgNeoFSPrivateKey, generated, fmt.Sprintf(`set value to hex string, WIF string, or path to NeoFS private key file (use "%s" to generate key)`, generated))
+	flags.String(cfgUserAuthPrivateKey, "", "set path to file with private key to use in auth scheme")
 
-	flags.Bool(cfgGRPCVerbose, false, "debug gRPC connections")
-	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "gRPC request timeout")
-	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "gRPC connect timeout")
-	flags.Duration(cfgRebalanceTimer, defaultRebalanceTimer, "gRPC connection rebalance timer")
+	flags.Bool(cfgGRPCVerbose, false, "set debug mode of gRPC connections")
+	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")
+	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "set gRPC connect timeout")
+	flags.Duration(cfgRebalanceTimer, defaultRebalanceTimer, "set gRPC connection rebalance timer")
 
-	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "gRPC connection time to live")
+	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "set gRPC connection time to live")
 
-	flags.String(cfgListenAddress, "0.0.0.0:8080", "S3 Gateway listen address")
-	peers := flags.StringArrayP("peers", "p", nil, "NeoFS nodes")
+	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
+	peers := flags.StringArrayP("peers", "p", nil, "set NeoFS nodes")
 
 	// set prefers:
 	v.Set(cfgApplicationName, misc.ApplicationName)
