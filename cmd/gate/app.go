@@ -10,6 +10,7 @@ import (
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/legacy/config"
 	"github.com/minio/minio/neofs/layer"
+	"github.com/minio/minio/neofs/metrics"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -193,8 +194,23 @@ func (a *App) Server(ctx context.Context) {
 	attachMetrics(router, a.cfg, a.log)
 	attachProfiler(router, a.cfg, a.log)
 
+	{ // Example for metrics.Middleware and metrics.APIStats
+		r := router.PathPrefix("/test-metrics").Subrouter()
+		r.Handle("/foo", metrics.APIStats("foo", func(w http.ResponseWriter, r *http.Request) {
+			// do something
+		}))
+
+		m := r.PathPrefix("/bar").Subrouter()
+		m.Use(metrics.Middleware)
+		m.Handle("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// do something
+		}))
+	}
+
 	// Attach S3 API:
-	minio.AttachS3API(router, a.obj, a.log)
+	r := router.PathPrefix(minio.SlashSeparator).Subrouter()
+	r.Use(metrics.Middleware)
+	minio.AttachS3API(r, a.obj, a.log)
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router
