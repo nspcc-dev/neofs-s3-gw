@@ -12,7 +12,6 @@ import (
 	"github.com/minio/minio/legacy/config"
 	"github.com/minio/minio/neofs/layer"
 	"github.com/minio/minio/neofs/pool"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/keepalive"
@@ -121,7 +120,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 			l.Info("used credentials", zap.String("AccessKey", uid.String()), zap.String("SecretKey", wif))
 		}
 
-		if obj, err = layer.NewLayer(cli, l, auth.Credentials{AccessKey: uid.String(), SecretKey: wif}); err != nil {
+		if obj, err = layer.NewLayer(cli, l, center); err != nil {
 			l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 		}
 	}
@@ -174,6 +173,7 @@ func (a *App) Server(ctx context.Context) {
 	router := newS3Router()
 
 	// Attach app-specific routes:
+	attachNewUserAuth(router, a.center, a.log)
 	attachHealthy(router, a.cli)
 	attachMetrics(router, a.cfg, a.log)
 	attachProfiler(router, a.cfg, a.log)

@@ -10,6 +10,7 @@ func AttachS3API(r *mux.Router, obj ObjectLayer, l *zap.Logger) {
 		// Initialize all help
 		initHelp()
 
+		// TODO: If this name is actually stays unchanges, move it to constants.
 		globalGatewayName = "NeoFS S3 Gate"
 
 		// Set when gateway is enabled
