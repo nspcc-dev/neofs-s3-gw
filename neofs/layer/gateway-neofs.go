@@ -6,13 +6,11 @@ import (
 	"math"
 	"time"
 
+	s3auth "github.com/minio/minio/auth"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/pool"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/nspcc-dev/neofs-api-go/chain"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -42,41 +40,24 @@ type (
 
 // NewGatewayLayer creates instance of neofsObject. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(cli pool.Client, log *zap.Logger, cred auth.Credentials) (minio.ObjectLayer, error) {
-	// check if wif is correct
-	key, err := crypto.WIFDecode(cred.SecretKey)
-	if err != nil {
-		return nil, errors.New("can't decode secret key, it must be WIF")
-	}
-	// check if wif corresponds wallet address
-	if cred.AccessKey != chain.KeysToAddress(&key.PublicKey) {
-		return nil, errors.New("wif and wallet are not corresponded")
-	}
-	// format public key into owner
-	owner, err := refs.NewOwnerID(&key.PublicKey)
-	if err != nil {
-		return nil, errors.New("can't create owner id from key")
-	}
-
+func NewLayer(cli pool.Client, log *zap.Logger, center *s3auth.Center) (minio.ObjectLayer, error) {
 	// setup gRPC connection
 	// todo: think about getting timeout parameters from cli args
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
 	token, err := generateToken(ctx, tokenParams{
 		cli:   cli,
-		key:   key,
+		key:   center.GetNeoFSKeyPrivateKey(),
 		until: math.MaxInt64,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "can't establish neofs session with remote host")
 	}
-
 	return &neofsObject{
 		cli:   cli,
-		key:   key,
+		key:   center.GetNeoFSKeyPrivateKey(),
 		log:   log,
-		owner: owner,
+		owner: center.GetOwnerID(),
 		token: token,
 	}, nil
 }

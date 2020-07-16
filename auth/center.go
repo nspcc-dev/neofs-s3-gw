@@ -8,6 +8,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
+	"net/http"
+	"regexp"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -16,8 +18,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const authorizationFieldPattern = `AWS4-HMAC-SHA256 Credential=(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request, SignedHeaders=(?P<signed_header_fields>.*), Signature=(?P<v4_signature>.*)`
+
 // Center is a central app's authentication/authorization management unit.
 type Center struct {
+	submatcher  *regexpSubmatcher
 	zstdEncoder *zstd.Encoder
 	zstdDecoder *zstd.Decoder
 	neofsKeys   struct {
@@ -37,6 +42,7 @@ func NewCenter() *Center {
 	zstdEncoder, _ := zstd.NewWriter(nil)
 	zstdDecoder, _ := zstd.NewReader(nil)
 	return &Center{
+		submatcher:  &regexpSubmatcher{re: regexp.MustCompile(authorizationFieldPattern)},
 		zstdEncoder: zstdEncoder,
 		zstdDecoder: zstdDecoder,
 	}
@@ -80,7 +86,7 @@ func (center *Center) SetUserAuthKeys(key *rsa.PrivateKey) {
 	center.userAuthKeys.PublicKey = &key.PublicKey
 }
 
-func (center *Center) PackBearerToken(bearerToken *service.BearerTokenMsg) ([]byte, error) {
+func (center *Center) packBearerToken(bearerToken *service.BearerTokenMsg) ([]byte, error) {
 	data, err := bearerToken.Marshal()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal bearer token")
@@ -92,7 +98,7 @@ func (center *Center) PackBearerToken(bearerToken *service.BearerTokenMsg) ([]by
 	return append(sha256Hash(data), encryptedKeyID...), nil
 }
 
-func (center *Center) UnpackBearerToken(packedBearerToken []byte) (*service.BearerTokenMsg, error) {
+func (center *Center) unpackBearerToken(packedBearerToken []byte) (*service.BearerTokenMsg, error) {
 	compressedKeyID := packedBearerToken[32:]
 	encryptedKeyID, err := center.decompress(compressedKeyID)
 	if err != nil {
@@ -107,6 +113,25 @@ func (center *Center) UnpackBearerToken(packedBearerToken []byte) (*service.Bear
 		return nil, errors.Wrap(err, "failed to unmarshal embedded bearer token")
 	}
 	return bearerToken, nil
+}
+
+func (center *Center) AuthenticationPassed(header http.Header) (*service.BearerTokenMsg, error) {
+	authHeaderField := header["Authorization"]
+	if len(authHeaderField) != 1 {
+		return nil, errors.New("wrong length of Authorization header field")
+	}
+	sms := center.submatcher.getSubmatches(authHeaderField[0])
+	if len(sms) != 6 {
+		return nil, errors.New("bad Authorization header field")
+	}
+	akid := sms["access_key_id"]
+	bt, err := center.unpackBearerToken([]byte(akid))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to unpack bearer token")
+	}
+	// v4sig := sms["v4_signature"]
+	// TODO: Validate V4 signature.
+	return bt, nil
 }
 
 func (center *Center) compress(data []byte) []byte {
@@ -153,4 +178,20 @@ func ReadRSAPrivateKeyFromPEMFile(filePath string) (*rsa.PrivateKey, error) {
 		return nil, errors.Wrapf(err, "failed to parse private key bytes from pem data from file %s", filePath)
 	}
 	return rsaKey, nil
+}
+
+type regexpSubmatcher struct {
+	re *regexp.Regexp
+}
+
+func (resm *regexpSubmatcher) getSubmatches(target string) map[string]string {
+	matches := resm.re.FindStringSubmatch(target)
+	l := len(matches)
+	submatches := make(map[string]string, l)
+	for i, name := range resm.re.SubexpNames() {
+		if i > 0 && i <= l {
+			submatches[name] = matches[i]
+		}
+	}
+	return submatches
 }
