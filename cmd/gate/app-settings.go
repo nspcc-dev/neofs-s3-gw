@@ -110,7 +110,7 @@ func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*s3auth.Center, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load UserAuth private key")
 	}
-	center := s3auth.NewCenter()
+	center := s3auth.NewCenter(l)
 	center.SetUserAuthKeys(userAuthPrivateKey)
 	center.SetNeoFSKeys(neofsPrivateKey)
 	return center, nil

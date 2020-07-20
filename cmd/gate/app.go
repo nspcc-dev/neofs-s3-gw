@@ -120,7 +120,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 			l.Info("used credentials", zap.String("AccessKey", uid.String()), zap.String("SecretKey", wif))
 		}
 
-		if obj, err = layer.NewLayer(cli, l, center); err != nil {
+		if obj, err = layer.NewLayer(l, cli, center); err != nil {
 			l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 		}
 	}
