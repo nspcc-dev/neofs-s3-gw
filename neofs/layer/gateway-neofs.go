@@ -21,11 +21,12 @@ type (
 	neofsObject struct {
 		minio.GatewayUnsupported // placeholder for unimplemented functions
 
-		cli   pool.Client
-		log   *zap.Logger
-		key   *ecdsa.PrivateKey
-		owner refs.OwnerID
-		token *service.Token
+		log         *zap.Logger
+		cli         pool.Client
+		key         *ecdsa.PrivateKey
+		owner       refs.OwnerID
+		token       *service.Token
+		bearerToken *service.BearerTokenMsg
 
 		// Concurrency must be resolved by creating one lock per object, but
 		// it may be unnecessary in neofs, because objects are immutable. So
@@ -40,7 +41,7 @@ type (
 
 // NewGatewayLayer creates instance of neofsObject. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(cli pool.Client, log *zap.Logger, center *s3auth.Center) (minio.ObjectLayer, error) {
+func NewLayer(log *zap.Logger, cli pool.Client, center *s3auth.Center) (minio.ObjectLayer, error) {
 	// setup gRPC connection
 	// todo: think about getting timeout parameters from cli args
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

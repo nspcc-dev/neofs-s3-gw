@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"io/ioutil"
 	"net/http"
@@ -16,12 +18,16 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/service"
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 const authorizationFieldPattern = `AWS4-HMAC-SHA256 Credential=(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request, SignedHeaders=(?P<signed_header_fields>.*), Signature=(?P<v4_signature>.*)`
 
+const emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+
 // Center is a central app's authentication/authorization management unit.
 type Center struct {
+	log         *zap.Logger
 	submatcher  *regexpSubmatcher
 	zstdEncoder *zstd.Encoder
 	zstdDecoder *zstd.Decoder
@@ -38,10 +44,11 @@ type Center struct {
 }
 
 // NewCenter creates an instance of AuthCenter.
-func NewCenter() *Center {
+func NewCenter(log *zap.Logger) *Center {
 	zstdEncoder, _ := zstd.NewWriter(nil)
 	zstdDecoder, _ := zstd.NewReader(nil)
 	return &Center{
+		log:         log,
 		submatcher:  &regexpSubmatcher{re: regexp.MustCompile(authorizationFieldPattern)},
 		zstdEncoder: zstdEncoder,
 		zstdDecoder: zstdDecoder,
@@ -86,68 +93,72 @@ func (center *Center) SetUserAuthKeys(key *rsa.PrivateKey) {
 	center.userAuthKeys.PublicKey = &key.PublicKey
 }
 
-func (center *Center) packBearerToken(bearerToken *service.BearerTokenMsg) ([]byte, error) {
+func (center *Center) packBearerToken(bearerToken *service.BearerTokenMsg) (string, string, error) {
 	data, err := bearerToken.Marshal()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal bearer token")
+		return "", "", errors.Wrap(err, "failed to marshal bearer token")
 	}
 	encryptedKeyID, err := encrypt(center.userAuthKeys.PublicKey, center.compress(data))
 	if err != nil {
-		return nil, errors.Wrap(err, "")
+		return "", "", errors.Wrap(err, "failed to encrypt bearer token bytes")
 	}
-	return append(sha256Hash(data), encryptedKeyID...), nil
+	accessKeyID := hex.EncodeToString(encryptedKeyID)
+	secretAccessKey := hex.EncodeToString(sha256Hash(data))
+	return accessKeyID, secretAccessKey, nil
 }
 
-func (center *Center) unpackBearerToken(packedBearerToken []byte) (*service.BearerTokenMsg, error) {
-	compressedKeyID := packedBearerToken[32:]
-	encryptedKeyID, err := center.decompress(compressedKeyID)
+func (center *Center) unpackBearerToken(accessKeyID string) (*service.BearerTokenMsg, error) {
+	encryptedKeyID, err := hex.DecodeString(accessKeyID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to decompress key ID")
+		return nil, errors.Wrap(err, "failed to decode HEX string")
 	}
-	keyID, err := decrypt(center.userAuthKeys.PrivateKey, encryptedKeyID)
+	compressedKeyID, err := decrypt(center.userAuthKeys.PrivateKey, encryptedKeyID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decrypt key ID")
 	}
+	data, err := center.decompress(compressedKeyID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decompress key ID")
+	}
 	bearerToken := new(service.BearerTokenMsg)
-	if err := bearerToken.Unmarshal(keyID); err != nil {
+	if err := bearerToken.Unmarshal(data); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal embedded bearer token")
 	}
 	return bearerToken, nil
 }
 
-func (center *Center) AuthenticationPassed(header http.Header) (*service.BearerTokenMsg, error) {
-	authHeaderField := header["Authorization"]
+func (center *Center) AuthenticationPassed(request *http.Request) (*service.BearerTokenMsg, error) {
+	authHeaderField := request.Header["Authorization"]
 	if len(authHeaderField) != 1 {
-		return nil, errors.New("wrong length of Authorization header field")
+		return nil, errors.New("unsupported request: wrong length of Authorization header field")
 	}
 	sms := center.submatcher.getSubmatches(authHeaderField[0])
 	if len(sms) != 6 {
 		return nil, errors.New("bad Authorization header field")
 	}
-	akid := sms["access_key_id"]
-	bt, err := center.unpackBearerToken([]byte(akid))
+	bt, err := center.unpackBearerToken(sms["access_key_id"])
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to unpack bearer token")
+		center.log.Warn("Failed to unpack bearer token", zap.Error(err))
+		//return nil, errors.Wrap(err, "failed to unpack bearer token")
 	}
-	// v4sig := sms["v4_signature"]
-	// TODO: Validate V4 signature.
 	return bt, nil
 }
 
+func readAndReplaceBody(request *http.Request) []byte {
+	if request.Body == nil {
+		return []byte{}
+	}
+	payload, _ := ioutil.ReadAll(request.Body)
+	request.Body = ioutil.NopCloser(bytes.NewReader(payload))
+	return payload
+}
+
 func (center *Center) compress(data []byte) []byte {
-	center.zstdEncoder.Reset(nil)
-	var compressedData []byte
-	center.zstdEncoder.EncodeAll(data, compressedData)
-	return compressedData
+	return center.zstdEncoder.EncodeAll(data, make([]byte, 0, len(data)))
 }
 
 func (center *Center) decompress(data []byte) ([]byte, error) {
-	center.zstdDecoder.Reset(nil)
-	var decompressedData []byte
-	if _, err := center.zstdDecoder.DecodeAll(data, decompressedData); err != nil {
-		return nil, err
-	}
-	return decompressedData, nil
+	return center.zstdDecoder.DecodeAll(data, nil)
 }
 
 func encrypt(key *rsa.PublicKey, data []byte) ([]byte, error) {

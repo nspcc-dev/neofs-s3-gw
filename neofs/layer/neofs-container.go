@@ -16,6 +16,7 @@ func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 	req.OwnerID = n.owner
 	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetBearer(nil)
 
 	err := service.SignRequestData(n.key, req)
 	if err != nil {
