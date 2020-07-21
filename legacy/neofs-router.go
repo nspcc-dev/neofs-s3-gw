@@ -44,9 +44,6 @@ func AttachS3API(r *mux.Router, obj ObjectLayer, l *zap.Logger) {
 	// Add healthcheck router
 	registerHealthCheckRouter(r)
 
-	// Add server metrics router
-	registerMetricsRouter(r)
-
 	// Add API router.
 	registerAPIRouter(r, true, true)
 
