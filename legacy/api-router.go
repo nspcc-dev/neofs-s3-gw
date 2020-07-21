@@ -77,13 +77,13 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 			return allowSSEKMS
 		},
 	}
-
 	// API Router
 	apiRouter := router.PathPrefix(SlashSeparator).Subrouter()
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName+":{port:.*}").Subrouter())
+		r1 := apiRouter.Host("{bucket:.+}." + domainName).Subrouter()
+		r2 := apiRouter.Host("{bucket:.+}." + domainName + ":{port:.*}").Subrouter()
+		routers = append(routers, []*mux.Router{r1, r2}...)
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
