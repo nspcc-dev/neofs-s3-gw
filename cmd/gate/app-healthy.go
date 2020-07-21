@@ -12,8 +12,9 @@ type Healthy interface {
 }
 
 const (
-	healthyState = "NeoFS S3 Gateway is "
-	// defaultContentType = "text/plain; charset=utf-8"
+	healthyState       = "NeoFS S3 Gateway is "
+	hdrContentType     = "Content-Type"
+	defaultContentType = "text/plain; charset=utf-8"
 )
 
 func attachHealthy(r *mux.Router, h Healthy) {
@@ -22,6 +23,7 @@ func attachHealthy(r *mux.Router, h Healthy) {
 		StrictSlash(true)
 
 	healthy.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentType, defaultContentType)
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintln(w, healthyState+"ready")
 	})
@@ -35,6 +37,7 @@ func attachHealthy(r *mux.Router, h Healthy) {
 			code = http.StatusBadRequest
 		}
 
+		w.Header().Set(hdrContentType, defaultContentType)
 		w.WriteHeader(code)
 		_, _ = fmt.Fprintln(w, healthyState+msg)
 	})
