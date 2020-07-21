@@ -153,9 +153,7 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	accessKeyID := sms1["access_key_id"]
 	bearerToken, secretAccessKey, err := center.unpackBearerToken(accessKeyID)
 	if err != nil {
-		// FIXME: Should be `return nil, errors.Wrap(err, "failed to unpack bearer token")`
-		center.log.Warn("Failed to unpack bearer token", zap.Error(err))
-		return nil, nil
+		return nil, errors.Wrap(err, "failed to unpack bearer token")
 	}
 	otherRequest := request.Clone(context.TODO())
 	otherRequest.Header = map[string][]string{}
@@ -178,9 +176,7 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	}
 	sms2 := center.submatcher.getSubmatches(otherRequest.Header.Get("Authorization"))
 	if sms1["v4_signature"] != sms2["v4_signature"] {
-		// FIXME: Should be `return nil, errors.Wrap(err, "failed to pass authentication procedure")`
-		center.log.Warn("Failed to pass authentication procedure")
-		return nil, nil
+		return nil, errors.Wrap(err, "failed to pass authentication procedure")
 	}
 	return bearerToken, nil
 }
