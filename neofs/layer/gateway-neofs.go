@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	s3auth "github.com/minio/minio/auth"
+	auth "github.com/minio/minio/auth"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -41,7 +41,7 @@ type (
 
 // NewGatewayLayer creates instance of neofsObject. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, cli pool.Client, center *s3auth.Center) (minio.ObjectLayer, error) {
+func NewLayer(log *zap.Logger, cli pool.Client, center *auth.Center) (minio.ObjectLayer, error) {
 	// setup gRPC connection
 	// todo: think about getting timeout parameters from cli args
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

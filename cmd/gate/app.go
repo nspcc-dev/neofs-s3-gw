@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	s3auth "github.com/minio/minio/auth"
+	"github.com/minio/minio/auth"
 	minio "github.com/minio/minio/legacy"
 	"github.com/minio/minio/legacy/config"
 	"github.com/minio/minio/neofs/layer"
@@ -20,7 +20,7 @@ import (
 
 type (
 	App struct {
-		center *s3auth.Center
+		center *auth.Center
 		cli    pool.Pool
 		log    *zap.Logger
 		cfg    *viper.Viper

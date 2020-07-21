@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	s3auth "github.com/minio/minio/auth"
+	"github.com/minio/minio/auth"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/pkg/errors"
 
@@ -87,7 +87,7 @@ type empty int
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*s3auth.Center, error) {
+func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*auth.Center, error) {
 	var (
 		err                error
 		neofsPrivateKey    *ecdsa.PrivateKey
@@ -106,11 +106,11 @@ func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*s3auth.Center, error) {
 		}
 	}
 	uapk := v.GetString(cfgUserAuthPrivateKey)
-	userAuthPrivateKey, err = s3auth.ReadRSAPrivateKeyFromPEMFile(uapk)
+	userAuthPrivateKey, err = auth.ReadRSAPrivateKeyFromPEMFile(uapk)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load UserAuth private key")
 	}
-	center := s3auth.NewCenter(l)
+	center := auth.NewCenter(l)
 	center.SetUserAuthKeys(userAuthPrivateKey)
 	center.SetNeoFSKeys(neofsPrivateKey)
 	return center, nil
