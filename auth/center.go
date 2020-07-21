@@ -152,7 +152,7 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	}
 	signatureDateTime, err := time.Parse("20060102T150405Z", request.Header.Get("X-Amz-Date"))
 	if err != nil {
-		// TODO
+		return nil, errors.Wrap(err, "failed to parse x-amz-date header field")
 	}
 	accessKeyID := sms1["access_key_id"]
 	bearerToken, secretAccessKey, err := center.unpackBearerToken(accessKeyID)
@@ -174,11 +174,11 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	signer := v4.NewSigner(awsCreds)
 	body, err := readAndKeepBody(request)
 	if err != nil {
-		// TODO
+		return nil, errors.Wrap(err, "failed to read out request body")
 	}
 	_, err = signer.Sign(otherRequest, body, sms1["service"], sms1["region"], signatureDateTime)
 	if err != nil {
-		// TODO
+		return nil, errors.Wrap(err, "failed to sign temporary HTTP request")
 	}
 	sms2 := center.submatcher.getSubmatches(otherRequest.Header.Get("Authorization"))
 	if sms1["v4_signature"] != sms2["v4_signature"] {
