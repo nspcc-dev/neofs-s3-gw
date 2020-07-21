@@ -83,7 +83,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		Peers: fetchPeers(l, v),
 
 		Logger:     l,
-		PrivateKey: center.GetNeoFSKeyPrivateKey(),
+		PrivateKey: center.GetNeoFSPrivateKey(),
 
 		GRPCLogger:  gRPCLogger(l),
 		GRPCVerbose: v.GetBool(cfgGRPCVerbose),

@@ -73,11 +73,11 @@ func (center *Center) SetNeoFSKeys(key *ecdsa.PrivateKey) error {
 	return nil
 }
 
-func (center *Center) GetNeoFSKeyPrivateKey() *ecdsa.PrivateKey {
+func (center *Center) GetNeoFSPrivateKey() *ecdsa.PrivateKey {
 	return center.neofsKeys.PrivateKey
 }
 
-func (center *Center) GetNeoFSKeyPublicKey() *ecdsa.PublicKey {
+func (center *Center) GetNeoFSPublicKey() *ecdsa.PublicKey {
 	return center.neofsKeys.PublicKey
 }
 
