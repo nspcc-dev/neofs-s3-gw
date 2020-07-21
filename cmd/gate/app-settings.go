@@ -110,7 +110,10 @@ func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*auth.Center, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load UserAuth private key")
 	}
-	center := auth.NewCenter(l)
+	center, err := auth.NewCenter(l)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create auth center")
+	}
 	center.SetUserAuthKeys(userAuthPrivateKey)
 	center.SetNeoFSKeys(neofsPrivateKey)
 	return center, nil

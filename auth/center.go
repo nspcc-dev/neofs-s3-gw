@@ -45,15 +45,21 @@ type Center struct {
 }
 
 // NewCenter creates an instance of AuthCenter.
-func NewCenter(log *zap.Logger) *Center {
-	zstdEncoder, _ := zstd.NewWriter(nil)
-	zstdDecoder, _ := zstd.NewReader(nil)
+func NewCenter(log *zap.Logger) (*Center, error) {
+	zstdEncoder, err := zstd.NewWriter(nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create zstd encoder")
+	}
+	zstdDecoder, err := zstd.NewReader(nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create zstd decoder")
+	}
 	return &Center{
 		log:         log,
 		submatcher:  &regexpSubmatcher{re: authorizationFieldRegexp},
 		zstdEncoder: zstdEncoder,
 		zstdDecoder: zstdDecoder,
-	}
+	}, nil
 }
 
 func (center *Center) SetNeoFSKeys(key *ecdsa.PrivateKey) error {
