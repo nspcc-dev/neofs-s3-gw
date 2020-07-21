@@ -4,12 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -189,6 +185,7 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	return bearerToken, nil
 }
 
+// TODO: Make this write into a smart buffer backed by a file on a fast drive.
 func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
 	if request.Body == nil {
 		var r bytes.Reader
@@ -208,50 +205,4 @@ func (center *Center) compress(data []byte) []byte {
 
 func (center *Center) decompress(data []byte) ([]byte, error) {
 	return center.zstdDecoder.DecodeAll(data, nil)
-}
-
-func encrypt(key *rsa.PublicKey, data []byte) ([]byte, error) {
-	return rsa.EncryptOAEP(sha256.New(), rand.Reader, key, data, []byte{})
-}
-
-func decrypt(key *rsa.PrivateKey, data []byte) ([]byte, error) {
-	return rsa.DecryptOAEP(sha256.New(), rand.Reader, key, data, []byte{})
-}
-
-func sha256Hash(data []byte) []byte {
-	hash := sha256.New()
-	hash.Write(data)
-	return hash.Sum(nil)
-}
-
-func ReadRSAPrivateKeyFromPEMFile(filePath string) (*rsa.PrivateKey, error) {
-	kbs, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read file %s", filePath)
-	}
-	pemBlock, _ := pem.Decode(kbs)
-	if pemBlock == nil {
-		return nil, errors.Errorf("failed to decode PEM data from file %s", filePath)
-	}
-	rsaKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse private key bytes from pem data from file %s", filePath)
-	}
-	return rsaKey, nil
-}
-
-type regexpSubmatcher struct {
-	re *regexp.Regexp
-}
-
-func (resm *regexpSubmatcher) getSubmatches(target string) map[string]string {
-	matches := resm.re.FindStringSubmatch(target)
-	l := len(matches)
-	submatches := make(map[string]string, l)
-	for i, name := range resm.re.SubexpNames() {
-		if i > 0 && i <= l {
-			submatches[name] = matches[i]
-		}
-	}
-	return submatches
 }
