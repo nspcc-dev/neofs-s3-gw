@@ -274,13 +274,18 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 	return s3Err
 }
 
+// FIXME: Remove this temporary stub to by-pass Minio auth procedure.
+func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (string, bool, APIErrorCode) {
+	return "", true, ErrNone
+}
+
 // Check request auth type verifies the incoming http request
 // - validates the request signature
 // - validates the policy action if anonymous tests bucket policies if any,
 //   for authenticated requests validates IAM policies.
 // returns APIErrorCode if any to be replied to the client.
 // Additionally returns the accessKey used in the request, and if this request is by an admin.
-func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (accessKey string, owner bool, s3Err APIErrorCode) {
+func _checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (accessKey string, owner bool, s3Err APIErrorCode) {
 	var cred auth.Credentials
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
