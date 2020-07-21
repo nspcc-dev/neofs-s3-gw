@@ -48,7 +48,7 @@ func NewLayer(log *zap.Logger, cli pool.Client, center *s3auth.Center) (minio.Ob
 	defer cancel()
 	token, err := generateToken(ctx, tokenParams{
 		cli:   cli,
-		key:   center.GetNeoFSKeyPrivateKey(),
+		key:   center.GetNeoFSPrivateKey(),
 		until: math.MaxInt64,
 	})
 	if err != nil {
@@ -56,7 +56,7 @@ func NewLayer(log *zap.Logger, cli pool.Client, center *s3auth.Center) (minio.Ob
 	}
 	return &neofsObject{
 		cli:   cli,
-		key:   center.GetNeoFSKeyPrivateKey(),
+		key:   center.GetNeoFSPrivateKey(),
 		log:   log,
 		owner: center.GetOwnerID(),
 		token: token,
