@@ -20,5 +20,7 @@ func attachNewUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger)
 
 		})
 	}
+	// TODO: should not be used for all routes,
+	//       only for API
 	router.Use(uamw)
 }
