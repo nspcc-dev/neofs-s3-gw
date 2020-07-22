@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	s3http "github.com/minio/minio/http"
+	"github.com/minio/minio/auth"
 	"github.com/nspcc-dev/neofs-api-go/container"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
@@ -17,8 +17,7 @@ func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 	req.OwnerID = n.owner
 	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
-	bearerToken := ctx.Value(s3http.BearerTokenContextKey).(*service.BearerTokenMsg)
-	req.SetBearer(bearerToken)
+	req.SetBearer(auth.GetBearerToken(ctx))
 
 	err := service.SignRequestData(n.key, req)
 	if err != nil {
