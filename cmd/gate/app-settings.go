@@ -39,6 +39,9 @@ const (
 
 	defaultKeepaliveTime    = 10 * time.Second
 	defaultKeepaliveTimeout = 10 * time.Second
+
+	defaultMaxClientsCount    = 100
+	defaultMaxClientsDeadline = time.Second * 30
 )
 
 const ( // settings
@@ -68,6 +71,10 @@ const ( // settings
 	cfgConnectTimeout = "connect_timeout"
 	cfgRequestTimeout = "request_timeout"
 	cfgRebalanceTimer = "rebalance_timer"
+
+	// MaxClients
+	cfgMaxClientsCount    = "max_clients_count"
+	cfgMaxClientsDeadline = "max_clients_deadline"
 
 	// gRPC
 	cfgGRPCVerbose = "verbose"
@@ -108,14 +115,16 @@ func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*auth.Center, error) {
 	uapk := v.GetString(cfgUserAuthPrivateKey)
 	userAuthPrivateKey, err = auth.ReadRSAPrivateKeyFromPEMFile(uapk)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not load UserAuth private key")
+		return nil, errors.Wrapf(err, "could not load UserAuth private key %q", uapk)
 	}
 	center, err := auth.NewCenter(l)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create auth center")
 	}
 	center.SetUserAuthKeys(userAuthPrivateKey)
-	center.SetNeoFSKeys(neofsPrivateKey)
+	if err = center.SetNeoFSKeys(neofsPrivateKey); err != nil {
+		return nil, err
+	}
 	return center, nil
 }
 
@@ -167,6 +176,9 @@ func newSettings() *viper.Viper {
 	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")
 	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "set gRPC connect timeout")
 	flags.Duration(cfgRebalanceTimer, defaultRebalanceTimer, "set gRPC connection rebalance timer")
+
+	flags.Int(cfgMaxClientsCount, defaultMaxClientsCount, "set max-clients count")
+	flags.Duration(cfgMaxClientsDeadline, defaultMaxClientsDeadline, "set max-clients deadline")
 
 	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "set gRPC connection time to live")
 

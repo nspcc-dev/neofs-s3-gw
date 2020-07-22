@@ -8,14 +8,17 @@ import (
 	"time"
 
 	"github.com/minio/minio/auth"
-	minio "github.com/minio/minio/legacy"
-	"github.com/minio/minio/legacy/config"
+	"github.com/minio/minio/neofs/api"
+	"github.com/minio/minio/neofs/api/handler"
 	"github.com/minio/minio/neofs/layer"
-	"github.com/minio/minio/neofs/metrics"
 	"github.com/minio/minio/neofs/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/keepalive"
+
+	// should be removed in future
+	"github.com/minio/minio/legacy"
+	"github.com/minio/minio/legacy/config"
 )
 
 type (
@@ -25,12 +28,15 @@ type (
 		log    *zap.Logger
 		cfg    *viper.Viper
 		tls    *tlsConfig
-		obj    minio.ObjectLayer
+		obj    legacy.ObjectLayer
+		api    api.Handler
 
 		conTimeout time.Duration
 		reqTimeout time.Duration
 
 		reBalance time.Duration
+
+		maxClients api.MaxClients
 
 		webDone chan struct{}
 		wrkDone chan struct{}
@@ -47,10 +53,14 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		err        error
 		cli        pool.Pool
 		tls        *tlsConfig
-		obj        minio.ObjectLayer
+		caller     api.Handler
+		obj        legacy.ObjectLayer
 		reBalance  = defaultRebalanceTimer
 		conTimeout = defaultConnectTimeout
 		reqTimeout = defaultRequestTimeout
+
+		maxClientsCount    = defaultMaxClientsCount
+		maxClientsDeadline = defaultMaxClientsDeadline
 	)
 
 	center, err := fetchAuthCenter(l, v)
@@ -59,6 +69,10 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	}
 	uid := center.GetOwnerID()
 	wif := center.GetWIFString()
+
+	if caller, err = handler.New(); err != nil {
+		l.Fatal("could not initialize API handler", zap.Error(err))
+	}
 
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
 		tls = &tlsConfig{
@@ -73,6 +87,14 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 
 	if v := v.GetDuration(cfgRequestTimeout); v > 0 {
 		reqTimeout = v
+	}
+
+	if v := v.GetInt(cfgMaxClientsCount); v > 0 {
+		maxClientsCount = v
+	}
+
+	if v := v.GetDuration(cfgMaxClientsDeadline); v > 0 {
+		maxClientsDeadline = v
 	}
 
 	poolConfig := &pool.Config{
@@ -133,11 +155,14 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		cfg:    v,
 		obj:    obj,
 		tls:    tls,
+		api:    caller,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
 
 		reBalance: reBalance,
+
+		maxClients: api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline),
 
 		conTimeout: conTimeout,
 		reqTimeout: reqTimeout,
@@ -179,23 +204,8 @@ func (a *App) Server(ctx context.Context) {
 	attachMetrics(router, a.cfg, a.log)
 	attachProfiler(router, a.cfg, a.log)
 
-	{ // Example for metrics.Middleware and metrics.APIStats
-		r := router.PathPrefix("/test-metrics").Subrouter()
-		r.Handle("/foo", metrics.APIStats("foo", func(w http.ResponseWriter, r *http.Request) {
-			// do something
-		}))
-
-		m := r.PathPrefix("/bar").Subrouter()
-		m.Use(metrics.Middleware)
-		m.Handle("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// do something
-		}))
-	}
-
 	// Attach S3 API:
-	r := router.PathPrefix(minio.SlashSeparator).Subrouter()
-	r.Use(metrics.Middleware)
-	minio.AttachS3API(r, a.obj, a.log)
+	api.Attach(router, a.maxClients, a.api)
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router
