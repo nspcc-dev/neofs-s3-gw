@@ -15,8 +15,8 @@ import (
 func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 	req := new(container.ListRequest)
 	req.OwnerID = n.owner
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
 	req.SetBearer(auth.GetBearerToken(ctx))
 
 	err := service.SignRequestData(n.key, req)

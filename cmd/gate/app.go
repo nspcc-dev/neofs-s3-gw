@@ -199,13 +199,12 @@ func (a *App) Server(ctx context.Context) {
 	router := newS3Router()
 
 	// Attach app-specific routes:
-	attachNewUserAuth(router, a.center, a.log)
 	attachHealthy(router, a.cli)
 	attachMetrics(router, a.cfg, a.log)
 	attachProfiler(router, a.cfg, a.log)
 
 	// Attach S3 API:
-	api.Attach(router, a.maxClients, a.api)
+	api.Attach(router, a.maxClients, a.api, a.center, a.log)
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router

@@ -4,7 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/auth"
 	"github.com/minio/minio/neofs/metrics"
+	"go.uber.org/zap"
 )
 
 type (
@@ -89,8 +91,10 @@ const (
 	mimeXML mimeType = "application/xml"
 )
 
-func Attach(r *mux.Router, m MaxClients, h Handler) {
+func Attach(r *mux.Router, m MaxClients, h Handler, center *auth.Center, log *zap.Logger) {
 	api := r.PathPrefix(SlashSeparator).Subrouter()
+	// Attach user authentication for all S3 routes.
+	AttachUserAuth(api, center, log)
 
 	bucket := api.PathPrefix("/{bucket}").Subrouter()
 

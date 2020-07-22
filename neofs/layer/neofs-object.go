@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	auth "github.com/minio/minio/auth"
 	"github.com/nspcc-dev/neofs-api-go/object"
 	"github.com/nspcc-dev/neofs-api-go/query"
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -69,8 +70,9 @@ func (n *neofsObject) objectSearchContainer(ctx context.Context, cid refs.CID) (
 	req.Query = queryBinary
 	req.QueryVersion = 1
 	req.ContainerID = cid
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -153,8 +155,9 @@ func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name strin
 	req.Query = queryBinary
 	req.QueryVersion = 1
 	req.ContainerID = cid
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -229,8 +232,9 @@ func (n *neofsObject) objectHead(ctx context.Context, addr refs.Address) (*objec
 	req := new(object.HeadRequest)
 	req.Address = addr
 	req.FullHeaders = true
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -271,8 +275,9 @@ func (n *neofsObject) objectGet(ctx context.Context, p getParams) (*object.Objec
 	//       object.GetRange() response message become gRPC stream.
 	req := new(object.GetRequest)
 	req.Address = p.addr
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -391,8 +396,9 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 	}
 
 	req := object.MakePutRequestHeader(obj)
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -419,8 +425,9 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 
 		if read > 0 {
 			req := object.MakePutRequestChunk(readBuffer[:read])
-			req.SetTTL(service.SingleForwardingTTL)
 			req.SetVersion(APIVersion)
+			req.SetTTL(service.SingleForwardingTTL)
+			req.SetBearer(auth.GetBearerToken(ctx))
 
 			err = service.SignRequestData(n.key, req)
 			if err != nil {
@@ -493,8 +500,9 @@ func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.
 	sg.SetStorageGroup(new(storagegroup.StorageGroup))
 
 	req := object.MakePutRequestHeader(sg)
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -529,8 +537,9 @@ func (n *neofsObject) objectDelete(ctx context.Context, p delParams) error {
 	req := new(object.DeleteRequest)
 	req.Address = p.addr
 	req.OwnerID = n.owner
-	req.SetTTL(service.SingleForwardingTTL)
 	req.SetVersion(APIVersion)
+	req.SetTTL(service.SingleForwardingTTL)
+	req.SetBearer(auth.GetBearerToken(ctx))
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
