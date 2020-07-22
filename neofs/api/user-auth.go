@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -8,19 +8,17 @@ import (
 	"go.uber.org/zap"
 )
 
-func attachNewUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger) {
+func AttachUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger) {
 	uamw := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			bearerToken, err := center.AuthenticationPassed(r)
 			if err != nil {
 				log.Error("failed to pass authentication", zap.Error(err))
-				// TODO: Handle any auth error by rejecting request.
+				WriteErrorResponse(r.Context(), w, getAPIError(ErrAccessDenied), r.URL)
 			}
 			h.ServeHTTP(w, r.WithContext(auth.SetBearerToken(r.Context(), bearerToken)))
 
 		})
 	}
-	// TODO: should not be used for all routes,
-	//       only for API
 	router.Use(uamw)
 }
