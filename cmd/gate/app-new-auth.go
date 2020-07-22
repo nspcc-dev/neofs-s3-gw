@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -8,15 +9,19 @@ import (
 	"go.uber.org/zap"
 )
 
+type ContextKey string
+
+const BearerTokenContextKey ContextKey = "bearer-token"
+
 func attachNewUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger) {
 	uamw := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, err := center.AuthenticationPassed(r)
+			bearerToken, err := center.AuthenticationPassed(r)
 			if err != nil {
 				log.Error("failed to pass authentication", zap.Error(err))
+				// TODO: Handle any auth error by rejecting request.
 			}
-			// TODO: Handle any auth error by rejecting request.
-			h.ServeHTTP(w, r)
+			h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), BearerTokenContextKey, bearerToken)))
 
 		})
 	}
