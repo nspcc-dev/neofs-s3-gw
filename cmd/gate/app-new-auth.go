@@ -6,12 +6,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/auth"
+	s3http "github.com/minio/minio/http"
 	"go.uber.org/zap"
 )
-
-type ContextKey string
-
-const BearerTokenContextKey ContextKey = "bearer-token"
 
 func attachNewUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger) {
 	uamw := func(h http.Handler) http.Handler {
@@ -21,7 +18,7 @@ func attachNewUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger)
 				log.Error("failed to pass authentication", zap.Error(err))
 				// TODO: Handle any auth error by rejecting request.
 			}
-			h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), BearerTokenContextKey, bearerToken)))
+			h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), s3http.BearerTokenContextKey, bearerToken)))
 
 		})
 	}
