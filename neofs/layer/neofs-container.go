@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/container"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/pkg/errors"
 )
 
 func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
@@ -17,9 +18,12 @@ func (n *neofsObject) containerList(ctx context.Context) ([]refs.CID, error) {
 	req.OwnerID = n.owner
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
-
-	err := service.SignRequestData(n.key, req)
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
+	err = service.SignRequestData(n.key, req)
 	if err != nil {
 		n.log.Error("could not prepare request",
 			zap.Error(err))

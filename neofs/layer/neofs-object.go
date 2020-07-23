@@ -3,16 +3,16 @@ package layer
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"time"
 
-	auth "github.com/minio/minio/auth"
+	"github.com/minio/minio/auth"
 	"github.com/nspcc-dev/neofs-api-go/object"
 	"github.com/nspcc-dev/neofs-api-go/query"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-api-go/storagegroup"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -72,7 +72,11 @@ func (n *neofsObject) objectSearchContainer(ctx context.Context, cid refs.CID) (
 	req.ContainerID = cid
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -157,7 +161,12 @@ func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name strin
 	req.ContainerID = cid
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		var empty refs.ObjectID
+		return empty, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -234,7 +243,11 @@ func (n *neofsObject) objectHead(ctx context.Context, addr refs.Address) (*objec
 	req.FullHeaders = true
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -277,7 +290,11 @@ func (n *neofsObject) objectGet(ctx context.Context, p getParams) (*object.Objec
 	req.Address = p.addr
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -398,7 +415,11 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 	req := object.MakePutRequestHeader(obj)
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -427,7 +448,11 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 			req := object.MakePutRequestChunk(readBuffer[:read])
 			req.SetVersion(APIVersion)
 			req.SetTTL(service.SingleForwardingTTL)
-			req.SetBearer(auth.GetBearerToken(ctx))
+			bearerToken, err := auth.GetBearerToken(ctx)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get bearer token")
+			}
+			req.SetBearer(bearerToken)
 
 			err = service.SignRequestData(n.key, req)
 			if err != nil {
@@ -502,7 +527,11 @@ func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.
 	req := object.MakePutRequestHeader(sg)
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
@@ -539,7 +568,11 @@ func (n *neofsObject) objectDelete(ctx context.Context, p delParams) error {
 	req.OwnerID = n.owner
 	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(auth.GetBearerToken(ctx))
+	bearerToken, err := auth.GetBearerToken(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get bearer token")
+	}
+	req.SetBearer(bearerToken)
 	req.SetToken(token)
 
 	err = service.SignRequestData(n.key, req)
