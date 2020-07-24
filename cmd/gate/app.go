@@ -134,13 +134,12 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	{ // should prepare object layer
-		{ // Temporary solution, to resolve problems with MinIO GW access/secret keys:
+		{ // FIXME: Temporary solution, to resolve problems with MinIO GW access/secret keys:
 			if err = os.Setenv(config.EnvAccessKey, uid.String()); err != nil {
 				l.Fatal("could not set "+config.EnvAccessKey, zap.Error(err))
 			} else if err = os.Setenv(config.EnvSecretKey, wif); err != nil {
 				l.Fatal("could not set "+config.EnvSecretKey, zap.Error(err))
 			}
-			l.Info("gate neofs credentials", zap.String("OwnerID", uid.String()), zap.String("WIF", wif))
 		}
 
 		if obj, err = layer.NewLayer(l, cli, center); err != nil {
