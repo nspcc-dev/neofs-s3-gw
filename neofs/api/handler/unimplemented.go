@@ -6,12 +6,6 @@ import (
 	"github.com/minio/minio/neofs/api"
 )
 
-type handler struct{}
-
-var _ api.Handler = (*handler)(nil)
-
-func New() (api.Handler, error) { return new(handler), nil }
-
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
@@ -485,14 +479,6 @@ func (h *handler) DeleteBucketEncryptionHandler(w http.ResponseWriter, r *http.R
 }
 
 func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me",
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
 		Description:    "implement me",
