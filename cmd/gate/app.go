@@ -140,7 +140,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 			} else if err = os.Setenv(config.EnvSecretKey, wif); err != nil {
 				l.Fatal("could not set "+config.EnvSecretKey, zap.Error(err))
 			}
-			l.Info("used credentials", zap.String("AccessKey", uid.String()), zap.String("SecretKey", wif))
+			l.Info("gate neofs credentials", zap.String("OwnerID", uid.String()), zap.String("WIF", wif))
 		}
 
 		if obj, err = layer.NewLayer(l, cli, center); err != nil {
