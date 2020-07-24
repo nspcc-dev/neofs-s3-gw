@@ -401,6 +401,7 @@ github.com/nspcc-dev/hrw v1.0.8 h1:vwRuJXZXgkMvf473vFzeWGCfY1WBVeSHAEHvR4u3/Cg=
 github.com/nspcc-dev/hrw v1.0.8/go.mod h1:l/W2vx83vMQo6aStyx2AuZrJ+07lGv2JQGlVkPG06MU=
 github.com/nspcc-dev/neofs-api-go v1.2.0 h1:8vovd8hvnoWS4qkSa6rhyMFLFvjLtNKar5vYRodf+y4=
 github.com/nspcc-dev/neofs-api-go v1.2.0/go.mod h1:2tf31g2Ns/Z2ev5d8LZ/9f1VHIeY5LHpDbq4EsDhYM0=
+github.com/nspcc-dev/neofs-api-go v1.3.0 h1:w0wYIXzPJIElwhqahnQw/1NKiHxjRZKJhDUMSbEHmdk=
 github.com/nspcc-dev/neofs-crypto v0.3.0 h1:zlr3pgoxuzrmGCxc5W8dGVfA9Rro8diFvVnBg0L4ifM=
 github.com/nspcc-dev/neofs-crypto v0.3.0/go.mod h1:8w16GEJbH6791ktVqHN9YRNH3s9BEEKYxGhlFnp0cDw=
 github.com/nspcc-dev/netmap v1.7.0 h1:ak64xn/gPdgYw4tsqSSF7kAGQGbEpeuJEF3XwBX4L9Y=
