@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/minio/minio/auth"
 	"github.com/minio/minio/neofs/api"
 	"github.com/nspcc-dev/neofs-api-go/container"
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -47,17 +48,6 @@ type (
 	}
 )
 
-// TODO should be replaced with auth.GetBearerToken
-func getBearerToken(ctx context.Context) (*service.BearerTokenMsg, error) {
-	if val := ctx.Value("ctxBearerToken"); val == nil {
-		return nil, errors.New("empty bearer token")
-	} else if tkn, ok := val.(*service.BearerTokenMsg); ok {
-		return tkn, nil
-	}
-
-	return nil, errors.New("bad value for bearer token")
-}
-
 func (h *handler) getContainerInfo(ctx context.Context, p cnrInfoParams) (*Bucket, error) {
 	var (
 		err error
@@ -92,27 +82,32 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		inf *Bucket
 		con *grpc.ClientConn
 		res *container.ListResponse
+		tkn *service.BearerTokenMsg
 	)
 
-	// TODO think about timeout
+	// TODO think about deadlines
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	// TODO should be replaced with auth.GetBearerToken,
-	//      than if we not received token, should call
-	//      api.WriteErrorResponse
-	bearer, _ := getBearerToken(ctx)
+	if tkn, err = auth.GetBearerToken(ctx); err != nil {
+		h.log.Error("could not fetch bearer token",
+			zap.Error(err))
 
-	// should be taken from BearerToken, to display only users containers
-	// in future
-	if bearer != nil {
-		uid = bearer.OwnerID
+		e := api.GetAPIError(api.ErrInternalError)
+
+		api.WriteErrorResponse(ctx, w, api.Error{
+			Code:           e.Code,
+			Description:    err.Error(),
+			HTTPStatusCode: e.HTTPStatusCode,
+		}, r.URL)
+
+		return
 	}
 
 	req := new(container.ListRequest)
 	req.OwnerID = uid
 	req.SetTTL(service.SingleForwardingTTL)
-	req.SetBearer(bearer)
+	req.SetBearer(tkn)
 	// req.SetVersion(APIVersion) ??
 
 	if con, err = h.cli.GetConnection(ctx); err != nil {
@@ -161,7 +156,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		DisplayName: uid.String(),
 	}}
 
-	params := cnrInfoParams{con: con, tkn: bearer}
+	params := cnrInfoParams{con: con, tkn: tkn}
 
 	for _, cid := range res.CID {
 		// should receive each container info (??):
