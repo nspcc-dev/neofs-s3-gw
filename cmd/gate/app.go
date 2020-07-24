@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/minio/minio/auth"
@@ -18,7 +17,6 @@ import (
 
 	// should be removed in future
 	"github.com/minio/minio/legacy"
-	"github.com/minio/minio/legacy/config"
 )
 
 type (
@@ -67,8 +65,6 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	if err != nil {
 		l.Fatal("failed to initialize auth center", zap.Error(err))
 	}
-	uid := center.GetOwnerID()
-	wif := center.GetWIFString()
 
 	if caller, err = handler.New(); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
@@ -133,18 +129,8 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		}
 	}
 
-	{ // should prepare object layer
-		{ // FIXME: Temporary solution, to resolve problems with MinIO GW access/secret keys:
-			if err = os.Setenv(config.EnvAccessKey, uid.String()); err != nil {
-				l.Fatal("could not set "+config.EnvAccessKey, zap.Error(err))
-			} else if err = os.Setenv(config.EnvSecretKey, wif); err != nil {
-				l.Fatal("could not set "+config.EnvSecretKey, zap.Error(err))
-			}
-		}
-
-		if obj, err = layer.NewLayer(l, cli, center); err != nil {
-			l.Fatal("could not prepare ObjectLayer", zap.Error(err))
-		}
+	if obj, err = layer.NewLayer(l, cli, center); err != nil {
+		l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 	}
 
 	return &App{
