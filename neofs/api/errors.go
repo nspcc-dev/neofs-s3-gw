@@ -1939,8 +1939,8 @@ func toAPIError(ctx context.Context, err error) Error {
 	return apiErr
 }
 
-// getAPIError provides API Error for input API error code.
-func getAPIError(code ErrorCode) Error {
+// GetAPIError provides API Error for input API error code.
+func GetAPIError(code ErrorCode) Error {
 	if apiErr, ok := errorCodes[code]; ok {
 		return apiErr
 	}

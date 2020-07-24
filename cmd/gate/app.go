@@ -66,10 +66,6 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("failed to initialize auth center", zap.Error(err))
 	}
 
-	if caller, err = handler.New(); err != nil {
-		l.Fatal("could not initialize API handler", zap.Error(err))
-	}
-
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
 		tls = &tlsConfig{
 			KeyFile:  v.GetString(cfgTLSKeyFile),
@@ -131,6 +127,21 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 
 	if obj, err = layer.NewLayer(l, cli, center); err != nil {
 		l.Fatal("could not prepare ObjectLayer", zap.Error(err))
+	}
+
+	{ // should prepare api.Handler:
+		ctx, cancel := context.WithTimeout(context.Background(), conTimeout)
+		defer cancel()
+
+		apiParams := handler.Params{
+			Log: l,
+			Cli: cli,
+			Key: center.GetNeoFSPrivateKey(),
+		}
+
+		if caller, err = handler.New(ctx, apiParams); err != nil {
+			l.Fatal("could not initialize API handler", zap.Error(err))
+		}
 	}
 
 	return &App{

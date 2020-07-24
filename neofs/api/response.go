@@ -75,7 +75,7 @@ func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err Error, r
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
 		w.Header().Get(hdrAmzRequestID), deploymentID.String())
-	encodedErrorResponse := encodeResponse(errorResponse)
+	encodedErrorResponse := EncodeResponse(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
 
@@ -119,12 +119,18 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	}
 }
 
-// Encodes the response headers into XML format.
-func encodeResponse(response interface{}) []byte {
+// EncodeResponse encodes the response headers into XML format.
+func EncodeResponse(response interface{}) []byte {
 	var bytesBuffer bytes.Buffer
 	bytesBuffer.WriteString(xml.Header)
 	_ = xml.
 		NewEncoder(&bytesBuffer).
 		Encode(response)
 	return bytesBuffer.Bytes()
+}
+
+// WriteSuccessResponseXML writes success headers and response if any,
+// with content-type set to `application/xml`.
+func WriteSuccessResponseXML(w http.ResponseWriter, response []byte) {
+	writeResponse(w, http.StatusOK, response, mimeXML)
 }
