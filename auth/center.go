@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -151,7 +150,6 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 			return nil, errors.Wrap(err, "failed to pass authentication procedure")
 		}
 	*/
-	fmt.Println(bearerToken)
 	return bearerToken, nil
 }
 
