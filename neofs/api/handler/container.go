@@ -77,9 +77,10 @@ func (h *handler) getContainerInfo(ctx context.Context, p cnrInfoParams) (*Bucke
 	}, nil
 }
 
-func (h *handler) getContainerList(ctx context.Context, tkn *service.BearerTokenMsg) ([]refs.CID, error) {
+func (h *handler) getContainerList(ctx context.Context, tkn *service.BearerTokenMsg) ([]*Bucket, error) {
 	var (
 		err error
+		inf *Bucket
 		con *grpc.ClientConn
 		res *container.ListResponse
 	)
@@ -97,14 +98,25 @@ func (h *handler) getContainerList(ctx context.Context, tkn *service.BearerToken
 		return nil, errors.Wrap(err, "could not fetch list containers")
 	}
 
-	return res.CID, nil
+	params := cnrInfoParams{tkn: tkn}
+	result := make([]*Bucket, 0, len(res.CID))
+
+	for _, cid := range res.CID {
+		params.cid = cid
+		if inf, err = h.getContainerInfo(ctx, params); err != nil {
+			return nil, errors.Wrap(err, "could not fetch container info")
+		}
+
+		result = append(result, inf)
+	}
+
+	return result, nil
 }
 
 func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
-		inf *Bucket
-		lst []refs.CID
+		lst []*Bucket
 		tkn *service.BearerTokenMsg
 	)
 
@@ -147,31 +159,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		DisplayName: tkn.OwnerID.String(),
 	}}
 
-	params := cnrInfoParams{tkn: tkn}
-
-	for _, cid := range lst {
-		// should receive each container info (??):
-		params.cid = cid
-
-		if inf, err = h.getContainerInfo(ctx, params); err != nil {
-			h.log.Error("could not fetch bucket info",
-				zap.Error(err))
-
-			// TODO check that error isn't gRPC error
-
-			e := api.GetAPIError(api.ErrInternalError)
-
-			api.WriteErrorResponse(ctx, w, api.Error{
-				Code:           e.Code,
-				Description:    err.Error(),
-				HTTPStatusCode: e.HTTPStatusCode,
-			}, r.URL)
-
-			return
-		}
-
-		result.Buckets.Buckets = append(result.Buckets.Buckets, inf)
-	}
+	result.Buckets.Buckets = lst
 
 	// Generate response.
 	encodedSuccessResponse := api.EncodeResponse(result)
