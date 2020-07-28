@@ -25,6 +25,7 @@ type (
 
 	// Bucket container for bucket metadata
 	Bucket struct {
+		CID          refs.CID `xml:"-"` // ignored by response
 		Name         string
 		CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
 	}
@@ -72,6 +73,7 @@ func (h *handler) getContainerInfo(ctx context.Context, p cnrInfoParams) (*Bucke
 	_ = res
 
 	return &Bucket{
+		CID:          p.cid,
 		Name:         p.cid.String(),
 		CreationDate: new(time.Time).Format(time.RFC3339),
 	}, nil
