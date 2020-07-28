@@ -14,7 +14,7 @@ func AttachUserAuth(router *mux.Router, center *auth.Center, log *zap.Logger) {
 			bearerToken, err := center.AuthenticationPassed(r)
 			if err != nil {
 				log.Error("failed to pass authentication", zap.Error(err))
-				WriteErrorResponse(r.Context(), w, getAPIError(ErrAccessDenied), r.URL)
+				WriteErrorResponse(r.Context(), w, GetAPIError(ErrAccessDenied), r.URL)
 				return
 			}
 			h.ServeHTTP(w, r.WithContext(auth.SetBearerToken(r.Context(), bearerToken)))
