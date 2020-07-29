@@ -41,6 +41,7 @@ type (
 		Close()
 		Status() error
 		ReBalance(ctx context.Context)
+		SessionToken(ctx context.Context, params *SessionParams) (*service.Token, error)
 	}
 
 	Peer struct {
@@ -79,9 +80,11 @@ type (
 		reqHealth *state.HealthRequest
 
 		*sync.Mutex
-		nodes []*node
-		keys  []uint32
-		conns map[uint32][]*node
+		nodes  []*node
+		keys   []uint32
+		conns  map[uint32][]*node
+		key    *ecdsa.PrivateKey
+		tokens map[string]*service.Token
 
 		unhealthy *atomic.Error
 	}
@@ -95,11 +98,13 @@ var (
 
 func New(cfg *Config) (Pool, error) {
 	p := &pool{
-		log:   cfg.Logger,
-		Mutex: new(sync.Mutex),
-		keys:  make([]uint32, 0),
-		nodes: make([]*node, 0),
-		conns: make(map[uint32][]*node),
+		log:    cfg.Logger,
+		key:    cfg.PrivateKey,
+		Mutex:  new(sync.Mutex),
+		keys:   make([]uint32, 0),
+		nodes:  make([]*node, 0),
+		conns:  make(map[uint32][]*node),
+		tokens: make(map[string]*service.Token),
 
 		currentIdx: atomic.NewInt32(-1),
 
@@ -181,8 +186,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 	}()
 
 	keys := make(map[uint32]struct{})
-
-	p.log.Debug("re-balancing connections")
+	tokens := make(map[string]*service.Token)
 
 	for i := range p.nodes {
 		var (
@@ -190,6 +194,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 			exists bool
 			err    error
 			start  = time.Now()
+			tkn    *service.Token
 			conn   = p.nodes[i].conn
 			weight = p.nodes[i].weight
 		)
@@ -205,12 +210,14 @@ func (p *pool) ReBalance(ctx context.Context) {
 			p.log.Debug("empty connection, try to connect",
 				zap.String("address", p.nodes[i].address))
 
-			ctx, cancel := context.WithTimeout(ctx, p.conTimeout)
-			conn, err = grpc.DialContext(ctx, p.nodes[i].address,
-				grpc.WithBlock(),
-				grpc.WithInsecure(),
-				grpc.WithKeepaliveParams(p.opts))
-			cancel()
+			{ // try to connect
+				ctx, cancel := context.WithTimeout(ctx, p.conTimeout)
+				conn, err = grpc.DialContext(ctx, p.nodes[i].address,
+					grpc.WithBlock(),
+					grpc.WithInsecure(),
+					grpc.WithKeepaliveParams(p.opts))
+				cancel()
+			}
 
 			if err != nil || conn == nil {
 				p.log.Warn("skip, could not connect to node",
@@ -220,9 +227,31 @@ func (p *pool) ReBalance(ctx context.Context) {
 				continue
 			}
 
+			{ // try to prepare token
+				ctx, cancel := context.WithTimeout(ctx, p.reqTimeout)
+				tkn, err = generateToken(ctx, conn, p.key)
+				cancel()
+			}
+
+			if err != nil {
+				p.log.Debug("could not prepare session token",
+					zap.String("address", p.nodes[i].address),
+					zap.Error(err))
+				continue
+			}
+
+			tokens[conn.Target()] = tkn
+
 			p.nodes[i].conn = conn
 			p.nodes[i].usedAt = time.Now()
 			p.log.Debug("connected to node", zap.String("address", p.nodes[i].address))
+		} else if tkn, exists = p.tokens[conn.Target()]; exists {
+			// token exists, ignore
+		} else if tkn, err = generateToken(ctx, conn, p.key); err != nil {
+			p.log.Error("could not prepare session token",
+				zap.String("address", p.nodes[i].address),
+				zap.Error(err))
+			continue
 		}
 
 		for j := range p.conns[weight] {
@@ -247,6 +276,9 @@ func (p *pool) ReBalance(ctx context.Context) {
 				p.conns[weight] = append(p.conns[weight][:idx], p.conns[weight][idx+1:]...)
 			}
 
+			// remove token
+			delete(tokens, conn.Target())
+
 			if err = conn.Close(); err != nil {
 				p.log.Warn("could not close bad connection",
 					zap.String("address", p.nodes[i].address),
@@ -269,8 +301,13 @@ func (p *pool) ReBalance(ctx context.Context) {
 		if !exists {
 			p.conns[weight] = append(p.conns[weight], p.nodes[i])
 		}
+
+		if tkn != nil {
+			tokens[conn.Target()] = tkn
+		}
 	}
 
+	p.tokens = tokens
 	p.keys = p.keys[:0]
 	for w := range keys {
 		p.keys = append(p.keys, w)
