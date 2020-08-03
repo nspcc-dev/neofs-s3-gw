@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"net"
 	"net/http"
 	"time"
@@ -14,9 +15,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/keepalive"
-
-	// should be removed in future
-	"github.com/minio/minio/legacy"
 )
 
 type (
@@ -26,7 +24,7 @@ type (
 		log    *zap.Logger
 		cfg    *viper.Viper
 		tls    *tlsConfig
-		obj    legacy.ObjectLayer
+		obj    layer.Client
 		api    api.Handler
 
 		conTimeout time.Duration
@@ -52,7 +50,8 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		cli        pool.Pool
 		tls        *tlsConfig
 		caller     api.Handler
-		obj        legacy.ObjectLayer
+		obj        layer.Client
+		key        *ecdsa.PrivateKey
 		reBalance  = defaultRebalanceTimer
 		conTimeout = defaultConnectTimeout
 		reqTimeout = defaultRequestTimeout
@@ -65,6 +64,8 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	if err != nil {
 		l.Fatal("failed to initialize auth center", zap.Error(err))
 	}
+
+	key = center.GetNeoFSPrivateKey()
 
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
 		tls = &tlsConfig{
@@ -97,7 +98,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		Peers: fetchPeers(l, v),
 
 		Logger:     l,
-		PrivateKey: center.GetNeoFSPrivateKey(),
+		PrivateKey: key,
 
 		GRPCLogger:  gRPCLogger(l),
 		GRPCVerbose: v.GetBool(cfgGRPCVerbose),
@@ -125,7 +126,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		}
 	}
 
-	if obj, err = layer.NewLayer(l, cli, center); err != nil {
+	if obj, err = layer.NewLayer(l, cli, key); err != nil {
 		l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 	}
 
@@ -136,7 +137,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		apiParams := handler.Params{
 			Log: l,
 			Cli: cli,
-			Key: center.GetNeoFSPrivateKey(),
+			Key: key,
 		}
 
 		if caller, err = handler.New(ctx, apiParams); err != nil {
