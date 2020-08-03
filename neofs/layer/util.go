@@ -1,36 +1,50 @@
 package layer
 
 import (
-	"context"
-	"crypto/ecdsa"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 
-	minio "github.com/minio/minio/legacy"
-	"github.com/minio/minio/neofs/pool"
 	"github.com/nspcc-dev/neofs-api-go/object"
-	"github.com/nspcc-dev/neofs-api-go/refs"
-	"github.com/nspcc-dev/neofs-api-go/service"
-	"github.com/nspcc-dev/neofs-api-go/session"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 )
 
 type (
-	tokenParams struct {
-		cli   pool.Client
-		key   *ecdsa.PrivateKey
-		until uint64
+	ObjectInfo struct {
+		Bucket      string
+		Name        string
+		Size        int64
+		ContentType string
+		Created     time.Time
+		Headers     map[string]string
 	}
 
-	queryParams struct {
-		key  *ecdsa.PrivateKey
-		addr refs.Address
-		verb service.Token_Info_Verb
+	// ListObjectsInfo - container for list objects.
+	ListObjectsInfo struct {
+		// Indicates whether the returned list objects response is truncated. A
+		// value of true indicates that the list was truncated. The list can be truncated
+		// if the number of objects exceeds the limit allowed or specified
+		// by max keys.
+		IsTruncated bool
+
+		// When response is truncated (the IsTruncated element value in the response
+		// is true), you can use the key name in this field as marker in the subsequent
+		// request to get next set of objects.
+		//
+		// NOTE: This element is returned only if you have delimiter request parameter
+		// specified.
+		ContinuationToken     string
+		NextContinuationToken string
+
+		// List of objects info for this request.
+		Objects []ObjectInfo
+
+		// List of prefixes for this request.
+		Prefixes []string
 	}
 )
 
-// APIVersion of the neofs
-const APIVersion = 1
+const pathSeparator = string(os.PathSeparator)
 
 func userHeaders(h []object.Header) map[string]string {
 	result := make(map[string]string, len(h))
@@ -47,7 +61,7 @@ func userHeaders(h []object.Header) map[string]string {
 	return result
 }
 
-func objectInfoFromMeta(meta *object.Object) minio.ObjectInfo {
+func objectInfoFromMeta(meta *object.Object) *ObjectInfo {
 	aws3name := meta.SystemHeader.ID.String()
 
 	userHeaders := userHeaders(meta.Headers)
@@ -56,78 +70,16 @@ func objectInfoFromMeta(meta *object.Object) minio.ObjectInfo {
 		delete(userHeaders, name)
 	}
 
-	oi := minio.ObjectInfo{
+	mimeType := http.DetectContentType(meta.Payload)
+
+	return &ObjectInfo{
 		Bucket:      meta.SystemHeader.CID.String(),
 		Name:        aws3name,
-		ModTime:     time.Unix(meta.SystemHeader.CreatedAt.UnixTime, 0),
+		ContentType: mimeType,
+		Headers:     userHeaders,
 		Size:        int64(meta.SystemHeader.PayloadLength),
-		ETag:        "", // ?
-		ContentType: "", // ?
-		UserDefined: userHeaders,
-		UserTags:    "", // ignore it
+		Created:     time.Unix(meta.SystemHeader.CreatedAt.UnixTime, 0),
 	}
-
-	return oi
-}
-
-func generateToken(ctx context.Context, p tokenParams) (*service.Token, error) {
-	owner, err := refs.NewOwnerID(&p.key.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	token := new(service.Token)
-	token.SetOwnerID(owner)
-	token.SetExpirationEpoch(p.until)
-	token.SetOwnerKey(crypto.MarshalPublicKey(&p.key.PublicKey))
-
-	conn, err := p.cli.GetConnection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	creator, err := session.NewGRPCCreator(conn, p.key)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := creator.Create(ctx, token)
-	if err != nil {
-		return nil, err
-	}
-
-	token.SetID(res.GetID())
-	token.SetSessionKey(res.GetSessionKey())
-
-	return token, nil
-}
-
-func prepareToken(t *service.Token, p queryParams) (*service.Token, error) {
-	sig := make([]byte, len(t.Signature))
-	copy(sig, t.Signature)
-
-	token := &service.Token{
-		Token_Info: service.Token_Info{
-			ID:            t.ID,
-			OwnerID:       t.OwnerID,
-			Verb:          t.Verb,
-			Address:       t.Address,
-			TokenLifetime: t.TokenLifetime,
-			SessionKey:    t.SessionKey,
-			OwnerKey:      t.OwnerKey,
-		},
-		Signature: sig,
-	}
-
-	token.SetAddress(p.addr)
-	token.SetVerb(p.verb)
-
-	err := service.AddSignatureWithKey(p.key, service.NewSignedSessionToken(token))
-	if err != nil {
-		return nil, err
-	}
-
-	return token, nil
 }
 
 func parseUserHeaders(h map[string]string) []object.Header {
@@ -155,7 +107,7 @@ func nameFromObject(o *object.Object) (string, string) {
 		name = uh[AWS3NameHeader]
 	}
 
-	ind := strings.LastIndex(name, SlashSeparator)
+	ind := strings.LastIndex(name, pathSeparator)
 
 	return name[ind+1:], name[:ind+1]
 }

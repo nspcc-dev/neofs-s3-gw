@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/minio/minio/auth"
+	"github.com/minio/minio/neofs/pool"
 	"github.com/nspcc-dev/neofs-api-go/object"
 	"github.com/nspcc-dev/neofs-api-go/query"
 	"github.com/nspcc-dev/neofs-api-go/refs"
@@ -29,13 +29,16 @@ type (
 		r           io.Reader
 		userHeaders map[string]string
 	}
+
 	sgParams struct {
 		addr    refs.Address
 		objects []refs.ObjectID
 	}
+
 	delParams struct {
 		addr refs.Address
 	}
+
 	getParams struct {
 		addr   refs.Address
 		start  int64
@@ -45,22 +48,27 @@ type (
 )
 
 // objectSearchContainer returns all available objects in the container.
-func (n *neofsObject) objectSearchContainer(ctx context.Context, cid refs.CID) ([]refs.ObjectID, error) {
+func (n *layer) objectSearchContainer(ctx context.Context, cid refs.CID) ([]refs.ObjectID, error) {
 	var q query.Query
 	q.Filters = append(q.Filters, query.Filter{
 		Type: query.Filter_Exact,
 		Name: object.KeyRootObject,
 	})
 
+	conn, err := n.cli.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	queryBinary, err := q.Marshal()
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: refs.Address{CID: cid},
-		verb: service.Token_Info_Search,
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: refs.Address{CID: cid},
+		Verb: service.Token_Info_Search,
 	})
 	if err != nil {
 		return nil, err
@@ -70,21 +78,11 @@ func (n *neofsObject) objectSearchContainer(ctx context.Context, cid refs.CID) (
 	req.Query = queryBinary
 	req.QueryVersion = 1
 	req.ContainerID = cid
-	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +123,7 @@ func (n *neofsObject) objectSearchContainer(ctx context.Context, cid refs.CID) (
 
 // objectFindID returns object id (uuid) based on it's nice name in s3. If
 // nice name is uuid compatible, then function returns it.
-func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name string, put bool) (refs.ObjectID, error) {
+func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put bool) (refs.ObjectID, error) {
 	var (
 		id refs.ObjectID
 		q  query.Query
@@ -146,10 +144,15 @@ func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name strin
 		return id, err
 	}
 
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: refs.Address{CID: cid},
-		verb: service.Token_Info_Search,
+	conn, err := n.cli.GetConnection(ctx)
+	if err != nil {
+		return id, err
+	}
+
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: refs.Address{CID: cid},
+		Verb: service.Token_Info_Search,
 	})
 	if err != nil {
 		return id, err
@@ -159,22 +162,11 @@ func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name strin
 	req.Query = queryBinary
 	req.QueryVersion = 1
 	req.ContainerID = cid
-	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		var empty refs.ObjectID
-		return empty, errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
-	if err != nil {
-		return id, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		return id, err
 	}
@@ -228,11 +220,17 @@ func (n *neofsObject) objectFindID(ctx context.Context, cid refs.CID, name strin
 }
 
 // objectHead returns all object's headers.
-func (n *neofsObject) objectHead(ctx context.Context, addr refs.Address) (*object.Object, error) {
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: addr,
-		verb: service.Token_Info_Head,
+func (n *layer) objectHead(ctx context.Context, addr refs.Address) (*object.Object, error) {
+
+	conn, err := n.cli.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: addr,
+		Verb: service.Token_Info_Head,
 	})
 	if err != nil {
 		return nil, err
@@ -241,21 +239,11 @@ func (n *neofsObject) objectHead(ctx context.Context, addr refs.Address) (*objec
 	req := new(object.HeadRequest)
 	req.Address = addr
 	req.FullHeaders = true
-	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +261,16 @@ func (n *neofsObject) objectHead(ctx context.Context, addr refs.Address) (*objec
 }
 
 // objectGet and write it into provided io.Reader.
-func (n *neofsObject) objectGet(ctx context.Context, p getParams) (*object.Object, error) {
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: p.addr,
-		verb: service.Token_Info_Get,
+func (n *layer) objectGet(ctx context.Context, p getParams) (*object.Object, error) {
+	conn, err := n.cli.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: p.addr,
+		Verb: service.Token_Info_Get,
 	})
 	if err != nil {
 		return nil, err
@@ -288,21 +281,11 @@ func (n *neofsObject) objectGet(ctx context.Context, p getParams) (*object.Objec
 	//       object.GetRange() response message become gRPC stream.
 	req := new(object.GetRequest)
 	req.Address = p.addr
-	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -366,11 +349,16 @@ func (n *neofsObject) objectGet(ctx context.Context, p getParams) (*object.Objec
 }
 
 // objectPut into neofs, took payload from io.Reader.
-func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Object, error) {
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: p.addr,
-		verb: service.Token_Info_Put,
+func (n *layer) objectPut(ctx context.Context, p putParams) (*object.Object, error) {
+	conn, err := n.cli.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: p.addr,
+		Verb: service.Token_Info_Put,
 	})
 	if err != nil {
 		n.log.Error("could not prepare token",
@@ -378,16 +366,7 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 		return nil, err
 	}
 
-	conn, err := n.cli.GetConnection(ctx)
-	if err != nil {
-		n.log.Error("could not prepare connection",
-			zap.Error(err))
-		return nil, err
-	}
-
-	client := object.NewServiceClient(conn)
-	// todo: think about timeout
-	putClient, err := client.Put(ctx)
+	putClient, err := object.NewServiceClient(conn).Put(ctx)
 	if err != nil {
 		n.log.Error("could not prepare PutClient",
 			zap.Error(err))
@@ -405,7 +384,7 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 		SystemHeader: object.SystemHeader{
 			Version:       objectVersion,
 			ID:            p.addr.ObjectID,
-			OwnerID:       n.owner,
+			OwnerID:       n.uid,
 			CID:           p.addr.CID,
 			PayloadLength: uint64(p.size),
 		},
@@ -413,14 +392,9 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 	}
 
 	req := object.MakePutRequestHeader(obj)
-	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
 	if err != nil {
@@ -446,13 +420,8 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 
 		if read > 0 {
 			req := object.MakePutRequestChunk(readBuffer[:read])
-			req.SetVersion(APIVersion)
 			req.SetTTL(service.SingleForwardingTTL)
-			bearerToken, err := auth.GetBearerToken(ctx)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to get bearer token")
-			}
-			req.SetBearer(bearerToken)
+			// req.SetBearer(bearerToken)
 
 			err = service.SignRequestData(n.key, req)
 			if err != nil {
@@ -484,17 +453,17 @@ func (n *neofsObject) objectPut(ctx context.Context, p putParams) (*object.Objec
 }
 
 // storageGroupPut prepares storage group object and put it into neofs.
-func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.Object, error) {
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: p.addr,
-		verb: service.Token_Info_Put,
-	})
+func (n *layer) storageGroupPut(ctx context.Context, p sgParams) (*object.Object, error) {
+	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := n.cli.GetConnection(ctx)
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: p.addr,
+		Verb: service.Token_Info_Put,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +479,7 @@ func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.
 		SystemHeader: object.SystemHeader{
 			Version: objectVersion,
 			ID:      p.addr.ObjectID,
-			OwnerID: n.owner,
+			OwnerID: n.uid,
 			CID:     p.addr.CID,
 		},
 		Headers: make([]object.Header, 0, len(p.objects)),
@@ -525,14 +494,9 @@ func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.
 	sg.SetStorageGroup(new(storagegroup.StorageGroup))
 
 	req := object.MakePutRequestHeader(sg)
-	req.SetVersion(APIVersion)
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
 	if err != nil {
@@ -553,11 +517,16 @@ func (n *neofsObject) storageGroupPut(ctx context.Context, p sgParams) (*object.
 }
 
 // objectDelete puts tombstone object into neofs.
-func (n *neofsObject) objectDelete(ctx context.Context, p delParams) error {
-	token, err := prepareToken(n.token, queryParams{
-		key:  n.key,
-		addr: p.addr,
-		verb: service.Token_Info_Delete,
+func (n *layer) objectDelete(ctx context.Context, p delParams) error {
+	conn, err := n.cli.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
+	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
+		Conn: conn,
+		Addr: p.addr,
+		Verb: service.Token_Info_Delete,
 	})
 	if err != nil {
 		return err
@@ -565,22 +534,12 @@ func (n *neofsObject) objectDelete(ctx context.Context, p delParams) error {
 
 	req := new(object.DeleteRequest)
 	req.Address = p.addr
-	req.OwnerID = n.owner
-	req.SetVersion(APIVersion)
+	req.OwnerID = n.uid
 	req.SetTTL(service.SingleForwardingTTL)
-	bearerToken, err := auth.GetBearerToken(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get bearer token")
-	}
-	req.SetBearer(bearerToken)
 	req.SetToken(token)
+	// req.SetBearer(bearerToken)
 
 	err = service.SignRequestData(n.key, req)
-	if err != nil {
-		return err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
