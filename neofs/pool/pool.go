@@ -32,16 +32,16 @@ type (
 	}
 
 	Client interface {
+		Status() error
 		GetConnection(context.Context) (*grpc.ClientConn, error)
+		SessionToken(ctx context.Context, params *SessionParams) (*service.Token, error)
 	}
 
 	Pool interface {
 		Client
 
 		Close()
-		Status() error
 		ReBalance(ctx context.Context)
-		SessionToken(ctx context.Context, params *SessionParams) (*service.Token, error)
 	}
 
 	Peer struct {
