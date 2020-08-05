@@ -124,42 +124,7 @@ func (n *layer) Get(ctx context.Context, address refs.Address) (*object.Object, 
 		return nil, err
 	}
 
-	var (
-		off int
-		obj *object.Object
-	)
-
-	for {
-		resp, err := cli.Recv()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return nil, err
-		}
-
-		switch o := resp.R.(type) {
-		case *object.GetResponse_Object:
-			obj = o.Object
-
-			_, hdr := obj.LastHeader(object.HeaderType(object.TombstoneHdr))
-			if hdr != nil {
-				return nil, errors.New("object already removed")
-			}
-
-			obj.Payload = make([]byte, obj.SystemHeader.PayloadLength)
-		case *object.GetResponse_Chunk:
-			if obj == nil {
-				return nil, errors.New("object headers not received")
-			}
-			off += copy(obj.Payload[off:], o.Chunk)
-		default:
-			return nil, errors.Errorf("unknown response %T", o)
-		}
-	}
-
-	return obj, nil
+	return receiveObject(cli)
 }
 
 // GetBucketInfo returns bucket name.
