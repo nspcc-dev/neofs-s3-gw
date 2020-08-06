@@ -6,6 +6,14 @@ import (
 	"github.com/minio/minio/neofs/api"
 )
 
+func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
+	api.WriteErrorResponse(r.Context(), w, api.Error{
+		Code:           "XNeoFSUnimplemented",
+		Description:    "implement me ListBucketsHandler",
+		HTTPStatusCode: http.StatusNotImplemented,
+	}, r.URL)
+}
+
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
