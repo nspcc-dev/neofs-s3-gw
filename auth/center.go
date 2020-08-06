@@ -161,14 +161,5 @@ func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
 }
 
 func LoadGateAuthPrivateKey(path string) (hcs.X25519PrivateKey, error) {
-	bytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	key := string(bytes)
-	privateKey, _, err := hcs.DecodeKeysFromStrings(&key, nil)
-	if err != nil {
-		return nil, err
-	}
-	return privateKey, nil
+	return ioutil.ReadFile(path)
 }
