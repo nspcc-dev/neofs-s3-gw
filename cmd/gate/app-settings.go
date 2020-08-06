@@ -118,7 +118,7 @@ func fetchAuthCenter(l *zap.Logger, v *viper.Viper, peers []pool.Peer) (*auth.Ce
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create auth center")
 	}
-	if err = center.SetUserAuthKeys(gateAuthPrivateKey); err != nil {
+	if err = center.SetAuthKeys(gateAuthPrivateKey); err != nil {
 		return nil, errors.Wrap(err, "failed to set gate auth keys")
 	}
 	if err = center.SetNeoFSKeys(neofsPrivateKey); err != nil {
