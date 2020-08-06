@@ -188,3 +188,17 @@ func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
 	request.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	return bytes.NewReader(payload), nil
 }
+
+func LoadGateAuthPrivateKey(path string) (hcs.X25519PrivateKey, error) {
+	bytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	// FIXME: Rework when DecodeKeysFromBytes will arrive.
+	key := string(bytes)
+	privateKey, _, err := hcs.DecodeKeys(&key, nil)
+	if err != nil {
+		return nil, err
+	}
+	return privateKey, nil
+}
