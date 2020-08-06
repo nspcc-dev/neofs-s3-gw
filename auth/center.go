@@ -18,7 +18,6 @@ import (
 	"github.com/nspcc-dev/neofs-authmate/credentials"
 	"github.com/nspcc-dev/neofs-authmate/gates"
 	manager "github.com/nspcc-dev/neofs-authmate/neofsmanager"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -50,9 +49,10 @@ func NewCenter(log *zap.Logger, neofsNodeAddress string) (*Center, error) {
 }
 
 func (center *Center) SetNeoFSKeys(key *ecdsa.PrivateKey) error {
-	// TODO: Change when credentials will start taking not just a string.
-	wif, _ := crypto.WIFEncode(key)
-	creds, _ := credentials.NewCredentials(wif)
+	creds, err := credentials.NewFromKey(key)
+	if err != nil {
+		return err
+	}
 	center.neofsCredentials = creds
 	return nil
 }
@@ -65,7 +65,7 @@ func (center *Center) GetOwnerID() refs.OwnerID {
 	return center.neofsCredentials.OwnerID()
 }
 
-func (center *Center) SetUserAuthKeys(key hcs.X25519PrivateKey) error {
+func (center *Center) SetAuthKeys(key hcs.X25519PrivateKey) error {
 	keys, err := hcs.NewKeys(key)
 	if err != nil {
 		return err
