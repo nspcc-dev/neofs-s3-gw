@@ -130,19 +130,8 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 	}
 
-	{ // should prepare api.Handler:
-		ctx, cancel := context.WithTimeout(context.Background(), conTimeout)
-		defer cancel()
-
-		apiParams := handler.Params{
-			Log: l,
-			Cli: cli,
-			Key: key,
-		}
-
-		if caller, err = handler.New(ctx, apiParams); err != nil {
-			l.Fatal("could not initialize API handler", zap.Error(err))
-		}
+	if caller, err = handler.New(l, obj); err != nil {
+		l.Fatal("could not initialize API handler", zap.Error(err))
 	}
 
 	return &App{
