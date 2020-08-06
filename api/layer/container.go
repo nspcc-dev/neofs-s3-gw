@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/minio/auth"
 	"github.com/nspcc-dev/neofs-api-go/container"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
 )
 

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/neofs/pool"
 	"github.com/nspcc-dev/neofs-api-go/object"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )

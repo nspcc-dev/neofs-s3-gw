@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/minio/minio/misc"
+	"github.com/nspcc-dev/neofs-s3-gate/misc"
 )
 
 type (
@@ -152,7 +152,7 @@ func setCommonHeaders(w http.ResponseWriter) {
 
 // removeSensitiveHeaders removes confidential encryption
 // information - e.g. the SSE-C key - from the HTTP headers.
-// It has the same semantics as RemoveSensitiveEntires.
+// It has the same semantics as RemoveSensitiveEntries.
 func removeSensitiveHeaders(h http.Header) {
 	h.Del(hdrSSECustomerKey)
 	h.Del(hdrSSECopyKey)

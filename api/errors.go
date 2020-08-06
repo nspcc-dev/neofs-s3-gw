@@ -2,15 +2,9 @@ package api
 
 import (
 	"context"
-	"encoding/xml"
 	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
-
-	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/auth"
-	"github.com/minio/minio/neofs/api/crypto"
+	"path"
 )
 
 type (
@@ -24,7 +18,7 @@ const maxEConfigJSONSize = 262272
 
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
-	ErrNone ErrorCode = iota
+	_ ErrorCode = iota
 	ErrAccessDenied
 	ErrBadDigest
 	ErrEntityTooSmall
@@ -1096,7 +1090,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrObjectTampered: {
 		Code:           "XMinioObjectTampered",
-		Description:    errObjectTampered.Error(),
+		Description:    "The requested object was modified and may be compromised",
 		HTTPStatusCode: http.StatusPartialContent,
 	},
 	ErrMaximumExpires: {
@@ -1618,300 +1612,6 @@ func (e errorCodeMap) ToAPIErr(errCode ErrorCode) Error {
 	return e.ToAPIErrWithErr(errCode, nil)
 }
 
-// toAPIErrorCode - Converts embedded errors. Convenience
-// function written to handle all cases where we have known types of
-// errors returned by underlying layers.
-func toAPIErrorCode(_ context.Context, err error) (apiErr ErrorCode) {
-	if err == nil {
-		return ErrNone
-	}
-
-	switch err {
-	case errInvalidArgument:
-		apiErr = ErrAdminInvalidArgument
-	case errNoSuchUser:
-		apiErr = ErrAdminNoSuchUser
-	case errNoSuchGroup:
-		apiErr = ErrAdminNoSuchGroup
-	case errGroupNotEmpty:
-		apiErr = ErrAdminGroupNotEmpty
-	case errNoSuchPolicy:
-		apiErr = ErrAdminNoSuchPolicy
-	case errSignatureMismatch:
-		apiErr = ErrSignatureDoesNotMatch
-	case errInvalidRange:
-		apiErr = ErrInvalidRange
-	case errDataTooLarge:
-		apiErr = ErrEntityTooLarge
-	case errDataTooSmall:
-		apiErr = ErrEntityTooSmall
-	case errAuthentication:
-		apiErr = ErrAccessDenied
-	case auth.ErrInvalidAccessKeyLength:
-		apiErr = ErrAdminInvalidAccessKey
-	case auth.ErrInvalidSecretKeyLength:
-		apiErr = ErrAdminInvalidSecretKey
-	// SSE errors
-	case errInvalidEncryptionParameters:
-		apiErr = ErrInvalidEncryptionParameters
-	case crypto.ErrInvalidEncryptionMethod:
-		apiErr = ErrInvalidEncryptionMethod
-	case crypto.ErrInvalidCustomerAlgorithm:
-		apiErr = ErrInvalidSSECustomerAlgorithm
-	case crypto.ErrMissingCustomerKey:
-		apiErr = ErrMissingSSECustomerKey
-	case crypto.ErrMissingCustomerKeyMD5:
-		apiErr = ErrMissingSSECustomerKeyMD5
-	case crypto.ErrCustomerKeyMD5Mismatch:
-		apiErr = ErrSSECustomerKeyMD5Mismatch
-	case errObjectTampered:
-		apiErr = ErrObjectTampered
-	case errEncryptedObject:
-		apiErr = ErrSSEEncryptedObject
-	case errInvalidSSEParameters:
-		apiErr = ErrInvalidSSECustomerParameters
-	case crypto.ErrInvalidCustomerKey, crypto.ErrSecretKeyMismatch:
-		apiErr = ErrAccessDenied // no access without correct key
-	case crypto.ErrIncompatibleEncryptionMethod:
-		apiErr = ErrIncompatibleEncryptionMethod
-	case errKMSNotConfigured:
-		apiErr = ErrKMSNotConfigured
-	case crypto.ErrKMSAuthLogin:
-		apiErr = ErrKMSAuthFailure
-	case context.Canceled, context.DeadlineExceeded:
-		apiErr = ErrOperationTimedOut
-	case errDiskNotFound:
-		apiErr = ErrSlowDown
-		// case objectlock.ErrInvalidRetentionDate:
-		// 	apiErr = ErrInvalidRetentionDate
-		// case objectlock.ErrPastObjectLockRetainDate:
-		// 	apiErr = ErrPastObjectLockRetainDate
-		// case objectlock.ErrUnknownWORMModeDirective:
-		// 	apiErr = ErrUnknownWORMModeDirective
-		// case objectlock.ErrObjectLockInvalidHeaders:
-		// 	apiErr = ErrObjectLockInvalidHeaders
-		// case objectlock.ErrMalformedXML:
-		// 	apiErr = ErrMalformedXML
-	}
-
-	// Compression errors
-	switch err {
-	case errInvalidDecompressedSize:
-		apiErr = ErrInvalidDecompressedSize
-	}
-
-	if apiErr != ErrNone {
-		// If there was a match in the above switch case.
-		return apiErr
-	}
-
-	// etcd specific errors, a key is always a bucket for us return
-	// ErrNoSuchBucket in such a case.
-	if err == ErrNoEntriesFound {
-		return ErrNoSuchBucket
-	}
-
-	switch err.(type) {
-	case StorageFull:
-		apiErr = ErrStorageFull
-	// case hash.BadDigest:
-	// 	apiErr = ErrBadDigest
-	case AllAccessDisabled:
-		apiErr = ErrAllAccessDisabled
-	case IncompleteBody:
-		apiErr = ErrIncompleteBody
-	case ObjectExistsAsDirectory:
-		apiErr = ErrObjectExistsAsDirectory
-	case PrefixAccessDenied:
-		apiErr = ErrAccessDenied
-	case ParentIsObject:
-		apiErr = ErrParentIsObject
-	case BucketNameInvalid:
-		apiErr = ErrInvalidBucketName
-	case BucketNotFound:
-		apiErr = ErrNoSuchBucket
-	case BucketAlreadyOwnedByYou:
-		apiErr = ErrBucketAlreadyOwnedByYou
-	case BucketNotEmpty:
-		apiErr = ErrBucketNotEmpty
-	case BucketAlreadyExists:
-		apiErr = ErrBucketAlreadyExists
-	case BucketExists:
-		apiErr = ErrBucketAlreadyOwnedByYou
-	case ObjectNotFound:
-		apiErr = ErrNoSuchKey
-	case ObjectAlreadyExists:
-		apiErr = ErrMethodNotAllowed
-	case ObjectNameInvalid:
-		apiErr = ErrInvalidObjectName
-	case ObjectNamePrefixAsSlash:
-		apiErr = ErrInvalidObjectNamePrefixSlash
-	case InvalidUploadID:
-		apiErr = ErrNoSuchUpload
-	case InvalidPart:
-		apiErr = ErrInvalidPart
-	case InsufficientWriteQuorum:
-		apiErr = ErrSlowDown
-	case InsufficientReadQuorum:
-		apiErr = ErrSlowDown
-	case UnsupportedDelimiter:
-		apiErr = ErrNotImplemented
-	case InvalidMarkerPrefixCombination:
-		apiErr = ErrNotImplemented
-	case InvalidUploadIDKeyCombination:
-		apiErr = ErrNotImplemented
-	case MalformedUploadID:
-		apiErr = ErrNoSuchUpload
-	case PartTooSmall:
-		apiErr = ErrEntityTooSmall
-	case SignatureDoesNotMatch:
-		apiErr = ErrSignatureDoesNotMatch
-	// case hash.SHA256Mismatch:
-	// 	apiErr = ErrContentSHA256Mismatch
-	case ObjectTooLarge:
-		apiErr = ErrEntityTooLarge
-	case ObjectTooSmall:
-		apiErr = ErrEntityTooSmall
-	case NotImplemented:
-		apiErr = ErrNotImplemented
-	case PartTooBig:
-		apiErr = ErrEntityTooLarge
-	case UnsupportedMetadata:
-		apiErr = ErrUnsupportedMetadata
-	case BucketPolicyNotFound:
-		apiErr = ErrNoSuchBucketPolicy
-	case BucketLifecycleNotFound:
-		apiErr = ErrNoSuchLifecycleConfiguration
-	case BucketSSEConfigNotFound:
-		apiErr = ErrNoSuchBucketSSEConfig
-	case BucketTaggingNotFound:
-		apiErr = ErrBucketTaggingNotFound
-	case BucketObjectLockConfigNotFound:
-		apiErr = ErrObjectLockConfigurationNotFound
-	case BucketQuotaConfigNotFound:
-		apiErr = ErrAdminNoSuchQuotaConfiguration
-	case BucketQuotaExceeded:
-		apiErr = ErrAdminBucketQuotaExceeded
-	// case *event.ErrInvalidEventName:
-	// 	apiErr = ErrEventNotification
-	// case *event.ErrInvalidARN:
-	// 	apiErr = ErrARNNotification
-	// case *event.ErrARNNotFound:
-	// 	apiErr = ErrARNNotification
-	// case *event.ErrUnknownRegion:
-	// 	apiErr = ErrRegionNotification
-	// case *event.ErrInvalidFilterName:
-	// 	apiErr = ErrFilterNameInvalid
-	// case *event.ErrFilterNamePrefix:
-	// 	apiErr = ErrFilterNamePrefix
-	// case *event.ErrFilterNameSuffix:
-	// 	apiErr = ErrFilterNameSuffix
-	// case *event.ErrInvalidFilterValue:
-	// 	apiErr = ErrFilterValueInvalid
-	// case *event.ErrDuplicateEventName:
-	// 	apiErr = ErrOverlappingConfigs
-	// case *event.ErrDuplicateQueueConfiguration:
-	// 	apiErr = ErrOverlappingFilterNotification
-	// case *event.ErrUnsupportedConfiguration:
-	// 	apiErr = ErrUnsupportedNotification
-	case OperationTimedOut:
-		apiErr = ErrOperationTimedOut
-	case BackendDown:
-		apiErr = ErrBackendDown
-	case ObjectNameTooLong:
-		apiErr = ErrKeyTooLongError
-	default:
-		var ie, iw int
-		// This work-around is to handle the issue golang/go#30648
-		if _, ferr := fmt.Fscanf(strings.NewReader(err.Error()),
-			"request declared a Content-Length of %d but only wrote %d bytes",
-			&ie, &iw); ferr != nil {
-			apiErr = ErrInternalError
-			// Make sure to log the errors which we cannot translate
-			// to a meaningful S3 API errors. This is added to aid in
-			// debugging unexpected/unhandled errors.
-			// logger.LogIf(ctx, err)
-		} else if ie > iw {
-			apiErr = ErrIncompleteBody
-		} else {
-			apiErr = ErrInternalError
-			// Make sure to log the errors which we cannot translate
-			// to a meaningful S3 API errors. This is added to aid in
-			// debugging unexpected/unhandled errors.
-			// logger.LogIf(ctx, err)
-		}
-	}
-
-	return apiErr
-}
-
-var noError = Error{}
-
-// toAPIError - Converts embedded errors. Convenience
-// function written to handle all cases where we have known types of
-// errors returned by underlying layers.
-func toAPIError(ctx context.Context, err error) Error {
-	if err == nil {
-		return noError
-	}
-
-	var apiErr = errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
-	if apiErr.Code == "InternalError" {
-		// If we see an internal error try to interpret
-		// any underlying errors if possible depending on
-		// their internal error types. This code is only
-		// useful with gateway implementations.
-		switch e := err.(type) {
-		case *xml.SyntaxError:
-			apiErr = Error{
-				Code: "MalformedXML",
-				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
-					e.Error()),
-				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
-			}
-		case url.EscapeError:
-			apiErr = Error{
-				Code: "XMinioInvalidObjectName",
-				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
-					e.Error()),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		// case lifecycle.Error:
-		// 	apiErr = Error{
-		// 		Code:           "InvalidRequest",
-		// 		Description:    e.Error(),
-		// 		HTTPStatusCode: http.StatusBadRequest,
-		// 	}
-		case tags.Error:
-			apiErr = Error{
-				Code:           e.Code(),
-				Description:    e.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		// case policy.Error:
-		// 	apiErr = Error{
-		// 		Code:           "MalformedPolicy",
-		// 		Description:    e.Error(),
-		// 		HTTPStatusCode: http.StatusBadRequest,
-		// 	}
-		case crypto.Error:
-			apiErr = Error{
-				Code:           "XMinIOEncryptionError",
-				Description:    e.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case ErrorResponse:
-			apiErr = Error{
-				Code:           e.Code,
-				Description:    e.Message,
-				HTTPStatusCode: e.StatusCode,
-			}
-		}
-	}
-
-	return apiErr
-}
-
 // GetAPIError provides API Error for input API error code.
 func GetAPIError(code ErrorCode) Error {
 	if apiErr, ok := errorCodes[code]; ok {
@@ -1930,8 +1630,366 @@ func getAPIErrorResponse(ctx context.Context, err Error, resource, requestID, ho
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		Resource:   resource,
-		Region:     "",
 		RequestID:  requestID,
 		HostID:     hostID,
 	}
+}
+
+// SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
+type SignatureDoesNotMatch struct{}
+
+func (e SignatureDoesNotMatch) Error() string {
+	return "The request signature we calculated does not match the signature you provided. Check your key and signing method."
+}
+
+// StorageFull storage ran out of space.
+type StorageFull struct{}
+
+func (e StorageFull) Error() string {
+	return "Storage reached its minimum free disk threshold."
+}
+
+// SlowDown  too many file descriptors open or backend busy .
+type SlowDown struct{}
+
+func (e SlowDown) Error() string {
+	return "Please reduce your request rate"
+}
+
+// InsufficientReadQuorum storage cannot satisfy quorum for read operation.
+type InsufficientReadQuorum struct{}
+
+func (e InsufficientReadQuorum) Error() string {
+	return "Storage resources are insufficient for the read operation."
+}
+
+// InsufficientWriteQuorum storage cannot satisfy quorum for write operation.
+type InsufficientWriteQuorum struct{}
+
+func (e InsufficientWriteQuorum) Error() string {
+	return "Storage resources are insufficient for the write operation."
+}
+
+// GenericError - generic object layer error.
+type GenericError struct {
+	Bucket string
+	Object string
+}
+
+// BucketNotFound bucket does not exist.
+type BucketNotFound GenericError
+
+func (e BucketNotFound) Error() string {
+	return "Bucket not found: " + e.Bucket
+}
+
+// BucketAlreadyExists the requested bucket name is not available.
+type BucketAlreadyExists GenericError
+
+func (e BucketAlreadyExists) Error() string {
+	return "The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again."
+}
+
+// BucketAlreadyOwnedByYou already owned by you.
+type BucketAlreadyOwnedByYou GenericError
+
+func (e BucketAlreadyOwnedByYou) Error() string {
+	return "Bucket already owned by you: " + e.Bucket
+}
+
+// BucketNotEmpty bucket is not empty.
+type BucketNotEmpty GenericError
+
+func (e BucketNotEmpty) Error() string {
+	return "Bucket not empty: " + e.Bucket
+}
+
+// ObjectNotFound object does not exist.
+type ObjectNotFound GenericError
+
+func (e ObjectNotFound) Error() string {
+	return "Object not found: " + e.Bucket + "#" + e.Object
+}
+
+// ObjectAlreadyExists object already exists.
+type ObjectAlreadyExists GenericError
+
+func (e ObjectAlreadyExists) Error() string {
+	return "Object: " + e.Bucket + "#" + e.Object + " already exists"
+}
+
+// ObjectExistsAsDirectory object already exists as a directory.
+type ObjectExistsAsDirectory GenericError
+
+func (e ObjectExistsAsDirectory) Error() string {
+	return "Object exists on : " + e.Bucket + " as directory " + e.Object
+}
+
+// PrefixAccessDenied object access is denied.
+type PrefixAccessDenied GenericError
+
+func (e PrefixAccessDenied) Error() string {
+	return "Prefix access is denied: " + e.Bucket + SlashSeparator + e.Object
+}
+
+// ParentIsObject object access is denied.
+type ParentIsObject GenericError
+
+func (e ParentIsObject) Error() string {
+	return "Parent is object " + e.Bucket + SlashSeparator + path.Dir(e.Object)
+}
+
+// BucketExists bucket exists.
+type BucketExists GenericError
+
+func (e BucketExists) Error() string {
+	return "Bucket exists: " + e.Bucket
+}
+
+// UnsupportedDelimiter - unsupported delimiter.
+type UnsupportedDelimiter struct {
+	Delimiter string
+}
+
+func (e UnsupportedDelimiter) Error() string {
+	return fmt.Sprintf("delimiter '%s' is not supported. Only '/' is supported", e.Delimiter)
+}
+
+// InvalidUploadIDKeyCombination - invalid upload id and key marker combination.
+type InvalidUploadIDKeyCombination struct {
+	UploadIDMarker, KeyMarker string
+}
+
+func (e InvalidUploadIDKeyCombination) Error() string {
+	return fmt.Sprintf("Invalid combination of uploadID marker '%s' and marker '%s'", e.UploadIDMarker, e.KeyMarker)
+}
+
+// InvalidMarkerPrefixCombination - invalid marker and prefix combination.
+type InvalidMarkerPrefixCombination struct {
+	Marker, Prefix string
+}
+
+func (e InvalidMarkerPrefixCombination) Error() string {
+	return fmt.Sprintf("Invalid combination of marker '%s' and prefix '%s'", e.Marker, e.Prefix)
+}
+
+// BucketPolicyNotFound - no bucket policy found.
+type BucketPolicyNotFound GenericError
+
+func (e BucketPolicyNotFound) Error() string {
+	return "No bucket policy configuration found for bucket: " + e.Bucket
+}
+
+// BucketLifecycleNotFound - no bucket lifecycle found.
+type BucketLifecycleNotFound GenericError
+
+func (e BucketLifecycleNotFound) Error() string {
+	return "No bucket lifecycle configuration found for bucket : " + e.Bucket
+}
+
+// BucketSSEConfigNotFound - no bucket encryption found
+type BucketSSEConfigNotFound GenericError
+
+func (e BucketSSEConfigNotFound) Error() string {
+	return "No bucket encryption configuration found for bucket: " + e.Bucket
+}
+
+// BucketTaggingNotFound - no bucket tags found
+type BucketTaggingNotFound GenericError
+
+func (e BucketTaggingNotFound) Error() string {
+	return "No bucket tags found for bucket: " + e.Bucket
+}
+
+// BucketObjectLockConfigNotFound - no bucket object lock config found
+type BucketObjectLockConfigNotFound GenericError
+
+func (e BucketObjectLockConfigNotFound) Error() string {
+	return "No bucket object lock configuration found for bucket: " + e.Bucket
+}
+
+// BucketQuotaConfigNotFound - no bucket quota config found.
+type BucketQuotaConfigNotFound GenericError
+
+func (e BucketQuotaConfigNotFound) Error() string {
+	return "No quota config found for bucket : " + e.Bucket
+}
+
+// BucketQuotaExceeded - bucket quota exceeded.
+type BucketQuotaExceeded GenericError
+
+func (e BucketQuotaExceeded) Error() string {
+	return "Bucket quota exceeded for bucket: " + e.Bucket
+}
+
+// Bucket related errors.
+
+// BucketNameInvalid - bucketname provided is invalid.
+type BucketNameInvalid GenericError
+
+// Error returns string an error formatted as the given text.
+func (e BucketNameInvalid) Error() string {
+	return "Bucket name invalid: " + e.Bucket
+}
+
+// Object related errors.
+
+// ObjectNameInvalid - object name provided is invalid.
+type ObjectNameInvalid GenericError
+
+// ObjectNameTooLong - object name too long.
+type ObjectNameTooLong GenericError
+
+// ObjectNamePrefixAsSlash - object name has a slash as prefix.
+type ObjectNamePrefixAsSlash GenericError
+
+// Error returns string an error formatted as the given text.
+func (e ObjectNameInvalid) Error() string {
+	return "Object name invalid: " + e.Bucket + "#" + e.Object
+}
+
+// Error returns string an error formatted as the given text.
+func (e ObjectNameTooLong) Error() string {
+	return "Object name too long: " + e.Bucket + "#" + e.Object
+}
+
+// Error returns string an error formatted as the given text.
+func (e ObjectNamePrefixAsSlash) Error() string {
+	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
+}
+
+// AllAccessDisabled All access to this object has been disabled
+type AllAccessDisabled GenericError
+
+// Error returns string an error formatted as the given text.
+func (e AllAccessDisabled) Error() string {
+	return "All access to this object has been disabled"
+}
+
+// IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.
+type IncompleteBody GenericError
+
+// Error returns string an error formatted as the given text.
+func (e IncompleteBody) Error() string {
+	return e.Bucket + "#" + e.Object + "has incomplete body"
+}
+
+// InvalidRange - invalid range typed error.
+type InvalidRange struct {
+	OffsetBegin  int64
+	OffsetEnd    int64
+	ResourceSize int64
+}
+
+func (e InvalidRange) Error() string {
+	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
+}
+
+// ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.
+type ObjectTooLarge GenericError
+
+func (e ObjectTooLarge) Error() string {
+	return "size of the object greater than what is allowed(5G)"
+}
+
+// ObjectTooSmall error returned when the size of the object < what is expected.
+type ObjectTooSmall GenericError
+
+func (e ObjectTooSmall) Error() string {
+	return "size of the object less than what is expected"
+}
+
+// OperationTimedOut - a timeout occurred.
+type OperationTimedOut struct {
+}
+
+func (e OperationTimedOut) Error() string {
+	return "Operation timed out"
+}
+
+// Multipart related errors.
+
+// MalformedUploadID malformed upload id.
+type MalformedUploadID struct {
+	UploadID string
+}
+
+func (e MalformedUploadID) Error() string {
+	return "Malformed upload id " + e.UploadID
+}
+
+// InvalidUploadID invalid upload id.
+type InvalidUploadID struct {
+	Bucket   string
+	Object   string
+	UploadID string
+}
+
+func (e InvalidUploadID) Error() string {
+	return "Invalid upload id " + e.UploadID
+}
+
+// InvalidPart One or more of the specified parts could not be found
+type InvalidPart struct {
+	PartNumber int
+	ExpETag    string
+	GotETag    string
+}
+
+func (e InvalidPart) Error() string {
+	return fmt.Sprintf("Specified part could not be found. PartNumber %d, Expected %s, got %s",
+		e.PartNumber, e.ExpETag, e.GotETag)
+}
+
+// PartTooSmall - error if part size is less than 5MB.
+type PartTooSmall struct {
+	PartSize   int64
+	PartNumber int
+	PartETag   string
+}
+
+func (e PartTooSmall) Error() string {
+	return fmt.Sprintf("Part size for %d should be at least 5MB", e.PartNumber)
+}
+
+// PartTooBig returned if size of part is bigger than the allowed limit.
+type PartTooBig struct{}
+
+func (e PartTooBig) Error() string {
+	return "Part size bigger than the allowed limit"
+}
+
+// InvalidETag error returned when the etag has changed on disk
+type InvalidETag struct{}
+
+func (e InvalidETag) Error() string {
+	return "etag of the object has changed"
+}
+
+// NotImplemented If a feature is not implemented
+type NotImplemented struct{}
+
+func (e NotImplemented) Error() string {
+	return "Not Implemented"
+}
+
+// UnsupportedMetadata - unsupported metadata
+type UnsupportedMetadata struct{}
+
+func (e UnsupportedMetadata) Error() string {
+	return "Unsupported headers in Metadata"
+}
+
+// BackendDown is returned for network errors or if the gateway's backend is down.
+type BackendDown struct{}
+
+func (e BackendDown) Error() string {
+	return "Backend down"
+}
+
+// PreConditionFailed - Check if copy precondition failed
+type PreConditionFailed struct{}
+
+func (e PreConditionFailed) Error() string {
+	return "At least one of the pre-conditions you specified did not hold"
 }
