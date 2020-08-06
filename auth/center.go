@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
+	"github.com/nspcc-dev/neofs-authmate/credentials"
 	"github.com/nspcc-dev/neofs-authmate/gates"
 	manager "github.com/nspcc-dev/neofs-authmate/neofsmanager"
 	crypto "github.com/nspcc-dev/neofs-crypto"
@@ -24,16 +25,11 @@ const emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4959
 
 // Center is a central app's authentication/authorization management unit.
 type Center struct {
-	log        *zap.Logger
-	submatcher *regexpSubmatcher
-	neofsKeys  struct {
-		PrivateKey *ecdsa.PrivateKey
-		PublicKey  *ecdsa.PublicKey
-	}
-	ownerID   refs.OwnerID
-	wifString string
-	manager   *manager.Manager
-	authKeys  *hcs.X25519Keys
+	log              *zap.Logger
+	submatcher       *regexpSubmatcher
+	neofsCredentials *credentials.Credentials
+	manager          *manager.Manager
+	authKeys         *hcs.X25519Keys
 }
 
 // NewCenter creates an instance of AuthCenter.
@@ -50,36 +46,19 @@ func NewCenter(log *zap.Logger, neofsNodeAddress string) (*Center, error) {
 }
 
 func (center *Center) SetNeoFSKeys(key *ecdsa.PrivateKey) error {
-	publicKey := &key.PublicKey
-	oid, err := refs.NewOwnerID(publicKey)
-	if err != nil {
-		return errors.Wrap(err, "failed to get OwnerID")
-	}
-	center.neofsKeys.PrivateKey = key
-	wif, err := crypto.WIFEncode(key)
-	if err != nil {
-		return errors.Wrap(err, "failed to get WIF string from given key")
-	}
-	center.neofsKeys.PublicKey = publicKey
-	center.ownerID = oid
-	center.wifString = wif
+	// TODO: Change when credentials will start taking not just a string.
+	wif, _ := crypto.WIFEncode(key)
+	creds, _ := credentials.NewCredentials(wif)
+	center.neofsCredentials = creds
 	return nil
 }
 
 func (center *Center) GetNeoFSPrivateKey() *ecdsa.PrivateKey {
-	return center.neofsKeys.PrivateKey
-}
-
-func (center *Center) GetNeoFSPublicKey() *ecdsa.PublicKey {
-	return center.neofsKeys.PublicKey
+	return center.neofsCredentials.Key()
 }
 
 func (center *Center) GetOwnerID() refs.OwnerID {
-	return center.ownerID
-}
-
-func (center *Center) GetWIFString() string {
-	return center.wifString
+	return center.neofsCredentials.OwnerID()
 }
 
 func (center *Center) SetUserAuthKeys(key hcs.X25519PrivateKey) error {
@@ -149,21 +128,14 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 }
 
 func (center *Center) fetchBearerToken(accessKeyID string) (*service.BearerTokenMsg, string, error) {
-	// TODO: Turn it into getting bearer token from NeoFS node later on.
-	// accessKeyID = "051d729a102513387b63f2f07a5cd45ca3158b273646527916cc3f705fa0006b249e038f4e4b4986d85b18358da8692819ef6e35063e91efce17da32d956ad9e48d2674f0cab2bd5ff27b49cb9a1b0e71eb73d330b6cd8f23e85252e55afe992765b2983ee2bafc57079221fdc8e48a3f5d8b0be87a259fd12c6afd59e3ec748c8677a4211c8d6ec7b67008a006f526b22a8536effe8ecb6581ea16d7f9358ede53dddf36fb589ab9a829b81d9c69d19a4b9d1ac58d5e9311e3608eb233475bfc47a02633c5611d1bb3b9450ef00b2490924be5f3375e3eb4b6ed2f23906f183c213e77c19ec5c62b3be3a5a5b526851ea674c613b542c2861fd4a5178b65d8df8899a05b25db8b9e15f5e257467044e41b69144fe4b802aff2a56c8960e5e3c7eb004d41a6d873f927db43ed047171f36cda5be080e0df2ddfe15edb423b41491559a7a5cc70932566cdd71058913abb0a68d3c1ac50586f0a48b02e1cea24ca8a2010d5495dbc5daf0575413c06542a16288664104ad06289a5b2bf119071171562dcdc05d6b9260df2fc676540fc1d836c36f77a090cc5ce52b930f74ae625d53e1a80b7a59aa2d85e2f188c131de5739bf0e49e6d5f081e757f2b0d85a8264dfb66c4400bcd4727d7c21eca92c138d975fe51f986e80ec32ba13e8850c82dd813cd45640caa303555e0759d0d111dac6cc39cbe711dd56dc8f01a6022635"
-	// secretAccessKey := "12775ab859000dd87b3c7586146f465efc73bbbd33ac3b36f2ab2b061df15f7b"
-	// bearerToken, _, err := center.unpackBearerToken(accessKeyID)
-	// if err != nil {
-	// 	return nil, "", errors.Wrap(err, "failed to fetch bearer token")
-	// }
 	akid := new(refs.Address)
 	if err := akid.Parse(accessKeyID); err != nil {
 		return nil, "", errors.Wrap(err, "failed to parse access key id as refs.Address")
 	}
 	config := &gates.ObtainingConfig{
 		BaseConfig: gates.BaseConfig{
-			OperationalCredentials: nil,
-			Manager:                nil,
+			OperationalCredentials: center.neofsCredentials,
+			Manager:                center.manager,
 		},
 		GateKeys:      center.authKeys,
 		SecretAddress: akid,
@@ -194,9 +166,8 @@ func LoadGateAuthPrivateKey(path string) (hcs.X25519PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	// FIXME: Rework when DecodeKeysFromBytes will arrive.
 	key := string(bytes)
-	privateKey, _, err := hcs.DecodeKeys(&key, nil)
+	privateKey, _, err := hcs.DecodeKeysFromStrings(&key, nil)
 	if err != nil {
 		return nil, err
 	}
