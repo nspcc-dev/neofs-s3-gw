@@ -49,10 +49,7 @@ type (
 	}
 )
 
-const (
-	// TODO: should be imported from routing
-	systemPath = "/system"
-)
+const systemPath = "/system"
 
 var (
 	httpStatsMetric      = new(HTTPStats)
@@ -104,12 +101,6 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 			api,
 		)
 	}
-}
-
-func Middleware(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		APIStats(r.RequestURI, h.ServeHTTP).ServeHTTP(w, r)
-	})
 }
 
 func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {

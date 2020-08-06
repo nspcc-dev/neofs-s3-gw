@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/auth"
+	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
 )
 
