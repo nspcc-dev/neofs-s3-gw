@@ -8,17 +8,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/auth"
 	"github.com/minio/minio/neofs/api/crypto"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/hash"
-	"google.golang.org/api/googleapi"
 )
 
 type (
@@ -1629,7 +1621,7 @@ func (e errorCodeMap) ToAPIErr(errCode ErrorCode) Error {
 // toAPIErrorCode - Converts embedded errors. Convenience
 // function written to handle all cases where we have known types of
 // errors returned by underlying layers.
-func toAPIErrorCode(ctx context.Context, err error) (apiErr ErrorCode) {
+func toAPIErrorCode(_ context.Context, err error) (apiErr ErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
@@ -1690,16 +1682,16 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr ErrorCode) {
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
-	case objectlock.ErrInvalidRetentionDate:
-		apiErr = ErrInvalidRetentionDate
-	case objectlock.ErrPastObjectLockRetainDate:
-		apiErr = ErrPastObjectLockRetainDate
-	case objectlock.ErrUnknownWORMModeDirective:
-		apiErr = ErrUnknownWORMModeDirective
-	case objectlock.ErrObjectLockInvalidHeaders:
-		apiErr = ErrObjectLockInvalidHeaders
-	case objectlock.ErrMalformedXML:
-		apiErr = ErrMalformedXML
+		// case objectlock.ErrInvalidRetentionDate:
+		// 	apiErr = ErrInvalidRetentionDate
+		// case objectlock.ErrPastObjectLockRetainDate:
+		// 	apiErr = ErrPastObjectLockRetainDate
+		// case objectlock.ErrUnknownWORMModeDirective:
+		// 	apiErr = ErrUnknownWORMModeDirective
+		// case objectlock.ErrObjectLockInvalidHeaders:
+		// 	apiErr = ErrObjectLockInvalidHeaders
+		// case objectlock.ErrMalformedXML:
+		// 	apiErr = ErrMalformedXML
 	}
 
 	// Compression errors
@@ -1722,8 +1714,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr ErrorCode) {
 	switch err.(type) {
 	case StorageFull:
 		apiErr = ErrStorageFull
-	case hash.BadDigest:
-		apiErr = ErrBadDigest
+	// case hash.BadDigest:
+	// 	apiErr = ErrBadDigest
 	case AllAccessDisabled:
 		apiErr = ErrAllAccessDisabled
 	case IncompleteBody:
@@ -1774,8 +1766,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr ErrorCode) {
 		apiErr = ErrEntityTooSmall
 	case SignatureDoesNotMatch:
 		apiErr = ErrSignatureDoesNotMatch
-	case hash.SHA256Mismatch:
-		apiErr = ErrContentSHA256Mismatch
+	// case hash.SHA256Mismatch:
+	// 	apiErr = ErrContentSHA256Mismatch
 	case ObjectTooLarge:
 		apiErr = ErrEntityTooLarge
 	case ObjectTooSmall:
@@ -1800,28 +1792,28 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr ErrorCode) {
 		apiErr = ErrAdminNoSuchQuotaConfiguration
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
-	case *event.ErrInvalidEventName:
-		apiErr = ErrEventNotification
-	case *event.ErrInvalidARN:
-		apiErr = ErrARNNotification
-	case *event.ErrARNNotFound:
-		apiErr = ErrARNNotification
-	case *event.ErrUnknownRegion:
-		apiErr = ErrRegionNotification
-	case *event.ErrInvalidFilterName:
-		apiErr = ErrFilterNameInvalid
-	case *event.ErrFilterNamePrefix:
-		apiErr = ErrFilterNamePrefix
-	case *event.ErrFilterNameSuffix:
-		apiErr = ErrFilterNameSuffix
-	case *event.ErrInvalidFilterValue:
-		apiErr = ErrFilterValueInvalid
-	case *event.ErrDuplicateEventName:
-		apiErr = ErrOverlappingConfigs
-	case *event.ErrDuplicateQueueConfiguration:
-		apiErr = ErrOverlappingFilterNotification
-	case *event.ErrUnsupportedConfiguration:
-		apiErr = ErrUnsupportedNotification
+	// case *event.ErrInvalidEventName:
+	// 	apiErr = ErrEventNotification
+	// case *event.ErrInvalidARN:
+	// 	apiErr = ErrARNNotification
+	// case *event.ErrARNNotFound:
+	// 	apiErr = ErrARNNotification
+	// case *event.ErrUnknownRegion:
+	// 	apiErr = ErrRegionNotification
+	// case *event.ErrInvalidFilterName:
+	// 	apiErr = ErrFilterNameInvalid
+	// case *event.ErrFilterNamePrefix:
+	// 	apiErr = ErrFilterNamePrefix
+	// case *event.ErrFilterNameSuffix:
+	// 	apiErr = ErrFilterNameSuffix
+	// case *event.ErrInvalidFilterValue:
+	// 	apiErr = ErrFilterValueInvalid
+	// case *event.ErrDuplicateEventName:
+	// 	apiErr = ErrOverlappingConfigs
+	// case *event.ErrDuplicateQueueConfiguration:
+	// 	apiErr = ErrOverlappingFilterNotification
+	// case *event.ErrUnsupportedConfiguration:
+	// 	apiErr = ErrUnsupportedNotification
 	case OperationTimedOut:
 		apiErr = ErrOperationTimedOut
 	case BackendDown:
@@ -1884,55 +1876,36 @@ func toAPIError(ctx context.Context, err error) Error {
 					e.Error()),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
-		case lifecycle.Error:
-			apiErr = Error{
-				Code:           "InvalidRequest",
-				Description:    e.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
+		// case lifecycle.Error:
+		// 	apiErr = Error{
+		// 		Code:           "InvalidRequest",
+		// 		Description:    e.Error(),
+		// 		HTTPStatusCode: http.StatusBadRequest,
+		// 	}
 		case tags.Error:
 			apiErr = Error{
 				Code:           e.Code(),
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
-		case policy.Error:
-			apiErr = Error{
-				Code:           "MalformedPolicy",
-				Description:    e.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
+		// case policy.Error:
+		// 	apiErr = Error{
+		// 		Code:           "MalformedPolicy",
+		// 		Description:    e.Error(),
+		// 		HTTPStatusCode: http.StatusBadRequest,
+		// 	}
 		case crypto.Error:
 			apiErr = Error{
 				Code:           "XMinIOEncryptionError",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
-		case minio.ErrorResponse:
+		case ErrorResponse:
 			apiErr = Error{
 				Code:           e.Code,
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
 			}
-		case *googleapi.Error:
-			apiErr = Error{
-				Code:           "XGCSInternalError",
-				Description:    e.Message,
-				HTTPStatusCode: e.Code,
-			}
-			// GCS may send multiple errors, just pick the first one
-			// since S3 only sends one Error XML response.
-			if len(e.Errors) >= 1 {
-				apiErr.Code = e.Errors[0].Reason
-
-			}
-		case azblob.StorageError:
-			apiErr = Error{
-				Code:           string(e.ServiceCode()),
-				Description:    e.Error(),
-				HTTPStatusCode: e.Response().StatusCode,
-			}
-			// Add more Gateway SDKs here if any in future.
 		}
 	}
 
