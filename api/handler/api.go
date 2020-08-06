@@ -3,8 +3,8 @@ package handler
 import (
 	"errors"
 
-	"github.com/minio/minio/neofs/api"
-	"github.com/minio/minio/neofs/layer"
+	"github.com/nspcc-dev/neofs-s3-gate/api"
+	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
 	"go.uber.org/zap"
 )
 

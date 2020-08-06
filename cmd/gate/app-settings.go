@@ -12,13 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/auth"
-	"github.com/minio/minio/neofs/pool"
-	"github.com/pkg/errors"
-
-	"github.com/minio/minio/misc"
-
 	crypto "github.com/nspcc-dev/neofs-crypto"
+	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
+	"github.com/nspcc-dev/neofs-s3-gate/auth"
+	"github.com/nspcc-dev/neofs-s3-gate/misc"
+	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
