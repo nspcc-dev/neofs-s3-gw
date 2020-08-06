@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/minio/minio/neofs/api"
+	"github.com/nspcc-dev/neofs-s3-gate/api"
 )
 
 func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {

@@ -3,14 +3,10 @@ package pool
 import (
 	"context"
 	"crypto/ecdsa"
-	crand "crypto/rand"
-	"encoding/binary"
 	"math/rand"
 	"sort"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc/grpclog"
 
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-api-go/state"
@@ -19,6 +15,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -121,14 +118,10 @@ func New(cfg *Config) (Pool, error) {
 		grpclog.SetLoggerV2(cfg.GRPCLogger)
 	}
 
-	buf := make([]byte, 8)
-	if _, err := crand.Read(buf); err != nil {
-		return nil, err
-	}
+	seed := time.Now().UnixNano()
 
-	seed := binary.BigEndian.Uint64(buf)
-	rand.Seed(int64(seed))
-	cfg.Logger.Info("used random seed", zap.Uint64("seed", seed))
+	rand.Seed(seed)
+	cfg.Logger.Info("used random seed", zap.Int64("seed", seed))
 
 	p.reqHealth = new(state.HealthRequest)
 	p.reqHealth.SetTTL(service.NonForwardingTTL)
