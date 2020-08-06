@@ -2,12 +2,16 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
+	aws_credentials "github.com/aws/aws-sdk-go/aws/credentials"
+	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
@@ -87,43 +91,38 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	if len(signedHeaderFieldsNames) == 0 {
 		return nil, errors.New("wrong format of signed headers part")
 	}
-	// signatureDateTime, err := time.Parse("20060102T150405Z", request.Header.Get("X-Amz-Date"))
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "failed to parse x-amz-date header field")
-	// }
-
+	signatureDateTime, err := time.Parse("20060102T150405Z", request.Header.Get("X-Amz-Date"))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse x-amz-date header field")
+	}
 	accessKeyID := sms1["access_key_id"]
-	bearerToken, _, err := center.fetchBearerToken(accessKeyID)
+	bearerToken, secretAccessKey, err := center.fetchBearerToken(accessKeyID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch bearer token")
 	}
-
-	// Disable verification of S3 signature for arrival of the new auth scheme.
-	/*
-		otherRequest := request.Clone(context.TODO())
-		otherRequest.Header = map[string][]string{}
-		for hfn, hfvs := range request.Header {
-			for _, shfn := range signedHeaderFieldsNames {
-				if strings.EqualFold(hfn, shfn) {
-					otherRequest.Header[hfn] = hfvs
-				}
+	otherRequest := request.Clone(context.TODO())
+	otherRequest.Header = map[string][]string{}
+	for hfn, hfvs := range request.Header {
+		for _, shfn := range signedHeaderFieldsNames {
+			if strings.EqualFold(hfn, shfn) {
+				otherRequest.Header[hfn] = hfvs
 			}
 		}
-		awsCreds := credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
-		signer := v4.NewSigner(awsCreds)
-		body, err := readAndKeepBody(request)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to read out request body")
-		}
-		_, err = signer.Sign(otherRequest, body, sms1["service"], sms1["region"], signatureDateTime)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to sign temporary HTTP request")
-		}
-		sms2 := center.submatcher.getSubmatches(otherRequest.Header.Get("Authorization"))
-		if sms1["v4_signature"] != sms2["v4_signature"] {
-			return nil, errors.Wrap(err, "failed to pass authentication procedure")
-		}
-	*/
+	}
+	awsCreds := aws_credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+	signer := v4.NewSigner(awsCreds)
+	body, err := readAndKeepBody(request)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read out request body")
+	}
+	_, err = signer.Sign(otherRequest, body, sms1["service"], sms1["region"], signatureDateTime)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to sign temporary HTTP request")
+	}
+	sms2 := center.submatcher.getSubmatches(otherRequest.Header.Get("Authorization"))
+	if sms1["v4_signature"] != sms2["v4_signature"] {
+		return nil, errors.Wrap(err, "failed to pass authentication procedure")
+	}
 	return bearerToken, nil
 }
 
