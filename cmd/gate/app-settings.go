@@ -56,8 +56,8 @@ const ( // settings
 	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
 
 	// Keys
-	cfgNeoFSPrivateKey    = "neofs-ecdsa-key"
-	cfgGateAuthPrivateKey = "gate-auth-key"
+	cfgNeoFSPrivateKey    = "neofs-key"
+	cfgGateAuthPrivateKey = "auth-key"
 
 	// HTTPS/TLS
 	cfgTLSKeyFile  = "tls.key_file"
