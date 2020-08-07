@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"fmt"
 	"io"
 	"os"
@@ -57,8 +56,8 @@ const ( // settings
 	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
 
 	// Keys
-	cfgNeoFSPrivateKey    = "neofs-ecdsa-key"
-	cfgUserAuthPrivateKey = "userauth-rsa-key"
+	cfgNeoFSPrivateKey    = "neofs-key"
+	cfgGateAuthPrivateKey = "auth-key"
 
 	// HTTPS/TLS
 	cfgTLSKeyFile  = "tls.key_file"
@@ -92,11 +91,10 @@ type empty int
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*auth.Center, error) {
+func fetchAuthCenter(l *zap.Logger, v *viper.Viper, peers []pool.Peer) (*auth.Center, error) {
 	var (
-		err                error
-		neofsPrivateKey    *ecdsa.PrivateKey
-		userAuthPrivateKey *rsa.PrivateKey
+		err             error
+		neofsPrivateKey *ecdsa.PrivateKey
 	)
 	switch nfspk := v.GetString(cfgNeoFSPrivateKey); nfspk {
 	case generated:
@@ -110,18 +108,21 @@ func fetchAuthCenter(l *zap.Logger, v *viper.Viper) (*auth.Center, error) {
 			return nil, errors.Wrap(err, "could not load NeoFS private key")
 		}
 	}
-	uapk := v.GetString(cfgUserAuthPrivateKey)
-	userAuthPrivateKey, err = auth.ReadRSAPrivateKeyFromPEMFile(uapk)
+	gapk := v.GetString(cfgGateAuthPrivateKey)
+	gateAuthPrivateKey, err := auth.LoadGateAuthPrivateKey(gapk)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not load UserAuth private key %q", uapk)
+		return nil, errors.Wrapf(err, "could not load gate auth private key %q", gapk)
 	}
-	center, err := auth.NewCenter(l)
+	// NB: Maybe choose a peer more smarter.
+	center, err := auth.NewCenter(l, peers[0].Address)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create auth center")
 	}
-	center.SetUserAuthKeys(userAuthPrivateKey)
+	if err = center.SetAuthKeys(gateAuthPrivateKey); err != nil {
+		return nil, errors.Wrap(err, "failed to set gate auth keys")
+	}
 	if err = center.SetNeoFSKeys(neofsPrivateKey); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to set NeoFS keys")
 	}
 	return center, nil
 }
@@ -168,7 +169,7 @@ func newSettings() *viper.Viper {
 	version := flags.BoolP("version", "v", false, "show version")
 
 	flags.String(cfgNeoFSPrivateKey, generated, fmt.Sprintf(`set value to hex string, WIF string, or path to NeoFS private key file (use "%s" to generate key)`, generated))
-	flags.String(cfgUserAuthPrivateKey, "", "set path to file with private key to use in auth scheme")
+	flags.String(cfgGateAuthPrivateKey, "", "set path to file with auth (curve25519) private key to use in auth scheme")
 
 	flags.Bool(cfgGRPCVerbose, false, "set debug mode of gRPC connections")
 	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")
