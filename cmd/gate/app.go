@@ -59,12 +59,11 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		maxClientsCount    = defaultMaxClientsCount
 		maxClientsDeadline = defaultMaxClientsDeadline
 	)
-
-	center, err := fetchAuthCenter(l, v)
+	peers := fetchPeers(l, v)
+	center, err := fetchAuthCenter(l, v, peers)
 	if err != nil {
 		l.Fatal("failed to initialize auth center", zap.Error(err))
 	}
-
 	key = center.GetNeoFSPrivateKey()
 
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
@@ -95,7 +94,7 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		ConnectTimeout: v.GetDuration(cfgConnectTimeout),
 		RequestTimeout: v.GetDuration(cfgRequestTimeout),
 
-		Peers: fetchPeers(l, v),
+		Peers: peers,
 
 		Logger:     l,
 		PrivateKey: key,
