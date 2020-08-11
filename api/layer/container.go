@@ -7,6 +7,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/container"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
 )
@@ -28,9 +29,11 @@ type (
 )
 
 func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, error) {
+	rid := api.GetRequestID(ctx)
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
 		n.log.Error("could not receive bearer token",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -44,6 +47,7 @@ func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, e
 
 	if err = service.SignRequestData(n.key, req); err != nil {
 		n.log.Error("could not prepare request",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -51,6 +55,7 @@ func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, e
 	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		n.log.Error("could not prepare client",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -62,6 +67,7 @@ func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, e
 	res, err := container.NewServiceClient(conn).Get(ctx, req)
 	if err != nil {
 		n.log.Error("could not list buckets",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -76,9 +82,11 @@ func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, e
 }
 
 func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
+	rid := api.GetRequestID(ctx)
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
 		n.log.Error("could not receive bearer token",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -92,6 +100,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 
 	if err := service.SignRequestData(n.key, req); err != nil {
 		n.log.Error("could not prepare request",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -99,6 +108,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
 		n.log.Error("could not prepare client",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -110,6 +120,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 	res, err := container.NewServiceClient(conn).List(ctx, req)
 	if err != nil {
 		n.log.Error("could not list buckets",
+			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
@@ -119,6 +130,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 		info, err := n.containerInfo(ctx, cid)
 		if err != nil {
 			n.log.Error("could not fetch container info",
+				zap.String("request_id", rid),
 				zap.Error(err))
 			continue
 		}
