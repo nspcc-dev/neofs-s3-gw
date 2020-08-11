@@ -278,8 +278,9 @@ func receiveObject(cli object.Service_GetClient) (*object.Object, error) {
 
 		switch o := resp.R.(type) {
 		case *object.GetResponse_Object:
-
-			if _, hdr := o.Object.LastHeader(object.HeaderType(object.TombstoneHdr)); hdr != nil {
+			if obj != nil {
+				return nil, errors.New("object headers already received")
+			} else if _, hdr := o.Object.LastHeader(object.HeaderType(object.TombstoneHdr)); hdr != nil {
 				return nil, errors.New("object already removed")
 			}
 
@@ -480,9 +481,11 @@ func (n *layer) storageGroupPut(ctx context.Context, p sgParams) (*object.Object
 		return nil, err
 	}
 
-	client := object.NewServiceClient(conn)
 	// todo: think about timeout
-	putClient, err := client.Put(ctx)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	putClient, err := object.NewServiceClient(conn).Put(ctx)
 	if err != nil {
 		return nil, err
 	}
