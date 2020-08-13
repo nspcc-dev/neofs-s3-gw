@@ -68,7 +68,11 @@ const (
 	hdrSSECopyKey = "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key"
 )
 
-var deploymentID, _ = uuid.NewRandom()
+var (
+	deploymentID, _ = uuid.NewRandom()
+
+	xmlHeader = []byte(xml.Header)
+)
 
 // Non exhaustive list of AWS S3 standard error responses -
 // http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
@@ -179,6 +183,14 @@ func EncodeResponse(response interface{}) []byte {
 		NewEncoder(&bytesBuffer).
 		Encode(response)
 	return bytesBuffer.Bytes()
+}
+
+// EncodeToResponse encodes the response into ResponseWriter.
+func EncodeToResponse(w http.ResponseWriter, response interface{}) error {
+	if _, err := w.Write(xmlHeader); err != nil {
+		return err
+	}
+	return xml.NewEncoder(w).Encode(response)
 }
 
 // WriteSuccessResponseXML writes success headers and response if any,

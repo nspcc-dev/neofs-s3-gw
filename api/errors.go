@@ -1612,6 +1612,10 @@ func (e errorCodeMap) ToAPIErr(errCode ErrorCode) Error {
 	return e.ToAPIErrWithErr(errCode, nil)
 }
 
+func (e Error) Error() string {
+	return fmt.Sprintf("%s: %d => %s", e.Code, e.HTTPStatusCode, e.Description)
+}
+
 // GetAPIError provides API Error for input API error code.
 func GetAPIError(code ErrorCode) Error {
 	if apiErr, ok := errorCodes[code]; ok {
