@@ -175,14 +175,6 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}, r.URL)
 }
 
-func (h *handler) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
 func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
@@ -391,38 +383,6 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 	}, r.URL)
 }
 
-func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
 func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
@@ -440,38 +400,6 @@ func (h *handler) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) DeleteBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) DeleteBucketEncryptionHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
 		Description:    "implement me " + mux.CurrentRoute(r).GetName(),

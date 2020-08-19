@@ -80,3 +80,9 @@ type Object struct {
 
 // StringMap is a map[string]string.
 type StringMap map[string]string
+
+// LocationResponse - format for location response.
+type LocationResponse struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LocationConstraint" json:"-"`
+	Location string   `xml:",chardata"`
+}
