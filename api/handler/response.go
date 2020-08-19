@@ -87,6 +87,13 @@ type LocationResponse struct {
 	Location string   `xml:",chardata"`
 }
 
+// CopyObjectResponse container returns ETag and LastModified of the successfully copied object
+type CopyObjectResponse struct {
+	XMLName      xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CopyObjectResult" json:"-"`
+	LastModified string   // time string of format "2006-01-02T15:04:05.000Z"
+	ETag         string   // md5sum of the copied object.
+}
+
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
