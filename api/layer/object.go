@@ -390,7 +390,10 @@ func (n *layer) objectPut(ctx context.Context, p putParams) (*object.Object, err
 		p.userHeaders = make(map[string]string)
 	}
 
-	p.userHeaders[AWS3NameHeader] = p.name
+	// Set object name if not set before
+	if _, ok := p.userHeaders[AWS3NameHeader]; !ok {
+		p.userHeaders[AWS3NameHeader] = p.name
+	}
 
 	readBuffer := make([]byte, dataChunkSize)
 	obj := &object.Object{
