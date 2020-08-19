@@ -7,14 +7,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 )
 
-func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
 func (h *handler) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
@@ -127,22 +119,6 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 	}, r.URL)
 }
 
-func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
 func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
@@ -152,22 +128,6 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
 		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
