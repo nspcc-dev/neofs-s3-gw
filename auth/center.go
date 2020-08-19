@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -22,7 +23,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
+var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id_cid>[^/]+)/(?P<access_key_id_oid>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
 
 const emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
 
@@ -84,7 +85,7 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 		return nil, errors.New("unsupported request: wrong length of Authorization header field")
 	}
 	sms1 := center.submatcher.getSubmatches(authHeaderField[0])
-	if len(sms1) != 6 {
+	if len(sms1) != 7 {
 		return nil, errors.New("bad Authorization header field")
 	}
 	signedHeaderFieldsNames := strings.Split(sms1["signed_header_fields"], ";")
@@ -95,7 +96,7 @@ func (center *Center) AuthenticationPassed(request *http.Request) (*service.Bear
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse x-amz-date header field")
 	}
-	accessKeyID := sms1["access_key_id"]
+	accessKeyID := fmt.Sprintf("%s/%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
 	bearerToken, secretAccessKey, err := center.fetchBearerToken(accessKeyID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch bearer token")
