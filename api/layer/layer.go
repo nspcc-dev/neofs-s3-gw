@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/object"
 	"github.com/nspcc-dev/neofs-api-go/refs"
 	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -44,6 +45,7 @@ type (
 		DstBucket string
 		SrcObject string
 		DstObject string
+		Header    map[string]string
 	}
 
 	NeoFS interface {
@@ -354,6 +356,11 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 
 		_ = pw.CloseWithError(err)
 	}()
+
+	// set custom headers
+	for k, v := range p.Header {
+		info.Headers[k] = v
+	}
 
 	return n.PutObject(ctx, &PutObjectParams{
 		Bucket: p.DstBucket,
