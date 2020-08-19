@@ -288,7 +288,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 	_, err = n.objectFindID(ctx, cid, p.Object, true)
 	if err == nil {
-		return nil, err
+		return nil, &api.ObjectAlreadyExists{
+			Bucket: p.Bucket,
+			Object: p.Object,
+		}
 	}
 
 	oid, err := refs.NewObjectID()
