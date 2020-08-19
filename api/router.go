@@ -79,6 +79,11 @@ type (
 
 	// mimeType represents various MIME type used API responses.
 	mimeType string
+
+	logResponseWriter struct {
+		http.ResponseWriter
+		statusCode int
+	}
 )
 
 const (
@@ -92,6 +97,13 @@ const (
 	// Means response type is XML.
 	mimeXML mimeType = "application/xml"
 )
+
+var _ = logErrorResponse
+
+func (lrw *logResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
 
 func setRequestID(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +126,24 @@ func setRequestID(h http.Handler) http.Handler {
 	})
 }
 
+func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			lw := &logResponseWriter{ResponseWriter: w}
+
+			// pass execution:
+			h.ServeHTTP(lw, r)
+
+			// Ignore <300 status codes
+			if lw.statusCode >= http.StatusMultipleChoices {
+				l.Error("something went wrong",
+					zap.Int("status", lw.statusCode),
+					zap.String("method", mux.CurrentRoute(r).GetName()))
+			}
+		})
+	}
+}
+
 func GetRequestID(v interface{}) string {
 	switch t := v.(type) {
 	case context.Context:
@@ -128,8 +158,13 @@ func GetRequestID(v interface{}) string {
 func Attach(r *mux.Router, m MaxClients, h Handler, center *auth.Center, log *zap.Logger) {
 	api := r.PathPrefix(SlashSeparator).Subrouter()
 
-	// Attach behaviors: RequestID, ...
-	api.Use(setRequestID)
+	api.Use(
+		// -- prepare request
+		setRequestID,
+
+		// -- logging error requests
+		// logErrorResponse(log),
+	)
 
 	// Attach user authentication for all S3 routes.
 	AttachUserAuth(api, center, log)
