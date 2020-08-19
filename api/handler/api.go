@@ -20,6 +20,8 @@ type (
 	}
 )
 
+const notSupported = "Not supported by NeoFS S3 Gate: "
+
 var _ api.Handler = (*handler)(nil)
 
 func New(log *zap.Logger, obj layer.Client) (api.Handler, error) {
