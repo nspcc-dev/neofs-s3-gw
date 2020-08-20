@@ -34,3 +34,15 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// DeleteMultipleObjectsHandler :
+//
+// CyberDuck doesn't use that method for multiple delete.
+// Open issue and describe how to test that method.
+func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
+	api.WriteErrorResponse(r.Context(), w, api.Error{
+		Code:           "XNeoFSUnimplemented",
+		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
+		HTTPStatusCode: http.StatusNotImplemented,
+	}, r.URL)
+}
