@@ -358,11 +358,3 @@ func (h *handler) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request
 		HTTPStatusCode: http.StatusNotImplemented,
 	}, r.URL)
 }
-
-func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
