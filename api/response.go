@@ -199,6 +199,10 @@ func WriteSuccessResponseXML(w http.ResponseWriter, response []byte) {
 	writeResponse(w, http.StatusOK, response, mimeXML)
 }
 
+func WriteSuccessResponseHeadersOnly(w http.ResponseWriter) {
+	writeResponse(w, http.StatusOK, nil, mimeNone)
+}
+
 // Error - Returns S3 error string.
 func (e ErrorResponse) Error() string {
 	if e.Message == "" {
