@@ -371,19 +371,25 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 	})
 }
 
-// DeleteObject from the storage.
+// DeleteObject removes all objects with passed nice name.
 func (n *layer) DeleteObject(ctx context.Context, bucket, object string) error {
 	cid, err := refs.CIDFromString(bucket)
 	if err != nil {
 		return err
 	}
 
-	oid, err := n.objectFindID(ctx, cid, object, false)
+	ids, err := n.objectFindIDs(ctx, cid, object)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not find object")
 	}
 
-	return n.objectDelete(ctx, delParams{addr: refs.Address{CID: cid, ObjectID: oid}})
+	for _, id := range ids {
+		if err = n.objectDelete(ctx, delParams{addr: refs.Address{CID: cid, ObjectID: id}}); err != nil {
+			return errors.Wrapf(err, "could not remove object: %s => %s", object, id)
+		}
+	}
+
+	return nil
 }
 
 // DeleteObjects from the storage.

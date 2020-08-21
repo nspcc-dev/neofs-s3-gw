@@ -120,13 +120,10 @@ func (n *layer) objectSearchContainer(ctx context.Context, cid refs.CID) ([]refs
 	return result, nil
 }
 
-// objectFindID returns object id (uuid) based on it's nice name in s3. If
+// objectFindIDs returns object id's (uuid) based on they nice name in s3. If
 // nice name is uuid compatible, then function returns it.
-func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put bool) (refs.ObjectID, error) {
-	var (
-		id refs.ObjectID
-		q  query.Query
-	)
+func (n *layer) objectFindIDs(ctx context.Context, cid refs.CID, name string) ([]refs.ObjectID, error) {
+	var q query.Query
 
 	q.Filters = append(q.Filters, query.Filter{
 		Type: query.Filter_Exact,
@@ -140,12 +137,12 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 
 	queryBinary, err := q.Marshal()
 	if err != nil {
-		return id, err
+		return nil, err
 	}
 
 	conn, err := n.cli.GetConnection(ctx)
 	if err != nil {
-		return id, err
+		return nil, err
 	}
 
 	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
@@ -154,7 +151,7 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 		Verb: service.Token_Info_Search,
 	})
 	if err != nil {
-		return id, err
+		return nil, err
 	}
 
 	req := new(object.SearchRequest)
@@ -167,7 +164,7 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 
 	err = service.SignRequestData(n.key, req)
 	if err != nil {
-		return id, err
+		return nil, err
 	}
 
 	// todo: think about timeout
@@ -176,7 +173,7 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 
 	searchClient, err := object.NewServiceClient(conn).Search(ctx, req)
 	if err != nil {
-		return id, err
+		return nil, err
 	}
 
 	var response []refs.Address
@@ -188,18 +185,33 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 				break
 			}
 
-			return id, errors.New("search command received error")
+			return nil, errors.New("search command received error")
 		}
 
 		response = append(response, resp.Addresses...)
 	}
 
 	switch ln := len(response); {
-	case ln > 1:
-		return id, errors.New("several objects with the same name found")
-	case ln == 1:
-		return response[0].ObjectID, nil
+	case ln > 0:
+		result := make([]refs.ObjectID, 0, len(response))
+		for i := range response {
+			result = append(result, response[i].ObjectID)
+		}
+
+		return result, nil
 	default:
+		return nil, errors.New("object not found")
+	}
+}
+
+// objectFindID returns object id (uuid) based on it's nice name in s3. If
+// nice name is uuid compatible, then function returns it.
+func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put bool) (refs.ObjectID, error) {
+	var id refs.ObjectID
+
+	if result, err := n.objectFindIDs(ctx, cid, name); err != nil {
+		return id, err
+	} else if ln := len(result); ln == 0 {
 		// Minio lists all objects with and without nice names. All objects
 		// without nice name still have "name" in terms of minio - uuid encoded
 		// into string. There is a tricky case when user upload object
@@ -215,7 +227,11 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 			}
 		}
 		return id, errors.New("object not found")
+	} else if ln == 1 {
+		return result[0], nil
 	}
+
+	return id, errors.New("several objects with the same name found")
 }
 
 // objectHead returns all object's headers.
