@@ -86,11 +86,10 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
+func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObjectsArgs, *layer.ListObjectsInfo, error) {
 	var (
 		err error
 		arg *listObjectsArgs
-		res *ListObjectsResponse
 		rid = api.GetRequestID(r.Context())
 	)
 
@@ -105,7 +104,7 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 
-		return
+		return nil, nil, err
 	}
 
 	list, err := h.obj.ListObjects(r.Context(), &layer.ListObjectsParams{
@@ -125,10 +124,32 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
 
-		return
+		return nil, nil, err
 	}
 
-	res = &ListObjectsResponse{
+	return arg, list, nil
+}
+
+func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
+	var rid = api.GetRequestID(r.Context())
+	if arg, list, err := h.listObjects(w, r); err != nil {
+		// error already sent to client
+		return
+	} else if err := api.EncodeToResponse(w, encodeV1(arg, list)); err != nil {
+		h.log.Error("something went wrong",
+			zap.String("request_id", rid),
+			zap.Error(err))
+
+		api.WriteErrorResponse(r.Context(), w, api.Error{
+			Code:           api.GetAPIError(api.ErrInternalError).Code,
+			Description:    err.Error(),
+			HTTPStatusCode: http.StatusInternalServerError,
+		}, r.URL)
+	}
+}
+
+func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsResponse {
+	res := &ListObjectsResponse{
 		Name:         arg.Bucket,
 		EncodingType: arg.Encode,
 		Marker:       arg.Marker,
@@ -155,13 +176,25 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 			UserMetadata: obj.Headers,
 			LastModified: obj.Created.Format(time.RFC3339),
 
+			Owner: Owner{
+				ID:          obj.Owner.String(),
+				DisplayName: obj.Owner.String(),
+			},
+
 			// ETag:         "",
-			// Owner:        Owner{},
 			// StorageClass: "",
 		})
 	}
 
-	if err := api.EncodeToResponse(w, res); err != nil {
+	return res
+}
+
+func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
+	var rid = api.GetRequestID(r.Context())
+	if arg, list, err := h.listObjects(w, r); err != nil {
+		// error already sent to client
+		return
+	} else if err := api.EncodeToResponse(w, encodeV2(arg, list)); err != nil {
 		h.log.Error("something went wrong",
 			zap.String("request_id", rid),
 			zap.Error(err))
@@ -172,6 +205,48 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
 	}
+}
+
+func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2Response {
+	res := &ListObjectsV2Response{
+		Name:         arg.Bucket,
+		EncodingType: arg.Encode,
+		Prefix:       arg.Prefix,
+		MaxKeys:      arg.MaxKeys,
+		Delimiter:    arg.Delimeter,
+
+		IsTruncated: list.IsTruncated,
+
+		ContinuationToken:     arg.Marker,
+		NextContinuationToken: list.NextContinuationToken,
+	}
+
+	// fill common prefixes
+	for i := range list.Prefixes {
+		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
+			Prefix: list.Prefixes[i],
+		})
+	}
+
+	// fill contents
+	for _, obj := range list.Objects {
+		res.Contents = append(res.Contents, Object{
+			Key:          obj.Name,
+			Size:         obj.Size,
+			UserMetadata: obj.Headers,
+			LastModified: obj.Created.Format(time.RFC3339),
+
+			Owner: Owner{
+				ID:          obj.Owner.String(),
+				DisplayName: obj.Owner.String(),
+			},
+
+			// ETag:         "",
+			// StorageClass: "",
+		})
+	}
+
+	return res
 }
 
 func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
