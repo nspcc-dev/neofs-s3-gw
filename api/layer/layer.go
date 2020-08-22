@@ -69,7 +69,7 @@ type (
 		ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObjectsInfo, error)
 
 		DeleteObject(ctx context.Context, bucket, object string) error
-		DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
+		DeleteObjects(ctx context.Context, bucket string, objects []string) []error
 	}
 )
 
