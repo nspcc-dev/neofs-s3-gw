@@ -118,21 +118,25 @@ var s3ErrorResponseMap = map[string]string{
 }
 
 // WriteErrorResponse writes error headers
-func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err Error, reqURL *url.URL) {
-	switch err.Code {
-	case "SlowDown", "XNeoFSServerNotInitialized", "XNeoFSReadQuorum", "XNeoFSWriteQuorum":
-		// Set retry-after header to indicate user-agents to retry request after 120secs.
-		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
-		w.Header().Set(hdrRetryAfter, "120")
-	case "AccessDenied":
-		// TODO process when the request is from browser and also if browser
+func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, reqURL *url.URL) {
+	code := http.StatusBadRequest
+
+	if e, ok := err.(Error); ok {
+		switch e.Code {
+		case "SlowDown", "XNeoFSServerNotInitialized", "XNeoFSReadQuorum", "XNeoFSWriteQuorum":
+			// Set retry-after header to indicate user-agents to retry request after 120secs.
+			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
+			w.Header().Set(hdrRetryAfter, "120")
+		case "AccessDenied":
+			// TODO process when the request is from browser and also if browser
+		}
 	}
 
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
 		w.Header().Get(hdrAmzRequestID), deploymentID.String())
 	encodedErrorResponse := EncodeResponse(errorResponse)
-	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
+	WriteResponse(w, code, encodedErrorResponse, MimeXML)
 }
 
 // If none of the http routes match respond with appropriate errors
@@ -162,9 +166,9 @@ func removeSensitiveHeaders(h http.Header) {
 	h.Del(hdrSSECopyKey)
 }
 
-func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
+func WriteResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
 	setCommonHeaders(w)
-	if mType != mimeNone {
+	if mType != MimeNone {
 		w.Header().Set(hdrContentType, string(mType))
 	}
 	w.Header().Set(hdrContentLength, strconv.Itoa(len(response)))
@@ -196,11 +200,11 @@ func EncodeToResponse(w http.ResponseWriter, response interface{}) error {
 // WriteSuccessResponseXML writes success headers and response if any,
 // with content-type set to `application/xml`.
 func WriteSuccessResponseXML(w http.ResponseWriter, response []byte) {
-	writeResponse(w, http.StatusOK, response, mimeXML)
+	WriteResponse(w, http.StatusOK, response, MimeXML)
 }
 
 func WriteSuccessResponseHeadersOnly(w http.ResponseWriter) {
-	writeResponse(w, http.StatusOK, nil, mimeNone)
+	WriteResponse(w, http.StatusOK, nil, MimeNone)
 }
 
 // Error - Returns S3 error string.
