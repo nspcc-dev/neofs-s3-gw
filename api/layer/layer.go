@@ -143,7 +143,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 		}
 	}
 
-	return nil, errors.New("bucket not found")
+	return nil, status.Error(codes.NotFound, "bucket not found")
 }
 
 // ListBuckets returns all user containers. Name of the bucket is a container
