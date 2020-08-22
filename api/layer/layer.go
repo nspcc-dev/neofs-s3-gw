@@ -225,6 +225,7 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 				oi = objectInfoFromMeta(meta)
 			} else { // if there are sub-entities in tail - dir
 				oi = &ObjectInfo{
+					Owner:  meta.SystemHeader.OwnerID,
 					Bucket: meta.SystemHeader.CID.String(),
 					Name:   tail[:ind+1], // dir MUST have slash symbol in the end
 					// IsDir:  true,
