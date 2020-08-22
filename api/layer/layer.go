@@ -12,8 +12,9 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/service"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type (
@@ -375,17 +376,26 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 func (n *layer) DeleteObject(ctx context.Context, bucket, object string) error {
 	cid, err := refs.CIDFromString(bucket)
 	if err != nil {
-		return err
+		return &api.DeleteError{
+			Err:    err,
+			Object: object,
+		}
 	}
 
 	ids, err := n.objectFindIDs(ctx, cid, object)
 	if err != nil {
-		return errors.Wrap(err, "could not find object")
+		return &api.DeleteError{
+			Err:    err,
+			Object: object,
+		}
 	}
 
 	for _, id := range ids {
 		if err = n.objectDelete(ctx, delParams{addr: refs.Address{CID: cid, ObjectID: id}}); err != nil {
-			return errors.Wrapf(err, "could not remove object: %s => %s", object, id)
+			return &api.DeleteError{
+				Err:    err,
+				Object: object,
+			}
 		}
 	}
 
@@ -393,12 +403,14 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, object string) error {
 }
 
 // DeleteObjects from the storage.
-func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []string) []error {
 	var errs = make([]error, 0, len(objects))
 
 	for i := range objects {
-		errs = append(errs, n.DeleteObject(ctx, bucket, objects[i]))
+		if err := n.DeleteObject(ctx, bucket, objects[i]); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
-	return errs, nil
+	return errs
 }
