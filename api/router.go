@@ -90,12 +90,11 @@ const (
 	// SlashSeparator - slash separator.
 	SlashSeparator = "/"
 
-	// Means no response type.
-	mimeNone mimeType = ""
-	// Means response type is JSON.
-	// mimeJSON mimeType = "application/json"
-	// Means response type is XML.
-	mimeXML mimeType = "application/xml"
+	// MimeNone means no response type.
+	MimeNone mimeType = ""
+
+	// MimeXML means response type is XML.
+	MimeXML mimeType = "application/xml"
 )
 
 var _ = logErrorResponse
