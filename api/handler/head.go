@@ -8,6 +8,8 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -44,4 +46,35 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Last-Modified", inf.Created.Format(http.TimeFormat))
 
+}
+
+func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		req = mux.Vars(r)
+		bkt = req["bucket"]
+		rid = api.GetRequestID(r.Context())
+	)
+
+	if _, err := h.obj.GetBucketInfo(r.Context(), bkt); err != nil {
+		h.log.Error("could not fetch object info",
+			zap.String("request_id", rid),
+			zap.String("bucket_name", bkt),
+			zap.Error(err))
+
+		code := http.StatusBadRequest
+		if st, ok := status.FromError(err); ok && st != nil {
+			switch st.Code() {
+			case codes.NotFound:
+				code = http.StatusNotFound
+			case codes.PermissionDenied:
+				code = http.StatusForbidden
+			}
+		}
+
+		api.WriteResponse(w, code, nil, api.MimeNone)
+
+		return
+	}
+
+	api.WriteResponse(w, http.StatusOK, nil, api.MimeNone)
 }
