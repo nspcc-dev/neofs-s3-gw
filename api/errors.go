@@ -1626,14 +1626,23 @@ func GetAPIError(code ErrorCode) Error {
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
-func getAPIErrorResponse(ctx context.Context, err Error, resource, requestID, hostID string) ErrorResponse {
+func getAPIErrorResponse(ctx context.Context, err error, resource, requestID, hostID string) ErrorResponse {
+	code := "BadRequest"
+	desc := err.Error()
+
 	info := GetReqInfo(ctx)
 	if info == nil {
 		info = &ReqInfo{}
 	}
+
+	if e, ok := err.(Error); ok {
+		code = e.Code
+		desc = e.Description
+	}
+
 	return ErrorResponse{
-		Code:       err.Code,
-		Message:    err.Description,
+		Code:       code,
+		Message:    desc,
 		BucketName: info.BucketName,
 		Key:        info.ObjectName,
 		Resource:   resource,
@@ -1999,4 +2008,14 @@ type PreConditionFailed struct{}
 
 func (e PreConditionFailed) Error() string {
 	return "At least one of the pre-conditions you specified did not hold"
+}
+
+// DeleteError - returns when cant remove object
+type DeleteError struct {
+	Err    error
+	Object string
+}
+
+func (e DeleteError) Error() string {
+	return fmt.Sprintf("%s (%s)", e.Err, e.Object)
 }

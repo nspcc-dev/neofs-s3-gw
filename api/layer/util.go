@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/object"
+	"github.com/nspcc-dev/neofs-api-go/refs"
 )
 
 type (
@@ -16,6 +17,7 @@ type (
 		Size        int64
 		ContentType string
 		Created     time.Time
+		Owner       refs.OwnerID
 		Headers     map[string]string
 	}
 
