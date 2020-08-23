@@ -1,0 +1,25 @@
+package api
+
+// Standard S3 HTTP response constants
+const (
+	LastModified       = "Last-Modified"
+	Date               = "Date"
+	ETag               = "ETag"
+	ContentType        = "Content-Type"
+	ContentMD5         = "Content-Md5"
+	ContentEncoding    = "Content-Encoding"
+	Expires            = "Expires"
+	ContentLength      = "Content-Length"
+	ContentLanguage    = "Content-Language"
+	ContentRange       = "Content-Range"
+	Connection         = "Connection"
+	AcceptRanges       = "Accept-Ranges"
+	AmzBucketRegion    = "X-Amz-Bucket-Region"
+	ServerInfo         = "Server"
+	RetryAfter         = "Retry-After"
+	Location           = "Location"
+	CacheControl       = "Cache-Control"
+	ContentDisposition = "Content-Disposition"
+	Authorization      = "Authorization"
+	Action             = "Action"
+)

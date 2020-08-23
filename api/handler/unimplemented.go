@@ -295,14 +295,6 @@ func (h *handler) ListObjectsV2MHandler(w http.ResponseWriter, r *http.Request) 
 	}, r.URL)
 }
 
-func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
 func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
@@ -336,14 +328,6 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           "XNeoFSUnimplemented",
-		Description:    "implement me " + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
-
-func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteErrorResponse(r.Context(), w, api.Error{
 		Code:           "XNeoFSUnimplemented",
 		Description:    "implement me " + mux.CurrentRoute(r).GetName(),

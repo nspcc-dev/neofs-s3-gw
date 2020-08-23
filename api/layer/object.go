@@ -13,6 +13,8 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -226,7 +228,7 @@ func (n *layer) objectFindID(ctx context.Context, cid refs.CID, name string, put
 				return id, nil
 			}
 		}
-		return id, errors.New("object not found")
+		return id, status.Error(codes.NotFound, "object not found")
 	} else if ln == 1 {
 		return result[0], nil
 	}
