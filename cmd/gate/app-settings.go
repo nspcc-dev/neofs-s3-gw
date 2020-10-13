@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
-
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
 	"github.com/nspcc-dev/neofs-s3-gate/auth"

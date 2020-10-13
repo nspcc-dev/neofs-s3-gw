@@ -8,9 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
