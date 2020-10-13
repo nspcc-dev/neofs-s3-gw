@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
 
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
@@ -91,40 +95,47 @@ type empty int
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchAuthCenter(l *zap.Logger, v *viper.Viper, peers []pool.Peer) (*auth.Center, error) {
+func fetchGateAuthKeys(v *viper.Viper) (*hcs.X25519Keys, error) {
+	path := v.GetString(cfgGateAuthPrivateKey)
+
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return hcs.NewKeys(data)
+}
+
+func fetchNeoFSKey(v *viper.Viper) (*ecdsa.PrivateKey, error) {
 	var (
-		err             error
-		neofsPrivateKey *ecdsa.PrivateKey
+		err error
+		key *ecdsa.PrivateKey
 	)
-	switch nfspk := v.GetString(cfgNeoFSPrivateKey); nfspk {
+
+	switch val := v.GetString(cfgNeoFSPrivateKey); val {
 	case generated:
-		neofsPrivateKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not generate NeoFS private key")
 		}
 	default:
-		neofsPrivateKey, err = crypto.LoadPrivateKey(nfspk)
+		key, err = crypto.LoadPrivateKey(val)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not load NeoFS private key")
 		}
 	}
-	gapk := v.GetString(cfgGateAuthPrivateKey)
-	gateAuthPrivateKey, err := auth.LoadGateAuthPrivateKey(gapk)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load gate auth private key %q", gapk)
-	}
-	// NB: Maybe choose a peer more smarter.
-	center, err := auth.NewCenter(l, peers[0].Address)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create auth center")
-	}
-	if err = center.SetAuthKeys(gateAuthPrivateKey); err != nil {
-		return nil, errors.Wrap(err, "failed to set gate auth keys")
-	}
-	if err = center.SetNeoFSKeys(neofsPrivateKey); err != nil {
-		return nil, errors.Wrap(err, "failed to set NeoFS keys")
-	}
-	return center, nil
+
+	return key, nil
+}
+
+func fetchAuthCenter(ctx context.Context, p *authCenterParams) (*auth.Center, error) {
+	return auth.New(ctx, &auth.Params{
+		Con:     p.Pool,
+		Log:     p.Logger,
+		Timeout: p.Timeout,
+		GAKey:   p.GateAuthKeys,
+		NFKey:   p.NeoFSPrivateKey,
+	})
 }
 
 func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {

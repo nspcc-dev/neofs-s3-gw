@@ -4,8 +4,8 @@ func main() {
 	var (
 		v = newSettings()
 		l = newLogger(v)
-		a = newApp(l, v)
 		g = newGracefulContext(l)
+		a = newApp(g, l, v)
 	)
 
 	go a.Server(g)
