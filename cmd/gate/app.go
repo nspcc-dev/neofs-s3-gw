@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
@@ -19,13 +20,13 @@ import (
 
 type (
 	App struct {
-		center *auth.Center
-		cli    pool.Pool
-		log    *zap.Logger
-		cfg    *viper.Viper
-		tls    *tlsConfig
-		obj    layer.Client
-		api    api.Handler
+		cli pool.Pool
+		ctr *auth.Center
+		log *zap.Logger
+		cfg *viper.Viper
+		tls *tlsConfig
+		obj layer.Client
+		api api.Handler
 
 		conTimeout time.Duration
 		reqTimeout time.Duration
@@ -44,14 +45,18 @@ type (
 	}
 )
 
-func newApp(l *zap.Logger, v *viper.Viper) *App {
+func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	var (
-		err        error
-		cli        pool.Pool
-		tls        *tlsConfig
-		caller     api.Handler
-		obj        layer.Client
-		key        *ecdsa.PrivateKey
+		err    error
+		cli    pool.Pool
+		tls    *tlsConfig
+		caller api.Handler
+		ctr    *auth.Center
+		obj    layer.Client
+
+		gaKey *hcs.X25519Keys
+		nfKey *ecdsa.PrivateKey
+
 		reBalance  = defaultRebalanceTimer
 		conTimeout = defaultConnectTimeout
 		reqTimeout = defaultRequestTimeout
@@ -59,19 +64,6 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		maxClientsCount    = defaultMaxClientsCount
 		maxClientsDeadline = defaultMaxClientsDeadline
 	)
-	peers := fetchPeers(l, v)
-	center, err := fetchAuthCenter(l, v, peers)
-	if err != nil {
-		l.Fatal("failed to initialize auth center", zap.Error(err))
-	}
-	key = center.GetNeoFSPrivateKey()
-
-	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
-		tls = &tlsConfig{
-			KeyFile:  v.GetString(cfgTLSKeyFile),
-			CertFile: v.GetString(cfgTLSCertFile),
-		}
-	}
 
 	if v := v.GetDuration(cfgConnectTimeout); v > 0 {
 		conTimeout = v
@@ -89,15 +81,36 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		maxClientsDeadline = v
 	}
 
+	if v := v.GetDuration(cfgRebalanceTimer); v > 0 {
+		reBalance = v
+	}
+
+	if nfKey, err = fetchNeoFSKey(v); err != nil {
+		l.Fatal("could not load NeoFS private key")
+	}
+
+	if gaKey, err = fetchGateAuthKeys(v); err != nil {
+		l.Fatal("could not load gate auth key")
+	}
+
+	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
+		tls = &tlsConfig{
+			KeyFile:  v.GetString(cfgTLSKeyFile),
+			CertFile: v.GetString(cfgTLSCertFile),
+		}
+	}
+
+	peers := fetchPeers(l, v)
+
 	poolConfig := &pool.Config{
+		ConnectTimeout: conTimeout,
+		RequestTimeout: reqTimeout,
 		ConnectionTTL:  v.GetDuration(cfgConnectionTTL),
-		ConnectTimeout: v.GetDuration(cfgConnectTimeout),
-		RequestTimeout: v.GetDuration(cfgRequestTimeout),
 
 		Peers: peers,
 
 		Logger:     l,
-		PrivateKey: key,
+		PrivateKey: nfKey,
 
 		GRPCLogger:  gRPCLogger(l),
 		GRPCVerbose: v.GetBool(cfgGRPCVerbose),
@@ -105,27 +118,42 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 		ClientParameters: keepalive.ClientParameters{},
 	}
 
-	if v := v.GetDuration(cfgRebalanceTimer); v > 0 {
-		reBalance = v
-	}
-
 	if cli, err = pool.New(poolConfig); err != nil {
 		l.Fatal("could not prepare pool connections", zap.Error(err))
 	}
 
+	{ // prepare auth center
+		ctx, cancel := context.WithTimeout(ctx, conTimeout)
+		defer cancel()
+
+		params := &authCenterParams{
+			Logger: l,
+			Pool:   cli,
+
+			Timeout: conTimeout,
+
+			GateAuthKeys:    gaKey,
+			NeoFSPrivateKey: nfKey,
+		}
+
+		if ctr, err = fetchAuthCenter(ctx, params); err != nil {
+			l.Fatal("failed to initialize auth center", zap.Error(err))
+		}
+	}
+
 	{ // should establish connection with NeoFS Storage Nodes
-		ctx, cancel := context.WithTimeout(context.Background(), conTimeout)
+		ctx, cancel := context.WithTimeout(ctx, conTimeout)
 		defer cancel()
 
 		cli.ReBalance(ctx)
 
-		if _, err = cli.GetConnection(ctx); err != nil {
+		if _, err = cli.Connection(ctx); err != nil {
 			l.Fatal("could not establish connection",
 				zap.Error(err))
 		}
 	}
 
-	if obj, err = layer.NewLayer(l, cli, key); err != nil {
+	if obj, err = layer.NewLayer(l, cli, nfKey); err != nil {
 		l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 	}
 
@@ -134,13 +162,13 @@ func newApp(l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	return &App{
-		center: center,
-		cli:    cli,
-		log:    l,
-		cfg:    v,
-		obj:    obj,
-		tls:    tls,
-		api:    caller,
+		ctr: ctr,
+		cli: cli,
+		log: l,
+		cfg: v,
+		obj: obj,
+		tls: tls,
+		api: caller,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -189,7 +217,7 @@ func (a *App) Server(ctx context.Context) {
 	attachProfiler(router, a.cfg, a.log)
 
 	// Attach S3 API:
-	api.Attach(router, a.maxClients, a.api, a.center, a.log)
+	api.Attach(router, a.maxClients, a.api, a.ctr, a.log)
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router
