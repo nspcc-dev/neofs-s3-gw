@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gate/auth"
@@ -25,12 +27,14 @@ var maxObjectList = 10000 // Limit number of objects in a listObjectsResponse/li
 
 func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
+		err error
+		own = owner.NewID()
+		tkn *token.BearerToken
 		res *ListBucketsResponse
 		rid = api.GetRequestID(r.Context())
 	)
 
-	tkn, err := auth.GetBearerToken(r.Context())
-	if err != nil {
+	if tkn, err = auth.GetBearerToken(r.Context()); err != nil {
 		h.log.Error("something went wrong",
 			zap.String("request_id", rid),
 			zap.Error(err))
@@ -39,6 +43,18 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 			Code:           api.GetAPIError(api.ErrInternalError).Code,
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
+		}, r.URL)
+
+		return
+	} else if own, err = layer.GetOwnerID(tkn); err != nil {
+		h.log.Error("something went wrong",
+			zap.String("request_id", rid),
+			zap.Error(err))
+
+		api.WriteErrorResponse(r.Context(), w, api.Error{
+			Code:           api.GetAPIError(api.ErrBadRequest).Code,
+			Description:    err.Error(),
+			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
 
 		return
@@ -61,8 +77,8 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 
 	res = &ListBucketsResponse{
 		Owner: Owner{
-			ID:          tkn.OwnerID.String(),
-			DisplayName: tkn.OwnerID.String(),
+			ID:          own.String(),
+			DisplayName: own.String(),
 		},
 	}
 
