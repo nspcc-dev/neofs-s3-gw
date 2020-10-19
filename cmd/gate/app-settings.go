@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -84,13 +85,31 @@ const ( // settings
 	cfgEnableProfiler = "pprof"
 	cfgListenAddress  = "listen_address"
 
+	// Peers
+	cfgPeers = "peers"
+
 	// Application
 	cfgApplicationName      = "app.name"
 	cfgApplicationVersion   = "app.version"
 	cfgApplicationBuildTime = "app.build_time"
+
+	// command line args
+	cmdHelp    = "help"
+	cmdVersion = "version"
 )
 
 type empty int
+
+var ignore = map[string]struct{}{
+	cfgApplicationName:      {},
+	cfgApplicationVersion:   {},
+	cfgApplicationBuildTime: {},
+
+	cfgPeers: {},
+
+	cmdHelp:    {},
+	cmdVersion: {},
+}
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
@@ -142,7 +161,7 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
 
 	for i := 0; ; i++ {
 
-		key := "peers." + strconv.Itoa(i) + "."
+		key := cfgPeers + "." + strconv.Itoa(i) + "."
 		address := v.GetString(key + "address")
 		weight := v.GetFloat64(key + "weight")
 
@@ -164,7 +183,7 @@ func newSettings() *viper.Viper {
 	v := viper.New()
 
 	v.AutomaticEnv()
-	v.SetEnvPrefix("S3")
+	v.SetEnvPrefix(misc.Prefix)
 	v.SetConfigType("yaml")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
@@ -175,8 +194,8 @@ func newSettings() *viper.Viper {
 	flags.Bool(cfgEnableProfiler, false, "enable pprof")
 	flags.Bool(cfgEnableMetrics, false, "enable prometheus metrics")
 
-	help := flags.BoolP("help", "h", false, "show help")
-	version := flags.BoolP("version", "v", false, "show version")
+	help := flags.BoolP(cmdHelp, "h", false, "show help")
+	version := flags.BoolP(cmdVersion, "v", false, "show version")
 
 	flags.String(cfgNeoFSPrivateKey, generated, fmt.Sprintf(`set value to hex string, WIF string, or path to NeoFS private key file (use "%s" to generate key)`, generated))
 	flags.String(cfgGateAuthPrivateKey, "", "set path to file with auth (curve25519) private key to use in auth scheme")
@@ -192,7 +211,7 @@ func newSettings() *viper.Viper {
 	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "set gRPC connection time to live")
 
 	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
-	peers := flags.StringArrayP("peers", "p", nil, "set NeoFS nodes")
+	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
 
 	// set prefers:
 	v.Set(cfgApplicationName, misc.ApplicationName)
@@ -227,23 +246,46 @@ func newSettings() *viper.Viper {
 		panic(err)
 	}
 
+	if peers != nil && len(*peers) > 0 {
+		for i := range *peers {
+			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".address", (*peers)[i])
+			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".weight", 1)
+		}
+	}
+
 	switch {
 	case help != nil && *help:
 		fmt.Printf("NeoFS S3 Gateway %s (%s)\n", misc.Version, misc.Build)
 		flags.PrintDefaults()
+
+		fmt.Println()
+		fmt.Println("Default environments:")
+		fmt.Println()
+		keys := v.AllKeys()
+		sort.Strings(keys)
+
+		for i := range keys {
+			if _, ok := ignore[keys[i]]; ok {
+				continue
+			}
+
+			k := strings.Replace(keys[i], ".", "_", -1)
+			fmt.Printf("%s_%s = %v\n", misc.Prefix, strings.ToUpper(k), v.Get(keys[i]))
+		}
+
+		fmt.Println()
+		fmt.Println("Peers preset:")
+		fmt.Println()
+
+		fmt.Printf("%s_%s_[N]_ADDRESS = string\n", misc.Prefix, strings.ToUpper(cfgPeers))
+		fmt.Printf("%s_%s_[N]_WEIGHT = 0..1 (float)\n", misc.Prefix, strings.ToUpper(cfgPeers))
+
 		os.Exit(0)
 	case version != nil && *version:
 		fmt.Printf("NeoFS S3 Gateway %s (%s)\n", misc.Version, misc.Build)
 		os.Exit(0)
 	case ttl != nil && ttl.Minutes() < minimumTTLInMinutes:
 		fmt.Printf("connection ttl should not be less than %s", defaultTTL)
-	}
-
-	if peers != nil && len(*peers) > 0 {
-		for i := range *peers {
-			v.SetDefault("peers."+strconv.Itoa(i)+".address", (*peers)[i])
-			v.SetDefault("peers."+strconv.Itoa(i)+".weight", 1)
-		}
 	}
 
 	return v
