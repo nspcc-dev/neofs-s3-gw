@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/container"
-	"github.com/nspcc-dev/neofs-api-go/refs"
-	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-api-go/pkg/client"
+	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
@@ -15,7 +14,7 @@ import (
 type (
 	BucketInfo struct {
 		Name    string
-		CID     refs.CID
+		CID     *container.ID
 		Created time.Time
 	}
 
@@ -28,47 +27,36 @@ type (
 	}
 )
 
-func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, error) {
+func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketInfo, error) {
 	rid := api.GetRequestID(ctx)
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
 		n.log.Error("could not receive bearer token",
+			zap.Stringer("cid", cid),
 			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
-
-	req := new(container.GetRequest)
-	req.SetCID(cid)
-	req.SetTTL(service.SingleForwardingTTL)
-	// req.SetBearer(bearer)
 
 	_ = bearer
 
-	if err = service.SignRequestData(n.key, req); err != nil {
-		n.log.Error("could not prepare request",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
+	cli, tkn, err := n.prepareClient(ctx)
 	if err != nil {
 		n.log.Error("could not prepare client",
+			zap.Stringer("cid", cid),
 			zap.String("request_id", rid),
 			zap.Error(err))
+
 		return nil, err
 	}
 
-	// todo: think about timeout
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	res, err := container.NewServiceClient(conn).Get(ctx, req)
+	res, err := cli.GetContainer(ctx, cid, client.WithSession(tkn))
 	if err != nil {
-		n.log.Error("could not list buckets",
+		n.log.Error("could not fetch container",
+			zap.Stringer("cid", cid),
 			zap.String("request_id", rid),
 			zap.Error(err))
+
 		return nil, err
 	}
 
@@ -76,8 +64,8 @@ func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, e
 
 	return &BucketInfo{
 		CID:     cid,
-		Name:    cid.String(), // should be fetched from container.GetResponse
-		Created: time.Time{},  // should be fetched from container.GetResponse
+		Name:    cid.String(), // should be fetched from container.Attributes
+		Created: time.Time{},  // should be fetched from container.Attributes
 	}, nil
 }
 
@@ -91,21 +79,9 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 		return nil, err
 	}
 
-	req := new(container.ListRequest)
-	req.OwnerID = n.uid
-	req.SetTTL(service.SingleForwardingTTL)
-	// req.SetBearer(bearer)
-
 	_ = bearer
 
-	if err := service.SignRequestData(n.key, req); err != nil {
-		n.log.Error("could not prepare request",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
+	cli, tkn, err := n.prepareClient(ctx)
 	if err != nil {
 		n.log.Error("could not prepare client",
 			zap.String("request_id", rid),
@@ -113,20 +89,24 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 		return nil, err
 	}
 
-	// todo: think about timeout
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	// own, err := GetOwnerID(bearer)
+	// if err != nil {
+	// 	n.log.Error("could not fetch owner id",
+	// 		zap.String("request_id", rid),
+	// 		zap.Error(err))
+	// 	return nil, err
+	// }
 
-	res, err := container.NewServiceClient(conn).List(ctx, req)
+	res, err := cli.ListContainers(ctx, tkn.OwnerID(), client.WithSession(tkn))
 	if err != nil {
-		n.log.Error("could not list buckets",
+		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
 
-	list := make([]BucketInfo, 0, len(res.CID))
-	for _, cid := range res.CID {
+	list := make([]BucketInfo, 0, len(res))
+	for _, cid := range res {
 		info, err := n.containerInfo(ctx, cid)
 		if err != nil {
 			n.log.Error("could not fetch container info",
