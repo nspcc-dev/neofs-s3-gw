@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
@@ -148,12 +150,24 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		cli.ReBalance(ctx)
 
 		if _, err = cli.Connection(ctx); err != nil {
+			if errors.Is(err, context.Canceled) {
+				l.Info("connection canceled")
+				os.Exit(0)
+			}
+
 			l.Fatal("could not establish connection",
 				zap.Error(err))
 		}
 	}
 
-	if obj, err = layer.NewLayer(l, cli, nfKey); err != nil {
+	layerParams := &layer.Params{
+		Pool:    cli,
+		Logger:  l,
+		Timeout: reqTimeout,
+		NFKey:   nfKey,
+	}
+
+	if obj, err = layer.NewLayer(layerParams); err != nil {
 		l.Fatal("could not prepare ObjectLayer", zap.Error(err))
 	}
 
