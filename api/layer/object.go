@@ -21,7 +21,7 @@ import (
 
 type (
 	findParams struct {
-		key string
+		val string
 		cid *container.ID
 	}
 
@@ -65,14 +65,10 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	filter.AddNonLeafFilter()
 
 	sop := new(client.SearchObjectParams)
+	sop.WithContainerID(p.cid)
 
-	if p.cid != nil {
-		filter.AddFilter(object.HdrSysNameCID, p.cid.String(), object.MatchStringEqual)
-		sop.WithContainerID(p.cid)
-	}
-
-	if p.key != "" {
-		filter.AddFilter(AWS3NameHeader, p.key, object.MatchStringEqual)
+	if p.val != "" {
+		filter.AddFilter(ObjectName, p.val, object.MatchStringEqual)
 	}
 
 	sop.WithSearchFilters(filter)
@@ -138,9 +134,13 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	} else if own, err = GetOwnerID(brt); err != nil {
 		return nil, err
-	} else if err = cid.Parse(p.Bucket); err != nil {
+	}
+
+	_ = own
+
+	if bkt, err := n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
-	} else if _, err = n.objectFindID(ctx, &findParams{cid: cid, key: p.Object}); err == nil {
+	} else if _, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err == nil {
 		return nil, &api.ObjectAlreadyExists{
 			Bucket: p.Bucket,
 			Object: p.Object,
@@ -155,7 +155,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	attributes := make([]*object.Attribute, 0, len(p.Header)+1)
 
 	filename := object.NewAttribute()
-	filename.SetKey(AWS3NameHeader)
+	filename.SetKey(ObjectName)
 	filename.SetValue(p.Object)
 
 	attributes = append(attributes, filename)
@@ -172,7 +172,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	r := io.TeeReader(p.Reader, b)
 
 	raw := object.NewRaw()
-	raw.SetOwnerID(own)
+	raw.SetOwnerID(tkn.OwnerID()) // should be replaced with BearerToken.GetOwnerID()
 	raw.SetContainerID(cid)
 	raw.SetAttributes(attributes...)
 
