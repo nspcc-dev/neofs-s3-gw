@@ -33,11 +33,16 @@ func (w *offsetWriter) Write(p []byte) (int, error) {
 
 	length -= offset
 
-	left := w.length - w.written
-	if left-length < 0 || length-left < length {
-		length = left
-	} else {
+	// Writer should write enough and stop writing
+	// 1. When passed zero length, it should write all bytes except offset
+	// 2. When the written buffer is almost filled (left < length),
+	//    should write some bytes to fill up the buffer
+	// 3. When the written buffer is filled, should stop to write
+
+	if left := w.length - w.written; left == 0 && w.length != 0 {
 		return 0, nil
+	} else if left > 0 && left < length {
+		length = left
 	}
 
 	n, err := w.Writer.Write(p[offset : offset+length])

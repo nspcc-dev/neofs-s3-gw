@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
@@ -28,7 +29,15 @@ type (
 )
 
 func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketInfo, error) {
-	rid := api.GetRequestID(ctx)
+	var (
+		rid = api.GetRequestID(ctx)
+
+		info = &BucketInfo{
+			CID:  cid,
+			Name: cid.String(),
+		}
+	)
+
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
 		n.log.Error("could not receive bearer token",
@@ -60,13 +69,27 @@ func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketIn
 		return nil, err
 	}
 
-	_ = res
+	for _, attr := range res.GetAttributes() {
+		switch key, val := attr.GetKey(), attr.GetValue(); key {
+		case ContainerName:
+			info.Name = val
+		case LocallyCreationTime:
+			unix, err := strconv.ParseInt(attr.GetValue(), 10, 64)
+			if err != nil {
+				n.log.Error("could not parse container creation time",
+					zap.Stringer("cid", cid),
+					zap.String("request_id", rid),
+					zap.String("created_at", val),
+					zap.Error(err))
 
-	return &BucketInfo{
-		CID:     cid,
-		Name:    cid.String(), // should be fetched from container.Attributes
-		Created: time.Time{},  // should be fetched from container.Attributes
-	}, nil
+				continue
+			}
+
+			info.Created = time.Unix(unix, 0)
+		}
+	}
+
+	return info, nil
 }
 
 func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {

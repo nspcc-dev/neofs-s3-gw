@@ -86,9 +86,6 @@ type (
 	}
 )
 
-// AWS3NameHeader key in the object NeoFS.
-const AWS3NameHeader = "filename"
-
 // NewGatewayLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
 func NewLayer(p *Params) (Client, error) {
@@ -248,7 +245,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 
 	if err = cid.Parse(p.Bucket); err != nil {
 		return err
-	} else if oid, err = n.objectFindID(ctx, &findParams{cid: cid, key: p.Object}); err != nil {
+	} else if oid, err = n.objectFindID(ctx, &findParams{cid: cid, val: p.Object}); err != nil {
 		return err
 	}
 
@@ -280,7 +277,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 
 	if err = cid.Parse(bucketName); err != nil {
 		return nil, err
-	} else if oid, err = n.objectFindID(ctx, &findParams{cid: cid, key: filename}); err != nil {
+	} else if oid, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err != nil {
 		return nil, err
 	}
 
@@ -356,7 +353,7 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error
 			Err:    err,
 			Object: filename,
 		}
-	} else if ids, err = n.objectSearch(ctx, &findParams{cid: cid, key: filename}); err != nil {
+	} else if ids, err = n.objectSearch(ctx, &findParams{cid: cid, val: filename}); err != nil {
 		return &api.DeleteError{
 			Err:    err,
 			Object: filename,

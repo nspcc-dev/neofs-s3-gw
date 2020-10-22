@@ -62,7 +62,7 @@ func objectInfoFromMeta(meta *object.Object) *ObjectInfo {
 	aws3name := meta.GetID().String()
 
 	userHeaders := userHeaders(meta.GetAttributes())
-	if name, ok := userHeaders[AWS3NameHeader]; ok {
+	if name, ok := userHeaders[ObjectName]; ok {
 		aws3name = name
 		delete(userHeaders, name)
 	}
@@ -83,7 +83,7 @@ func nameFromObject(o *object.Object) (string, string) {
 	var name = o.GetID().String()
 
 	for _, attr := range o.GetAttributes() {
-		if attr.GetKey() == AWS3NameHeader {
+		if attr.GetKey() == ObjectName {
 			name = attr.GetValue()
 
 			break

@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/mux v1.7.4
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
-	github.com/nspcc-dev/neofs-api-go v1.3.1-0.20201007071636-fa18f5ede719
+	github.com/nspcc-dev/neofs-api-go v1.3.1-0.20201020152448-c8f46f7d9762
 	github.com/nspcc-dev/neofs-authmate v0.0.0
 	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/pelletier/go-toml v1.8.0 // indirect
