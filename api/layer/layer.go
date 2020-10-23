@@ -69,7 +69,7 @@ type (
 	Client interface {
 		NeoFS
 
-		ListBuckets(ctx context.Context) ([]BucketInfo, error)
+		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
@@ -129,7 +129,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 
 	for _, bkt := range list {
 		if bkt.Name == name {
-			return &bkt, nil
+			return bkt, nil
 		}
 	}
 
@@ -138,7 +138,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 
 // ListBuckets returns all user containers. Name of the bucket is a container
 // id. Timestamp is omitted since it is not saved in neofs container.
-func (n *layer) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
+func (n *layer) ListBuckets(ctx context.Context) ([]*BucketInfo, error) {
 	return n.containerList(ctx)
 }
 
@@ -240,18 +240,18 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var (
 		err error
 		oid *object.ID
-		cid = container.NewID()
+		bkt *BucketInfo
 	)
 
-	if err = cid.Parse(p.Bucket); err != nil {
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return err
-	} else if oid, err = n.objectFindID(ctx, &findParams{cid: cid, val: p.Object}); err != nil {
+	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
 		return err
 	}
 
 	addr := object.NewAddress()
 	addr.SetObjectID(oid)
-	addr.SetContainerID(cid)
+	addr.SetContainerID(bkt.CID)
 
 	_, err = n.objectGet(ctx, &getParams{
 		Writer: p.Writer,
@@ -293,6 +293,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 }
 
 func GetOwnerID(tkn *token.BearerToken) (*owner.ID, error) {
+
 	switch pkg.SDKVersion().GetMajor() {
 	case 2:
 		id := tkn.ToV2().GetBody().GetOwnerID()

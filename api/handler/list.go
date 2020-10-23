@@ -75,6 +75,10 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(list) > 0 {
+		own = list[0].Owner
+	}
+
 	res = &ListBucketsResponse{
 		Owner: Owner{
 			ID:          own.String(),

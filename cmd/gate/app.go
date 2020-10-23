@@ -235,6 +235,7 @@ func (a *App) Server(ctx context.Context) {
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router
+	srv.ErrorLog = zap.NewStdLog(a.log)
 
 	go func() {
 		a.log.Info("starting server",

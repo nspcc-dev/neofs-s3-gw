@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
@@ -62,13 +63,13 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	}
 
 	filter := object.NewSearchFilters()
-	filter.AddNonLeafFilter()
+	filter.AddRootFilter()
 
 	sop := new(client.SearchObjectParams)
 	sop.WithContainerID(p.cid)
 
 	if p.val != "" {
-		filter.AddFilter(ObjectName, p.val, object.MatchStringEqual)
+		filter.AddFilter(object.AttributeFileName, p.val, object.MatchStringEqual)
 	}
 
 	sop.WithSearchFilters(filter)
@@ -100,7 +101,6 @@ func (n *layer) objectHead(ctx context.Context, addr *object.Address) (*object.O
 	ohp := new(client.ObjectHeaderParams)
 	ohp.WithAddress(addr)
 	ohp.WithAllFields()
-	ohp.WithMainFields()
 
 	return cli.GetObjectHeader(ctx, ohp, client.WithSession(tkn))
 }
@@ -116,6 +116,7 @@ func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, er
 	writer := newWriter(p.Writer, p.offset, p.length)
 
 	gop := new(client.GetObjectParams)
+	gop.WithAddress(p.addr)
 	gop.WithPayloadWriter(writer)
 
 	return cli.GetObject(ctx, gop, client.WithSession(tkn))
@@ -126,8 +127,8 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	var (
 		err error
 		own *owner.ID
+		bkt *BucketInfo
 		brt *token.BearerToken
-		cid = container.NewID()
 	)
 
 	if brt, err = auth.GetBearerToken(ctx); err != nil {
@@ -138,7 +139,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 	_ = own
 
-	if bkt, err := n.GetBucketInfo(ctx, p.Bucket); err != nil {
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
 	} else if _, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err == nil {
 		return nil, &api.ObjectAlreadyExists{
@@ -154,11 +155,17 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 	attributes := make([]*object.Attribute, 0, len(p.Header)+1)
 
+	unix := strconv.FormatInt(time.Now().UTC().Unix(), 64)
+
 	filename := object.NewAttribute()
-	filename.SetKey(ObjectName)
+	filename.SetKey(object.AttributeFileName)
 	filename.SetValue(p.Object)
 
-	attributes = append(attributes, filename)
+	createdAt := object.NewAttribute()
+	createdAt.SetKey(object.AttributeTimestamp)
+	createdAt.SetValue(unix)
+
+	attributes = append(attributes, filename, createdAt)
 
 	for k, v := range p.Header {
 		ua := object.NewAttribute()
@@ -172,8 +179,8 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	r := io.TeeReader(p.Reader, b)
 
 	raw := object.NewRaw()
-	raw.SetOwnerID(tkn.OwnerID()) // should be replaced with BearerToken.GetOwnerID()
-	raw.SetContainerID(cid)
+	raw.SetOwnerID(tkn.OwnerID()) // should be replaced with BearerToken.Issuer()
+	raw.SetContainerID(bkt.CID)
 	raw.SetAttributes(attributes...)
 
 	pop := new(client.PutObjectParams)
@@ -181,7 +188,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	pop.WithObject(raw.Object())
 
 	if _, err = cli.PutObject(ctx, pop, client.WithSession(tkn)); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "owner_id = %s", tkn.OwnerID())
 	}
 
 	return &ObjectInfo{

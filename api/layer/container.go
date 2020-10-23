@@ -7,6 +7,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
@@ -16,6 +17,7 @@ type (
 	BucketInfo struct {
 		Name    string
 		CID     *container.ID
+		Owner   *owner.ID
 		Created time.Time
 	}
 
@@ -69,11 +71,13 @@ func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketIn
 		return nil, err
 	}
 
+	info.Owner = owner.NewIDFromV2(res.GetOwnerID())
+
 	for _, attr := range res.GetAttributes() {
 		switch key, val := attr.GetKey(), attr.GetValue(); key {
-		case ContainerName:
+		case container.AttributeName:
 			info.Name = val
-		case LocallyCreationTime:
+		case container.AttributeTimestamp:
 			unix, err := strconv.ParseInt(attr.GetValue(), 10, 64)
 			if err != nil {
 				n.log.Error("could not parse container creation time",
@@ -92,7 +96,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketIn
 	return info, nil
 }
 
-func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
+func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	rid := api.GetRequestID(ctx)
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
@@ -128,7 +132,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 		return nil, err
 	}
 
-	list := make([]BucketInfo, 0, len(res))
+	list := make([]*BucketInfo, 0, len(res))
 	for _, cid := range res {
 		info, err := n.containerInfo(ctx, cid)
 		if err != nil {
@@ -138,7 +142,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 			continue
 		}
 
-		list = append(list, *info)
+		list = append(list, info)
 	}
 
 	return list, nil
