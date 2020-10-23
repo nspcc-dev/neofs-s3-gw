@@ -238,7 +238,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 
 			{ // try to prepare token
 				ctx, cancel := context.WithTimeout(ctx, p.reqTimeout)
-				tkn, err = prepareToken(ctx, conn, p.key)
+				tkn, err = p.prepareToken(ctx, conn)
 				cancel()
 			}
 
@@ -256,7 +256,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 			p.log.Debug("connected to node", zap.String("address", p.nodes[i].address))
 		} else if tkn, exists = p.tokens[conn.Target()]; exists {
 			// token exists, ignore
-		} else if tkn, err = prepareToken(ctx, conn, p.key); err != nil {
+		} else if tkn, err = p.prepareToken(ctx, conn); err != nil {
 			p.log.Error("could not prepare session token",
 				zap.String("address", p.nodes[i].address),
 				zap.Error(err))

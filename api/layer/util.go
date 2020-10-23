@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -62,7 +63,7 @@ func objectInfoFromMeta(meta *object.Object) *ObjectInfo {
 	aws3name := meta.GetID().String()
 
 	userHeaders := userHeaders(meta.GetAttributes())
-	if name, ok := userHeaders[ObjectName]; ok {
+	if name, ok := userHeaders[object.AttributeFileName]; ok {
 		aws3name = name
 		delete(userHeaders, name)
 	}
@@ -82,8 +83,12 @@ func objectInfoFromMeta(meta *object.Object) *ObjectInfo {
 func nameFromObject(o *object.Object) (string, string) {
 	var name = o.GetID().String()
 
+	fmt.Printf("OID: %s\n", name)
+	fmt.Println("Attributes:")
 	for _, attr := range o.GetAttributes() {
-		if attr.GetKey() == ObjectName {
+		fmt.Printf("\t%s = %s\n", attr.GetKey(), attr.GetValue())
+
+		if attr.GetKey() == object.AttributeFileName {
 			name = attr.GetValue()
 
 			break

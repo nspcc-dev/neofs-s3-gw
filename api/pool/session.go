@@ -2,8 +2,9 @@ package pool
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"math"
+
+	"go.uber.org/zap"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
@@ -20,7 +21,7 @@ func (p *pool) Token(ctx context.Context, conn *grpc.ClientConn) (*token.Session
 	}
 
 	// prepare session token
-	tkn, err := prepareToken(ctx, conn, p.key)
+	tkn, err := p.prepareToken(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -32,11 +33,20 @@ func (p *pool) Token(ctx context.Context, conn *grpc.ClientConn) (*token.Session
 }
 
 // creates token using
-func prepareToken(ctx context.Context, con *grpc.ClientConn, key *ecdsa.PrivateKey) (*token.SessionToken, error) {
-	cli, err := client.New(key, client.WithGRPCConnection(con))
+func (p *pool) prepareToken(ctx context.Context, conn *grpc.ClientConn) (*token.SessionToken, error) {
+	cli, err := client.New(p.key, client.WithGRPCConnection(conn))
 	if err != nil {
 		return nil, err
 	}
 
-	return cli.CreateSession(ctx, math.MaxUint64)
+	tkn, err := cli.CreateSession(ctx, math.MaxUint64)
+	if err != nil {
+		return nil, err
+	}
+
+	p.log.Info("token created for connection",
+		zap.String("address", conn.Target()),
+		zap.Stringer("owner", tkn.OwnerID()))
+
+	return tkn, err
 }
