@@ -3,19 +3,19 @@ package layer
 import (
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg"
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -122,6 +122,11 @@ func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Objec
 
 // GetBucketInfo returns bucket name.
 func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error) {
+	name, err := url.QueryUnescape(name)
+	if err != nil {
+		return nil, err
+	}
+
 	list, err := n.containerList(ctx)
 	if err != nil {
 		return nil, err
@@ -213,9 +218,11 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 			)
 
 			if ind < 0 { // if there are not sub-entities in tail - file
-				oi = objectInfoFromMeta(meta)
+				oi = objectInfoFromMeta(bkt, meta)
 			} else { // if there are sub-entities in tail - dir
 				oi = &ObjectInfo{
+					id: meta.GetID(),
+
 					Owner:  meta.GetOwnerID(),
 					Bucket: bkt.Name,
 					Name:   tail[:ind+1], // dir MUST have slash symbol in the end
@@ -244,7 +251,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-		return err
+		return errors.Wrapf(err, "bucket = %s", p.Bucket)
 	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
 		return err
 	}
@@ -268,28 +275,27 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 // GetObjectInfo returns meta information about the object.
 func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) (*ObjectInfo, error) {
 	var (
-		err error
-		oid *object.ID
-		cid = container.NewID()
-
+		err  error
+		oid  *object.ID
+		bkt  *BucketInfo
 		meta *object.Object
 	)
 
-	if err = cid.Parse(bucketName); err != nil {
+	if bkt, err = n.GetBucketInfo(ctx, bucketName); err != nil {
 		return nil, err
-	} else if oid, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err != nil {
+	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
 		return nil, err
 	}
 
 	addr := object.NewAddress()
 	addr.SetObjectID(oid)
-	addr.SetContainerID(cid)
+	addr.SetContainerID(bkt.CID)
 
 	if meta, err = n.objectHead(ctx, addr); err != nil {
 		return nil, err
 	}
 
-	return objectInfoFromMeta(meta), nil
+	return objectInfoFromMeta(bkt, meta), nil
 }
 
 func GetOwnerID(tkn *token.BearerToken) (*owner.ID, error) {
@@ -312,7 +318,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error) {
 	info, err := n.GetObjectInfo(ctx, p.SrcBucket, p.SrcObject)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "get-object-info")
 	}
 
 	pr, pw := io.Pipe()
@@ -324,7 +330,9 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 			Writer: pw,
 		})
 
-		_ = pw.CloseWithError(err)
+		if err = pw.CloseWithError(err); err != nil {
+			n.log.Error("could not get object", zap.Error(err))
+		}
 	}()
 
 	// set custom headers
@@ -346,15 +354,15 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error
 	var (
 		err error
 		ids []*object.ID
-		cid = container.NewID()
+		bkt *BucketInfo
 	)
 
-	if err = cid.Parse(bucket); err != nil {
+	if bkt, err = n.GetBucketInfo(ctx, bucket); err != nil {
 		return &api.DeleteError{
 			Err:    err,
 			Object: filename,
 		}
-	} else if ids, err = n.objectSearch(ctx, &findParams{cid: cid, val: filename}); err != nil {
+	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
 		return &api.DeleteError{
 			Err:    err,
 			Object: filename,
@@ -364,7 +372,7 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error
 	for _, id := range ids {
 		addr := object.NewAddress()
 		addr.SetObjectID(id)
-		addr.SetContainerID(cid)
+		addr.SetContainerID(bkt.CID)
 
 		if err = n.objectDelete(ctx, addr); err != nil {
 			return &api.DeleteError{

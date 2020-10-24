@@ -36,5 +36,7 @@ func (h *handler) GetBucketLocationHandler(w http.ResponseWriter, r *http.Reques
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
+
+		return
 	}
 }

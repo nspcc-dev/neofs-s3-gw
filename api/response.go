@@ -122,6 +122,8 @@ func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, r
 	code := http.StatusBadRequest
 
 	if e, ok := err.(Error); ok {
+		code = e.HTTPStatusCode
+
 		switch e.Code {
 		case "SlowDown", "XNeoFSServerNotInitialized", "XNeoFSReadQuorum", "XNeoFSWriteQuorum":
 			// Set retry-after header to indicate user-agents to retry request after 120secs.
@@ -191,17 +193,22 @@ func EncodeResponse(response interface{}) []byte {
 
 // EncodeToResponse encodes the response into ResponseWriter.
 func EncodeToResponse(w http.ResponseWriter, response interface{}) error {
+	w.WriteHeader(http.StatusOK)
+
 	if _, err := w.Write(xmlHeader); err != nil {
 		return err
+	} else if err = xml.NewEncoder(w).Encode(response); err != nil {
+		return err
 	}
-	return xml.NewEncoder(w).Encode(response)
+
+	return nil
 }
 
-// WriteSuccessResponseXML writes success headers and response if any,
-// with content-type set to `application/xml`.
-func WriteSuccessResponseXML(w http.ResponseWriter, response []byte) {
-	WriteResponse(w, http.StatusOK, response, MimeXML)
-}
+// // WriteSuccessResponseXML writes success headers and response if any,
+// // with content-type set to `application/xml`.
+// func WriteSuccessResponseXML(w http.ResponseWriter, response []byte) {
+// 	WriteResponse(w, http.StatusOK, response, MimeXML)
+// }
 
 func WriteSuccessResponseHeadersOnly(w http.ResponseWriter) {
 	WriteResponse(w, http.StatusOK, nil, MimeNone)

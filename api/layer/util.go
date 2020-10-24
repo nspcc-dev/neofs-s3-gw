@@ -1,9 +1,9 @@
 package layer
 
 import (
-	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +13,8 @@ import (
 
 type (
 	ObjectInfo struct {
+		id *object.ID
+
 		Bucket      string
 		Name        string
 		Size        int64
@@ -59,35 +61,43 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	return result
 }
 
-func objectInfoFromMeta(meta *object.Object) *ObjectInfo {
-	aws3name := meta.GetID().String()
+func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object) *ObjectInfo {
+	var (
+		creation time.Time
+		filename = meta.GetID().String()
+	)
 
 	userHeaders := userHeaders(meta.GetAttributes())
-	if name, ok := userHeaders[object.AttributeFileName]; ok {
-		aws3name = name
-		delete(userHeaders, name)
+	if val, ok := userHeaders[object.AttributeFileName]; ok {
+		filename = val
+		delete(userHeaders, object.AttributeFileName)
+	}
+
+	if val, ok := userHeaders[object.AttributeTimestamp]; !ok {
+		// ignore empty value
+	} else if dt, err := strconv.ParseInt(val, 10, 64); err == nil {
+		creation = time.Unix(dt, 0)
+		delete(userHeaders, object.AttributeTimestamp)
 	}
 
 	mimeType := http.DetectContentType(meta.GetPayload())
 
 	return &ObjectInfo{
-		Bucket:      meta.GetContainerID().String(),
-		Name:        aws3name,
+		id: meta.GetID(),
+
+		Bucket:      bkt.Name,
+		Name:        filename,
+		Created:     creation,
 		ContentType: mimeType,
 		Headers:     userHeaders,
 		Size:        int64(meta.GetPayloadSize()),
-		Created:     time.Now(), // time.Unix(meta.GetCreationEpoch(), 0),
 	}
 }
 
 func nameFromObject(o *object.Object) (string, string) {
 	var name = o.GetID().String()
 
-	fmt.Printf("OID: %s\n", name)
-	fmt.Println("Attributes:")
 	for _, attr := range o.GetAttributes() {
-		fmt.Printf("\t%s = %s\n", attr.GetKey(), attr.GetValue())
-
 		if attr.GetKey() == object.AttributeFileName {
 			name = attr.GetValue()
 
@@ -99,3 +109,5 @@ func nameFromObject(o *object.Object) (string, string) {
 
 	return name[ind+1:], name[:ind+1]
 }
+
+func (o *ObjectInfo) ID() *object.ID { return o.id }
