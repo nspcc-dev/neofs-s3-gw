@@ -1,10 +1,12 @@
 package layer
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -14,7 +16,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
-	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -57,6 +58,11 @@ func (n *layer) prepareClient(ctx context.Context) (*client.Client, *token.Sessi
 
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, error) {
+	filename, err := url.QueryUnescape(p.val)
+	if err != nil {
+		return nil, err
+	}
+
 	cli, tkn, err := n.prepareClient(ctx)
 	if err != nil {
 		return nil, err
@@ -69,7 +75,7 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	sop.WithContainerID(p.cid)
 
 	if p.val != "" {
-		filter.AddFilter(object.AttributeFileName, p.val, object.MatchStringEqual)
+		filter.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
 	}
 
 	sop.WithSearchFilters(filter)
@@ -113,7 +119,9 @@ func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, er
 	}
 
 	// prepare length/offset writer
-	writer := newWriter(p.Writer, p.offset, p.length)
+	b := bufio.NewWriter(p.Writer)
+	w := newWriter(b, p.offset, p.length)
+	writer := newWriter(w, p.offset, p.length)
 
 	gop := new(client.GetObjectParams)
 	gop.WithAddress(p.addr)
@@ -126,20 +134,26 @@ func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, er
 func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error) {
 	var (
 		err error
+		obj string
 		own *owner.ID
+		oid *object.ID
 		bkt *BucketInfo
-		brt *token.BearerToken
+		// brt *token.BearerToken
 	)
 
-	if brt, err = auth.GetBearerToken(ctx); err != nil {
-		return nil, err
-	} else if own, err = GetOwnerID(brt); err != nil {
-		return nil, err
-	}
+	// if brt, err = auth.GetBearerToken(ctx); err != nil {
+	// 	return nil, err
+	// }
+
+	// else if own, err = GetOwnerID(brt); err != nil {
+	// 	return nil, err
+	// }
 
 	_ = own
 
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+	if obj, err = url.QueryUnescape(p.Object); err != nil {
+		return nil, err
+	} else if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
 	} else if _, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err == nil {
 		return nil, &api.ObjectAlreadyExists{
@@ -155,11 +169,11 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 	attributes := make([]*object.Attribute, 0, len(p.Header)+1)
 
-	unix := strconv.FormatInt(time.Now().UTC().Unix(), 64)
+	unix := strconv.FormatInt(time.Now().UTC().Unix(), 10)
 
 	filename := object.NewAttribute()
 	filename.SetKey(object.AttributeFileName)
-	filename.SetValue(p.Object)
+	filename.SetValue(obj)
 
 	createdAt := object.NewAttribute()
 	createdAt.SetKey(object.AttributeTimestamp)
@@ -187,11 +201,13 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	pop.WithPayloadReader(r)
 	pop.WithObject(raw.Object())
 
-	if _, err = cli.PutObject(ctx, pop, client.WithSession(tkn)); err != nil {
+	if oid, err = cli.PutObject(ctx, pop, client.WithSession(tkn)); err != nil {
 		return nil, errors.Wrapf(err, "owner_id = %s", tkn.OwnerID())
 	}
 
 	return &ObjectInfo{
+		id: oid,
+
 		Bucket:      p.Bucket,
 		Name:        p.Object,
 		Size:        p.Size,

@@ -49,6 +49,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 				Description:    "",
 				HTTPStatusCode: http.StatusBadRequest,
 			}, r.URL)
+
 			return
 		}
 
@@ -78,6 +79,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
+
+		return
 	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: inf.Created.Format(time.RFC3339)}); err != nil {
 		h.log.Error("something went wrong",
 			zap.String("request_id", rid),
@@ -92,5 +95,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
+
+		return
 	}
+
+	h.log.Info("object is copied",
+		zap.String("bucket", inf.Bucket),
+		zap.String("object", inf.Name),
+		zap.Stringer("object_id", inf.ID()))
 }
