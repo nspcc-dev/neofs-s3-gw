@@ -137,7 +137,13 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 			if lw.statusCode >= http.StatusMultipleChoices {
 				l.Error("something went wrong",
 					zap.Int("status", lw.statusCode),
-					zap.String("method", mux.CurrentRoute(r).GetName()))
+					zap.String("method", mux.CurrentRoute(r).GetName()),
+					zap.String("description", http.StatusText(lw.statusCode)))
+			} else {
+				l.Info("call method",
+					zap.Int("status", lw.statusCode),
+					zap.String("method", mux.CurrentRoute(r).GetName()),
+					zap.String("description", http.StatusText(lw.statusCode)))
 			}
 		})
 	}
@@ -162,7 +168,7 @@ func Attach(r *mux.Router, m MaxClients, h Handler, center *auth.Center, log *za
 		setRequestID,
 
 		// -- logging error requests
-		// logErrorResponse(log),
+		logErrorResponse(log),
 	)
 
 	// Attach user authentication for all S3 routes.

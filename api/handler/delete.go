@@ -153,5 +153,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
+
+		return
 	}
 }

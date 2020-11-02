@@ -2,11 +2,12 @@ package layer
 
 import (
 	"context"
+	"strconv"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/container"
-	"github.com/nspcc-dev/neofs-api-go/refs"
-	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-api-go/pkg/client"
+	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
@@ -15,7 +16,8 @@ import (
 type (
 	BucketInfo struct {
 		Name    string
-		CID     refs.CID
+		CID     *container.ID
+		Owner   *owner.ID
 		Created time.Time
 	}
 
@@ -28,60 +30,73 @@ type (
 	}
 )
 
-func (n *layer) containerInfo(ctx context.Context, cid refs.CID) (*BucketInfo, error) {
-	rid := api.GetRequestID(ctx)
+func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketInfo, error) {
+	var (
+		rid = api.GetRequestID(ctx)
+
+		info = &BucketInfo{
+			CID:  cid,
+			Name: cid.String(),
+		}
+	)
+
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
 		n.log.Error("could not receive bearer token",
+			zap.Stringer("cid", cid),
 			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
-
-	req := new(container.GetRequest)
-	req.SetCID(cid)
-	req.SetTTL(service.SingleForwardingTTL)
-	// req.SetBearer(bearer)
 
 	_ = bearer
 
-	if err = service.SignRequestData(n.key, req); err != nil {
-		n.log.Error("could not prepare request",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
+	cli, tkn, err := n.prepareClient(ctx)
 	if err != nil {
 		n.log.Error("could not prepare client",
+			zap.Stringer("cid", cid),
 			zap.String("request_id", rid),
 			zap.Error(err))
+
 		return nil, err
 	}
 
-	// todo: think about timeout
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	res, err := container.NewServiceClient(conn).Get(ctx, req)
+	res, err := cli.GetContainer(ctx, cid, client.WithSession(tkn))
 	if err != nil {
-		n.log.Error("could not list buckets",
+		n.log.Error("could not fetch container",
+			zap.Stringer("cid", cid),
 			zap.String("request_id", rid),
 			zap.Error(err))
+
 		return nil, err
 	}
 
-	_ = res
+	info.Owner = owner.NewIDFromV2(res.GetOwnerID())
 
-	return &BucketInfo{
-		CID:     cid,
-		Name:    cid.String(), // should be fetched from container.GetResponse
-		Created: time.Time{},  // should be fetched from container.GetResponse
-	}, nil
+	for _, attr := range res.GetAttributes() {
+		switch key, val := attr.GetKey(), attr.GetValue(); key {
+		case container.AttributeName:
+			info.Name = val
+		case container.AttributeTimestamp:
+			unix, err := strconv.ParseInt(attr.GetValue(), 10, 64)
+			if err != nil {
+				n.log.Error("could not parse container creation time",
+					zap.Stringer("cid", cid),
+					zap.String("request_id", rid),
+					zap.String("created_at", val),
+					zap.Error(err))
+
+				continue
+			}
+
+			info.Created = time.Unix(unix, 0)
+		}
+	}
+
+	return info, nil
 }
 
-func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
+func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	rid := api.GetRequestID(ctx)
 	bearer, err := auth.GetBearerToken(ctx)
 	if err != nil {
@@ -91,21 +106,9 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 		return nil, err
 	}
 
-	req := new(container.ListRequest)
-	req.OwnerID = n.uid
-	req.SetTTL(service.SingleForwardingTTL)
-	// req.SetBearer(bearer)
-
 	_ = bearer
 
-	if err := service.SignRequestData(n.key, req); err != nil {
-		n.log.Error("could not prepare request",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-
-	conn, err := n.cli.GetConnection(ctx)
+	cli, tkn, err := n.prepareClient(ctx)
 	if err != nil {
 		n.log.Error("could not prepare client",
 			zap.String("request_id", rid),
@@ -113,20 +116,24 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 		return nil, err
 	}
 
-	// todo: think about timeout
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	// own, err := GetOwnerID(bearer)
+	// if err != nil {
+	// 	n.log.Error("could not fetch owner id",
+	// 		zap.String("request_id", rid),
+	// 		zap.Error(err))
+	// 	return nil, err
+	// }
 
-	res, err := container.NewServiceClient(conn).List(ctx, req)
+	res, err := cli.ListContainers(ctx, tkn.OwnerID(), client.WithSession(tkn))
 	if err != nil {
-		n.log.Error("could not list buckets",
+		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
 
-	list := make([]BucketInfo, 0, len(res.CID))
-	for _, cid := range res.CID {
+	list := make([]*BucketInfo, 0, len(res))
+	for _, cid := range res {
 		info, err := n.containerInfo(ctx, cid)
 		if err != nil {
 			n.log.Error("could not fetch container info",
@@ -135,7 +142,7 @@ func (n *layer) containerList(ctx context.Context) ([]BucketInfo, error) {
 			continue
 		}
 
-		list = append(list, *info)
+		list = append(list, info)
 	}
 
 	return list, nil
