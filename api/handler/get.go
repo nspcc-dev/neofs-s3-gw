@@ -21,12 +21,6 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		rid = api.GetRequestID(r.Context())
 	)
 
-	params := &layer.GetObjectParams{
-		Bucket: bkt,
-		Object: obj,
-		Writer: w,
-	}
-
 	if inf, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err != nil {
 		h.log.Error("could not find object",
 			zap.String("request_id", rid),
@@ -43,7 +37,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params.Length = inf.Size
+	params := &layer.GetObjectParams{
+		Bucket: inf.Bucket,
+		Object: inf.Name,
+		Writer: w,
+	}
+
+	// params.Length = inf.Size
 
 	if err = h.obj.GetObject(r.Context(), params); err != nil {
 		h.log.Error("could not get object",
@@ -62,8 +62,8 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", inf.ContentType)
+	w.Header().Set("Last-Modified", inf.Created.Format(http.TimeFormat))
 	w.Header().Set("Content-Length", strconv.FormatInt(inf.Size, 10))
 
-	w.Header().Set("Last-Modified", inf.Created.Format(http.TimeFormat))
-
+	w.WriteHeader(http.StatusOK)
 }

@@ -39,13 +39,11 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-
 	w.Header().Set("Content-Type", inf.ContentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(inf.Size, 10))
-
 	w.Header().Set("Last-Modified", inf.Created.Format(http.TimeFormat))
 
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {

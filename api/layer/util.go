@@ -3,21 +3,24 @@ package layer
 import (
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/object"
-	"github.com/nspcc-dev/neofs-api-go/refs"
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 )
 
 type (
 	ObjectInfo struct {
+		id *object.ID
+
 		Bucket      string
 		Name        string
 		Size        int64
 		ContentType string
 		Created     time.Time
-		Owner       refs.OwnerID
+		Owner       *owner.ID
 		Headers     map[string]string
 	}
 
@@ -39,7 +42,7 @@ type (
 		NextContinuationToken string
 
 		// List of objects info for this request.
-		Objects []ObjectInfo
+		Objects []*ObjectInfo
 
 		// List of prefixes for this request.
 		Prefixes []string
@@ -48,68 +51,63 @@ type (
 
 const pathSeparator = string(os.PathSeparator)
 
-func userHeaders(h []object.Header) map[string]string {
-	result := make(map[string]string, len(h))
+func userHeaders(attrs []*object.Attribute) map[string]string {
+	result := make(map[string]string, len(attrs))
 
-	for i := range h {
-		switch v := h[i].Value.(type) {
-		case *object.Header_UserHeader:
-			result[v.UserHeader.Key] = v.UserHeader.Value
-		default:
-			continue
-		}
+	for _, attr := range attrs {
+		result[attr.GetKey()] = attr.GetValue()
 	}
 
 	return result
 }
 
-func objectInfoFromMeta(meta *object.Object) *ObjectInfo {
-	aws3name := meta.SystemHeader.ID.String()
+func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object) *ObjectInfo {
+	var (
+		creation time.Time
+		filename = meta.GetID().String()
+	)
 
-	userHeaders := userHeaders(meta.Headers)
-	if name, ok := userHeaders[AWS3NameHeader]; ok {
-		aws3name = name
-		delete(userHeaders, name)
+	userHeaders := userHeaders(meta.GetAttributes())
+	if val, ok := userHeaders[object.AttributeFileName]; ok {
+		filename = val
+		delete(userHeaders, object.AttributeFileName)
 	}
 
-	mimeType := http.DetectContentType(meta.Payload)
+	if val, ok := userHeaders[object.AttributeTimestamp]; !ok {
+		// ignore empty value
+	} else if dt, err := strconv.ParseInt(val, 10, 64); err == nil {
+		creation = time.Unix(dt, 0)
+		delete(userHeaders, object.AttributeTimestamp)
+	}
+
+	mimeType := http.DetectContentType(meta.GetPayload())
 
 	return &ObjectInfo{
-		Bucket:      meta.SystemHeader.CID.String(),
-		Name:        aws3name,
+		id: meta.GetID(),
+
+		Bucket:      bkt.Name,
+		Name:        filename,
+		Created:     creation,
 		ContentType: mimeType,
 		Headers:     userHeaders,
-		Size:        int64(meta.SystemHeader.PayloadLength),
-		Created:     time.Unix(meta.SystemHeader.CreatedAt.UnixTime, 0),
+		Size:        int64(meta.GetPayloadSize()),
 	}
-}
-
-func parseUserHeaders(h map[string]string) []object.Header {
-	headers := make([]object.Header, 0, len(h))
-
-	for k, v := range h {
-		uh := &object.UserHeader{Key: k, Value: v}
-		headers = append(headers, object.Header{
-			Value: &object.Header_UserHeader{UserHeader: uh},
-		})
-	}
-
-	return headers
 }
 
 func nameFromObject(o *object.Object) (string, string) {
-	var (
-		name string
-		uh   = userHeaders(o.Headers)
-	)
+	var name = o.GetID().String()
 
-	if _, ok := uh[AWS3NameHeader]; !ok {
-		name = o.SystemHeader.ID.String()
-	} else {
-		name = uh[AWS3NameHeader]
+	for _, attr := range o.GetAttributes() {
+		if attr.GetKey() == object.AttributeFileName {
+			name = attr.GetValue()
+
+			break
+		}
 	}
 
 	ind := strings.LastIndex(name, pathSeparator)
 
 	return name[ind+1:], name[:ind+1]
 }
+
+func (o *ObjectInfo) ID() *object.ID { return o.id }

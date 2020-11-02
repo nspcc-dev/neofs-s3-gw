@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/service"
-	"github.com/nspcc-dev/neofs-api-go/state"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -30,8 +30,8 @@ type (
 
 	Client interface {
 		Status() error
-		GetConnection(context.Context) (*grpc.ClientConn, error)
-		SessionToken(ctx context.Context, params *SessionParams) (*service.Token, error)
+		Connection(context.Context) (*grpc.ClientConn, error)
+		Token(context.Context, *grpc.ClientConn) (*token.SessionToken, error)
 	}
 
 	Pool interface {
@@ -74,20 +74,27 @@ type (
 		currentIdx  *atomic.Int32
 		currentConn *grpc.ClientConn
 
-		reqHealth *state.HealthRequest
+		ping Pinger
 
 		*sync.Mutex
 		nodes  []*node
 		keys   []uint32
 		conns  map[uint32][]*node
-		key    *ecdsa.PrivateKey
-		tokens map[string]*service.Token
+		tokens map[string]*token.SessionToken
+
+		oid *owner.ID
+		key *ecdsa.PrivateKey
 
 		unhealthy *atomic.Error
+	}
+
+	Pinger interface {
+		Call(context.Context, *grpc.ClientConn) error
 	}
 )
 
 var (
+	errNoConnections        = errors.New("no connections")
 	errBootstrapping        = errors.New("bootstrapping")
 	errEmptyConnection      = errors.New("empty connection")
 	errNoHealthyConnections = errors.New("no active connections")
@@ -101,7 +108,7 @@ func New(cfg *Config) (Pool, error) {
 		keys:   make([]uint32, 0),
 		nodes:  make([]*node, 0),
 		conns:  make(map[uint32][]*node),
-		tokens: make(map[string]*service.Token),
+		tokens: make(map[string]*token.SessionToken),
 
 		currentIdx: atomic.NewInt32(-1),
 
@@ -114,6 +121,14 @@ func New(cfg *Config) (Pool, error) {
 		unhealthy: atomic.NewError(errBootstrapping),
 	}
 
+	p.oid = owner.NewID()
+	wallet, err := owner.NEO3WalletFromPublicKey(&p.key.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	p.oid.SetNeo3Wallet(wallet)
+
 	if cfg.GRPCVerbose {
 		grpclog.SetLoggerV2(cfg.GRPCLogger)
 	}
@@ -123,11 +138,8 @@ func New(cfg *Config) (Pool, error) {
 	rand.Seed(seed)
 	cfg.Logger.Info("used random seed", zap.Int64("seed", seed))
 
-	p.reqHealth = new(state.HealthRequest)
-	p.reqHealth.SetTTL(service.NonForwardingTTL)
-
-	if err := service.SignRequestData(cfg.PrivateKey, p.reqHealth); err != nil {
-		return nil, errors.Wrap(err, "could not sign `HealthRequest`")
+	if p.ping, err = newV2Ping(cfg.PrivateKey); err != nil {
+		return nil, err
 	}
 
 	for i := range cfg.Peers {
@@ -145,6 +157,10 @@ func New(cfg *Config) (Pool, error) {
 		cfg.Logger.Info("add new peer",
 			zap.String("address", p.nodes[i].address),
 			zap.Uint32("weight", p.nodes[i].weight))
+	}
+
+	if len(p.nodes) == 0 {
+		return nil, errNoConnections
 	}
 
 	return p, nil
@@ -174,12 +190,12 @@ func (p *pool) ReBalance(ctx context.Context) {
 	defer func() {
 		p.Unlock()
 
-		_, err := p.GetConnection(ctx)
+		_, err := p.Connection(ctx)
 		p.unhealthy.Store(err)
 	}()
 
 	keys := make(map[uint32]struct{})
-	tokens := make(map[string]*service.Token)
+	tokens := make(map[string]*token.SessionToken)
 
 	for i := range p.nodes {
 		var (
@@ -187,7 +203,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 			exists bool
 			err    error
 			start  = time.Now()
-			tkn    *service.Token
+			tkn    *token.SessionToken
 			conn   = p.nodes[i].conn
 			weight = p.nodes[i].weight
 		)
@@ -222,7 +238,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 
 			{ // try to prepare token
 				ctx, cancel := context.WithTimeout(ctx, p.reqTimeout)
-				tkn, err = generateToken(ctx, conn, p.key)
+				tkn, err = p.prepareToken(ctx, conn)
 				cancel()
 			}
 
@@ -240,7 +256,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 			p.log.Debug("connected to node", zap.String("address", p.nodes[i].address))
 		} else if tkn, exists = p.tokens[conn.Target()]; exists {
 			// token exists, ignore
-		} else if tkn, err = generateToken(ctx, conn, p.key); err != nil {
+		} else if tkn, err = p.prepareToken(ctx, conn); err != nil {
 			p.log.Error("could not prepare session token",
 				zap.String("address", p.nodes[i].address),
 				zap.Error(err))
@@ -311,7 +327,7 @@ func (p *pool) ReBalance(ctx context.Context) {
 	})
 }
 
-func (p *pool) GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
+func (p *pool) Connection(ctx context.Context) (*grpc.ClientConn, error) {
 	p.Lock()
 	defer p.Unlock()
 
@@ -361,16 +377,7 @@ func (p *pool) isAlive(ctx context.Context, cur *grpc.ClientConn) error {
 		ctx, cancel := context.WithTimeout(ctx, p.reqTimeout)
 		defer cancel()
 
-		res, err := state.NewStatusClient(cur).HealthCheck(ctx, p.reqHealth)
-		if err != nil {
-			p.log.Warn("could not fetch health-check", zap.Error(err))
-
-			return err
-		} else if !res.Healthy {
-			return errors.New(res.Status)
-		}
-
-		return nil
+		return p.ping.Call(ctx, cur)
 	default:
 		return errors.New(st.String())
 	}

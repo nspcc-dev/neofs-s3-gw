@@ -4,14 +4,18 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/object"
-	"github.com/nspcc-dev/neofs-api-go/refs"
-	"github.com/nspcc-dev/neofs-api-go/service"
+	"github.com/nspcc-dev/neofs-api-go/pkg"
+	"github.com/nspcc-dev/neofs-api-go/pkg/client"
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,10 +23,19 @@ import (
 
 type (
 	layer struct {
+		uid *owner.ID
 		log *zap.Logger
 		cli pool.Client
-		uid refs.OwnerID
 		key *ecdsa.PrivateKey
+
+		reqTimeout time.Duration
+	}
+
+	Params struct {
+		Pool    pool.Client
+		Logger  *zap.Logger
+		Timeout time.Duration
+		NFKey   *ecdsa.PrivateKey
 	}
 
 	GetObjectParams struct {
@@ -50,13 +63,13 @@ type (
 	}
 
 	NeoFS interface {
-		Get(ctx context.Context, address refs.Address) (*object.Object, error)
+		Get(ctx context.Context, address *object.Address) (*object.Object, error)
 	}
 
 	Client interface {
 		NeoFS
 
-		ListBuckets(ctx context.Context) ([]BucketInfo, error)
+		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
@@ -73,65 +86,47 @@ type (
 	}
 )
 
-// AWS3NameHeader key in the object neofs.
-const AWS3NameHeader = "filename"
-
 // NewGatewayLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, cli pool.Client, key *ecdsa.PrivateKey) (Client, error) {
-	uid, err := refs.NewOwnerID(&key.PublicKey)
+func NewLayer(p *Params) (Client, error) {
+	wallet, err := owner.NEO3WalletFromPublicKey(&p.NFKey.PublicKey)
 	if err != nil {
 		return nil, err
 	}
+
+	uid := owner.NewID()
+	uid.SetNeo3Wallet(wallet)
+
 	return &layer{
-		cli: cli,
-		key: key,
-		log: log,
 		uid: uid,
+		cli: p.Pool,
+		key: p.NFKey,
+		log: p.Logger,
+
+		reqTimeout: p.Timeout,
 	}, nil
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center)
-func (n *layer) Get(ctx context.Context, address refs.Address) (*object.Object, error) {
-	conn, err := n.cli.GetConnection(ctx)
+func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
+	cli, tkn, err := n.prepareClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := n.cli.SessionToken(ctx, &pool.SessionParams{
-		Conn: conn,
-		Addr: address,
-		Verb: service.Token_Info_Get,
-	})
+	gop := new(client.GetObjectParams)
+	gop.WithAddress(address)
 
-	if err != nil {
-		return nil, err
-	}
-
-	req := new(object.GetRequest)
-	req.Address = address
-	req.SetTTL(service.SingleForwardingTTL)
-	req.SetToken(token)
-
-	err = service.SignRequestData(n.key, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// todo: think about timeout
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	cli, err := object.NewServiceClient(conn).Get(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return receiveObject(cli)
+	return cli.GetObject(ctx, gop, client.WithSession(tkn))
 }
 
 // GetBucketInfo returns bucket name.
 func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error) {
+	name, err := url.QueryUnescape(name)
+	if err != nil {
+		return nil, err
+	}
+
 	list, err := n.containerList(ctx)
 	if err != nil {
 		return nil, err
@@ -139,7 +134,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 
 	for _, bkt := range list {
 		if bkt.Name == name {
-			return &bkt, nil
+			return bkt, nil
 		}
 	}
 
@@ -148,7 +143,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 
 // ListBuckets returns all user containers. Name of the bucket is a container
 // id. Timestamp is omitted since it is not saved in neofs container.
-func (n *layer) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
+func (n *layer) ListBuckets(ctx context.Context) ([]*BucketInfo, error) {
 	return n.containerList(ctx)
 }
 
@@ -160,31 +155,32 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 	//       pagination must be implemented with cache, because search results
 	//       may be different between search calls
 	var (
+		err       error
+		bkt       *BucketInfo
+		ids       []*object.ID
 		result    ListObjectsInfo
 		uniqNames = make(map[string]struct{})
 	)
 
-	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
-	if err != nil {
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return nil, err
+	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID}); err != nil {
 		return nil, err
 	}
 
-	objectIDs, err := n.objectSearchContainer(ctx, bkt.CID)
-	if err != nil {
-		return nil, err
-	}
-
-	ln := len(objectIDs)
+	ln := len(ids)
 	// todo: check what happens if there is more than maxKeys objects
 	if ln > p.MaxKeys {
-		result.IsTruncated = true
 		ln = p.MaxKeys
+		result.IsTruncated = true
 	}
 
-	result.Objects = make([]ObjectInfo, 0, ln)
+	result.Objects = make([]*ObjectInfo, 0, ln)
 
-	for i := 0; i < ln; i++ {
-		addr := refs.Address{ObjectID: objectIDs[i], CID: bkt.CID}
+	for _, id := range ids {
+		addr := object.NewAddress()
+		addr.SetObjectID(id)
+		addr.SetContainerID(bkt.CID)
 
 		meta, err := n.objectHead(ctx, addr)
 		if err != nil {
@@ -192,17 +188,17 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 			continue
 		}
 
-		// ignore tombstone objects
-		_, hdr := meta.LastHeader(object.HeaderType(object.TombstoneHdr))
-		if hdr != nil {
-			continue
-		}
+		// // ignore tombstone objects
+		// _, hdr := meta.LastHeader(object.HeaderType(object.TombstoneHdr))
+		// if hdr != nil {
+		// 	continue
+		// }
 
 		// ignore storage group objects
-		_, hdr = meta.LastHeader(object.HeaderType(object.StorageGroupHdr))
-		if hdr != nil {
-			continue
-		}
+		// _, hdr = meta.LastHeader(object.HeaderType(object.StorageGroupHdr))
+		// if hdr != nil {
+		// 	continue
+		// }
 
 		// dirs don't exist in neofs, gateway stores full path to the file
 		// in object header, e.g. `filename`:`/this/is/path/file.txt`
@@ -222,11 +218,13 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 			)
 
 			if ind < 0 { // if there are not sub-entities in tail - file
-				oi = objectInfoFromMeta(meta)
+				oi = objectInfoFromMeta(bkt, meta)
 			} else { // if there are sub-entities in tail - dir
 				oi = &ObjectInfo{
-					Owner:  meta.SystemHeader.OwnerID,
-					Bucket: meta.SystemHeader.CID.String(),
+					id: meta.GetID(),
+
+					Owner:  meta.GetOwnerID(),
+					Bucket: bkt.Name,
 					Name:   tail[:ind+1], // dir MUST have slash symbol in the end
 					// IsDir:  true,
 				}
@@ -236,7 +234,7 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 			if _, ok := uniqNames[oi.Name]; !ok {
 				uniqNames[oi.Name] = struct{}{}
 
-				result.Objects = append(result.Objects, *oi)
+				result.Objects = append(result.Objects, oi)
 			}
 		}
 	}
@@ -246,105 +244,81 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 
 // GetObject from storage.
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
-	cid, err := refs.CIDFromString(p.Bucket)
-	if err != nil {
+	var (
+		err error
+		oid *object.ID
+		bkt *BucketInfo
+	)
+
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return errors.Wrapf(err, "bucket = %s", p.Bucket)
+	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
 		return err
 	}
 
-	oid, err := n.objectFindID(ctx, cid, p.Object, false)
-	if err != nil {
-		return err
-	}
+	addr := object.NewAddress()
+	addr.SetObjectID(oid)
+	addr.SetContainerID(bkt.CID)
 
-	addr := refs.Address{
-		ObjectID: oid,
-		CID:      cid,
-	}
-	_, err = n.objectGet(ctx, getParams{
-		addr:   addr,
-		start:  p.Offset,
+	_, err = n.objectGet(ctx, &getParams{
+		Writer: p.Writer,
+
+		addr: addr,
+
+		offset: p.Offset,
 		length: p.Length,
-		writer: p.Writer,
 	})
 
 	return err
 }
 
 // GetObjectInfo returns meta information about the object.
-func (n *layer) GetObjectInfo(ctx context.Context, bucketName, objectName string) (*ObjectInfo, error) {
-	var meta *object.Object
-	if cid, err := refs.CIDFromString(bucketName); err != nil {
+func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) (*ObjectInfo, error) {
+	var (
+		err  error
+		oid  *object.ID
+		bkt  *BucketInfo
+		meta *object.Object
+	)
+
+	if bkt, err = n.GetBucketInfo(ctx, bucketName); err != nil {
 		return nil, err
-	} else if oid, err := n.objectFindID(ctx, cid, objectName, false); err != nil {
-		return nil, err
-	} else if meta, err = n.objectHead(ctx, refs.Address{CID: cid, ObjectID: oid}); err != nil {
+	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
 		return nil, err
 	}
-	return objectInfoFromMeta(meta), nil
+
+	addr := object.NewAddress()
+	addr.SetObjectID(oid)
+	addr.SetContainerID(bkt.CID)
+
+	if meta, err = n.objectHead(ctx, addr); err != nil {
+		return nil, err
+	}
+
+	return objectInfoFromMeta(bkt, meta), nil
+}
+
+func GetOwnerID(tkn *token.BearerToken) (*owner.ID, error) {
+
+	switch pkg.SDKVersion().GetMajor() {
+	case 2:
+		id := tkn.ToV2().GetBody().GetOwnerID()
+		return owner.NewIDFromV2(id), nil
+	default:
+		return nil, errors.New("unknown version")
+	}
 }
 
 // PutObject into storage.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error) {
-	cid, err := refs.CIDFromString(p.Bucket)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = n.objectFindID(ctx, cid, p.Object, true)
-	if err == nil {
-		return nil, &api.ObjectAlreadyExists{
-			Bucket: p.Bucket,
-			Object: p.Object,
-		}
-	}
-
-	oid, err := refs.NewObjectID()
-	if err != nil {
-		return nil, err
-	}
-
-	sgid, err := refs.NewSGID()
-	if err != nil {
-		return nil, err
-	}
-
-	addr := refs.Address{
-		ObjectID: oid,
-		CID:      cid,
-	}
-
-	meta, err := n.objectPut(ctx, putParams{
-		addr:        addr,
-		size:        p.Size,
-		name:        p.Object,
-		r:           p.Reader,
-		userHeaders: p.Header,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	oi := objectInfoFromMeta(meta)
-
-	// for every object create storage group, otherwise object will be deleted
-	addr.ObjectID = sgid
-
-	_, err = n.storageGroupPut(ctx, sgParams{
-		addr:    addr,
-		objects: []refs.ObjectID{oid},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return oi, nil
+	return n.objectPut(ctx, p)
 }
 
 // CopyObject from one bucket into another bucket.
 func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error) {
 	info, err := n.GetObjectInfo(ctx, p.SrcBucket, p.SrcObject)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "get-object-info")
 	}
 
 	pr, pw := io.Pipe()
@@ -356,7 +330,9 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 			Writer: pw,
 		})
 
-		_ = pw.CloseWithError(err)
+		if err = pw.CloseWithError(err); err != nil {
+			n.log.Error("could not get object", zap.Error(err))
+		}
 	}()
 
 	// set custom headers
@@ -374,28 +350,34 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 }
 
 // DeleteObject removes all objects with passed nice name.
-func (n *layer) DeleteObject(ctx context.Context, bucket, object string) error {
-	cid, err := refs.CIDFromString(bucket)
-	if err != nil {
-		return &api.DeleteError{
-			Err:    err,
-			Object: object,
-		}
-	}
+func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error {
+	var (
+		err error
+		ids []*object.ID
+		bkt *BucketInfo
+	)
 
-	ids, err := n.objectFindIDs(ctx, cid, object)
-	if err != nil {
+	if bkt, err = n.GetBucketInfo(ctx, bucket); err != nil {
 		return &api.DeleteError{
 			Err:    err,
-			Object: object,
+			Object: filename,
+		}
+	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
+		return &api.DeleteError{
+			Err:    err,
+			Object: filename,
 		}
 	}
 
 	for _, id := range ids {
-		if err = n.objectDelete(ctx, delParams{addr: refs.Address{CID: cid, ObjectID: id}}); err != nil {
+		addr := object.NewAddress()
+		addr.SetObjectID(id)
+		addr.SetContainerID(bkt.CID)
+
+		if err = n.objectDelete(ctx, addr); err != nil {
 			return &api.DeleteError{
 				Err:    err,
-				Object: object,
+				Object: filename,
 			}
 		}
 	}
