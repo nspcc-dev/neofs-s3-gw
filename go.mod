@@ -9,8 +9,8 @@ require (
 	github.com/gorilla/mux v1.7.4
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
-	github.com/nspcc-dev/neofs-api-go v1.3.1-0.20201020152448-c8f46f7d9762
-	github.com/nspcc-dev/neofs-authmate v0.0.0
+	github.com/nspcc-dev/neofs-api-go v0.0.0-20201029071528-352e99d9b91a
+	github.com/nspcc-dev/neofs-authmate v0.0.0-20201024131449-35d634118c0d
 	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/pelletier/go-toml v1.8.0 // indirect
 	github.com/pkg/errors v0.9.1
@@ -33,10 +33,4 @@ require (
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/ini.v1 v1.57.0 // indirect
-)
-
-// temporary
-replace (
-	github.com/nspcc-dev/neofs-api-go => ../neofs-api
-	github.com/nspcc-dev/neofs-authmate => ../neofs-authmate
 )
