@@ -175,9 +175,13 @@ func WriteResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	}
 	w.Header().Set(hdrContentLength, strconv.Itoa(len(response)))
 	w.WriteHeader(statusCode)
-	if response != nil {
-		_, _ = w.Write(response)
-		w.(http.Flusher).Flush()
+	if response == nil {
+		return
+	}
+
+	_, _ = w.Write(response)
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
 	}
 }
 
