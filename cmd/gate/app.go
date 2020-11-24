@@ -157,7 +157,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	obj = layer.NewLayer(l, cli)
 
 	// prepare auth center
-	ctr = auth.New(cli, hcsCred.PrivateKey())
+	ctr = auth.New(cli.Object(), hcsCred.PrivateKey())
 
 	if caller, err = handler.New(l, obj); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
