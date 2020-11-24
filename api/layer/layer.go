@@ -2,19 +2,16 @@ package layer
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"io"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg"
-	"github.com/nspcc-dev/neofs-api-go/pkg/client"
+	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
+	"github.com/nspcc-dev/cdn-neofs-sdk/creds/neofs"
+	"github.com/nspcc-dev/cdn-neofs-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
-	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -23,19 +20,15 @@ import (
 
 type (
 	layer struct {
-		uid *owner.ID
+		cli sdk.Client
 		log *zap.Logger
-		cli pool.Client
-		key *ecdsa.PrivateKey
-
-		reqTimeout time.Duration
 	}
 
 	Params struct {
-		Pool    pool.Client
-		Logger  *zap.Logger
-		Timeout time.Duration
-		NFKey   *ecdsa.PrivateKey
+		Pool       pool.Client
+		Logger     *zap.Logger
+		Timeout    time.Duration
+		Credential neofs.Credentials
 	}
 
 	GetObjectParams struct {
@@ -88,36 +81,16 @@ type (
 
 // NewGatewayLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(p *Params) (Client, error) {
-	wallet, err := owner.NEO3WalletFromPublicKey(&p.NFKey.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	uid := owner.NewID()
-	uid.SetNeo3Wallet(wallet)
-
+func NewLayer(log *zap.Logger, cli sdk.Client) Client {
 	return &layer{
-		uid: uid,
-		cli: p.Pool,
-		key: p.NFKey,
-		log: p.Logger,
-
-		reqTimeout: p.Timeout,
-	}, nil
+		cli: cli,
+		log: log,
+	}
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center)
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
-	cli, tkn, err := n.prepareClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	gop := new(client.GetObjectParams)
-	gop.WithAddress(address)
-
-	return cli.GetObject(ctx, gop, client.WithSession(tkn))
+	return n.cli.Object().Get(ctx, address)
 }
 
 // GetBucketInfo returns bucket name.
@@ -221,9 +194,9 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 				oi = objectInfoFromMeta(bkt, meta)
 			} else { // if there are sub-entities in tail - dir
 				oi = &ObjectInfo{
-					id: meta.GetID(),
+					id: meta.ID(),
 
-					Owner:  meta.GetOwnerID(),
+					Owner:  meta.OwnerID(),
 					Bucket: bkt.Name,
 					Name:   tail[:ind+1], // dir MUST have slash symbol in the end
 					// IsDir:  true,
@@ -263,7 +236,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	_, err = n.objectGet(ctx, &getParams{
 		Writer: p.Writer,
 
-		addr: addr,
+		address: addr,
 
 		offset: p.Offset,
 		length: p.Length,
@@ -296,17 +269,6 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 	}
 
 	return objectInfoFromMeta(bkt, meta), nil
-}
-
-func GetOwnerID(tkn *token.BearerToken) (*owner.ID, error) {
-
-	switch pkg.SDKVersion().GetMajor() {
-	case 2:
-		id := tkn.ToV2().GetBody().GetOwnerID()
-		return owner.NewIDFromV2(id), nil
-	default:
-		return nil, errors.New("unknown version")
-	}
 }
 
 // PutObject into storage.
