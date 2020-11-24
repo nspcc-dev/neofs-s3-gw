@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"time"
 
+	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
 )
 
@@ -34,7 +34,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		rid = api.GetRequestID(r.Context())
 	)
 
-	if tkn, err = auth.GetBearerToken(r.Context()); err != nil {
+	if tkn, err = sdk.BearerToken(r.Context()); err != nil {
 		h.log.Error("something went wrong",
 			zap.String("request_id", rid),
 			zap.Error(err))
@@ -46,19 +46,9 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		}, r.URL)
 
 		return
-	} else if own, err = layer.GetOwnerID(tkn); err != nil {
-		h.log.Error("something went wrong",
-			zap.String("request_id", rid),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrBadRequest).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
-
-		return
 	}
+
+	own = tkn.Issuer()
 
 	list, err := h.obj.ListBuckets(r.Context())
 	if err != nil {
