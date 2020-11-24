@@ -1,25 +1,15 @@
 package main
 
 import (
-	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
-	crypto "github.com/nspcc-dev/neofs-crypto"
-	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
-	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"github.com/nspcc-dev/neofs-s3-gate/misc"
-	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -113,51 +103,8 @@ var ignore = map[string]struct{}{
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchGateAuthKeys(v *viper.Viper) (*hcs.X25519Keys, error) {
-	path := v.GetString(cfgGateAuthPrivateKey)
-
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return hcs.NewKeys(data)
-}
-
-func fetchNeoFSKey(v *viper.Viper) (*ecdsa.PrivateKey, error) {
-	var (
-		err error
-		key *ecdsa.PrivateKey
-	)
-
-	switch val := v.GetString(cfgNeoFSPrivateKey); val {
-	case generated:
-		key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not generate NeoFS private key")
-		}
-	default:
-		key, err = crypto.LoadPrivateKey(val)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not load NeoFS private key")
-		}
-	}
-
-	return key, nil
-}
-
-func fetchAuthCenter(ctx context.Context, p *authCenterParams) (*auth.Center, error) {
-	return auth.New(ctx, &auth.Params{
-		Con:     p.Pool,
-		Log:     p.Logger,
-		Timeout: p.Timeout,
-		GAKey:   p.GateAuthKeys,
-		NFKey:   p.NeoFSPrivateKey,
-	})
-}
-
-func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
-	peers := make([]pool.Peer, 0)
+func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
+	peers := make(map[string]float64, 0)
 
 	for i := 0; ; i++ {
 
@@ -170,10 +117,10 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
 			break
 		}
 
-		peers = append(peers, pool.Peer{
-			Address: address,
-			Weight:  weight,
-		})
+		peers[address] = weight
+		l.Info("add connection peer",
+			zap.String("address", address),
+			zap.Float64("weight", weight))
 	}
 
 	return peers
