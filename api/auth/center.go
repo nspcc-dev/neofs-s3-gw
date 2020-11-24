@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
-	"github.com/nspcc-dev/cdn-neofs-sdk/creds/accessbox"
 	"github.com/nspcc-dev/cdn-neofs-sdk/creds/hcs"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
@@ -85,20 +84,12 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, errors.Wrapf(err, "could not parse AccessBox address: %s", accessKeyID)
 	}
 
-	buf := new(bytes.Buffer)
-	if _, err = c.cli.Object().Get(r.Context(), address, sdk.WithGetWriter(buf)); err != nil {
-		return nil, errors.Wrapf(err, "could not fetch AccessBox: %s (%s / %s)",
-			accessKeyID,
-			address.ContainerID(),
-			address.ObjectID())
-	}
-
-	box := accessbox.NewBearerBox(nil)
-	if err = accessbox.NewDecoder(buf, c.key).Decode(box); err != nil {
+	tkn, err := c.cli.Credentials().BearerToken(r.Context(), address, c.key)
+	if err != nil {
 		return nil, err
 	}
 
-	data, err := box.Token().Marshal()
+	data, err := tkn.Marshal()
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +126,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, errors.Wrap(err, "failed to pass authentication procedure")
 	}
 
-	return box.Token(), nil
+	return tkn, nil
 }
 
 // TODO: Make this write into a smart buffer backed by a file on a fast drive.

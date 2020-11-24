@@ -10,12 +10,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-
 	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
-
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
