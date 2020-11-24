@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
+	"github.com/nspcc-dev/cdn-neofs-sdk/creds/bearer"
 	"github.com/nspcc-dev/cdn-neofs-sdk/creds/hcs"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
@@ -30,9 +31,8 @@ type (
 	}
 
 	center struct {
-		cli sdk.Client
-		key hcs.PrivateKey
 		reg *regexpSubmatcher
+		cli bearer.Credentials
 	}
 
 	Params struct {
@@ -43,10 +43,9 @@ type (
 )
 
 // New creates an instance of AuthCenter.
-func New(cli sdk.Client, key hcs.PrivateKey) Center {
+func New(obj sdk.ObjectClient, key hcs.PrivateKey) Center {
 	return &center{
-		cli: cli,
-		key: key,
+		cli: bearer.New(obj, key),
 		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
 	}
 }
@@ -84,7 +83,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, errors.Wrapf(err, "could not parse AccessBox address: %s", accessKeyID)
 	}
 
-	tkn, err := c.cli.Credentials().BearerToken(r.Context(), address, c.key)
+	tkn, err := c.cli.Get(r.Context(), address)
 	if err != nil {
 		return nil, err
 	}
