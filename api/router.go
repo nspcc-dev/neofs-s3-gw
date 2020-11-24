@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/nspcc-dev/neofs-s3-gate/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gate/api/metrics"
-	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
 )
@@ -160,7 +160,7 @@ func GetRequestID(v interface{}) string {
 	}
 }
 
-func Attach(r *mux.Router, m MaxClients, h Handler, center *auth.Center, log *zap.Logger) {
+func Attach(r *mux.Router, m MaxClients, h Handler, center auth.Center, log *zap.Logger) {
 	api := r.PathPrefix(SlashSeparator).Subrouter()
 
 	api.Use(
