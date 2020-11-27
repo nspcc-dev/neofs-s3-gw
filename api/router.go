@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -81,7 +82,9 @@ type (
 	mimeType string
 
 	logResponseWriter struct {
+		sync.Once
 		http.ResponseWriter
+
 		statusCode int
 	}
 )
@@ -100,8 +103,10 @@ const (
 var _ = logErrorResponse
 
 func (lrw *logResponseWriter) WriteHeader(code int) {
-	lrw.statusCode = code
-	lrw.ResponseWriter.WriteHeader(code)
+	lrw.Do(func() {
+		lrw.statusCode = code
+		lrw.ResponseWriter.WriteHeader(code)
+	})
 }
 
 func setRequestID(h http.Handler) http.Handler {
@@ -139,12 +144,14 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 					zap.Int("status", lw.statusCode),
 					zap.String("method", mux.CurrentRoute(r).GetName()),
 					zap.String("description", http.StatusText(lw.statusCode)))
-			} else {
-				l.Info("call method",
-					zap.Int("status", lw.statusCode),
-					zap.String("method", mux.CurrentRoute(r).GetName()),
-					zap.String("description", http.StatusText(lw.statusCode)))
+
+				return
 			}
+
+			l.Info("call method",
+				zap.Int("status", lw.statusCode),
+				zap.String("method", mux.CurrentRoute(r).GetName()),
+				zap.String("description", http.StatusText(lw.statusCode)))
 		})
 	}
 }
