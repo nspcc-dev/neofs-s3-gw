@@ -1,12 +1,11 @@
 package auth
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -40,7 +39,19 @@ type (
 		Logger     *zap.Logger
 		Credential hcs.Credentials
 	}
+
+	prs int
 )
+
+func (p prs) Read(_ []byte) (n int, err error) {
+	panic("implement me")
+}
+
+func (p prs) Seek(_ int64, _ int) (int64, error) {
+	panic("implement me")
+}
+
+var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
 func New(obj sdk.ObjectClient, key hcs.PrivateKey) Center {
@@ -60,6 +71,11 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 	if len(authHeaderField) != 1 {
 		return nil, errors.New("unsupported request: wrong length of Authorization header field")
 	}
+
+	// { // to debug request
+	// 	data, _ := httputil.DumpRequest(r, false)
+	// 	fmt.Println(string(data))
+	// }
 
 	sms1 := c.reg.getSubmatches(authHeaderField[0])
 	if len(sms1) != 7 {
@@ -110,34 +126,40 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 	awsCreds := credentials.NewStaticCredentials(accessKeyID, secret, "")
 	signer := v4.NewSigner(awsCreds)
 
-	body, err := readAndKeepBody(r)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read out request body")
-	}
+	// body, err := readAndKeepBody(r)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "failed to read out request body")
+	// }
+	//
+	// _ = body
 
-	hdr, err := signer.Sign(otherRequest, body, sms1["service"], sms1["region"], signatureDateTime)
-	if err != nil {
+	// body not required
+	if _, err := signer.Sign(otherRequest, nil, sms1["service"], sms1["region"], signatureDateTime); err != nil {
 		return nil, errors.Wrap(err, "failed to sign temporary HTTP request")
 	}
 
-	sms2 := c.reg.getSubmatches(hdr.Get("Authorization"))
+	sms2 := c.reg.getSubmatches(otherRequest.Header.Get("Authorization"))
 	if sms1["v4_signature"] != sms2["v4_signature"] {
-		return nil, errors.Wrap(err, "failed to pass authentication procedure")
+		return nil, errors.New("failed to pass authentication procedure")
 	}
 
 	return tkn, nil
 }
 
+// for debug reasons
+func panicSeeker() io.ReadSeeker { return prs(0) }
+
 // TODO: Make this write into a smart buffer backed by a file on a fast drive.
-func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
-	if request.Body == nil {
-		var r bytes.Reader
-		return &r, nil
-	}
-	payload, err := ioutil.ReadAll(request.Body)
-	if err != nil {
-		return nil, err
-	}
-	request.Body = ioutil.NopCloser(bytes.NewReader(payload))
-	return bytes.NewReader(payload), nil
-}
+// func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
+// 	if request.Body == nil {
+// 		return new(bytes.Reader), nil
+// 	}
+//
+// 	payload, err := ioutil.ReadAll(request.Body)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	request.Body = ioutil.NopCloser(bytes.NewReader(payload))
+// 	return bytes.NewReader(payload), nil
+// }
