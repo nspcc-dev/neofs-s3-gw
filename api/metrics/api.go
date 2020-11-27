@@ -41,11 +41,11 @@ type (
 	}
 
 	responseWrapper struct {
+		sync.Once
 		http.ResponseWriter
 
-		statusCode  int
-		headWritten bool
-		startTime   time.Time
+		statusCode int
+		startTime  time.Time
 	}
 )
 
@@ -202,12 +202,10 @@ func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Requ
 
 // WriteHeader - writes http status code
 func (w *responseWrapper) WriteHeader(code int) {
-	if !w.headWritten {
+	w.Do(func() {
 		w.statusCode = code
-		w.headWritten = true
-
 		w.ResponseWriter.WriteHeader(code)
-	}
+	})
 }
 
 // Flush - Calls the underlying Flush.
