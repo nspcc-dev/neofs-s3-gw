@@ -5,9 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
 	"go.uber.org/zap"
@@ -29,26 +27,9 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
 		own = owner.NewID()
-		tkn *token.BearerToken
 		res *ListBucketsResponse
 		rid = api.GetRequestID(r.Context())
 	)
-
-	if tkn, err = sdk.BearerToken(r.Context()); err != nil {
-		h.log.Error("something went wrong",
-			zap.String("request_id", rid),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
-
-		return
-	}
-
-	own = tkn.Issuer()
 
 	list, err := h.obj.ListBuckets(r.Context())
 	if err != nil {
