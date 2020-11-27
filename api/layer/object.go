@@ -2,10 +2,8 @@ package layer
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"io"
-	"net/http"
 	"net/url"
 	"strconv"
 	"time"
@@ -13,7 +11,6 @@ import (
 	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
@@ -41,15 +38,11 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 		sdk.SearchRootObjects(),
 	}
 
-	filename, err := url.QueryUnescape(p.val)
-	if err != nil {
+	if filename, err := url.QueryUnescape(p.val); err != nil {
 		return nil, err
-	}
-
-	if p.val != "" {
+	} else if filename != "" {
 		opts = append(opts, sdk.SearchByFilename(filename))
 	}
-
 	return n.cli.Object().Search(ctx, p.cid, opts...)
 }
 
@@ -88,18 +81,18 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		err error
 		obj string
 		bkt *BucketInfo
-		brt *token.BearerToken
+		own = n.Owner(ctx)
 
 		address *object.Address
 	)
 
-	if brt, err = sdk.BearerToken(ctx); err != nil {
-		return nil, err
-	} else if obj, err = url.QueryUnescape(p.Object); err != nil {
+	if obj, err = url.QueryUnescape(p.Object); err != nil {
 		return nil, err
 	} else if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
-	} else if _, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err == nil {
+	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil && err != ErrObjectNotExists {
+		return nil, err
+	} else if err == ErrObjectExists {
 		return nil, &api.ObjectAlreadyExists{
 			Bucket: p.Bucket,
 			Object: p.Object,
@@ -128,14 +121,12 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		attributes = append(attributes, ua)
 	}
 
-	b := new(bytes.Buffer)
-
 	raw := object.NewRaw()
-	raw.SetOwnerID(brt.Issuer())
+	raw.SetOwnerID(own)
 	raw.SetContainerID(bkt.CID)
 	raw.SetAttributes(attributes...)
 
-	r := io.TeeReader(p.Reader, b)
+	r := newDetector(p.Reader)
 	if address, err = n.cli.Object().Put(ctx, raw.Object(), sdk.WithPutReader(r)); err != nil {
 		return nil, err
 	}
@@ -143,13 +134,13 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	return &ObjectInfo{
 		id: address.ObjectID(),
 
+		Owner:       own,
 		Bucket:      p.Bucket,
 		Name:        p.Object,
 		Size:        p.Size,
 		Created:     time.Now(),
-		ContentType: http.DetectContentType(b.Bytes()),
-		Owner:       brt.Issuer(),
 		Headers:     p.Header,
+		ContentType: r.contentType,
 	}, nil
 }
 

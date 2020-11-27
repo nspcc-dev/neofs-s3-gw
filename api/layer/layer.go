@@ -10,7 +10,9 @@ import (
 	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/cdn-neofs-sdk/creds/neofs"
 	"github.com/nspcc-dev/cdn-neofs-sdk/pool"
+	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -79,6 +81,11 @@ type (
 	}
 )
 
+var (
+	ErrObjectExists    = errors.New("object exists")
+	ErrObjectNotExists = errors.New("object not exists")
+)
+
 // NewGatewayLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
 func NewLayer(log *zap.Logger, cli sdk.Client) Client {
@@ -86,6 +93,15 @@ func NewLayer(log *zap.Logger, cli sdk.Client) Client {
 		cli: cli,
 		log: log,
 	}
+}
+
+// Owner returns owner id from BearerToken (context) or from client owner.
+func (n *layer) Owner(ctx context.Context) *owner.ID {
+	if tkn, err := sdk.BearerToken(ctx); err != nil && tkn != nil {
+		return tkn.Issuer()
+	}
+
+	return n.cli.Owner()
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center)
@@ -245,6 +261,20 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	return err
 }
 
+func (n *layer) checkObject(ctx context.Context, cid *container.ID, filename string) error {
+	var err error
+
+	if _, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err == nil {
+		return ErrObjectExists
+	} else if state, ok := status.FromError(err); !ok || state == nil {
+		return err
+	} else if state.Code() == codes.NotFound {
+		return ErrObjectNotExists
+	}
+
+	return err
+}
+
 // GetObjectInfo returns meta information about the object.
 func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) (*ObjectInfo, error) {
 	var (
@@ -255,8 +285,10 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, bucketName); err != nil {
+		n.log.Error("could not fetch bucket info", zap.Error(err))
 		return nil, err
 	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
+		n.log.Error("could not find object id", zap.Error(err))
 		return nil, err
 	}
 
@@ -265,6 +297,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 	addr.SetContainerID(bkt.CID)
 
 	if meta, err = n.objectHead(ctx, addr); err != nil {
+		n.log.Error("could not fetch object head", zap.Error(err))
 		return nil, err
 	}
 

@@ -5,10 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"go.uber.org/zap"
 )
@@ -79,19 +77,12 @@ func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketIn
 func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	var (
 		err error
-		tkn *token.BearerToken
+		own = n.Owner(ctx)
+		res []*container.ID
 		rid = api.GetRequestID(ctx)
 	)
 
-	if tkn, err = sdk.BearerToken(ctx); err != nil {
-		n.log.Error("could not receive bearer token",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-
-	res, err := n.cli.Container().List(ctx, tkn.Issuer())
-	if err != nil {
+	if res, err = n.cli.Container().List(ctx, own); err != nil {
 		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
 			zap.Error(err))
