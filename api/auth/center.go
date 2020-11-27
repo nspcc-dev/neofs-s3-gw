@@ -2,8 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +14,7 @@ import (
 	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/cdn-neofs-sdk/creds/bearer"
 	"github.com/nspcc-dev/cdn-neofs-sdk/creds/hcs"
+	"github.com/nspcc-dev/cdn-neofs-sdk/creds/s3"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/pkg/errors"
@@ -104,13 +103,10 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, err
 	}
 
-	data, err := tkn.Marshal()
+	secret, err := s3.SecretAccessKey(tkn)
 	if err != nil {
 		return nil, err
 	}
-
-	hash := sha256.Sum256(data)
-	secret := hex.EncodeToString(hash[:])
 
 	otherRequest := r.Clone(context.TODO())
 	otherRequest.Header = map[string][]string{}
@@ -147,7 +143,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 }
 
 // for debug reasons
-func panicSeeker() io.ReadSeeker { return prs(0) }
+// func panicSeeker() io.ReadSeeker { return prs(0) }
 
 // TODO: Make this write into a smart buffer backed by a file on a fast drive.
 // func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
