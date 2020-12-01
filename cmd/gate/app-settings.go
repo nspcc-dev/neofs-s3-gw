@@ -40,6 +40,7 @@ const ( // settings
 	cfgLoggerLevel              = "logger.level"
 	cfgLoggerFormat             = "logger.format"
 	cfgLoggerTraceLevel         = "logger.trace_level"
+	cfgLoggerNoCaller           = "logger.no_caller"
 	cfgLoggerNoDisclaimer       = "logger.no_disclaimer"
 	cfgLoggerSamplingInitial    = "logger.sampling.initial"
 	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
@@ -171,6 +172,7 @@ func newSettings() *viper.Viper {
 	v.SetDefault(cfgLoggerLevel, "debug")
 	v.SetDefault(cfgLoggerFormat, "console")
 	v.SetDefault(cfgLoggerTraceLevel, "panic")
+	v.SetDefault(cfgLoggerNoCaller, false)
 	v.SetDefault(cfgLoggerNoDisclaimer, true)
 	v.SetDefault(cfgLoggerSamplingInitial, 1000)
 	v.SetDefault(cfgLoggerSamplingThereafter, 1000)

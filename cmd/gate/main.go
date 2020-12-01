@@ -9,23 +9,23 @@ import (
 
 func newLogger(v *viper.Viper) *zap.Logger {
 	options := []logger.Option{
-		logger.WithLevel(v.GetString("logger.level")),
-		logger.WithTraceLevel(v.GetString("logger.trace_level")),
+		logger.WithLevel(v.GetString(cfgLoggerLevel)),
+		logger.WithTraceLevel(v.GetString(cfgLoggerTraceLevel)),
 
-		logger.WithFormat(v.GetString("logger.format")),
+		logger.WithFormat(v.GetString(cfgLoggerFormat)),
 
-		logger.WithSamplingInitial(v.GetInt("logger.sampling.initial")),
-		logger.WithSamplingThereafter(v.GetInt("logger.sampling.thereafter")),
+		logger.WithSamplingInitial(v.GetInt(cfgLoggerSamplingInitial)),
+		logger.WithSamplingThereafter(v.GetInt(cfgLoggerSamplingThereafter)),
 
-		logger.WithAppName(v.GetString("app_name")),
-		logger.WithAppVersion(v.GetString("app_version")),
+		logger.WithAppName(v.GetString(cfgApplicationName)),
+		logger.WithAppVersion(v.GetString(cfgApplicationVersion)),
 	}
 
-	if v.GetBool("logger.no_caller") {
+	if v.GetBool(cfgLoggerNoCaller) {
 		options = append(options, logger.WithoutCaller())
 	}
 
-	if v.GetBool("logger.no_disclaimer") {
+	if v.GetBool(cfgLoggerNoDisclaimer) {
 		options = append(options, logger.WithoutDisclaimer())
 	}
 

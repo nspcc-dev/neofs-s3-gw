@@ -20,7 +20,12 @@ RUN set -x \
     && export GOGC=off \
     && export CGO_ENABLED=0 \
     && [ -d "./vendor" ] || go mod vendor \
-    && go build -v -mod=vendor -trimpath -gcflags "all=-N -l" -ldflags "${LDFLAGS}" -o /go/bin/neofs-s3 ./cmd/gate \
+    && go build \
+      -v \
+      -mod=vendor \
+      -trimpath \
+      -ldflags "${LDFLAGS} -X main.Build=$(date -u +%s%N) -X main.Prefix=S3_GW" \
+      -o /go/bin/neofs-s3 ./cmd/gate \
     && upx -3 /go/bin/neofs-s3
 
 # Executable image
