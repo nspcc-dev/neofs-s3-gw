@@ -24,7 +24,7 @@ RUN set -x \
       -v \
       -mod=vendor \
       -trimpath \
-      -ldflags "${LDFLAGS} -X main.Build=$(date -u +%s%N) -X main.Prefix=S3_GW" \
+      -ldflags "${LDFLAGS} -X ${REPO}/misc.Prefix=S3_GW" \
       -o /go/bin/neofs-s3 ./cmd/gate \
     && upx -3 /go/bin/neofs-s3
 
@@ -33,8 +33,7 @@ FROM scratch
 
 WORKDIR /
 
-COPY --from=builder /go/bin/neofs-s3 /usr/bin/neofs-s3
+COPY --from=builder /go/bin/neofs-s3 /bin/neofs-s3
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-# Run delve
-CMD ["/usr/bin/neofs-s3"]
+ENTRYPOINT ["/bin/neofs-s3"]
