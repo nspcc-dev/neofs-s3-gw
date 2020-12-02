@@ -137,6 +137,7 @@ func newSettings() *viper.Viper {
 
 	// flags setup:
 	flags := pflag.NewFlagSet("commandline", pflag.ExitOnError)
+	flags.SetOutput(os.Stdout)
 	flags.SortFlags = false
 
 	flags.Bool(cfgEnableProfiler, false, "enable pprof")

@@ -1,11 +1,12 @@
 package misc
 
-const ApplicationName = "neofs-s3-gate"
+const (
+	ApplicationName = "neofs-s3-gate"
+
+	Prefix = "S3_GW"
+)
 
 var (
-	// TODO should be replaced with S3_GW before release
-	Prefix = "S3"
-
 	Build   = "now"
 	Version = "dev"
 )

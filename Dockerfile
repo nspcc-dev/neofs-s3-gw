@@ -24,7 +24,7 @@ RUN set -x \
       -v \
       -mod=vendor \
       -trimpath \
-      -ldflags "${LDFLAGS} -X ${REPO}/misc.Prefix=S3_GW" \
+      -ldflags "${LDFLAGS}" \
       -o /go/bin/neofs-s3 ./cmd/gate \
     && upx -3 /go/bin/neofs-s3
 
