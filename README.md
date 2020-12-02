@@ -50,7 +50,7 @@ S3_GW_PEERS_[N]_WEIGHT = 0..1 (float)
 
 ## Reference Resources
 
-* [AWS S3 API Reference]("https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf")
+* [AWS S3 API Reference](https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf)
 
 
 ### Bucket/Object-Level Actions
