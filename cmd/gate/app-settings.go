@@ -75,6 +75,7 @@ const ( // settings
 	cfgEnableMetrics  = "metrics"
 	cfgEnableProfiler = "pprof"
 	cfgListenAddress  = "listen_address"
+	cfgListenDomains  = "listen_domains"
 
 	// Peers
 	cfgPeers = "peers"
@@ -127,6 +128,21 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
 	return peers
 }
 
+func fetchDomains(v *viper.Viper) []string {
+	cnt := v.GetInt(cfgListenDomains + ".count")
+	res := make([]string, 0, cnt)
+	for i := 0; ; i++ {
+		domain := v.GetString(cfgListenDomains + "." + strconv.Itoa(i))
+		if domain == "" {
+			break
+		}
+
+		res = append(res, domain)
+	}
+
+	return res
+}
+
 func newSettings() *viper.Viper {
 	v := viper.New()
 
@@ -161,6 +177,8 @@ func newSettings() *viper.Viper {
 
 	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
 	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
+
+	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
 
 	// set prefers:
 	v.Set(cfgApplicationName, misc.ApplicationName)
@@ -201,6 +219,14 @@ func newSettings() *viper.Viper {
 			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".address", (*peers)[i])
 			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".weight", 1)
 		}
+	}
+
+	if domains != nil && len(*domains) > 0 {
+		for i := range *domains {
+			v.SetDefault(cfgListenDomains+"."+strconv.Itoa(i), (*domains)[i])
+		}
+
+		v.SetDefault(cfgListenDomains+".count", len(*domains))
 	}
 
 	switch {
