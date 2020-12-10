@@ -1,14 +1,41 @@
 package handler
 
 import (
+	"io"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/nspcc-dev/neofs-s3-gate/api/layer"
 	"go.uber.org/zap"
 )
+
+type (
+	detector struct {
+		io.Writer
+		sync.Once
+
+		contentType string
+	}
+)
+
+func newDetector(w io.Writer) *detector {
+	return &detector{Writer: w}
+}
+
+func (d *detector) Write(data []byte) (int, error) {
+	d.Once.Do(func() {
+		if rw, ok := d.Writer.(http.ResponseWriter); ok {
+			rw.WriteHeader(http.StatusOK)
+		}
+
+		d.contentType = http.DetectContentType(data)
+	})
+
+	return d.Writer.Write(data)
+}
 
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -37,10 +64,12 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writer := newDetector(w)
+
 	params := &layer.GetObjectParams{
 		Bucket: inf.Bucket,
 		Object: inf.Name,
-		Writer: w,
+		Writer: writer,
 	}
 
 	// params.Length = inf.Size
@@ -61,9 +90,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", inf.ContentType)
+	w.Header().Set("Content-Type", writer.contentType)
 	w.Header().Set("Last-Modified", inf.Created.Format(http.TimeFormat))
 	w.Header().Set("Content-Length", strconv.FormatInt(inf.Size, 10))
-
-	w.WriteHeader(http.StatusOK)
 }
