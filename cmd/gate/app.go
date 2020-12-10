@@ -214,7 +214,10 @@ func (a *App) Server(ctx context.Context) {
 	attachProfiler(router, a.cfg, a.log)
 
 	// Attach S3 API:
-	api.Attach(router, a.maxClients, a.api, a.ctr, a.log)
+	domains := fetchDomains(a.cfg)
+	a.log.Info("fetch domains, prepare to use API",
+		zap.Strings("domains", domains))
+	api.Attach(router, domains, a.maxClients, a.api, a.ctr, a.log)
 
 	// Use mux.Router as http.Handler
 	srv.Handler = router
