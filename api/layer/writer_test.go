@@ -33,10 +33,8 @@ func TestOffsetWriter(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		wo := wt.(*offsetWriter)
-
-		require.Equal(t, o, wo.skipped)
-		require.Equal(t, l, wo.written)
+		require.Equal(t, o, wt.skipped)
+		require.Equal(t, l, wt.written)
 		require.Equal(t, b[o:o+l], w.Bytes())
 	})
 
@@ -51,10 +49,8 @@ func TestOffsetWriter(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		wo := wt.(*offsetWriter)
-
-		require.Equal(t, o, wo.skipped)
-		require.Equal(t, l, wo.written)
+		require.Equal(t, o, wt.skipped)
+		require.Equal(t, l, wt.written)
 		require.Equal(t, b[o:o+l], w.Bytes())
 	})
 
@@ -69,10 +65,8 @@ func TestOffsetWriter(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		wo := wt.(*offsetWriter)
-
-		require.Equal(t, o, wo.skipped)
-		require.Equal(t, l, wo.written)
+		require.Equal(t, o, wt.skipped)
+		require.Equal(t, l, wt.written)
 		require.Equal(t, b[o:o+l], w.Bytes())
 	})
 
@@ -87,10 +81,8 @@ func TestOffsetWriter(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		wo := wt.(*offsetWriter)
-
-		require.Equal(t, o, wo.skipped)
-		require.Equal(t, s, wo.written)
+		require.Equal(t, o, wt.skipped)
+		require.Equal(t, s, wt.written)
 		require.Equal(t, b, w.Bytes())
 	})
 
@@ -105,10 +97,8 @@ func TestOffsetWriter(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		wo := wt.(*offsetWriter)
-
-		require.Equal(t, o, wo.skipped)
-		require.Equal(t, s, wo.written)
+		require.Equal(t, o, wt.skipped)
+		require.Equal(t, s, wt.written)
 		require.Equal(t, b, w.Bytes())
 	})
 }

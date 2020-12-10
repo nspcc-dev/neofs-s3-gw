@@ -12,7 +12,7 @@ type offsetWriter struct {
 	length int64
 }
 
-func newWriter(w io.Writer, offset, length int64) io.Writer {
+func newWriter(w io.Writer, offset, length int64) *offsetWriter {
 	return &offsetWriter{
 		Writer: w,
 		offset: offset,
