@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"bufio"
 	"context"
 	"io"
 	"net/url"
@@ -68,11 +67,8 @@ func (n *layer) objectHead(ctx context.Context, address *object.Address) (*objec
 // objectGet and write it into provided io.Reader.
 func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, error) {
 	// prepare length/offset writer
-	b := bufio.NewWriter(p.Writer)
-	w := newWriter(b, p.offset, p.length)
-	writer := newWriter(w, p.offset, p.length)
-
-	return n.cli.Object().Get(ctx, p.address, sdk.WithGetWriter(writer))
+	w := newWriter(p.Writer, p.offset, p.length)
+	return n.cli.Object().Get(ctx, p.address, sdk.WithGetWriter(w))
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
