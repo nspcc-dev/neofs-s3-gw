@@ -55,7 +55,7 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	result := make(map[string]string, len(attrs))
 
 	for _, attr := range attrs {
-		result[attr.GetKey()] = attr.GetValue()
+		result[attr.Key()] = attr.Value()
 	}
 
 	return result
@@ -64,10 +64,10 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object) *ObjectInfo {
 	var (
 		creation time.Time
-		filename = meta.GetID().String()
+		filename = meta.ID().String()
 	)
 
-	userHeaders := userHeaders(meta.GetAttributes())
+	userHeaders := userHeaders(meta.Attributes())
 	if val, ok := userHeaders[object.AttributeFileName]; ok {
 		filename = val
 		delete(userHeaders, object.AttributeFileName)
@@ -80,26 +80,26 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object) *ObjectInfo {
 		delete(userHeaders, object.AttributeTimestamp)
 	}
 
-	mimeType := http.DetectContentType(meta.GetPayload())
+	mimeType := http.DetectContentType(meta.Payload())
 
 	return &ObjectInfo{
-		id: meta.GetID(),
+		id: meta.ID(),
 
 		Bucket:      bkt.Name,
 		Name:        filename,
 		Created:     creation,
 		ContentType: mimeType,
 		Headers:     userHeaders,
-		Size:        int64(meta.GetPayloadSize()),
+		Size:        int64(meta.PayloadSize()),
 	}
 }
 
 func nameFromObject(o *object.Object) (string, string) {
-	var name = o.GetID().String()
+	var name = o.ID().String()
 
-	for _, attr := range o.GetAttributes() {
-		if attr.GetKey() == object.AttributeFileName {
-			name = attr.GetValue()
+	for _, attr := range o.Attributes() {
+		if attr.Key() == object.AttributeFileName {
+			name = attr.Value()
 
 			break
 		}

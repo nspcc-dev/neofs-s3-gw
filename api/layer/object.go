@@ -1,20 +1,15 @@
 package layer
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"io"
-	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/client"
+	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gate/api"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
@@ -30,57 +25,24 @@ type (
 	getParams struct {
 		io.Writer
 
-		addr *object.Address
-
-		offset int64
-		length int64
+		offset  int64
+		length  int64
+		address *object.Address
 	}
 )
 
-func (n *layer) prepareClient(ctx context.Context) (*client.Client, *token.SessionToken, error) {
-	conn, err := n.cli.Connection(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tkn, err := n.cli.Token(ctx, conn)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cli, err := client.New(n.key, client.WithGRPCConnection(conn))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return cli, tkn, nil
-}
-
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, error) {
-	filename, err := url.QueryUnescape(p.val)
-	if err != nil {
+	opts := []sdk.ObjectSearchOption{
+		sdk.SearchRootObjects(),
+	}
+
+	if filename, err := url.QueryUnescape(p.val); err != nil {
 		return nil, err
+	} else if filename != "" {
+		opts = append(opts, sdk.SearchByFilename(filename))
 	}
-
-	cli, tkn, err := n.prepareClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	filter := object.NewSearchFilters()
-	filter.AddRootFilter()
-
-	sop := new(client.SearchObjectParams)
-	sop.WithContainerID(p.cid)
-
-	if p.val != "" {
-		filter.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
-	}
-
-	sop.WithSearchFilters(filter)
-
-	return cli.SearchObject(ctx, sop, client.WithSession(tkn))
+	return n.cli.Object().Search(ctx, p.cid, opts...)
 }
 
 // objectFindID returns object id (uuid) based on it's nice name in s3. If
@@ -98,36 +60,15 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 }
 
 // objectHead returns all object's headers.
-func (n *layer) objectHead(ctx context.Context, addr *object.Address) (*object.Object, error) {
-	cli, tkn, err := n.prepareClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ohp := new(client.ObjectHeaderParams)
-	ohp.WithAddress(addr)
-	ohp.WithAllFields()
-
-	return cli.GetObjectHeader(ctx, ohp, client.WithSession(tkn))
+func (n *layer) objectHead(ctx context.Context, address *object.Address) (*object.Object, error) {
+	return n.cli.Object().Head(ctx, address, sdk.WithFullHeaders())
 }
 
 // objectGet and write it into provided io.Reader.
 func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, error) {
-	cli, tkn, err := n.prepareClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// prepare length/offset writer
-	b := bufio.NewWriter(p.Writer)
-	w := newWriter(b, p.offset, p.length)
-	writer := newWriter(w, p.offset, p.length)
-
-	gop := new(client.GetObjectParams)
-	gop.WithAddress(p.addr)
-	gop.WithPayloadWriter(writer)
-
-	return cli.GetObject(ctx, gop, client.WithSession(tkn))
+	w := newWriter(p.Writer, p.offset, p.length)
+	return n.cli.Object().Get(ctx, p.address, sdk.WithGetWriter(w))
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
@@ -135,36 +76,23 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	var (
 		err error
 		obj string
-		own *owner.ID
-		oid *object.ID
 		bkt *BucketInfo
-		// brt *token.BearerToken
+		own = n.Owner(ctx)
+
+		address *object.Address
 	)
-
-	// if brt, err = auth.GetBearerToken(ctx); err != nil {
-	// 	return nil, err
-	// }
-
-	// else if own, err = GetOwnerID(brt); err != nil {
-	// 	return nil, err
-	// }
-
-	_ = own
 
 	if obj, err = url.QueryUnescape(p.Object); err != nil {
 		return nil, err
 	} else if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
-	} else if _, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err == nil {
+	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil && err != ErrObjectNotExists {
+		return nil, err
+	} else if err == ErrObjectExists {
 		return nil, &api.ObjectAlreadyExists{
 			Bucket: p.Bucket,
 			Object: p.Object,
 		}
-	}
-
-	cli, tkn, err := n.prepareClient(ctx)
-	if err != nil {
-		return nil, err
 	}
 
 	attributes := make([]*object.Attribute, 0, len(p.Header)+1)
@@ -189,44 +117,30 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		attributes = append(attributes, ua)
 	}
 
-	b := new(bytes.Buffer)
-	r := io.TeeReader(p.Reader, b)
-
 	raw := object.NewRaw()
-	raw.SetOwnerID(tkn.OwnerID()) // should be replaced with BearerToken.Issuer()
+	raw.SetOwnerID(own)
 	raw.SetContainerID(bkt.CID)
 	raw.SetAttributes(attributes...)
 
-	pop := new(client.PutObjectParams)
-	pop.WithPayloadReader(r)
-	pop.WithObject(raw.Object())
-
-	if oid, err = cli.PutObject(ctx, pop, client.WithSession(tkn)); err != nil {
-		return nil, errors.Wrapf(err, "owner_id = %s", tkn.OwnerID())
+	r := newDetector(p.Reader)
+	if address, err = n.cli.Object().Put(ctx, raw.Object(), sdk.WithPutReader(r)); err != nil {
+		return nil, err
 	}
 
 	return &ObjectInfo{
-		id: oid,
+		id: address.ObjectID(),
 
+		Owner:       own,
 		Bucket:      p.Bucket,
 		Name:        p.Object,
 		Size:        p.Size,
 		Created:     time.Now(),
-		ContentType: http.DetectContentType(b.Bytes()),
-		Owner:       own,
 		Headers:     p.Header,
+		ContentType: r.contentType,
 	}, nil
 }
 
 // objectDelete puts tombstone object into neofs.
 func (n *layer) objectDelete(ctx context.Context, address *object.Address) error {
-	cli, tkn, err := n.prepareClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	dob := new(client.DeleteObjectParams)
-	dob.WithAddress(address)
-
-	return cli.DeleteObject(ctx, dob, client.WithSession(tkn))
+	return n.cli.Object().Delete(ctx, address)
 }
