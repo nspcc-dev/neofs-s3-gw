@@ -1,9 +1,9 @@
 package misc
 
 const (
-	Prefix = "S3"
-
 	ApplicationName = "neofs-s3-gate"
+
+	Prefix = "S3_GW"
 )
 
 var (

@@ -20,7 +20,12 @@ RUN set -x \
     && export GOGC=off \
     && export CGO_ENABLED=0 \
     && [ -d "./vendor" ] || go mod vendor \
-    && go build -v -mod=vendor -trimpath -gcflags "all=-N -l" -ldflags "${LDFLAGS}" -o /go/bin/neofs-s3 ./cmd/gate \
+    && go build \
+      -v \
+      -mod=vendor \
+      -trimpath \
+      -ldflags "${LDFLAGS}" \
+      -o /go/bin/neofs-s3 ./cmd/gate \
     && upx -3 /go/bin/neofs-s3
 
 # Executable image
@@ -28,8 +33,7 @@ FROM scratch
 
 WORKDIR /
 
-COPY --from=builder /go/bin/neofs-s3 /usr/bin/neofs-s3
+COPY --from=builder /go/bin/neofs-s3 /bin/neofs-s3
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-# Run delve
-CMD ["/usr/bin/neofs-s3"]
+ENTRYPOINT ["/bin/neofs-s3"]

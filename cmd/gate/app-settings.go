@@ -1,25 +1,15 @@
 package main
 
 import (
-	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-authmate/accessbox/hcs"
-	crypto "github.com/nspcc-dev/neofs-crypto"
-	"github.com/nspcc-dev/neofs-s3-gate/api/pool"
-	"github.com/nspcc-dev/neofs-s3-gate/auth"
 	"github.com/nspcc-dev/neofs-s3-gate/misc"
-	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -50,6 +40,7 @@ const ( // settings
 	cfgLoggerLevel              = "logger.level"
 	cfgLoggerFormat             = "logger.format"
 	cfgLoggerTraceLevel         = "logger.trace_level"
+	cfgLoggerNoCaller           = "logger.no_caller"
 	cfgLoggerNoDisclaimer       = "logger.no_disclaimer"
 	cfgLoggerSamplingInitial    = "logger.sampling.initial"
 	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
@@ -84,6 +75,7 @@ const ( // settings
 	cfgEnableMetrics  = "metrics"
 	cfgEnableProfiler = "pprof"
 	cfgListenAddress  = "listen_address"
+	cfgListenDomains  = "listen_domains"
 
 	// Peers
 	cfgPeers = "peers"
@@ -113,51 +105,8 @@ var ignore = map[string]struct{}{
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchGateAuthKeys(v *viper.Viper) (*hcs.X25519Keys, error) {
-	path := v.GetString(cfgGateAuthPrivateKey)
-
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return hcs.NewKeys(data)
-}
-
-func fetchNeoFSKey(v *viper.Viper) (*ecdsa.PrivateKey, error) {
-	var (
-		err error
-		key *ecdsa.PrivateKey
-	)
-
-	switch val := v.GetString(cfgNeoFSPrivateKey); val {
-	case generated:
-		key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not generate NeoFS private key")
-		}
-	default:
-		key, err = crypto.LoadPrivateKey(val)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not load NeoFS private key")
-		}
-	}
-
-	return key, nil
-}
-
-func fetchAuthCenter(ctx context.Context, p *authCenterParams) (*auth.Center, error) {
-	return auth.New(ctx, &auth.Params{
-		Con:     p.Pool,
-		Log:     p.Logger,
-		Timeout: p.Timeout,
-		GAKey:   p.GateAuthKeys,
-		NFKey:   p.NeoFSPrivateKey,
-	})
-}
-
-func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
-	peers := make([]pool.Peer, 0)
+func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
+	peers := make(map[string]float64, 0)
 
 	for i := 0; ; i++ {
 
@@ -170,13 +119,28 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.Peer {
 			break
 		}
 
-		peers = append(peers, pool.Peer{
-			Address: address,
-			Weight:  weight,
-		})
+		peers[address] = weight
+		l.Info("add connection peer",
+			zap.String("address", address),
+			zap.Float64("weight", weight))
 	}
 
 	return peers
+}
+
+func fetchDomains(v *viper.Viper) []string {
+	cnt := v.GetInt(cfgListenDomains + ".count")
+	res := make([]string, 0, cnt)
+	for i := 0; ; i++ {
+		domain := v.GetString(cfgListenDomains + "." + strconv.Itoa(i))
+		if domain == "" {
+			break
+		}
+
+		res = append(res, domain)
+	}
+
+	return res
 }
 
 func newSettings() *viper.Viper {
@@ -189,6 +153,7 @@ func newSettings() *viper.Viper {
 
 	// flags setup:
 	flags := pflag.NewFlagSet("commandline", pflag.ExitOnError)
+	flags.SetOutput(os.Stdout)
 	flags.SortFlags = false
 
 	flags.Bool(cfgEnableProfiler, false, "enable pprof")
@@ -213,6 +178,8 @@ func newSettings() *viper.Viper {
 	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
 	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
 
+	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
+
 	// set prefers:
 	v.Set(cfgApplicationName, misc.ApplicationName)
 	v.Set(cfgApplicationVersion, misc.Version)
@@ -224,6 +191,7 @@ func newSettings() *viper.Viper {
 	v.SetDefault(cfgLoggerLevel, "debug")
 	v.SetDefault(cfgLoggerFormat, "console")
 	v.SetDefault(cfgLoggerTraceLevel, "panic")
+	v.SetDefault(cfgLoggerNoCaller, false)
 	v.SetDefault(cfgLoggerNoDisclaimer, true)
 	v.SetDefault(cfgLoggerSamplingInitial, 1000)
 	v.SetDefault(cfgLoggerSamplingThereafter, 1000)
@@ -251,6 +219,14 @@ func newSettings() *viper.Viper {
 			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".address", (*peers)[i])
 			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".weight", 1)
 		}
+	}
+
+	if domains != nil && len(*domains) > 0 {
+		for i := range *domains {
+			v.SetDefault(cfgListenDomains+"."+strconv.Itoa(i), (*domains)[i])
+		}
+
+		v.SetDefault(cfgListenDomains+".count", len(*domains))
 	}
 
 	switch {

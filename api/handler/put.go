@@ -31,20 +31,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}, r.URL)
 
 		return
-	} else if _, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err == nil {
-		h.log.Error("object exists",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.String("object_name", obj),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrMethodNotAllowed).Code,
-			Description:    "Object: " + bkt + "#" + obj + " already exists",
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
-
-		return
 	}
 
 	params := &layer.PutObjectParams{

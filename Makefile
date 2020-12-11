@@ -15,7 +15,7 @@ help:
 
 # Show current version
 version:
-	@echo $(VERSION)
+	@echo $(BUILD_VERSION)
 
 # Reformat code
 format:
@@ -38,6 +38,6 @@ deps:
 image-build:
 	@echo "⇒ Build docker-image"
 	@docker build \
-		--build-arg VERSION=$(VERSION) \
+		--build-arg VERSION=$(BUILD_VERSION) \
 		 -f Dockerfile \
-		 -t nspccdev/neofs-s3-gate:$(VERSION) .
+		 -t nspccdev/neofs-s3-gate:$(BUILD_VERSION) .
