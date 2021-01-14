@@ -96,14 +96,14 @@ type CommonPrefix struct {
 type Object struct {
 	Key          string
 	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
-	ETag         string
+	ETag         string `xml:"ETag,omitempty"`
 	Size         int64
 
 	// Owner of the object.
 	Owner Owner
 
 	// The class of storage used to store the object.
-	StorageClass string
+	StorageClass string `xml:"StorageClass,omitempty"`
 
 	// UserMetadata user-defined metadata
 	UserMetadata StringMap `xml:"UserMetadata,omitempty"`

@@ -4,12 +4,11 @@ import (
 	"context"
 	"io"
 	"net/url"
-	"strings"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
-	"github.com/nspcc-dev/cdn-neofs-sdk/creds/neofs"
-	"github.com/nspcc-dev/cdn-neofs-sdk/pool"
+	sdk "github.com/nspcc-dev/cdn-sdk"
+	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
+	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
@@ -198,27 +197,7 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		// and look for entities after prefix. If entity does not have any
 		// sub-entities, then it is a file, else directory.
 
-		_, dirname := nameFromObject(meta)
-		if strings.HasPrefix(dirname, p.Prefix) {
-			var (
-				oi   *ObjectInfo
-				tail = strings.TrimLeft(dirname, p.Prefix)
-				ind  = strings.Index(tail, pathSeparator)
-			)
-
-			if ind < 0 { // if there are not sub-entities in tail - file
-				oi = objectInfoFromMeta(bkt, meta)
-			} else { // if there are sub-entities in tail - dir
-				oi = &ObjectInfo{
-					id: meta.ID(),
-
-					Owner:  meta.OwnerID(),
-					Bucket: bkt.Name,
-					Name:   tail[:ind+1], // dir MUST have slash symbol in the end
-					// IsDir:  true,
-				}
-			}
-
+		if oi := objectInfoFromMeta(bkt, meta, p.Prefix); oi != nil {
 			// use only unique dir names
 			if _, ok := uniqNames[oi.Name]; !ok {
 				uniqNames[oi.Name] = struct{}{}
@@ -242,7 +221,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return errors.Wrapf(err, "bucket = %s", p.Bucket)
 	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
-		return err
+		return errors.Wrapf(err, "cid: %s, val: %s", bkt.CID, p.Object)
 	}
 
 	addr := object.NewAddress()
@@ -258,7 +237,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 		length: p.Length,
 	})
 
-	return err
+	return errors.Wrapf(err, "cid: %s", bkt.CID)
 }
 
 func (n *layer) checkObject(ctx context.Context, cid *container.ID, filename string) error {
@@ -301,7 +280,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 		return nil, err
 	}
 
-	return objectInfoFromMeta(bkt, meta), nil
+	return objectInfoFromMeta(bkt, meta, rootSeparator), nil
 }
 
 // PutObject into storage.
