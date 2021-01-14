@@ -142,6 +142,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 			if lw.statusCode >= http.StatusMultipleChoices {
 				l.Error("something went wrong",
 					zap.Int("status", lw.statusCode),
+					zap.String("request_id", GetRequestID(r.Context())),
 					zap.String("method", mux.CurrentRoute(r).GetName()),
 					zap.String("description", http.StatusText(lw.statusCode)))
 
@@ -150,6 +151,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 
 			l.Info("call method",
 				zap.Int("status", lw.statusCode),
+				zap.String("request_id", GetRequestID(r.Context())),
 				zap.String("method", mux.CurrentRoute(r).GetName()),
 				zap.String("description", http.StatusText(lw.statusCode)))
 		})

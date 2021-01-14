@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/nspcc-dev/cdn-neofs-sdk/grace"
-	"github.com/nspcc-dev/cdn-neofs-sdk/logger"
+	"github.com/nspcc-dev/cdn-sdk/grace"
+	"github.com/nspcc-dev/cdn-sdk/logger"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
