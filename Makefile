@@ -35,7 +35,7 @@ deps:
 	@go mod vendor && echo OK || (echo fail && exit 2)
 
 # Build current docker image
-image-build:
+image-build: deps
 	@echo "⇒ Build docker-image"
 	@docker build \
 		--build-arg VERSION=$(BUILD_VERSION) \
