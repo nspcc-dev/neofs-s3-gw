@@ -13,7 +13,8 @@ import (
 
 type (
 	ObjectInfo struct {
-		id *object.ID
+		id    *object.ID
+		isDir bool
 
 		Bucket      string
 		Name        string
@@ -49,7 +50,10 @@ type (
 	}
 )
 
-const pathSeparator = string(os.PathSeparator)
+const (
+	rootSeparator = "root://"
+	PathSeparator = string(os.PathSeparator)
+)
 
 func userHeaders(attrs []*object.Attribute) map[string]string {
 	result := make(map[string]string, len(attrs))
@@ -61,11 +65,23 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	return result
 }
 
-func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object) *ObjectInfo {
+func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix string) *ObjectInfo {
 	var (
-		creation time.Time
-		filename = meta.ID().String()
+		isDir         bool
+		size          int64
+		mimeType      string
+		creation      time.Time
+		filename      = meta.ID().String()
+		name, dirname = nameFromObject(meta)
 	)
+
+	if !strings.HasPrefix(dirname, prefix) && prefix != rootSeparator {
+		return nil
+	}
+
+	if ln := len(prefix); ln > 0 && prefix[ln-1:] != PathSeparator {
+		prefix += PathSeparator
+	}
 
 	userHeaders := userHeaders(meta.Attributes())
 	if val, ok := userHeaders[object.AttributeFileName]; ok {
@@ -80,17 +96,33 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object) *ObjectInfo {
 		delete(userHeaders, object.AttributeTimestamp)
 	}
 
-	mimeType := http.DetectContentType(meta.Payload())
+	tail := strings.TrimPrefix(dirname, prefix)
+	index := strings.Index(tail, PathSeparator)
+
+	if prefix == rootSeparator {
+		size = int64(meta.PayloadSize())
+		mimeType = http.DetectContentType(meta.Payload())
+	} else if index < 0 {
+		filename = name
+		size = int64(meta.PayloadSize())
+		mimeType = http.DetectContentType(meta.Payload())
+	} else {
+		isDir = true
+		filename = tail[:index] + PathSeparator
+		userHeaders = nil
+	}
 
 	return &ObjectInfo{
-		id: meta.ID(),
+		id:    meta.ID(),
+		isDir: isDir,
 
 		Bucket:      bkt.Name,
 		Name:        filename,
 		Created:     creation,
 		ContentType: mimeType,
 		Headers:     userHeaders,
-		Size:        int64(meta.PayloadSize()),
+		Owner:       meta.OwnerID(),
+		Size:        size,
 	}
 }
 
@@ -105,9 +137,14 @@ func nameFromObject(o *object.Object) (string, string) {
 		}
 	}
 
-	ind := strings.LastIndex(name, pathSeparator)
+	return NameFromString(name)
+}
 
+func NameFromString(name string) (string, string) {
+	ind := strings.LastIndex(name, PathSeparator)
 	return name[ind+1:], name[:ind+1]
 }
 
 func (o *ObjectInfo) ID() *object.ID { return o.id }
+
+func (o *ObjectInfo) IsDir() bool { return o.isDir }
