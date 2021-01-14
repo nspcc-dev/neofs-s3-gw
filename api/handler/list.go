@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/xml"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,6 +20,18 @@ type listObjectsArgs struct {
 	MaxKeys   int
 	Prefix    string
 	Version   string
+}
+
+type VersioningConfiguration struct {
+	XMLName xml.Name `xml:"VersioningConfiguration"`
+	Text    string   `xml:",chardata"`
+	Xmlns   string   `xml:"xmlns,attr"`
+}
+
+type ListMultipartUploadsResult struct {
+	XMLName xml.Name `xml:"ListMultipartUploadsResult"`
+	Text    string   `xml:",chardata"`
+	Xmlns   string   `xml:"xmlns,attr"`
 }
 
 var maxObjectList = 10000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
@@ -263,4 +276,46 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 	}
 
 	return &res, nil
+}
+
+func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		rid = api.GetRequestID(r.Context())
+		res = new(VersioningConfiguration)
+	)
+
+	res.Xmlns = "http://s3.amazonaws.com/doc/2006-03-01/"
+
+	if err := api.EncodeToResponse(w, res); err != nil {
+		h.log.Error("something went wrong",
+			zap.String("request_id", rid),
+			zap.Error(err))
+
+		api.WriteErrorResponse(r.Context(), w, api.Error{
+			Code:           api.GetAPIError(api.ErrInternalError).Code,
+			Description:    err.Error(),
+			HTTPStatusCode: http.StatusInternalServerError,
+		}, r.URL)
+	}
+}
+
+func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		rid = api.GetRequestID(r.Context())
+		res = new(ListMultipartUploadsResult)
+	)
+
+	res.Xmlns = "http://s3.amazonaws.com/doc/2006-03-01/"
+
+	if err := api.EncodeToResponse(w, res); err != nil {
+		h.log.Error("something went wrong",
+			zap.String("request_id", rid),
+			zap.Error(err))
+
+		api.WriteErrorResponse(r.Context(), w, api.Error{
+			Code:           api.GetAPIError(api.ErrInternalError).Code,
+			Description:    err.Error(),
+			HTTPStatusCode: http.StatusInternalServerError,
+		}, r.URL)
+	}
 }

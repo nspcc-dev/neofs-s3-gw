@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	sdk "github.com/nspcc-dev/cdn-neofs-sdk"
+	sdk "github.com/nspcc-dev/cdn-sdk"
 	"github.com/nspcc-dev/neofs-s3-gate/api/auth"
 	"go.uber.org/zap"
 )
