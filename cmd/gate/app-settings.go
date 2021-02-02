@@ -16,8 +16,7 @@ import (
 )
 
 const (
-	devNull   = empty(0)
-	generated = "generated"
+	devNull = empty(0)
 
 	minimumTTLInMinutes = 5
 
@@ -162,7 +161,7 @@ func newSettings() *viper.Viper {
 	help := flags.BoolP(cmdHelp, "h", false, "show help")
 	version := flags.BoolP(cmdVersion, "v", false, "show version")
 
-	flags.String(cfgNeoFSPrivateKey, generated, fmt.Sprintf(`set value to hex string, WIF string, or path to NeoFS private key file (use "%s" to generate key)`, generated))
+	flags.String(cfgNeoFSPrivateKey, "", "set value to hex string, WIF string, or path to NeoFS private key file")
 	flags.String(cfgGateAuthPrivateKey, "", "set path to file with auth (curve25519) private key to use in auth scheme")
 
 	flags.Bool(cfgGRPCVerbose, false, "set debug mode of gRPC connections")
