@@ -71,11 +71,6 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, errors.New("unsupported request: wrong length of Authorization header field")
 	}
 
-	// { // to debug request
-	// 	data, _ := httputil.DumpRequest(r, false)
-	// 	fmt.Println(string(data))
-	// }
-
 	sms1 := c.reg.getSubmatches(authHeaderField[0])
 	if len(sms1) != 7 {
 		return nil, errors.New("bad Authorization header field")
@@ -109,25 +104,19 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 	}
 
 	otherRequest := r.Clone(context.TODO())
-	otherRequest.Header = map[string][]string{}
+	otherRequest.Header = make(http.Header)
 
-	for hfn, hfvs := range r.Header {
-		for _, shfn := range signedHeaderFieldsNames {
-			if strings.EqualFold(hfn, shfn) {
-				otherRequest.Header[hfn] = hfvs
+	for key, val := range r.Header {
+		for _, name := range signedHeaderFieldsNames {
+			if strings.EqualFold(key, name) {
+				otherRequest.Header[key] = val
 			}
 		}
 	}
 
 	awsCreds := credentials.NewStaticCredentials(accessKeyID, secret, "")
 	signer := v4.NewSigner(awsCreds)
-
-	// body, err := readAndKeepBody(r)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "failed to read out request body")
-	// }
-	//
-	// _ = body
+	signer.DisableURIPathEscaping = true
 
 	// body not required
 	if _, err := signer.Sign(otherRequest, nil, sms1["service"], sms1["region"], signatureDateTime); err != nil {
@@ -141,21 +130,3 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 
 	return tkn, nil
 }
-
-// for debug reasons
-// func panicSeeker() io.ReadSeeker { return prs(0) }
-
-// TODO: Make this write into a smart buffer backed by a file on a fast drive.
-// func readAndKeepBody(request *http.Request) (*bytes.Reader, error) {
-// 	if request.Body == nil {
-// 		return new(bytes.Reader), nil
-// 	}
-//
-// 	payload, err := ioutil.ReadAll(request.Body)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	request.Body = ioutil.NopCloser(bytes.NewReader(payload))
-// 	return bytes.NewReader(payload), nil
-// }
