@@ -8,7 +8,7 @@
       --metrics                         enable prometheus metrics
   -h, --help                            show help
   -v, --version                         show version
-      --neofs-key string                set value to hex string, WIF string, or path to NeoFS private key file (use "generated" to generate key) (default "generated")
+      --neofs-key string                set value to hex string, WIF string, or path to NeoFS private key file
       --auth-key string                 set path to file with auth (curve25519) private key to use in auth scheme
       --verbose                         set debug mode of gRPC connections
       --request_timeout duration        set gRPC request timeout (default 15s)
@@ -16,13 +16,16 @@
       --rebalance_timer duration        set gRPC connection rebalance timer (default 15s)
       --max_clients_count int           set max-clients count (default 100)
       --max_clients_deadline duration   set max-clients deadline (default 30s)
+  -t, --con_ttl duration                set gRPC connection time to live (default 5m0s)
       --listen_address string           set address to listen (default "0.0.0.0:8080")
   -p, --peers stringArray               set NeoFS nodes
+  -d, --listen_domains stringArray      set domains to be listened
 
 # Environments
 
 S3_GW_AUTH-KEY = 
 S3_GW_NEOFS-KEY =
+S3_GW_CON_TTL = 5m0s
 S3_GW_CONNECT_TIMEOUT = 30s
 S3_GW_REBALANCE_TIMER = 15s
 S3_GW_REQUEST_TIMEOUT = 15s
@@ -30,8 +33,10 @@ S3_GW_KEEPALIVE_PERMIT_WITHOUT_STREAM = true
 S3_GW_KEEPALIVE_TIME = 10s
 S3_GW_KEEPALIVE_TIMEOUT = 10s
 S3_GW_LISTEN_ADDRESS = 0.0.0.0:8080
+S3_GW_LISTEN_DOMAINS = []
 S3_GW_LOGGER_FORMAT = console
 S3_GW_LOGGER_LEVEL = debug
+S3_GW_LOGGER_NO_CALLER = false
 S3_GW_LOGGER_NO_DISCLAIMER = true
 S3_GW_LOGGER_SAMPLING_INITIAL = 1000
 S3_GW_LOGGER_SAMPLING_THEREAFTER = 1000
