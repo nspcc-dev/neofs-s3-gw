@@ -1,5 +1,24 @@
 # NeoFS S3 Gate
 
+S3Gate provides API compatible with Amazon S3 cloud storage service.
+
+## Notable make targets
+
+```
+  Usage:
+
+    make <target>
+
+  Targets:
+
+    deps      Check and ensure dependencies
+    format    Reformat code
+    help      Show this help prompt
+    image     Build current docker image
+    publish   Publish docker image
+    version   Show current version
+```
+
 ## Example of configuration
 
 ```
