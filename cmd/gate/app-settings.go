@@ -105,7 +105,7 @@ var ignore = map[string]struct{}{
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
 func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
-	peers := make(map[string]float64, 0)
+	peers := make(map[string]float64)
 
 	for i := 0; ; i++ {
 
