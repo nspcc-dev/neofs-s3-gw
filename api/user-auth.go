@@ -21,7 +21,6 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 
 			h.ServeHTTP(w, r.WithContext(
 				sdk.SetBearerToken(r.Context(), token)))
-
 		})
 	})
 }
