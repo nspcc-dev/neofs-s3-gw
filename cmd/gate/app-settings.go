@@ -108,7 +108,6 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
 	peers := make(map[string]float64)
 
 	for i := 0; ; i++ {
-
 		key := cfgPeers + "." + strconv.Itoa(i) + "."
 		address := v.GetString(key + "address")
 		weight := v.GetFloat64(key + "weight")

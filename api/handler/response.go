@@ -127,7 +127,6 @@ type CopyObjectResponse struct {
 
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-
 	tokens := []xml.Token{start}
 
 	for key, value := range s {
