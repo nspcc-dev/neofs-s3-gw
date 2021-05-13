@@ -14,7 +14,7 @@ import (
 )
 
 type (
-	// ErrorResponse - error response format
+	// ErrorResponse - error response format.
 	ErrorResponse struct {
 		XMLName    xml.Name `xml:"Error" json:"-"`
 		Code       string
@@ -32,11 +32,11 @@ type (
 		// Captures the server string returned in response header.
 		Server string `xml:"-" json:"-"`
 
-		// Underlying HTTP status code for the returned error
+		// Underlying HTTP status code for the returned error.
 		StatusCode int `xml:"-" json:"-"`
 	}
 
-	// APIError structure
+	// APIError structure.
 	Error struct {
 		Code           string
 		Description    string
@@ -117,7 +117,7 @@ var s3ErrorResponseMap = map[string]string{
 	// Add new API errors here.
 }
 
-// WriteErrorResponse writes error headers
+// WriteErrorResponse writes error headers.
 func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, reqURL *url.URL) {
 	code := http.StatusBadRequest
 
@@ -141,7 +141,7 @@ func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, r
 	WriteResponse(w, code, encodedErrorResponse, MimeXML)
 }
 
-// If none of the http routes match respond with appropriate errors
+// If none of the http routes match respond with appropriate errors.
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
 	WriteErrorResponse(r.Context(), w, Error{
@@ -151,7 +151,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	}, r.URL)
 }
 
-// Write http common headers
+// Write http common headers.
 func setCommonHeaders(w http.ResponseWriter) {
 	w.Header().Set(hdrServerInfo, "NeoFS-S3-Gate/"+misc.Version)
 	w.Header().Set(hdrAcceptRanges, "bytes")
