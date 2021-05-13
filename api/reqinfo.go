@@ -33,6 +33,7 @@ type (
 		tags         []KeyVal // Any additional info not accommodated by above fields
 	}
 
+	// ObjectRequest represents object request data.
 	ObjectRequest struct {
 		Bucket string
 		Object string

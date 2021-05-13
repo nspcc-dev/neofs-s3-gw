@@ -22,6 +22,7 @@ import (
 )
 
 type (
+	// App is the main application structure.
 	App struct {
 		cli pool.Client
 		ctr auth.Center
@@ -179,6 +180,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 }
 
+// Wait waits for application to finish.
 func (a *App) Wait() {
 	a.log.Info("application started")
 
@@ -192,6 +194,7 @@ func (a *App) Wait() {
 	a.log.Info("application finished")
 }
 
+// Server runs HTTP server to handle S3 API requests.
 func (a *App) Server(ctx context.Context) {
 	var (
 		err  error
@@ -256,6 +259,7 @@ func (a *App) Server(ctx context.Context) {
 	close(a.webDone)
 }
 
+// Worker runs client worker.
 func (a *App) Worker(ctx context.Context) {
 	a.cli.Worker(ctx)
 	a.log.Info("stopping worker")

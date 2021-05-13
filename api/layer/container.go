@@ -12,6 +12,7 @@ import (
 )
 
 type (
+	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
 		Name    string
 		CID     *container.ID
@@ -19,6 +20,7 @@ type (
 		Created time.Time
 	}
 
+	// ListObjectsParams represents object listing request parameters.
 	ListObjectsParams struct {
 		Bucket    string
 		Prefix    string

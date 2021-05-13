@@ -103,6 +103,7 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	}
 }
 
+// APIStats wraps http handler for api with basic statistics collection.
 func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		httpStatsMetric.currentS3Requests.Inc(api)

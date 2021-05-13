@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// AttachUserAuth adds user authentication via center to router using log for logging.
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 	router.Use(func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
