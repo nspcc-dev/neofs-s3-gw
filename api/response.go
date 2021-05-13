@@ -36,7 +36,7 @@ type (
 		StatusCode int `xml:"-" json:"-"`
 	}
 
-	// APIError structure.
+	// Error structure represents API error.
 	Error struct {
 		Code           string
 		Description    string
@@ -168,6 +168,7 @@ func removeSensitiveHeaders(h http.Header) {
 	h.Del(hdrSSECopyKey)
 }
 
+// WriteResponse writes given statusCode and response into w (with mType header if set).
 func WriteResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
 	setCommonHeaders(w)
 	if mType != MimeNone {
@@ -214,6 +215,8 @@ func EncodeToResponse(w http.ResponseWriter, response interface{}) error {
 // 	WriteResponse(w, http.StatusOK, response, MimeXML)
 // }
 
+// WriteSuccessResponseHeadersOnly writes HTTP (200) OK response with no data
+// to the client.
 func WriteSuccessResponseHeadersOnly(w http.ResponseWriter) {
 	WriteResponse(w, http.StatusOK, nil, MimeNone)
 }

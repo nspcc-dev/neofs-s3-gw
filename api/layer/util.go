@@ -12,6 +12,7 @@ import (
 )
 
 type (
+	// ObjectInfo holds S3 object data.
 	ObjectInfo struct {
 		id    *object.ID
 		isDir bool
@@ -52,6 +53,7 @@ type (
 
 const (
 	rootSeparator = "root://"
+	// PathSeparator is a path components separator string.
 	PathSeparator = string(os.PathSeparator)
 )
 
@@ -140,11 +142,14 @@ func nameFromObject(o *object.Object) (string, string) {
 	return NameFromString(name)
 }
 
+// NameFromString splits name into base file name and directory path.
 func NameFromString(name string) (string, string) {
 	ind := strings.LastIndex(name, PathSeparator)
 	return name[ind+1:], name[:ind+1]
 }
 
+// ID returns object ID from ObjectInfo.
 func (o *ObjectInfo) ID() *object.ID { return o.id }
 
+// IsDir allows to check if object is a directory.
 func (o *ObjectInfo) IsDir() bool { return o.isDir }

@@ -25,6 +25,7 @@ type (
 		log *zap.Logger
 	}
 
+	// Params stores basic API parameters.
 	Params struct {
 		Pool       pool.Client
 		Logger     *zap.Logger
@@ -32,6 +33,7 @@ type (
 		Credential neofs.Credentials
 	}
 
+	// GetObjectParams stores object get request parameters.
 	GetObjectParams struct {
 		Bucket string
 		Object string
@@ -40,6 +42,7 @@ type (
 		Writer io.Writer
 	}
 
+	// PutObjectParams stores object put request parameters.
 	PutObjectParams struct {
 		Bucket string
 		Object string
@@ -48,6 +51,7 @@ type (
 		Header map[string]string
 	}
 
+	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
 		SrcBucket string
 		DstBucket string
@@ -56,10 +60,12 @@ type (
 		Header    map[string]string
 	}
 
+	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
 		Get(ctx context.Context, address *object.Address) (*object.Object, error)
 	}
 
+	// Client provides S3 API client interface.
 	Client interface {
 		NeoFS
 
@@ -81,11 +87,13 @@ type (
 )
 
 var (
-	ErrObjectExists    = errors.New("object exists")
+	// ErrObjectExists is returned on attempts to create already existing object.
+	ErrObjectExists = errors.New("object exists")
+	// ErrObjectNotExists is returned on attempts to work with non-existing object.
 	ErrObjectNotExists = errors.New("object not exists")
 )
 
-// NewGatewayLayer creates instance of layer. It checks credentials
+// NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
 func NewLayer(log *zap.Logger, cli sdk.Client) Client {
 	return &layer{
