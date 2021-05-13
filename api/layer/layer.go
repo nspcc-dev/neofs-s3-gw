@@ -103,7 +103,7 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 	return n.cli.Owner()
 }
 
-// Get NeoFS Object by refs.Address (should be used by auth.Center)
+// Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
 	return n.cli.Object().Get(ctx, address)
 }

@@ -1,6 +1,6 @@
 package api
 
-// Standard S3 HTTP response constants
+// Standard S3 HTTP response constants.
 const (
 	LastModified       = "Last-Modified"
 	Date               = "Date"
