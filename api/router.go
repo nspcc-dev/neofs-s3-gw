@@ -14,6 +14,7 @@ import (
 )
 
 type (
+	// Handler is an S3 API handler interface.
 	Handler interface {
 		HeadObjectHandler(http.ResponseWriter, *http.Request)
 		CopyObjectPartHandler(http.ResponseWriter, *http.Request)
@@ -158,6 +159,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 	}
 }
 
+// GetRequestID returns request ID from response writer or context.
 func GetRequestID(v interface{}) string {
 	switch t := v.(type) {
 	case context.Context:
@@ -169,6 +171,8 @@ func GetRequestID(v interface{}) string {
 	}
 }
 
+// Attach adds S3 API handlers from h to r for domains with m client limit using
+// center authentication and log logger.
 func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center auth.Center, log *zap.Logger) {
 	api := r.PathPrefix(SlashSeparator).Subrouter()
 

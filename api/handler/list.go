@@ -22,12 +22,14 @@ type listObjectsArgs struct {
 	Version   string
 }
 
+// VersioningConfiguration contains VersioningConfiguration XML representation.
 type VersioningConfiguration struct {
 	XMLName xml.Name `xml:"VersioningConfiguration"`
 	Text    string   `xml:",chardata"`
 	Xmlns   string   `xml:"xmlns,attr"`
 }
 
+// ListMultipartUploadsResult contains ListMultipartUploadsResult XML representation.
 type ListMultipartUploadsResult struct {
 	XMLName xml.Name `xml:"ListMultipartUploadsResult"`
 	Text    string   `xml:",chardata"`
@@ -36,6 +38,7 @@ type ListMultipartUploadsResult struct {
 
 var maxObjectList = 10000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
 
+// ListBucketsHandler handles bucket listing requests.
 func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
@@ -134,6 +137,7 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 	return arg, list, nil
 }
 
+// ListObjectsV1Handler handles objects listing requests for API version 1.
 func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	var rid = api.GetRequestID(r.Context())
 	if arg, list, err := h.listObjects(w, r); err != nil {
@@ -193,6 +197,7 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 	return res
 }
 
+// ListObjectsV2Handler handles objects listing requests for API version 2.
 func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	var rid = api.GetRequestID(r.Context())
 	if arg, list, err := h.listObjects(w, r); err != nil {
@@ -278,6 +283,7 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 	return &res, nil
 }
 
+// GetBucketVersioningHandler implements bucket versioning getter handler.
 func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		rid = api.GetRequestID(r.Context())
@@ -299,6 +305,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// ListMultipartUploadsHandler implements multipart uploads listing handler.
 func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		rid = api.GetRequestID(r.Context())

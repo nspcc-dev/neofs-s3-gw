@@ -118,7 +118,7 @@ const (
 	ErrInvalidTagDirective
 	// Add new error codes here.
 
-	// SSE-S3 related API errors
+	// SSE-S3 related API errors.
 	ErrInvalidEncryptionMethod
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
@@ -157,8 +157,8 @@ const (
 	// Add new extended error codes here.
 
 	// MinIO extended errors.
-	// ErrReadQuorum
-	// ErrWriteQuorum
+	//   ErrReadQuorum
+	//   ErrWriteQuorum
 	ErrParentIsObject
 	ErrStorageFull
 	ErrRequestBodyParse
@@ -170,7 +170,7 @@ const (
 	ErrOperationTimedOut
 	ErrOperationMaxedOut
 	ErrInvalidRequest
-	// MinIO storage class error codes
+	// MinIO storage class error codes.
 	ErrInvalidStorageClass
 	ErrBackendDown
 	// Add new extended error codes here.
@@ -192,7 +192,7 @@ const (
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
-	// Bucket Quota error codes
+	// Bucket Quota error codes.
 	ErrAdminBucketQuotaExceeded
 	ErrAdminNoSuchQuotaConfiguration
 	ErrAdminBucketQuotaDisabled
@@ -205,7 +205,7 @@ const (
 	ErrHealOverlappingPaths
 	ErrIncorrectContinuationToken
 
-	// S3 Select Errors
+	// S3 Select Errors.
 	ErrEmptyRequestBody
 	ErrUnsupportedFunction
 	ErrInvalidExpressionType
@@ -1625,7 +1625,7 @@ func GetAPIError(code ErrorCode) Error {
 }
 
 // getErrorResponse gets in standard error and resource value and
-// provides a encodable populated response values
+// provides a encodable populated response values.
 func getAPIErrorResponse(ctx context.Context, err error, resource, requestID, hostID string) ErrorResponse {
 	code := "BadRequest"
 	desc := err.Error()
@@ -1803,21 +1803,21 @@ func (e BucketLifecycleNotFound) Error() string {
 	return "No bucket lifecycle configuration found for bucket : " + e.Bucket
 }
 
-// BucketSSEConfigNotFound - no bucket encryption found
+// BucketSSEConfigNotFound - no bucket encryption found.
 type BucketSSEConfigNotFound GenericError
 
 func (e BucketSSEConfigNotFound) Error() string {
 	return "No bucket encryption configuration found for bucket: " + e.Bucket
 }
 
-// BucketTaggingNotFound - no bucket tags found
+// BucketTaggingNotFound - no bucket tags found.
 type BucketTaggingNotFound GenericError
 
 func (e BucketTaggingNotFound) Error() string {
 	return "No bucket tags found for bucket: " + e.Bucket
 }
 
-// BucketObjectLockConfigNotFound - no bucket object lock config found
+// BucketObjectLockConfigNotFound - no bucket object lock config found.
 type BucketObjectLockConfigNotFound GenericError
 
 func (e BucketObjectLockConfigNotFound) Error() string {
@@ -1874,7 +1874,7 @@ func (e ObjectNamePrefixAsSlash) Error() string {
 	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
 }
 
-// AllAccessDisabled All access to this object has been disabled
+// AllAccessDisabled All access to this object has been disabled.
 type AllAccessDisabled GenericError
 
 // Error returns string an error formatted as the given text.
@@ -1945,7 +1945,7 @@ func (e InvalidUploadID) Error() string {
 	return "Invalid upload id " + e.UploadID
 }
 
-// InvalidPart One or more of the specified parts could not be found
+// InvalidPart One or more of the specified parts could not be found.
 type InvalidPart struct {
 	PartNumber int
 	ExpETag    string
@@ -1975,21 +1975,21 @@ func (e PartTooBig) Error() string {
 	return "Part size bigger than the allowed limit"
 }
 
-// InvalidETag error returned when the etag has changed on disk
+// InvalidETag error returned when the etag has changed on disk.
 type InvalidETag struct{}
 
 func (e InvalidETag) Error() string {
 	return "etag of the object has changed"
 }
 
-// NotImplemented If a feature is not implemented
+// NotImplemented If a feature is not implemented.
 type NotImplemented struct{}
 
 func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
-// UnsupportedMetadata - unsupported metadata
+// UnsupportedMetadata - unsupported metadata.
 type UnsupportedMetadata struct{}
 
 func (e UnsupportedMetadata) Error() string {
@@ -2003,14 +2003,14 @@ func (e BackendDown) Error() string {
 	return "Backend down"
 }
 
-// PreConditionFailed - Check if copy precondition failed
+// PreConditionFailed - Check if copy precondition failed.
 type PreConditionFailed struct{}
 
 func (e PreConditionFailed) Error() string {
 	return "At least one of the pre-conditions you specified did not hold"
 }
 
-// DeleteError - returns when cant remove object
+// DeleteError - returns when cant remove object.
 type DeleteError struct {
 	Err    error
 	Object string

@@ -20,7 +20,7 @@ type (
 	}
 
 	// HTTPStats holds statistics information about
-	// HTTP requests made by all clients
+	// HTTP requests made by all clients.
 	HTTPStats struct {
 		currentS3Requests HTTPAPIStats
 		totalS3Requests   HTTPAPIStats
@@ -63,8 +63,8 @@ var (
 	)
 )
 
-// collects http metrics for NeoFS S3 Gate in Prometheus specific format
-// and sends to given channel
+// Collects HTTP metrics for NeoFS S3 Gate in Prometheus specific format
+// and sends to given channel.
 func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	for api, value := range httpStatsMetric.currentS3Requests.Load() {
 		ch <- prometheus.MustNewConstMetric(
@@ -103,6 +103,7 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	}
 }
 
+// APIStats wraps http handler for api with basic statistics collection.
 func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		httpStatsMetric.currentS3Requests.Inc(api)
@@ -176,7 +177,7 @@ func (st *HTTPStats) getOutputBytes() uint64 {
 	return atomic.LoadUint64(&st.totalOutputBytes)
 }
 
-// Update statistics from http request and response data
+// Update statistics from http request and response data.
 func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Request, durationSecs float64) {
 	var code int
 
@@ -200,7 +201,7 @@ func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// WriteHeader - writes http status code
+// WriteHeader - writes http status code.
 func (w *responseWrapper) WriteHeader(code int) {
 	w.Do(func() {
 		w.statusCode = code

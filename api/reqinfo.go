@@ -13,7 +13,7 @@ import (
 )
 
 type (
-	// KeyVal - appended to ReqInfo.Tags
+	// KeyVal - appended to ReqInfo.Tags.
 	KeyVal struct {
 		Key string
 		Val string
@@ -33,6 +33,7 @@ type (
 		tags         []KeyVal // Any additional info not accommodated by above fields
 	}
 
+	// ObjectRequest represents object request data.
 	ObjectRequest struct {
 		Bucket string
 		Object string
@@ -40,7 +41,7 @@ type (
 	}
 )
 
-// Key used for Get/SetReqInfo
+// Key used for Get/SetReqInfo.
 type contextKeyType string
 
 const ctxRequestInfo = contextKeyType("NeoFS-S3-Gate")
@@ -54,7 +55,7 @@ var (
 var (
 	// RFC7239 defines a new "Forwarded: " header designed to replace the
 	// existing use of X-Forwarded-* headers.
-	// e.g. Forwarded: for=192.0.2.60;proto=https;by=203.0.113.43
+	// e.g. Forwarded: for=192.0.2.60;proto=https;by=203.0.113.43.
 	forwarded = http.CanonicalHeaderKey("Forwarded")
 	// Allows for a sub-match of the first value after 'for=' to the next
 	// comma, semi-colon or space. The match is case-insensitive.
@@ -125,7 +126,7 @@ func prepareContext(w http.ResponseWriter, r *http.Request) context.Context {
 		}))
 }
 
-// NewReqInfo :
+// NewReqInfo returns new ReqInfo based on parameters.
 func NewReqInfo(w http.ResponseWriter, r *http.Request, req ObjectRequest) *ReqInfo {
 	return &ReqInfo{
 		API:          req.Method,
@@ -138,7 +139,7 @@ func NewReqInfo(w http.ResponseWriter, r *http.Request, req ObjectRequest) *ReqI
 	}
 }
 
-// AppendTags - appends key/val to ReqInfo.tags
+// AppendTags - appends key/val to ReqInfo.tags.
 func (r *ReqInfo) AppendTags(key string, val string) *ReqInfo {
 	if r == nil {
 		return nil
@@ -149,7 +150,7 @@ func (r *ReqInfo) AppendTags(key string, val string) *ReqInfo {
 	return r
 }
 
-// SetTags - sets key/val to ReqInfo.tags
+// SetTags - sets key/val to ReqInfo.tags.
 func (r *ReqInfo) SetTags(key string, val string) *ReqInfo {
 	if r == nil {
 		return nil
@@ -172,7 +173,7 @@ func (r *ReqInfo) SetTags(key string, val string) *ReqInfo {
 	return r
 }
 
-// GetTags - returns the user defined tags
+// GetTags - returns the user defined tags.
 func (r *ReqInfo) GetTags() []KeyVal {
 	if r == nil {
 		return nil

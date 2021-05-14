@@ -109,7 +109,7 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 		code := http.StatusBadRequest
 		if st, ok := status.FromError(err); ok && st != nil {
-			switch st.Code() {
+			switch st.Code() { //nolint:exhaustive // we have default value set above
 			case codes.NotFound:
 				code = http.StatusNotFound
 			case codes.PermissionDenied:

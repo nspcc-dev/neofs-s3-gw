@@ -34,8 +34,8 @@ const (
 	defaultMaxClientsDeadline = time.Second * 30
 )
 
-const ( // settings
-	// Logger:
+const ( // Settings.
+	// Logger.
 	cfgLoggerLevel              = "logger.level"
 	cfgLoggerFormat             = "logger.format"
 	cfgLoggerTraceLevel         = "logger.trace_level"
@@ -44,47 +44,47 @@ const ( // settings
 	cfgLoggerSamplingInitial    = "logger.sampling.initial"
 	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
 
-	// KeepAlive
+	// KeepAlive.
 	cfgKeepaliveTime                = "keepalive.time"
 	cfgKeepaliveTimeout             = "keepalive.timeout"
 	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
 
-	// Keys
+	// Keys.
 	cfgNeoFSPrivateKey    = "neofs-key"
 	cfgGateAuthPrivateKey = "auth-key"
 
-	// HTTPS/TLS
+	// HTTPS/TLS.
 	cfgTLSKeyFile  = "tls.key_file"
 	cfgTLSCertFile = "tls.cert_file"
 
-	// Timeouts
+	// Timeouts.
 	cfgConnectionTTL  = "con_ttl"
 	cfgConnectTimeout = "connect_timeout"
 	cfgRequestTimeout = "request_timeout"
 	cfgRebalanceTimer = "rebalance_timer"
 
-	// MaxClients
+	// MaxClients.
 	cfgMaxClientsCount    = "max_clients_count"
 	cfgMaxClientsDeadline = "max_clients_deadline"
 
-	// gRPC
+	// gRPC.
 	cfgGRPCVerbose = "verbose"
 
-	// Metrics / Profiler / Web
+	// Metrics / Profiler / Web.
 	cfgEnableMetrics  = "metrics"
 	cfgEnableProfiler = "pprof"
 	cfgListenAddress  = "listen_address"
 	cfgListenDomains  = "listen_domains"
 
-	// Peers
+	// Peers.
 	cfgPeers = "peers"
 
-	// Application
+	// Application.
 	cfgApplicationName      = "app.name"
 	cfgApplicationVersion   = "app.version"
 	cfgApplicationBuildTime = "app.build_time"
 
-	// command line args
+	// Command line args.
 	cmdHelp    = "help"
 	cmdVersion = "version"
 )
@@ -105,10 +105,9 @@ var ignore = map[string]struct{}{
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
 func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
-	peers := make(map[string]float64, 0)
+	peers := make(map[string]float64)
 
 	for i := 0; ; i++ {
-
 		key := cfgPeers + "." + strconv.Itoa(i) + "."
 		address := v.GetString(key + "address")
 		weight := v.GetFloat64(key + "weight")
