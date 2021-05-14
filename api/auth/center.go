@@ -24,6 +24,7 @@ import (
 var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id_cid>[^/]+)/(?P<access_key_id_oid>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
 
 type (
+	// Center is a user authentication interface.
 	Center interface {
 		Authenticate(request *http.Request) (*token.BearerToken, error)
 	}
@@ -33,6 +34,7 @@ type (
 		cli bearer.Credentials
 	}
 
+	// Params stores node connection parameters.
 	Params struct {
 		Client     sdk.Client
 		Logger     *zap.Logger

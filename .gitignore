@@ -7,3 +7,11 @@ vendor
 
 # tempfiles
 .DS_Store
+*~
+
+# binary
+bin/
+
+# coverage
+coverage.txt
+coverage.html

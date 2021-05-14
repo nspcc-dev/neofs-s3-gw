@@ -2,7 +2,7 @@ package handler
 
 import "encoding/xml"
 
-// ListBucketsResponse - format for list buckets response
+// ListBucketsResponse - format for list buckets response.
 type ListBucketsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult" json:"-"`
 
@@ -45,13 +45,13 @@ type ListObjectsV2Response struct {
 	EncodingType string `xml:"EncodingType,omitempty"`
 }
 
-// Bucket container for bucket metadata
+// Bucket container for bucket metadata.
 type Bucket struct {
 	Name         string
 	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
 }
 
-// Owner - bucket owner/principal
+// Owner - bucket owner/principal.
 type Owner struct {
 	ID          string
 	DisplayName string
@@ -87,12 +87,12 @@ type ListObjectsResponse struct {
 	EncodingType string `xml:"EncodingType,omitempty"`
 }
 
-// CommonPrefix container for prefix response in ListObjectsResponse
+// CommonPrefix container for prefix response in ListObjectsResponse.
 type CommonPrefix struct {
 	Prefix string
 }
 
-// Object container for object metadata
+// Object container for object metadata.
 type Object struct {
 	Key          string
 	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
@@ -118,7 +118,7 @@ type LocationResponse struct {
 	Location string   `xml:",chardata"`
 }
 
-// CopyObjectResponse container returns ETag and LastModified of the successfully copied object
+// CopyObjectResponse container returns ETag and LastModified of the successfully copied object.
 type CopyObjectResponse struct {
 	XMLName      xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CopyObjectResult" json:"-"`
 	LastModified string   // time string of format "2006-01-02T15:04:05.000Z"
@@ -127,7 +127,6 @@ type CopyObjectResponse struct {
 
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-
 	tokens := []xml.Token{start}
 
 	for key, value := range s {

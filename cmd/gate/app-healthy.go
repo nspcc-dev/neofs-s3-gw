@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Healthy is a health check interface.
 type Healthy interface {
 	Status() error
 }

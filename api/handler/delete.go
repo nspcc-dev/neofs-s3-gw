@@ -68,7 +68,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DeleteMultipleObjectsHandler :
+// DeleteMultipleObjectsHandler handles multiple delete requests.
 func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		req = mux.Vars(r)
