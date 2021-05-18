@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/nspcc-dev/neofs-s3-gate/api/auth"
-	"github.com/nspcc-dev/neofs-s3-gate/api/metrics"
+	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
+	"github.com/nspcc-dev/neofs-s3-gw/api/metrics"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
 )

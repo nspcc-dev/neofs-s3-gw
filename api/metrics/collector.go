@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"github.com/nspcc-dev/neofs-s3-gate/misc"
+	"github.com/nspcc-dev/neofs-s3-gw/misc"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
