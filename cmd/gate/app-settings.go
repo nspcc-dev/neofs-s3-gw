@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gate/misc"
+	"github.com/nspcc-dev/neofs-s3-gw/misc"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/nspcc-dev/neofs-s3-gate/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 )
 
 func (h *handler) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {

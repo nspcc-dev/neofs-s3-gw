@@ -1,4 +1,4 @@
-module github.com/nspcc-dev/neofs-s3-gate
+module github.com/nspcc-dev/neofs-s3-gw
 
 go 1.14
 
