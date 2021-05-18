@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/nspcc-dev/neofs-s3-gate/misc"
+	"github.com/nspcc-dev/neofs-s3-gw/misc"
 )
 
 type (
@@ -153,7 +153,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 
 // Write http common headers.
 func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set(hdrServerInfo, "NeoFS-S3-Gate/"+misc.Version)
+	w.Header().Set(hdrServerInfo, "NeoFS-S3-GW/"+misc.Version)
 	w.Header().Set(hdrAcceptRanges, "bytes")
 
 	// Remove sensitive information
