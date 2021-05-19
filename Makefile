@@ -1,17 +1,20 @@
 #!/usr/bin/make -f
 
+# Common variables
 REPO ?= $(shell go list -m)
 VERSION ?= "$(shell git describe --tags 2>/dev/null || git rev-parse --short HEAD | sed 's/^v//')"
-
-BIN_NAME=neofs-s3-gw
-HUB_IMAGE="nspccdev/$(BIN_NAME)"
-HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 BINDIR = bin
+
+# s3 gate variables
+BIN_NAME=neofs-s3-gw
 BIN = "$(BINDIR)/$(BIN_NAME)"
 
-AUTHMATE_BIN_NAME=authmate
-AUTHMATE_HUB_IMAGE="nspccdev/$(AUTHMATE_BIN_NAME)"
-AUTHMATE_HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
+# Variables for docker
+HUB_IMAGE ?= "nspccdev/$(BIN_NAME)"
+HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
+
+#authmate variables
+AUTHMATE_BIN_NAME=neofs-authmate
 AUTHMATE_BIN = "$(BINDIR)/$(AUTHMATE_BIN_NAME)"
 
 .PHONY: help all dep clean format test cover lint docker/lint image-push image dirty-image
