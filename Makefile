@@ -9,10 +9,15 @@ HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 BINDIR = bin
 BIN = "$(BINDIR)/$(BIN_NAME)"
 
+AUTHMATE_BIN_NAME=authmate
+AUTHMATE_HUB_IMAGE="nspccdev/$(AUTHMATE_BIN_NAME)"
+AUTHMATE_HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
+AUTHMATE_BIN = "$(BINDIR)/$(AUTHMATE_BIN_NAME)"
+
 .PHONY: help all dep clean format test cover lint docker/lint image-push image dirty-image
 
 # Make all binaries
-all: $(BIN)
+all: $(BIN) $(AUTHMATE_BIN)
 
 $(BIN): $(BINDIR) dep
 	@echo "⇒ Build $@"
@@ -20,6 +25,13 @@ $(BIN): $(BINDIR) dep
 	go build -v -trimpath \
 	-ldflags "-X main.Version=$(VERSION)" \
 	-o $@ ./cmd/gate
+
+$(AUTHMATE_BIN): $(BINDIR) dep
+	@echo "⇒ Build $@"
+	CGO_ENABLED=0 \
+	go build -v -trimpath \
+	-ldflags "-X main.Version=$(VERSION)" \
+	-o $@ ./cmd/authmate
 
 $(BINDIR):
 	@echo "⇒ Ensure dir: $@"
