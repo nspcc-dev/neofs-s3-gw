@@ -27,16 +27,19 @@ import (
 
 const defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001100
 
+// Agent contains client communicating with NeoFS and logger.
 type Agent struct {
 	cli sdk.Client
 	log *zap.Logger
 }
 
+// New creates an object of type Agent that consists of Client and logger.
 func New(log *zap.Logger, client sdk.Client) *Agent {
 	return &Agent{log: log, cli: client}
 }
 
 type (
+	// IssueSecretOptions contains options for passing to Agent.IssueSecret method.
 	IssueSecretOptions struct {
 		ContainerID           *container.ID
 		ContainerFriendlyName string
@@ -46,6 +49,7 @@ type (
 		EACLRules             []byte
 	}
 
+	// ObtainSecretOptions contains options for passing to Agent.ObtainSecret method.
 	ObtainSecretOptions struct {
 		SecretAddress  string
 		GatePrivateKey hcs.PrivateKey
@@ -88,6 +92,7 @@ func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyN
 		sdk.ContainerPutWithTimeout(120*time.Second))
 }
 
+// IssueSecret creates an auth token, puts it in the NeoFS network and writes to io.Writer a new secret access key.
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
 		err error
@@ -138,6 +143,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	return enc.Encode(ir)
 }
 
+// ObtainSecret receives an existing secret access key from NeoFS and
+// writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
 	bearerCreds := bearer.New(a.cli.Object(), options.GatePrivateKey)
 	address := object.NewAddress()
@@ -183,7 +190,7 @@ func buildPlacementPolicy(placementRules string) (*netmap.PlacementPolicy, error
 	return pp, nil
 }
 
-// selects <count> nodes in container without any additional attributes
+// selects <count> nodes in container without any additional attributes.
 func newSimpleSelector(name string, count uint32) (s *netmap.Selector) {
 	s = new(netmap.Selector)
 	s.SetCount(count)

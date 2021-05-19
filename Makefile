@@ -5,7 +5,7 @@ REPO ?= $(shell go list -m)
 VERSION ?= "$(shell git describe --tags 2>/dev/null || git rev-parse --short HEAD | sed 's/^v//')"
 BINDIR = bin
 
-# s3 gate variables
+# s3 gw variables
 BIN_NAME=neofs-s3-gw
 BIN = "$(BINDIR)/$(BIN_NAME)"
 
@@ -13,7 +13,7 @@ BIN = "$(BINDIR)/$(BIN_NAME)"
 HUB_IMAGE ?= "nspccdev/$(BIN_NAME)"
 HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 
-#authmate variables
+# Authmate variables
 AUTHMATE_BIN_NAME=neofs-authmate
 AUTHMATE_BIN = "$(BINDIR)/$(AUTHMATE_BIN_NAME)"
 
