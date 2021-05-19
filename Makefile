@@ -1,18 +1,26 @@
 #!/usr/bin/make -f
 
+# Common variables
 REPO ?= $(shell go list -m)
 VERSION ?= "$(shell git describe --tags 2>/dev/null || git rev-parse --short HEAD | sed 's/^v//')"
-
-BIN_NAME=neofs-s3-gw
-HUB_IMAGE="nspccdev/$(BIN_NAME)"
-HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 BINDIR = bin
+
+# s3 gw variables
+BIN_NAME=neofs-s3-gw
 BIN = "$(BINDIR)/$(BIN_NAME)"
+
+# Variables for docker
+HUB_IMAGE ?= "nspccdev/$(BIN_NAME)"
+HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
+
+# Authmate variables
+AUTHMATE_BIN_NAME=neofs-authmate
+AUTHMATE_BIN = "$(BINDIR)/$(AUTHMATE_BIN_NAME)"
 
 .PHONY: help all dep clean format test cover lint docker/lint image-push image dirty-image
 
 # Make all binaries
-all: $(BIN)
+all: $(BIN) $(AUTHMATE_BIN)
 
 $(BIN): $(BINDIR) dep
 	@echo "⇒ Build $@"
@@ -20,6 +28,13 @@ $(BIN): $(BINDIR) dep
 	go build -v -trimpath \
 	-ldflags "-X main.Version=$(VERSION)" \
 	-o $@ ./cmd/gate
+
+$(AUTHMATE_BIN): $(BINDIR) dep
+	@echo "⇒ Build $@"
+	CGO_ENABLED=0 \
+	go build -v -trimpath \
+	-ldflags "-X main.Version=$(VERSION)" \
+	-o $@ ./cmd/authmate
 
 $(BINDIR):
 	@echo "⇒ Ensure dir: $@"
