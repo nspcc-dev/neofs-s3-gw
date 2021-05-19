@@ -127,7 +127,7 @@ func appCommands() []*cli.Command {
 func generateGatesKeys(count int) ([]hcs.Credentials, error) {
 	var (
 		err error
-		res = make([]hcs.Credentials, count, count)
+		res = make([]hcs.Credentials, count)
 	)
 
 	for i := 0; i < count; i++ {
@@ -163,7 +163,7 @@ func generateKeys() *cli.Command {
 
 			log.Info("generated x25519 keys")
 
-			gatesKeys := make([]gateKey, len(csl), len(csl))
+			gatesKeys := make([]gateKey, len(csl))
 			for i, cs := range csl {
 				privateKey, publicKey := cs.PrivateKey().String(), cs.PublicKey().String()
 				gatesKeys[i] = gateKey{PrivateKey: privateKey, PublicKey: publicKey}
