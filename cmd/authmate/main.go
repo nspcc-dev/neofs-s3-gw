@@ -8,13 +8,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/nspcc-dev/cdn-authmate/agents/s3"
 	sdk "github.com/nspcc-dev/cdn-sdk"
 	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
 	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
 	"github.com/nspcc-dev/cdn-sdk/grace"
 	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -247,7 +247,7 @@ func issueSecret() *cli.Command {
 				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
 			}
 
-			agent := s3.New(log, client)
+			agent := authmate.New(log, client)
 			var cid *container.ID
 			if len(containerIDFlag) > 0 {
 				cid = container.NewID()
@@ -270,7 +270,7 @@ func issueSecret() *cli.Command {
 				gatesPublicKeys = append(gatesPublicKeys, gpk)
 			}
 
-			issueSecretOptions := &s3.IssueSecretOptions{
+			issueSecretOptions := &authmate.IssueSecretOptions{
 				ContainerID:           cid,
 				ContainerFriendlyName: containerFriendlyName,
 				NEOFSCreds:            neofsCreds,
@@ -336,7 +336,7 @@ func obtainSecret() *cli.Command {
 				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
 			}
 
-			agent := s3.New(log, client)
+			agent := authmate.New(log, client)
 
 			var _ = agent
 
@@ -345,7 +345,7 @@ func obtainSecret() *cli.Command {
 				return cli.Exit(fmt.Sprintf("failed to create owner's private key: %s", err), 4)
 			}
 
-			obtainSecretOptions := &s3.ObtainSecretOptions{
+			obtainSecretOptions := &authmate.ObtainSecretOptions{
 				SecretAddress:  secretAddressFlag,
 				GatePrivateKey: gateCreds.PrivateKey(),
 			}
