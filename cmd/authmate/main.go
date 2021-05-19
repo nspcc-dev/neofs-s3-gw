@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	// Build   = "now"
+	// Version of the program.
 	Version = "dev"
 )
 
