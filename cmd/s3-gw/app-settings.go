@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gw/misc"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -87,6 +87,12 @@ const ( // Settings.
 	// Command line args.
 	cmdHelp    = "help"
 	cmdVersion = "version"
+
+	// applicationName is gateway name.
+	applicationName = "neofs-s3-gw"
+
+	// envPrefix is environment variables prefix used for configuration.
+	envPrefix = "S3_GW"
 )
 
 type empty int
@@ -145,7 +151,7 @@ func newSettings() *viper.Viper {
 	v := viper.New()
 
 	v.AutomaticEnv()
-	v.SetEnvPrefix(misc.Prefix)
+	v.SetEnvPrefix(envPrefix)
 	v.SetConfigType("yaml")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
@@ -158,7 +164,7 @@ func newSettings() *viper.Viper {
 	flags.Bool(cfgEnableMetrics, false, "enable prometheus metrics")
 
 	help := flags.BoolP(cmdHelp, "h", false, "show help")
-	version := flags.BoolP(cmdVersion, "v", false, "show version")
+	versionFlag := flags.BoolP(cmdVersion, "v", false, "show version")
 
 	flags.String(cfgNeoFSPrivateKey, "", "set value to hex string, WIF string, or path to NeoFS private key file")
 	flags.String(cfgGateAuthPrivateKey, "", "set path to file with auth (curve25519) private key to use in auth scheme")
@@ -179,9 +185,8 @@ func newSettings() *viper.Viper {
 	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
 
 	// set prefers:
-	v.Set(cfgApplicationName, misc.ApplicationName)
-	v.Set(cfgApplicationVersion, misc.Version)
-	v.Set(cfgApplicationBuildTime, misc.Build)
+	v.Set(cfgApplicationName, applicationName)
+	v.Set(cfgApplicationVersion, version.Version)
 
 	// set defaults:
 
@@ -229,7 +234,7 @@ func newSettings() *viper.Viper {
 
 	switch {
 	case help != nil && *help:
-		fmt.Printf("NeoFS S3 Gateway %s (%s)\n", misc.Version, misc.Build)
+		fmt.Printf("NeoFS S3 gateway %s\n", version.Version)
 		flags.PrintDefaults()
 
 		fmt.Println()
@@ -244,19 +249,19 @@ func newSettings() *viper.Viper {
 			}
 
 			k := strings.Replace(keys[i], ".", "_", -1)
-			fmt.Printf("%s_%s = %v\n", misc.Prefix, strings.ToUpper(k), v.Get(keys[i]))
+			fmt.Printf("%s_%s = %v\n", envPrefix, strings.ToUpper(k), v.Get(keys[i]))
 		}
 
 		fmt.Println()
 		fmt.Println("Peers preset:")
 		fmt.Println()
 
-		fmt.Printf("%s_%s_[N]_ADDRESS = string\n", misc.Prefix, strings.ToUpper(cfgPeers))
-		fmt.Printf("%s_%s_[N]_WEIGHT = 0..1 (float)\n", misc.Prefix, strings.ToUpper(cfgPeers))
+		fmt.Printf("%s_%s_[N]_ADDRESS = string\n", envPrefix, strings.ToUpper(cfgPeers))
+		fmt.Printf("%s_%s_[N]_WEIGHT = 0..1 (float)\n", envPrefix, strings.ToUpper(cfgPeers))
 
 		os.Exit(0)
-	case version != nil && *version:
-		fmt.Printf("NeoFS S3 Gateway %s (%s)\n", misc.Version, misc.Build)
+	case versionFlag != nil && *versionFlag:
+		fmt.Printf("NeoFS S3 gateway %s\n", version.Version)
 		os.Exit(0)
 	case ttl != nil && ttl.Minutes() < minimumTTLInMinutes:
 		fmt.Printf("connection ttl should not be less than %s", defaultTTL)
