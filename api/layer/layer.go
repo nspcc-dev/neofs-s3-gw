@@ -2,6 +2,8 @@ package layer
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"time"
@@ -13,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -116,7 +117,7 @@ func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Objec
 	return n.cli.Object().Get(ctx, address)
 }
 
-// GetBucketInfo returns bucket name.
+// GetBucketInfo returns bucket info by name.
 func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error) {
 	name, err := url.QueryUnescape(name)
 	if err != nil {
@@ -227,9 +228,9 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-		return errors.Wrapf(err, "bucket = %s", p.Bucket)
+		return fmt.Errorf("couldn't find bucket: %s : %w", p.Bucket, err)
 	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
-		return errors.Wrapf(err, "cid: %s, val: %s", bkt.CID, p.Object)
+		return fmt.Errorf("search of the object failed: cid: %s, val: %s : %w", bkt.CID, p.Object, err)
 	}
 
 	addr := object.NewAddress()
@@ -245,7 +246,11 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 		length: p.Length,
 	})
 
-	return errors.Wrapf(err, "cid: %s", bkt.CID)
+	if err != nil {
+		return fmt.Errorf("couldn't get object, cid: %s : %w", bkt.CID, err)
+	}
+
+	return nil
 }
 
 func (n *layer) checkObject(ctx context.Context, cid *container.ID, filename string) error {
@@ -300,7 +305,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error) {
 	info, err := n.GetObjectInfo(ctx, p.SrcBucket, p.SrcObject)
 	if err != nil {
-		return nil, errors.Wrap(err, "get-object-info")
+		return nil, fmt.Errorf("couldn't get object info: %w", err)
 	}
 
 	pr, pw := io.Pipe()
