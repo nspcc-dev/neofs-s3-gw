@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
-	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -379,7 +378,7 @@ func createSDKClient(ctx context.Context, log *zap.Logger, neofsCreds neofs.Cred
 		pool.WithConnectTimeout(poolConnectTimeout),
 		pool.WithRequestTimeout(poolRequestTimeout))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create connection pool")
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	log.Debug("prepare sdk client")
