@@ -19,8 +19,6 @@ var (
 		[]string{
 			// current version
 			"version",
-			// build time of the current version
-			"build_time",
 		},
 	)
 
@@ -62,7 +60,7 @@ func (s *stats) Describe(ch chan<- *prometheus.Desc) {
 
 func (s *stats) Collect(ch chan<- prometheus.Metric) {
 	// Expose current version information
-	versionInfo.WithLabelValues(misc.Version, misc.Build).Set(1.0)
+	versionInfo.WithLabelValues(misc.Version).Set(1.0)
 
 	// connect collectors
 	collectHTTPMetrics(ch)

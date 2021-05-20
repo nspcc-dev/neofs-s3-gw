@@ -181,7 +181,6 @@ func newSettings() *viper.Viper {
 	// set prefers:
 	v.Set(cfgApplicationName, misc.ApplicationName)
 	v.Set(cfgApplicationVersion, misc.Version)
-	v.Set(cfgApplicationBuildTime, misc.Build)
 
 	// set defaults:
 
@@ -229,7 +228,7 @@ func newSettings() *viper.Viper {
 
 	switch {
 	case help != nil && *help:
-		fmt.Printf("NeoFS S3 Gateway %s (%s)\n", misc.Version, misc.Build)
+		fmt.Printf("NeoFS S3 Gateway %s\n", misc.Version)
 		flags.PrintDefaults()
 
 		fmt.Println()
@@ -256,7 +255,7 @@ func newSettings() *viper.Viper {
 
 		os.Exit(0)
 	case version != nil && *version:
-		fmt.Printf("NeoFS S3 Gateway %s (%s)\n", misc.Version, misc.Build)
+		fmt.Printf("NeoFS S3 Gateway %s\n", misc.Version)
 		os.Exit(0)
 	case ttl != nil && ttl.Minutes() < minimumTTLInMinutes:
 		fmt.Printf("connection ttl should not be less than %s", defaultTTL)
