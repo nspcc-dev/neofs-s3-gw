@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -28,11 +29,6 @@ type gateKey struct {
 const (
 	poolConnectTimeout = 5 * time.Second
 	poolRequestTimeout = 5 * time.Second
-)
-
-var (
-	// Version of the program.
-	Version = "dev"
 )
 
 var (
@@ -89,7 +85,7 @@ func main() {
 	app := &cli.App{
 		Name:     "NeoFS gate authentication manager",
 		Usage:    "Helps manage delegated access via gates to data stored in NeoFS network",
-		Version:  Version,
+		Version:  version.Version,
 		Flags:    appFlags(),
 		Commands: appCommands(),
 	}
