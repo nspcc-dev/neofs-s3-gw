@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"strconv"
@@ -21,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -78,7 +78,7 @@ func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyN
 
 	pp, err := buildPlacementPolicy("")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to build placement policy")
+		return nil, fmt.Errorf("failed to build placement policy: %w", err)
 	}
 
 	cnr := container.New(
@@ -108,12 +108,12 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	table, err := buildEACLTable(cid, options.EACLRules)
 	if err != nil {
-		return errors.Wrap(err, "failed to build eacl table")
+		return fmt.Errorf("failed to build eacl table: %w", err)
 	}
 
 	tkn, err := buildBearerToken(options.NEOFSCreds.PrivateKey(), options.NEOFSCreds.Owner(), table)
 	if err != nil {
-		return errors.Wrap(err, "failed to build bearer token")
+		return fmt.Errorf("failed to build bearer token: %w", err)
 	}
 
 	a.log.Info("store bearer token into NeoFS",
@@ -124,12 +124,12 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		New(a.cli.Object(), options.OwnerPrivateKey).
 		Put(ctx, cid, tkn, options.GatesPublicKeys...)
 	if err != nil {
-		return errors.Wrap(err, "failed to put bearer token")
+		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
 	secret, err := s3.SecretAccessKey(tkn)
 	if err != nil {
-		return errors.Wrap(err, "failed to get bearer token secret key")
+		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
 
 	ir := &issuingResult{
@@ -149,17 +149,17 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 	bearerCreds := bearer.New(a.cli.Object(), options.GatePrivateKey)
 	address := object.NewAddress()
 	if err := address.Parse(options.SecretAddress); err != nil {
-		return errors.Wrap(err, "failed to parse secret address")
+		return fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
 	tkn, err := bearerCreds.Get(ctx, address)
 	if err != nil {
-		return errors.Wrap(err, "failed to get bearer token")
+		return fmt.Errorf("failed to get bearer token: %w", err)
 	}
 
 	secret, err := s3.SecretAccessKey(tkn)
 	if err != nil {
-		return errors.Wrap(err, "failed to get bearer token secret key")
+		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
 
 	or := &obtainingResult{
