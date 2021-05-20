@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"github.com/nspcc-dev/cdn-sdk/creds/s3"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -85,14 +85,14 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 
 	signatureDateTime, err := time.Parse("20060102T150405Z", r.Header.Get("X-Amz-Date"))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse x-amz-date header field")
+		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
 	accessKeyID := fmt.Sprintf("%s/%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
 
 	address := object.NewAddress()
 	if err = address.Parse(accessKeyID); err != nil {
-		return nil, errors.Wrapf(err, "could not parse AccessBox address: %s", accessKeyID)
+		return nil, fmt.Errorf("could not parse AccessBox address: %s : %w", accessKeyID, err)
 	}
 
 	tkn, err := c.cli.Get(r.Context(), address)
@@ -122,7 +122,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 
 	// body not required
 	if _, err := signer.Sign(otherRequest, nil, sms1["service"], sms1["region"], signatureDateTime); err != nil {
-		return nil, errors.Wrap(err, "failed to sign temporary HTTP request")
+		return nil, fmt.Errorf("failed to sign temporary HTTP request: %w", err)
 	}
 
 	sms2 := c.reg.getSubmatches(otherRequest.Header.Get("Authorization"))

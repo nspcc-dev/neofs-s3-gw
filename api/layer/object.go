@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/url"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
