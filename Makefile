@@ -22,7 +22,7 @@ $(BINS): $(BINDIR) dep
 	@echo "⇒ Build $@"
 	CGO_ENABLED=0 \
 	go build -v -trimpath \
-	-ldflags "-X main.Version=$(VERSION)" \
+	-ldflags "-X $(REPO)/internal/version.Version=$(VERSION)" \
 	-o $@ ./cmd/$(subst neofs-,,$(notdir $@))
 
 $(BINDIR):
