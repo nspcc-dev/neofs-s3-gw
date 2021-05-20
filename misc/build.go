@@ -9,8 +9,6 @@ const (
 )
 
 var (
-	// Build holds build timestamp.
-	Build = "now"
 	// Version contains application version.
 	Version = "dev"
 )
