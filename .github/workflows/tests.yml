@@ -1,0 +1,86 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize]
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: latest
+
+  cover:
+    name: Coverage
+    runs-on: ubuntu-20.04
+
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+
+      - name: Restore Go modules from cache
+        uses: actions/cache@v2
+        with:
+          path: /home/runner/go/pkg/mod
+          key: deps-${{ hashFiles('go.sum') }}
+
+      - name: Update Go modules
+        run: make dep
+
+      - name: Test and write coverage profile
+        run: make cover
+
+      - name: Upload coverage results to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          fail_ci_if_error: false
+          path_to_write_report: ./coverage.txt
+          verbose: true
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        go_versions: [ '1.16' ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '${{ matrix.go_versions }}'
+
+      - name: Restore Go modules from cache
+        uses: actions/cache@v2
+        with:
+          path: /home/runner/go/pkg/mod
+          key: deps-${{ hashFiles('go.sum') }}
+
+      - name: Update Go modules
+        run: make dep
+
+      - name: Run tests
+        run: make test
