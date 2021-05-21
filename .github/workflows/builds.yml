@@ -42,10 +42,13 @@ jobs:
           name: neofs-http-gw
           path: bin/neofs-http-gw
 
+# This job was made being skipped because building of a docker image is not working at this moment
   build_image:
     needs: build_cli
     name: Build Docker image
     runs-on: ubuntu-20.04
+
+    if: ${{ false }}  # remove this line when building of docker image will work
 
     steps:
       - uses: actions/checkout@v2
