@@ -10,7 +10,8 @@ CMDS = $(addprefix neofs-, $(notdir $(wildcard cmd/*)))
 BINS = $(addprefix $(BINDIR)/, $(CMDS))
 
 # Variables for docker
-HUB_IMAGE ?= "nspccdev/$(BIN_NAME)"
+REPO_BASENAME = $(shell basename `go list -m`)
+HUB_IMAGE ?= "nspccdev/$(REPO_BASENAME)"
 HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 
 .PHONY: help all dep clean format test cover lint docker/lint image-push image dirty-image
@@ -55,7 +56,7 @@ format:
 	@goimports -w ./
 
 # Build clean Docker image
-image:
+image: dep
 	@echo "⇒ Build NeoFS S3 Gateway docker image "
 	@docker build \
 		--build-arg REPO=$(REPO) \
