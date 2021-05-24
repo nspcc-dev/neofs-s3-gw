@@ -1,5 +1,3 @@
-# Jobs in this file are disabled because building of a docker image is not working
-# Remove .disabled extension to enable it
 name: Push images to DockerHub
 
 # Controls when the action will run.
