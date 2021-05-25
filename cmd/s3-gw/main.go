@@ -1,7 +1,10 @@
 package main
 
 import (
-	"github.com/nspcc-dev/cdn-sdk/grace"
+	"context"
+	"os/signal"
+	"syscall"
+
 	"github.com/nspcc-dev/cdn-sdk/logger"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -39,10 +42,10 @@ func newLogger(v *viper.Viper) *zap.Logger {
 
 func main() {
 	var (
-		v = newSettings()
-		l = newLogger(v)
-		g = grace.Context(l)
-		a = newApp(g, l, v)
+		v    = newSettings()
+		l    = newLogger(v)
+		g, _ = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+		a    = newApp(g, l, v)
 	)
 
 	go a.Server(g)
