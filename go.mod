@@ -1,6 +1,6 @@
 module github.com/nspcc-dev/neofs-s3-gw
 
-go 1.14
+go 1.16
 
 require (
 	github.com/aws/aws-sdk-go v1.37.9
@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/nspcc-dev/cdn-sdk v0.3.4
 	github.com/nspcc-dev/neofs-api-go v1.23.0
+	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/nspcc-dev/neofs-node v1.22.0
 	github.com/prometheus/client_golang v1.9.0
 	github.com/spf13/pflag v1.0.5
@@ -15,5 +16,6 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.16.0
+	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
 	google.golang.org/grpc v1.35.0
 )

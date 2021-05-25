@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	sdk "github.com/nspcc-dev/cdn-sdk"
 	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
 	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
-	"github.com/nspcc-dev/cdn-sdk/grace"
 	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
@@ -64,12 +65,13 @@ var zapConfig = zap.Config{
 
 func prepare() (context.Context, *zap.Logger) {
 	var (
-		err error
-		log = zap.NewNop()
+		err    error
+		log    = zap.NewNop()
+		ctx, _ = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	)
 
 	if !logEnabledFlag {
-		return grace.Context(log), log
+		return ctx, log
 	} else if logDebugEnabledFlag {
 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
 	}
@@ -78,7 +80,7 @@ func prepare() (context.Context, *zap.Logger) {
 		panic(err)
 	}
 
-	return grace.Context(log), log
+	return ctx, log
 }
 
 func main() {
