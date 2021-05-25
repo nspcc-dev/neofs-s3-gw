@@ -3,6 +3,8 @@ package authmate
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +16,6 @@ import (
 	"github.com/nspcc-dev/cdn-sdk/creds/bearer"
 	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
 	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
-	"github.com/nspcc-dev/cdn-sdk/creds/s3"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
@@ -127,7 +128,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
-	secret, err := s3.SecretAccessKey(tkn)
+	secret, err := BearerToAccessKey(tkn)
 	if err != nil {
 		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
@@ -157,7 +158,7 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 		return fmt.Errorf("failed to get bearer token: %w", err)
 	}
 
-	secret, err := s3.SecretAccessKey(tkn)
+	secret, err := BearerToAccessKey(tkn)
 	if err != nil {
 		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
@@ -233,4 +234,15 @@ func buildBearerToken(key *ecdsa.PrivateKey, oid *owner.ID, table *eacl.Table) (
 	bearerToken.SetLifetime(math.MaxUint64, 0, 0)
 
 	return bearerToken, bearerToken.SignToken(key)
+}
+
+// BearerToAccessKey returns secret access key generated from given BearerToken.
+func BearerToAccessKey(tkn *token.BearerToken) (string, error) {
+	data, err := tkn.Marshal()
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:]), nil
 }

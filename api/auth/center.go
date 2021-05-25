@@ -15,9 +15,9 @@ import (
 	sdk "github.com/nspcc-dev/cdn-sdk"
 	"github.com/nspcc-dev/cdn-sdk/creds/bearer"
 	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
-	"github.com/nspcc-dev/cdn-sdk/creds/s3"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"go.uber.org/zap"
 )
 
@@ -100,7 +100,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, err
 	}
 
-	secret, err := s3.SecretAccessKey(tkn)
+	secret, err := authmate.BearerToAccessKey(tkn)
 	if err != nil {
 		return nil, err
 	}
