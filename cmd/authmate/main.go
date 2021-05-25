@@ -11,8 +11,8 @@ import (
 	"time"
 
 	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
-	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"

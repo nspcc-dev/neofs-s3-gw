@@ -8,8 +8,8 @@ import (
 	"os"
 
 	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
-	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
