@@ -9,8 +9,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// KeyWrapper is wrapper for context keys.
+type KeyWrapper string
+
 // BearerTokenKey is an ID used to store bearer token in a context.
-const BearerTokenKey = "__context_bearer_token_key"
+var BearerTokenKey = KeyWrapper("__context_bearer_token_key")
 
 // AttachUserAuth adds user authentication via center to router using log for logging.
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
