@@ -8,14 +8,17 @@ type bearerBox struct {
 	tkn *token.BearerToken
 }
 
+// NewBearerBox wraps given bearer token into BearerTokenBox.
 func NewBearerBox(token *token.BearerToken) BearerTokenBox {
 	return &bearerBox{tkn: token}
 }
 
+// Marshal serializes bearer token.
 func (b *bearerBox) Marshal() ([]byte, error) {
 	return b.tkn.Marshal(nil)
 }
 
+// Marshal initializes bearer box from its serialized representation.
 func (b *bearerBox) Unmarshal(data []byte) error {
 	tkn := token.NewBearerToken()
 
@@ -29,10 +32,12 @@ func (b *bearerBox) Unmarshal(data []byte) error {
 	return nil
 }
 
+// Token unwraps bearer token from the box.
 func (b *bearerBox) Token() *token.BearerToken {
 	return b.tkn
 }
 
+// SetToken sets new token in the box.
 func (b *bearerBox) SetToken(tkn *token.BearerToken) {
 	b.tkn = tkn
 }

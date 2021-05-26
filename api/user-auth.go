@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// BearerTokenKey is an ID used to store bearer token in a context.
 const BearerTokenKey = "__context_bearer_token_key"
 
 // AttachUserAuth adds user authentication via center to router using log for logging.

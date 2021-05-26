@@ -18,6 +18,7 @@ import (
 )
 
 type (
+	// Credentials is a bearer token get/put interface.
 	Credentials interface {
 		Get(context.Context, *object.Address) (*token.BearerToken, error)
 		Put(context.Context, *container.ID, *token.BearerToken, ...hcs.PublicKey) (*object.Address, error)
@@ -30,7 +31,9 @@ type (
 )
 
 var (
-	ErrEmptyPublicKeys  = errors.New("HCS public keys could not be empty")
+	// ErrEmptyPublicKeys is returned when no HCS keys are provided.
+	ErrEmptyPublicKeys = errors.New("HCS public keys could not be empty")
+	// ErrEmptyBearerToken is returned when no bearer token is provided.
 	ErrEmptyBearerToken = errors.New("Bearer token could not be empty")
 )
 
@@ -42,6 +45,7 @@ var bufferPool = sync.Pool{
 
 var _ = New
 
+// New creates new Credentials instance using given cli and key.
 func New(cli sdk.ClientPlant, key hcs.PrivateKey) Credentials {
 	return &cred{obj: cli, key: key}
 }

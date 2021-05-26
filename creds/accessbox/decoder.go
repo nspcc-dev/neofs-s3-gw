@@ -18,6 +18,7 @@ type decoder struct {
 	key hcs.PrivateKey
 }
 
+// NewDecoder returns new private key decoder.
 func NewDecoder(r io.Reader, key hcs.PrivateKey) Decoder {
 	return &decoder{Reader: bufio.NewReader(r), key: key}
 }
@@ -81,6 +82,7 @@ func (d *decoder) Decode(box Box) error {
 	return lastErr
 }
 
+// Decode unwraps serialized bearer token from data into box using owner key.
 func Decode(data []byte, box Box, owner hcs.PrivateKey) error {
 	return NewDecoder(bytes.NewBuffer(data), owner).Decode(box)
 }
