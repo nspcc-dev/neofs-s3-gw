@@ -19,7 +19,7 @@ type encoder struct {
 	keys  []hcs.PublicKey
 }
 
-// NewEncoder creates encoder
+// NewEncoder creates encoder.
 func NewEncoder(w io.Writer, owner hcs.PrivateKey, keys ...hcs.PublicKey) Encoder {
 	return &encoder{
 		Writer: w,

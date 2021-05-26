@@ -40,6 +40,7 @@ func publicKeyFromString(val string) (PublicKey, error) {
 	return publicKeyFromBytes(v)
 }
 
+// NewPublicKeyFromReader reads new public key from given reader.
 func NewPublicKeyFromReader(r io.Reader) (PublicKey, error) {
 	data := make([]byte, curve25519.PointSize)
 	if _, err := r.Read(data); err != nil {
@@ -49,6 +50,7 @@ func NewPublicKeyFromReader(r io.Reader) (PublicKey, error) {
 	return publicKeyFromBytes(data)
 }
 
+// LoadPublicKey loads public key from given file or (serialized) string.
 func LoadPublicKey(val string) (PublicKey, error) {
 	data, err := ioutil.ReadFile(val)
 	if err != nil {

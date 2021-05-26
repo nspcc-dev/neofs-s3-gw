@@ -8,6 +8,7 @@ import (
 )
 
 type (
+	// Credentials is an HCS interface (private/public key).
 	Credentials interface {
 		PublicKey() PublicKey
 		PrivateKey() PrivateKey
@@ -20,10 +21,12 @@ type (
 		String() string
 	}
 
+	// PublicKey is a public key wrapper providing useful methods.
 	PublicKey interface {
 		keyer
 	}
 
+	// PrivateKey is private key wrapper providing useful methods.
 	PrivateKey interface {
 		keyer
 
@@ -39,10 +42,12 @@ type (
 	secret []byte
 )
 
+// ErrEmptyCredentials is returned when no credentials are provided.
 var ErrEmptyCredentials = errors.New("empty credentials")
 
 var _ = NewCredentials
 
+// Generate generates new key pair using given source of randomness.
 func Generate(r io.Reader) (Credentials, error) {
 	buf := make([]byte, curve25519.ScalarSize)
 
@@ -57,6 +62,7 @@ func Generate(r io.Reader) (Credentials, error) {
 	}, nil
 }
 
+// NewCredentials loads private key from the string given and returns Credentials wrapper.
 func NewCredentials(val string) (Credentials, error) {
 	if val == "" {
 		return nil, ErrEmptyCredentials
@@ -73,10 +79,12 @@ func NewCredentials(val string) (Credentials, error) {
 	}, nil
 }
 
+// PublicKey returns public key.
 func (c *credentials) PublicKey() PublicKey {
 	return c.public
 }
 
+// PrivateKey returns private key.
 func (c *credentials) PrivateKey() PrivateKey {
 	return c.secret
 }
