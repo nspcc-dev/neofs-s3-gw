@@ -2,29 +2,26 @@ package main
 
 import (
 	"context"
-	"errors"
+	"math"
 	"net"
 	"net/http"
-	"os"
 
-	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
-	"github.com/nspcc-dev/cdn-sdk/pool"
+	"github.com/nspcc-dev/neofs-http-gw/connections"
+	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
 )
 
 type (
 	// App is the main application structure.
 	App struct {
-		cli pool.Client
+		cli sdk.ClientPlant
 		ctr auth.Center
 		log *zap.Logger
 		cfg *viper.Viper
@@ -46,10 +43,10 @@ type (
 
 func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	var (
+		pool   connections.Pool
 		err    error
 		tls    *tlsConfig
-		cli    sdk.Client
-		con    pool.Client
+		cli    sdk.ClientPlant
 		caller api.Handler
 		ctr    auth.Center
 		obj    layer.Client
@@ -57,7 +54,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		hcsCred hcs.Credentials
 		nfsCred neofs.Credentials
 
-		peers = fetchPeers(l, v)
+		poolPeers = fetchPeers(l, v)
 
 		reBalance  = defaultRebalanceTimer
 		conTimeout = defaultConnectTimeout
@@ -109,56 +106,30 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		zap.String("HCS", hcsCredential),
 		zap.String("NeoFS", nfsCredential))
 
-	poolOptions := []pool.Option{
-		pool.WithLogger(l),
-		pool.WithWeightPool(peers),
-		pool.WithCredentials(nfsCred),
-		pool.WithTickerTimeout(reBalance),
-		pool.WithConnectTimeout(conTimeout),
-		pool.WithRequestTimeout(reqTimeout),
-		pool.WithAPIPreparer(sdk.APIPreparer),
-		pool.WithGRPCOptions(
-			grpc.WithBlock(),
-			grpc.WithInsecure(),
-			grpc.WithKeepaliveParams(keepalive.ClientParameters{
-				Time:                v.GetDuration(cfgKeepaliveTime),
-				Timeout:             v.GetDuration(cfgKeepaliveTimeout),
-				PermitWithoutStream: v.GetBool(cfgKeepalivePermitWithoutStream),
-			}))}
-
-	if con, err = pool.New(ctx, poolOptions...); err != nil {
-		l.Fatal("could not prepare pool connections", zap.Error(err))
+	opts := &connections.PoolBuilderOptions{
+		Key:                     nfsCred.PrivateKey(),
+		NodeConnectionTimeout:   conTimeout,
+		NodeRequestTimeout:      reqTimeout,
+		ClientRebalanceInterval: reBalance,
+		SessionExpirationEpoch:  math.MaxUint64,
+		KeepaliveTime:           v.GetDuration(cfgKeepaliveTime),
+		KeepaliveTimeout:        v.GetDuration(cfgKeepaliveTimeout),
+		KeepalivePermitWoStream: v.GetBool(cfgKeepalivePermitWithoutStream),
 	}
-
-	{ // should establish connection with NeoFS Storage Nodes
-		ctx, cancel := context.WithTimeout(ctx, conTimeout)
-		defer cancel()
-
-		if _, err = con.Connection(ctx); err != nil {
-			if errors.Is(err, context.Canceled) {
-				l.Info("connection canceled")
-				os.Exit(0)
-			}
-
-			l.Fatal("could not establish connection",
-				zap.Error(err))
-		}
+	pool, err = poolPeers.Build(ctx, opts)
+	if err != nil {
+		l.Fatal("failed to create connection pool", zap.Error(err))
 	}
-
-	if cli, err = sdk.New(ctx,
-		sdk.WithLogger(l),
-		sdk.WithConnectionPool(con),
-		sdk.WithCredentials(nfsCred),
-		sdk.WithAPIPreparer(sdk.APIPreparer)); err != nil {
-		l.Fatal("could not prepare sdk client",
-			zap.Error(err))
+	cli, err = sdk.NewClientPlant(ctx, pool, nfsCred)
+	if err != nil {
+		l.Fatal("failed to create neofs client plant")
 	}
 
 	// prepare object layer
 	obj = layer.NewLayer(l, cli)
 
 	// prepare auth center
-	ctr = auth.New(cli.Object(), hcsCred.PrivateKey())
+	ctr = auth.New(cli, hcsCred.PrivateKey())
 
 	if caller, err = handler.New(l, obj); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
@@ -166,7 +137,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 	return &App{
 		ctr: ctr,
-		cli: con,
+		cli: cli,
 		log: l,
 		cfg: v,
 		obj: obj,
@@ -184,12 +155,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 func (a *App) Wait() {
 	a.log.Info("application started")
 
-	select {
-	case <-a.wrkDone: // wait for worker is stopped
-		<-a.webDone
-	case <-a.webDone: // wait for web-server is stopped
-		<-a.wrkDone
-	}
+	<-a.webDone // wait for web-server to be stopped
 
 	a.log.Info("application finished")
 }
@@ -212,7 +178,7 @@ func (a *App) Server(ctx context.Context) {
 	router := newS3Router()
 
 	// Attach app-specific routes:
-	attachHealthy(router, a.cli)
+	//	attachHealthy(router, a.cli)
 	attachMetrics(router, a.cfg, a.log)
 	attachProfiler(router, a.cfg, a.log)
 
@@ -257,11 +223,4 @@ func (a *App) Server(ctx context.Context) {
 		zap.Error(srv.Shutdown(ctx)))
 
 	close(a.webDone)
-}
-
-// Worker runs client worker.
-func (a *App) Worker(ctx context.Context) {
-	a.cli.Worker(ctx)
-	a.log.Info("stopping worker")
-	close(a.wrkDone)
 }

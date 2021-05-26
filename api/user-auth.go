@@ -1,13 +1,15 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	sdk "github.com/nspcc-dev/cdn-sdk"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"go.uber.org/zap"
 )
+
+const BearerTokenKey = "__context_bearer_token_key"
 
 // AttachUserAuth adds user authentication via center to router using log for logging.
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
@@ -21,7 +23,7 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 			}
 
 			h.ServeHTTP(w, r.WithContext(
-				sdk.SetBearerToken(r.Context(), token)))
+				context.WithValue(r.Context(), BearerTokenKey, token)))
 		})
 	})
 }
