@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/nspcc-dev/cdn-sdk/logger"
+	"github.com/nspcc-dev/neofs-http-gw/logger"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -49,7 +49,6 @@ func main() {
 	)
 
 	go a.Server(g)
-	go a.Worker(g)
 
 	a.Wait()
 }

@@ -12,30 +12,34 @@ import (
 	"strconv"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"go.uber.org/zap"
 )
 
-const defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001100
+const (
+	defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001100
+	containerCreationTimeout            = 120 * time.Second
+	containerPollInterval               = 5 * time.Second
+)
 
 // Agent contains client communicating with NeoFS and logger.
 type Agent struct {
-	cli sdk.Client
+	cli sdk.ClientPlant
 	log *zap.Logger
 }
 
 // New creates an object of type Agent that consists of Client and logger.
-func New(log *zap.Logger, client sdk.Client) *Agent {
+func New(log *zap.Logger, client sdk.ClientPlant) *Agent {
 	return &Agent{log: log, cli: client}
 }
 
@@ -71,9 +75,14 @@ type (
 )
 
 func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyName string) (*container.ID, error) {
+	conn, _, err := a.cli.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
+
 	if cid != nil {
 		// check that container exists
-		_, err := a.cli.Container().Get(ctx, cid)
+		_, err = conn.GetContainer(ctx, cid)
 		return cid, err
 	}
 
@@ -88,9 +97,31 @@ func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyN
 		container.WithAttribute(container.AttributeName, friendlyName),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
 
-	return a.cli.Container().Put(ctx, cnr,
-		sdk.ContainerPutAndWait(),
-		sdk.ContainerPutWithTimeout(120*time.Second))
+	cid, err = conn.PutContainer(ctx, cnr)
+	if err != nil {
+		return nil, err
+	}
+
+	wctx, cancel := context.WithTimeout(ctx, containerCreationTimeout)
+	defer cancel()
+	ticker := time.NewTimer(containerPollInterval)
+	defer ticker.Stop()
+	wdone := wctx.Done()
+	done := ctx.Done()
+	for {
+		select {
+		case <-done:
+			return nil, ctx.Err()
+		case <-wdone:
+			return nil, wctx.Err()
+		case <-ticker.C:
+			_, err = conn.GetContainer(ctx, cid)
+			if err == nil {
+				return cid, nil
+			}
+			ticker.Reset(containerPollInterval)
+		}
+	}
 }
 
 // IssueSecret creates an auth token, puts it in the NeoFS network and writes to io.Writer a new secret access key.
@@ -122,7 +153,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		zap.Stringer("owner_tkn", tkn.Issuer()))
 
 	address, err := bearer.
-		New(a.cli.Object(), options.OwnerPrivateKey).
+		New(a.cli, options.OwnerPrivateKey).
 		Put(ctx, cid, tkn, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
@@ -147,7 +178,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
-	bearerCreds := bearer.New(a.cli.Object(), options.GatePrivateKey)
+	bearerCreds := bearer.New(a.cli, options.GatePrivateKey)
 	address := object.NewAddress()
 	if err := address.Parse(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)

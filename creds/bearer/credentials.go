@@ -8,12 +8,13 @@ import (
 	"sync"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-sdk"
+	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 )
 
 type (
@@ -24,7 +25,7 @@ type (
 
 	cred struct {
 		key hcs.PrivateKey
-		obj sdk.ObjectClient
+		obj sdk.ClientPlant
 	}
 )
 
@@ -41,7 +42,7 @@ var bufferPool = sync.Pool{
 
 var _ = New
 
-func New(cli sdk.ObjectClient, key hcs.PrivateKey) Credentials {
+func New(cli sdk.ClientPlant, key hcs.PrivateKey) Credentials {
 	return &cred{obj: cli, key: key}
 }
 
@@ -60,9 +61,23 @@ func (c *cred) Get(ctx context.Context, address *object.Address) (*token.BearerT
 
 	box := accessbox.NewBearerBox(nil)
 
-	if _, err := c.obj.Get(ctx, address, sdk.WithGetWriter(buf)); err != nil {
+	conn, tok, err := c.obj.ConnectionArtifacts()
+	if err != nil {
 		return nil, err
-	} else if err = accessbox.NewDecoder(buf, c.key).Decode(box); err != nil {
+	}
+	ops := new(client.GetObjectParams).WithAddress(address).WithPayloadWriter(buf)
+
+	_, err = conn.GetObject(
+		ctx,
+		ops,
+		client.WithSession(tok),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = accessbox.NewDecoder(buf, c.key).Decode(box)
+	if err != nil {
 		return nil, err
 	}
 
@@ -88,6 +103,10 @@ func (c *cred) Put(ctx context.Context, cid *container.ID, tkn *token.BearerToke
 		return nil, err
 	}
 
+	conn, tok, err := c.obj.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
 	timestamp := object.NewAttribute()
 	timestamp.SetKey(object.AttributeTimestamp)
 	timestamp.SetValue(created)
@@ -101,5 +120,17 @@ func (c *cred) Put(ctx context.Context, cid *container.ID, tkn *token.BearerToke
 	raw.SetOwnerID(tkn.Issuer())
 	raw.SetAttributes(filename, timestamp)
 
-	return c.obj.Put(ctx, raw.Object(), sdk.WithPutReader(buf))
+	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(buf)
+	oid, err := conn.PutObject(
+		ctx,
+		ops,
+		client.WithSession(tok),
+	)
+	if err != nil {
+		return nil, err
+	}
+	address := object.NewAddress()
+	address.SetObjectID(oid)
+	address.SetContainerID(cid)
+	return address, nil
 }

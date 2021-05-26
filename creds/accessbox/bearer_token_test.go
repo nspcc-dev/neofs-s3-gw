@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/stretchr/testify/require"
 )
 

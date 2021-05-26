@@ -18,6 +18,7 @@ const (
 	defaultContentType = "text/plain; charset=utf-8"
 )
 
+//nolint:deadcode,unused // TODO
 func attachHealthy(r *mux.Router, h Healthy) {
 	healthy := r.PathPrefix(systemPath + "/-").
 		Subrouter().
