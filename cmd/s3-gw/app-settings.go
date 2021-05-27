@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nspcc-dev/neofs-http-gw/connections"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -110,8 +111,8 @@ var ignore = map[string]struct{}{
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
-	peers := make(map[string]float64)
+func fetchPeers(l *zap.Logger, v *viper.Viper) *connections.PoolBuilder {
+	pb := new(connections.PoolBuilder)
 
 	for i := 0; ; i++ {
 		key := cfgPeers + "." + strconv.Itoa(i) + "."
@@ -122,14 +123,17 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) map[string]float64 {
 			l.Warn("skip, empty address")
 			break
 		}
+		if weight <= 0 { // unspecified or wrong
+			weight = 1
+		}
+		pb.AddNode(address, weight)
 
-		peers[address] = weight
-		l.Info("add connection peer",
+		l.Info("added connection peer",
 			zap.String("address", address),
 			zap.Float64("weight", weight))
 	}
 
-	return peers
+	return pb
 }
 
 func fetchDomains(v *viper.Viper) []string {

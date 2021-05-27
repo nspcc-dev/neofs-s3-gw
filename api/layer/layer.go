@@ -8,13 +8,15 @@ import (
 	"net/url"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
-	"github.com/nspcc-dev/cdn-sdk/pool"
+	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	"github.com/nspcc-dev/neofs-http-gw/connections"
+	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,13 +24,13 @@ import (
 
 type (
 	layer struct {
-		cli sdk.Client
+		cli sdk.ClientPlant
 		log *zap.Logger
 	}
 
 	// Params stores basic API parameters.
 	Params struct {
-		Pool       pool.Client
+		Pool       connections.Pool
 		Logger     *zap.Logger
 		Timeout    time.Duration
 		Credential neofs.Credentials
@@ -96,7 +98,7 @@ var (
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, cli sdk.Client) Client {
+func NewLayer(log *zap.Logger, cli sdk.ClientPlant) Client {
 	return &layer{
 		cli: cli,
 		log: log,
@@ -105,16 +107,21 @@ func NewLayer(log *zap.Logger, cli sdk.Client) Client {
 
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
-	if tkn, err := sdk.BearerToken(ctx); err != nil && tkn != nil {
+	if tkn, ok := ctx.Value(api.BearerTokenKey).(*token.BearerToken); ok && tkn != nil {
 		return tkn.Issuer()
 	}
 
-	return n.cli.Owner()
+	return n.cli.OwnerID()
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
-	return n.cli.Object().Get(ctx, address)
+	conn, tok, err := n.cli.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
+	ops := new(client.GetObjectParams).WithAddress(address)
+	return conn.GetObject(ctx, ops, client.WithSession(tok))
 }
 
 // GetBucketInfo returns bucket info by name.

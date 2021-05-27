@@ -12,12 +12,12 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/cdn-sdk/creds/bearer"
-	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
-	"github.com/nspcc-dev/cdn-sdk/creds/s3"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/authmate"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"go.uber.org/zap"
 )
 
@@ -36,7 +36,7 @@ type (
 
 	// Params stores node connection parameters.
 	Params struct {
-		Client     sdk.Client
+		Client     sdk.ClientPlant
 		Logger     *zap.Logger
 		Credential hcs.Credentials
 	}
@@ -55,7 +55,7 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(obj sdk.ObjectClient, key hcs.PrivateKey) Center {
+func New(obj sdk.ClientPlant, key hcs.PrivateKey) Center {
 	return &center{
 		cli: bearer.New(obj, key),
 		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
@@ -100,7 +100,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, err
 	}
 
-	secret, err := s3.SecretAccessKey(tkn)
+	secret, err := authmate.BearerToAccessKey(tkn)
 	if err != nil {
 		return nil, err
 	}
