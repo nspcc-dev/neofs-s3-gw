@@ -6,15 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-sdk"
-	"github.com/nspcc-dev/cdn-sdk/creds/hcs"
-	"github.com/nspcc-dev/cdn-sdk/creds/neofs"
-	"github.com/nspcc-dev/cdn-sdk/grace"
-	"github.com/nspcc-dev/cdn-sdk/pool"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	"github.com/nspcc-dev/neofs-http-gw/connections"
+	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -64,12 +65,13 @@ var zapConfig = zap.Config{
 
 func prepare() (context.Context, *zap.Logger) {
 	var (
-		err error
-		log = zap.NewNop()
+		err    error
+		log    = zap.NewNop()
+		ctx, _ = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	)
 
 	if !logEnabledFlag {
-		return grace.Context(log), log
+		return ctx, log
 	} else if logDebugEnabledFlag {
 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
 	}
@@ -78,7 +80,7 @@ func prepare() (context.Context, *zap.Logger) {
 		panic(err)
 	}
 
-	return grace.Context(log), log
+	return ctx, log
 }
 
 func main() {
@@ -363,25 +365,23 @@ func fetchHCSCredentials(val string) (hcs.Credentials, error) {
 	return hcs.NewCredentials(val)
 }
 
-func createSDKClient(ctx context.Context, log *zap.Logger, neofsCreds neofs.Credentials, peerAddress string) (sdk.Client, error) {
+func createSDKClient(ctx context.Context, log *zap.Logger, neofsCreds neofs.Credentials, peerAddress string) (sdk.ClientPlant, error) {
 	log.Debug("prepare connection pool")
 
-	p, err := pool.New(ctx,
-		pool.WithLogger(log),
-		pool.WithAddress(peerAddress),
-		pool.WithCredentials(neofsCreds),
-		pool.WithAPIPreparer(sdk.APIPreparer),
-		pool.WithConnectTimeout(poolConnectTimeout),
-		pool.WithRequestTimeout(poolRequestTimeout))
+	pb := new(connections.PoolBuilder)
+	pb.AddNode(peerAddress, 1)
+
+	opts := &connections.PoolBuilderOptions{
+		Key:                   neofsCreds.PrivateKey(),
+		NodeConnectionTimeout: poolConnectTimeout,
+		NodeRequestTimeout:    poolRequestTimeout,
+	}
+	pool, err := pb.Build(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	log.Debug("prepare sdk client")
 
-	return sdk.New(ctx,
-		sdk.WithLogger(log),
-		sdk.WithCredentials(neofsCreds),
-		sdk.WithConnectionPool(p),
-		sdk.WithAPIPreparer(sdk.APIPreparer))
+	return sdk.NewClientPlant(ctx, pool, neofsCreds)
 }

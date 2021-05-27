@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	sdk "github.com/nspcc-dev/cdn-sdk"
+	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -33,16 +33,20 @@ type (
 
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, error) {
-	opts := []sdk.ObjectSearchOption{
-		sdk.SearchRootObjects(),
-	}
+	var opts object.SearchFilters
+
+	opts.AddRootFilter()
 
 	if filename, err := url.QueryUnescape(p.val); err != nil {
 		return nil, err
 	} else if filename != "" {
-		opts = append(opts, sdk.SearchByFilename(filename))
+		opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
 	}
-	return n.cli.Object().Search(ctx, p.cid, opts...)
+	conn, _, err := n.cli.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
+	return conn.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts))
 }
 
 // objectFindID returns object id (uuid) based on it's nice name in s3. If
@@ -61,14 +65,24 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, address *object.Address) (*object.Object, error) {
-	return n.cli.Object().Head(ctx, address, sdk.WithFullHeaders())
+	conn, _, err := n.cli.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
+	ops := new(client.ObjectHeaderParams).WithAddress(address).WithAllFields()
+	return conn.GetObjectHeader(ctx, ops)
 }
 
 // objectGet and write it into provided io.Reader.
 func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, error) {
+	conn, tok, err := n.cli.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
 	// prepare length/offset writer
 	w := newWriter(p.Writer, p.offset, p.length)
-	return n.cli.Object().Get(ctx, p.address, sdk.WithGetWriter(w))
+	ops := new(client.GetObjectParams).WithAddress(p.address).WithPayloadWriter(w)
+	return conn.GetObject(ctx, ops, client.WithSession(tok))
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
@@ -78,8 +92,6 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		obj string
 		bkt *BucketInfo
 		own = n.Owner(ctx)
-
-		address *object.Address
 	)
 
 	if obj, err = url.QueryUnescape(p.Object); err != nil {
@@ -123,12 +135,23 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	raw.SetAttributes(attributes...)
 
 	r := newDetector(p.Reader)
-	if address, err = n.cli.Object().Put(ctx, raw.Object(), sdk.WithPutReader(r)); err != nil {
+	conn, tok, err := n.cli.ConnectionArtifacts()
+	if err != nil {
+		return nil, err
+	}
+
+	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(r)
+	oid, err := conn.PutObject(
+		ctx,
+		ops,
+		client.WithSession(tok),
+	)
+	if err != nil {
 		return nil, err
 	}
 
 	return &ObjectInfo{
-		id: address.ObjectID(),
+		id: oid,
 
 		Owner:       own,
 		Bucket:      p.Bucket,
@@ -142,5 +165,11 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 // objectDelete puts tombstone object into neofs.
 func (n *layer) objectDelete(ctx context.Context, address *object.Address) error {
-	return n.cli.Object().Delete(ctx, address)
+	conn, _, err := n.cli.ConnectionArtifacts()
+	if err != nil {
+		return err
+	}
+	dop := new(client.DeleteObjectParams)
+	dop.WithAddress(address)
+	return conn.DeleteObject(ctx, dop)
 }
