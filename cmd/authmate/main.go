@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -11,11 +12,10 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
-	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -231,7 +231,7 @@ func issueSecret() *cli.Command {
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
 
-			neofsCreds, err := neofs.New(neoFSKeyPathFlag)
+			key, err := crypto.LoadPrivateKey(neoFSKeyPathFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to load neofs private key: %s", err), 1)
 			}
@@ -239,7 +239,7 @@ func issueSecret() *cli.Command {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			client, err := createSDKClient(ctx, log, neofsCreds, peerAddressFlag)
+			client, err := createSDKClient(ctx, log, key, peerAddressFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
 			}
@@ -270,7 +270,7 @@ func issueSecret() *cli.Command {
 			issueSecretOptions := &authmate.IssueSecretOptions{
 				ContainerID:           cid,
 				ContainerFriendlyName: containerFriendlyName,
-				NEOFSCreds:            neofsCreds,
+				NeoFSKey:              key,
 				OwnerPrivateKey:       owner.PrivateKey(),
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             []byte(eaclRulesFlag),
@@ -320,7 +320,7 @@ func obtainSecret() *cli.Command {
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
 
-			neofsCreds, err := neofs.New(neoFSKeyPathFlag)
+			key, err := crypto.LoadPrivateKey(neoFSKeyPathFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to load neofs private key: %s", err), 1)
 			}
@@ -328,7 +328,7 @@ func obtainSecret() *cli.Command {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			client, err := createSDKClient(ctx, log, neofsCreds, peerAddressFlag)
+			client, err := createSDKClient(ctx, log, key, peerAddressFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
 			}
@@ -365,23 +365,16 @@ func fetchHCSCredentials(val string) (hcs.Credentials, error) {
 	return hcs.NewCredentials(val)
 }
 
-func createSDKClient(ctx context.Context, log *zap.Logger, neofsCreds neofs.Credentials, peerAddress string) (sdk.ClientPlant, error) {
+func createSDKClient(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, peerAddress string) (pool.Pool, error) {
 	log.Debug("prepare connection pool")
 
 	pb := new(pool.Builder)
 	pb.AddNode(peerAddress, 1)
 
 	opts := &pool.BuilderOptions{
-		Key:                   neofsCreds.PrivateKey(),
+		Key:                   key,
 		NodeConnectionTimeout: poolConnectTimeout,
 		NodeRequestTimeout:    poolRequestTimeout,
 	}
-	conns, err := pb.Build(ctx, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create connection pool: %w", err)
-	}
-
-	log.Debug("prepare sdk client")
-
-	return sdk.NewClientPlant(ctx, conns, neofsCreds)
+	return pb.Build(ctx, opts)
 }
