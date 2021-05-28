@@ -6,14 +6,14 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/nspcc-dev/neofs-http-gw/connections"
-	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
+	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -43,7 +43,7 @@ type (
 
 func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	var (
-		pool   connections.Pool
+		conns  pool.Pool
 		err    error
 		tls    *tlsConfig
 		cli    sdk.ClientPlant
@@ -106,7 +106,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		zap.String("HCS", hcsCredential),
 		zap.String("NeoFS", nfsCredential))
 
-	opts := &connections.PoolBuilderOptions{
+	opts := &pool.BuilderOptions{
 		Key:                     nfsCred.PrivateKey(),
 		NodeConnectionTimeout:   conTimeout,
 		NodeRequestTimeout:      reqTimeout,
@@ -116,11 +116,11 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		KeepaliveTimeout:        v.GetDuration(cfgKeepaliveTimeout),
 		KeepalivePermitWoStream: v.GetBool(cfgKeepalivePermitWithoutStream),
 	}
-	pool, err = poolPeers.Build(ctx, opts)
+	conns, err = poolPeers.Build(ctx, opts)
 	if err != nil {
 		l.Fatal("failed to create connection pool", zap.Error(err))
 	}
-	cli, err = sdk.NewClientPlant(ctx, pool, nfsCred)
+	cli, err = sdk.NewClientPlant(ctx, conns, nfsCred)
 	if err != nil {
 		l.Fatal("failed to create neofs client plant")
 	}
