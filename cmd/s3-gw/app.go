@@ -2,17 +2,17 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math"
 	"net"
 	"net/http"
 
+	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
-	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -21,13 +21,13 @@ import (
 type (
 	// App is the main application structure.
 	App struct {
-		cli sdk.ClientPlant
-		ctr auth.Center
-		log *zap.Logger
-		cfg *viper.Viper
-		tls *tlsConfig
-		obj layer.Client
-		api api.Handler
+		pool pool.Pool
+		ctr  auth.Center
+		log  *zap.Logger
+		cfg  *viper.Viper
+		tls  *tlsConfig
+		obj  layer.Client
+		api  api.Handler
 
 		maxClients api.MaxClients
 
@@ -44,15 +44,14 @@ type (
 func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	var (
 		conns  pool.Pool
+		key    *ecdsa.PrivateKey
 		err    error
 		tls    *tlsConfig
-		cli    sdk.ClientPlant
 		caller api.Handler
 		ctr    auth.Center
 		obj    layer.Client
 
 		hcsCred hcs.Credentials
-		nfsCred neofs.Credentials
 
 		poolPeers = fetchPeers(l, v)
 
@@ -87,7 +86,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		reBalance = v
 	}
 
-	if nfsCred, err = neofs.New(nfsCredential); err != nil {
+	if key, err = crypto.LoadPrivateKey(nfsCredential); err != nil {
 		l.Fatal("could not load NeoFS private key")
 	}
 
@@ -107,7 +106,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		zap.String("NeoFS", nfsCredential))
 
 	opts := &pool.BuilderOptions{
-		Key:                     nfsCred.PrivateKey(),
+		Key:                     key,
 		NodeConnectionTimeout:   conTimeout,
 		NodeRequestTimeout:      reqTimeout,
 		ClientRebalanceInterval: reBalance,
@@ -120,29 +119,25 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	if err != nil {
 		l.Fatal("failed to create connection pool", zap.Error(err))
 	}
-	cli, err = sdk.NewClientPlant(ctx, conns, nfsCred)
-	if err != nil {
-		l.Fatal("failed to create neofs client plant")
-	}
 
 	// prepare object layer
-	obj = layer.NewLayer(l, cli)
+	obj = layer.NewLayer(l, conns)
 
 	// prepare auth center
-	ctr = auth.New(cli, hcsCred.PrivateKey())
+	ctr = auth.New(conns, hcsCred.PrivateKey())
 
 	if caller, err = handler.New(l, obj); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
 	}
 
 	return &App{
-		ctr: ctr,
-		cli: cli,
-		log: l,
-		cfg: v,
-		obj: obj,
-		tls: tls,
-		api: caller,
+		ctr:  ctr,
+		pool: conns,
+		log:  l,
+		cfg:  v,
+		obj:  obj,
+		tls:  tls,
+		api:  caller,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
