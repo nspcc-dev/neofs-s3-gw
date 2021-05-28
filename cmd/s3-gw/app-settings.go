@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-http-gw/connections"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -111,8 +111,8 @@ var ignore = map[string]struct{}{
 
 func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
-func fetchPeers(l *zap.Logger, v *viper.Viper) *connections.PoolBuilder {
-	pb := new(connections.PoolBuilder)
+func fetchPeers(l *zap.Logger, v *viper.Viper) *pool.Builder {
+	pb := new(pool.Builder)
 
 	for i := 0; ; i++ {
 		key := cfgPeers + "." + strconv.Itoa(i) + "."
