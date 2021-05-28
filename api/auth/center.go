@@ -14,10 +14,10 @@ import (
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
 	"go.uber.org/zap"
 )
 

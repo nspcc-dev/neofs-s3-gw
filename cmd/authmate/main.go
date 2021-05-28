@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
-	"github.com/nspcc-dev/neofs-http-gw/connections"
-	sdk "github.com/nspcc-dev/neofs-http-gw/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
+	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -368,20 +368,20 @@ func fetchHCSCredentials(val string) (hcs.Credentials, error) {
 func createSDKClient(ctx context.Context, log *zap.Logger, neofsCreds neofs.Credentials, peerAddress string) (sdk.ClientPlant, error) {
 	log.Debug("prepare connection pool")
 
-	pb := new(connections.PoolBuilder)
+	pb := new(pool.Builder)
 	pb.AddNode(peerAddress, 1)
 
-	opts := &connections.PoolBuilderOptions{
+	opts := &pool.BuilderOptions{
 		Key:                   neofsCreds.PrivateKey(),
 		NodeConnectionTimeout: poolConnectTimeout,
 		NodeRequestTimeout:    poolRequestTimeout,
 	}
-	pool, err := pb.Build(ctx, opts)
+	conns, err := pb.Build(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	log.Debug("prepare sdk client")
 
-	return sdk.NewClientPlant(ctx, pool, neofsCreds)
+	return sdk.NewClientPlant(ctx, conns, neofsCreds)
 }
