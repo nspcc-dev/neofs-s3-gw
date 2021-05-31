@@ -21,8 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
-	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
 
@@ -34,13 +33,13 @@ const (
 
 // Agent contains client communicating with NeoFS and logger.
 type Agent struct {
-	cli sdk.ClientPlant
-	log *zap.Logger
+	pool pool.Pool
+	log  *zap.Logger
 }
 
 // New creates an object of type Agent that consists of Client and logger.
-func New(log *zap.Logger, client sdk.ClientPlant) *Agent {
-	return &Agent{log: log, cli: client}
+func New(log *zap.Logger, conns pool.Pool) *Agent {
+	return &Agent{log: log, pool: conns}
 }
 
 type (
@@ -48,7 +47,7 @@ type (
 	IssueSecretOptions struct {
 		ContainerID           *container.ID
 		ContainerFriendlyName string
-		NEOFSCreds            neofs.Credentials
+		NeoFSKey              *ecdsa.PrivateKey
 		OwnerPrivateKey       hcs.PrivateKey
 		GatesPublicKeys       []hcs.PublicKey
 		EACLRules             []byte
@@ -75,7 +74,7 @@ type (
 )
 
 func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyName string) (*container.ID, error) {
-	conn, _, err := a.cli.ConnectionArtifacts()
+	conn, _, err := a.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
@@ -143,17 +142,16 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("failed to build eacl table: %w", err)
 	}
 
-	tkn, err := buildBearerToken(options.NEOFSCreds.PrivateKey(), options.NEOFSCreds.Owner(), table)
+	tkn, err := buildBearerToken(options.NeoFSKey, table)
 	if err != nil {
 		return fmt.Errorf("failed to build bearer token: %w", err)
 	}
 
 	a.log.Info("store bearer token into NeoFS",
-		zap.Stringer("owner_key", options.NEOFSCreds.Owner()),
 		zap.Stringer("owner_tkn", tkn.Issuer()))
 
 	address, err := bearer.
-		New(a.cli, options.OwnerPrivateKey).
+		New(a.pool, options.OwnerPrivateKey).
 		Put(ctx, cid, tkn, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
@@ -178,7 +176,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
-	bearerCreds := bearer.New(a.cli, options.GatePrivateKey)
+	bearerCreds := bearer.New(a.pool, options.GatePrivateKey)
 	address := object.NewAddress()
 	if err := address.Parse(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)
@@ -258,7 +256,13 @@ func buildEACLTable(cid *container.ID, eaclTable []byte) (*eacl.Table, error) {
 	return table, nil
 }
 
-func buildBearerToken(key *ecdsa.PrivateKey, oid *owner.ID, table *eacl.Table) (*token.BearerToken, error) {
+func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table) (*token.BearerToken, error) {
+	wallet, err := owner.NEO3WalletFromPublicKey(&key.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	oid := owner.NewIDFromNeo3Wallet(wallet)
+
 	bearerToken := token.NewBearerToken()
 	bearerToken.SetEACLTable(table)
 	bearerToken.SetOwner(oid)

@@ -22,3 +22,5 @@ require (
 	golang.org/x/text v0.3.5 // indirect
 	google.golang.org/grpc v1.36.1
 )
+
+replace github.com/nspcc-dev/neofs-sdk-go => github.com/roman-khimov/neofs-sdk-go v0.0.0-20210528201347-878f2cd855eb

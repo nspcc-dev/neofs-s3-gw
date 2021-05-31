@@ -42,7 +42,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketIn
 		}
 	)
 
-	conn, _, err := n.cli.ConnectionArtifacts()
+	conn, _, err := n.pool.Connection()
 	if err != nil {
 		n.log.Error("failed to get connection from the pool",
 			zap.String("request_id", rid),
@@ -92,7 +92,7 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 		rid = api.GetRequestID(ctx)
 	)
 
-	conn, _, err := n.cli.ConnectionArtifacts()
+	conn, _, err := n.pool.Connection()
 	if err != nil {
 		n.log.Error("failed to get connection from the pool",
 			zap.String("request_id", rid),

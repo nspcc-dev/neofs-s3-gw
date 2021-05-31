@@ -14,7 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 )
 
 type (
@@ -25,8 +25,8 @@ type (
 	}
 
 	cred struct {
-		key hcs.PrivateKey
-		obj sdk.ClientPlant
+		key  hcs.PrivateKey
+		pool pool.Pool
 	}
 )
 
@@ -46,8 +46,8 @@ var bufferPool = sync.Pool{
 var _ = New
 
 // New creates new Credentials instance using given cli and key.
-func New(cli sdk.ClientPlant, key hcs.PrivateKey) Credentials {
-	return &cred{obj: cli, key: key}
+func New(conns pool.Pool, key hcs.PrivateKey) Credentials {
+	return &cred{pool: conns, key: key}
 }
 
 func (c *cred) acquireBuffer() *bytes.Buffer {
@@ -65,7 +65,7 @@ func (c *cred) Get(ctx context.Context, address *object.Address) (*token.BearerT
 
 	box := accessbox.NewBearerBox(nil)
 
-	conn, tok, err := c.obj.ConnectionArtifacts()
+	conn, tok, err := c.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (c *cred) Put(ctx context.Context, cid *container.ID, tkn *token.BearerToke
 		return nil, err
 	}
 
-	conn, tok, err := c.obj.ConnectionArtifacts()
+	conn, tok, err := c.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
