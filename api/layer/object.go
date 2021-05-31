@@ -42,7 +42,7 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	} else if filename != "" {
 		opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
 	}
-	conn, _, err := n.cli.ConnectionArtifacts()
+	conn, _, err := n.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, address *object.Address) (*object.Object, error) {
-	conn, _, err := n.cli.ConnectionArtifacts()
+	conn, _, err := n.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (n *layer) objectHead(ctx context.Context, address *object.Address) (*objec
 
 // objectGet and write it into provided io.Reader.
 func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, error) {
-	conn, tok, err := n.cli.ConnectionArtifacts()
+	conn, tok, err := n.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	raw.SetAttributes(attributes...)
 
 	r := newDetector(p.Reader)
-	conn, tok, err := n.cli.ConnectionArtifacts()
+	conn, tok, err := n.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 // objectDelete puts tombstone object into neofs.
 func (n *layer) objectDelete(ctx context.Context, address *object.Address) error {
-	conn, _, err := n.cli.ConnectionArtifacts()
+	conn, _, err := n.pool.Connection()
 	if err != nil {
 		return err
 	}

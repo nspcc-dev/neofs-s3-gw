@@ -17,7 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
-	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
 
@@ -36,7 +36,7 @@ type (
 
 	// Params stores node connection parameters.
 	Params struct {
-		Client     sdk.ClientPlant
+		Pool       pool.Pool
 		Logger     *zap.Logger
 		Credential hcs.Credentials
 	}
@@ -55,9 +55,9 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(obj sdk.ClientPlant, key hcs.PrivateKey) Center {
+func New(conns pool.Pool, key hcs.PrivateKey) Center {
 	return &center{
-		cli: bearer.New(obj, key),
+		cli: bearer.New(conns, key),
 		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
 	}
 }

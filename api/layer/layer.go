@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
@@ -14,8 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/neofs"
-	sdk "github.com/nspcc-dev/neofs-sdk-go/pkg/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -24,16 +23,16 @@ import (
 
 type (
 	layer struct {
-		cli sdk.ClientPlant
-		log *zap.Logger
+		pool pool.Pool
+		log  *zap.Logger
 	}
 
 	// Params stores basic API parameters.
 	Params struct {
-		Pool       pool.Pool
-		Logger     *zap.Logger
-		Timeout    time.Duration
-		Credential neofs.Credentials
+		Pool    pool.Pool
+		Logger  *zap.Logger
+		Timeout time.Duration
+		Key     *ecdsa.PrivateKey
 	}
 
 	// GetObjectParams stores object get request parameters.
@@ -98,10 +97,10 @@ var (
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, cli sdk.ClientPlant) Client {
+func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 	return &layer{
-		cli: cli,
-		log: log,
+		pool: conns,
+		log:  log,
 	}
 }
 
@@ -111,12 +110,12 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 		return tkn.Issuer()
 	}
 
-	return n.cli.OwnerID()
+	return n.pool.OwnerID()
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
-	conn, tok, err := n.cli.ConnectionArtifacts()
+	conn, tok, err := n.pool.Connection()
 	if err != nil {
 		return nil, err
 	}
