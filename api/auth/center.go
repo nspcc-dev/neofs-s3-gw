@@ -21,7 +21,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id_cid>[^/]+)/(?P<access_key_id_oid>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
+var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id_cid>[^/]+)_(?P<access_key_id_oid>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
 
 type (
 	// Center is a user authentication interface.
@@ -88,10 +88,11 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
-	accessKeyID := fmt.Sprintf("%s/%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
+	accessKeyID := fmt.Sprintf("%s_%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
+	accessKeyAddress := fmt.Sprintf("%s/%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
 
 	address := object.NewAddress()
-	if err = address.Parse(accessKeyID); err != nil {
+	if err = address.Parse(accessKeyAddress); err != nil {
 		return nil, fmt.Errorf("could not parse AccessBox address: %s : %w", accessKeyID, err)
 	}
 
