@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,7 +38,7 @@ var (
 	peerAddressFlag       string
 	eaclRulesFlag         string
 	gatePrivateKeyFlag    string
-	secretAddressFlag     string
+	accessKeyIDFlag       string
 	ownerPrivateKeyFlag   string
 	containerIDFlag       string
 	containerFriendlyName string
@@ -311,10 +312,10 @@ func obtainSecret() *cli.Command {
 				Destination: &gatePrivateKeyFlag,
 			},
 			&cli.StringFlag{
-				Name:        "secret-address",
-				Usage:       "address of a secret (i.e. access key id for s3)",
+				Name:        "access-key-id",
+				Usage:       "access key id for s3",
 				Required:    true,
-				Destination: &secretAddressFlag,
+				Destination: &accessKeyIDFlag,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -342,8 +343,10 @@ func obtainSecret() *cli.Command {
 				return cli.Exit(fmt.Sprintf("failed to create owner's private key: %s", err), 4)
 			}
 
+			secretAddress := strings.Replace(accessKeyIDFlag, "_", "/", 1)
+
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
-				SecretAddress:  secretAddressFlag,
+				SecretAddress:  secretAddress,
 				GatePrivateKey: gateCreds.PrivateKey(),
 			}
 
