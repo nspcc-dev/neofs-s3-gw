@@ -162,8 +162,10 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
 
+	accessKeyID := address.ContainerID().String() + "_" + address.ObjectID().String()
+
 	ir := &issuingResult{
-		AccessKeyID:     address.String(),
+		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secret,
 		OwnerPrivateKey: options.OwnerPrivateKey.String(),
 	}
