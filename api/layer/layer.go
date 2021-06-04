@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
@@ -259,7 +259,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	return nil
 }
 
-func (n *layer) checkObject(ctx context.Context, cid *container.ID, filename string) error {
+func (n *layer) checkObject(ctx context.Context, cid *cid.ID, filename string) error {
 	var err error
 
 	if _, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err == nil {

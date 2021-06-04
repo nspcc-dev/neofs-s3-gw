@@ -14,6 +14,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
@@ -45,7 +46,7 @@ func New(log *zap.Logger, conns pool.Pool) *Agent {
 type (
 	// IssueSecretOptions contains options for passing to Agent.IssueSecret method.
 	IssueSecretOptions struct {
-		ContainerID           *container.ID
+		ContainerID           *cid.ID
 		ContainerFriendlyName string
 		NeoFSKey              *ecdsa.PrivateKey
 		OwnerPrivateKey       hcs.PrivateKey
@@ -73,7 +74,7 @@ type (
 	}
 )
 
-func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyName string) (*container.ID, error) {
+func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName string) (*cid.ID, error) {
 	conn, _, err := a.pool.Connection()
 	if err != nil {
 		return nil, err
@@ -127,7 +128,7 @@ func (a *Agent) checkContainer(ctx context.Context, cid *container.ID, friendlyN
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
 		err error
-		cid *container.ID
+		cid *cid.ID
 	)
 
 	a.log.Info("check container", zap.Stringer("cid", options.ContainerID))
@@ -238,7 +239,7 @@ func newReplica(name string, count uint32) (r *netmap.Replica) {
 	return
 }
 
-func buildEACLTable(cid *container.ID, eaclTable []byte) (*eacl.Table, error) {
+func buildEACLTable(cid *cid.ID, eaclTable []byte) (*eacl.Table, error) {
 	table := eacl.NewTable()
 	if len(eaclTable) != 0 {
 		return table, table.UnmarshalJSON(eaclTable)

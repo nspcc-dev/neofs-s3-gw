@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"google.golang.org/grpc/codes"
@@ -19,7 +19,7 @@ import (
 type (
 	findParams struct {
 		val string
-		cid *container.ID
+		cid *cid.ID
 	}
 
 	getParams struct {
