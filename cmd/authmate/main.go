@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
@@ -246,10 +246,10 @@ func issueSecret() *cli.Command {
 			}
 
 			agent := authmate.New(log, client)
-			var cid *container.ID
+			var containerID *cid.ID
 			if len(containerIDFlag) > 0 {
-				cid = container.NewID()
-				if err := cid.Parse(containerIDFlag); err != nil {
+				containerID = cid.New()
+				if err := containerID.Parse(containerIDFlag); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to parse auth container id: %s", err), 3)
 				}
 			}
@@ -269,7 +269,7 @@ func issueSecret() *cli.Command {
 			}
 
 			issueSecretOptions := &authmate.IssueSecretOptions{
-				ContainerID:           cid,
+				ContainerID:           containerID,
 				ContainerFriendlyName: containerFriendlyName,
 				NeoFSKey:              key,
 				OwnerPrivateKey:       owner.PrivateKey(),

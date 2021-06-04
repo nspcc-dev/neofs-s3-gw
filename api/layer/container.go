@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"go.uber.org/zap"
@@ -15,7 +16,7 @@ type (
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
 		Name    string
-		CID     *container.ID
+		CID     *cid.ID
 		Owner   *owner.ID
 		Created time.Time
 	}
@@ -30,7 +31,7 @@ type (
 	}
 )
 
-func (n *layer) containerInfo(ctx context.Context, cid *container.ID) (*BucketInfo, error) {
+func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, error) {
 	var (
 		err error
 		res *container.Container
@@ -88,7 +89,7 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	var (
 		err error
 		own = n.Owner(ctx)
-		res []*container.ID
+		res []*cid.ID
 		rid = api.GetRequestID(ctx)
 	)
 
