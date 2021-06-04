@@ -141,3 +141,87 @@ S3_GW_PEERS_[N]_WEIGHT = 0..1 (float)
 | 58  | PutObjectTagging          | Unsupported             |
 | 59  | SelectObjectContent       | Unsupported             |
 
+## NeoFS AuthMate
+
+#### Generation of key pairs
+
+To generate key pairs for gates, run the following command: 
+
+```
+$ ./neofs-authmate generate-keys --count=2
+
+[
+  {
+    "private_key": "b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21",
+    "public_key": "dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64"
+  },
+  {
+    "private_key": "407c351b17446ca07521faceb8b7d3e738319635f39f892419e2bf94462b4419",
+    "public_key": "20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156"
+  }
+]
+```
+
+#### Issuing of a secret
+
+To issue a secret means to create a Bearer token and put it into a container in 
+the NeoFS network as an object. 
+
+If a parameter `container-id`  is not set, a new container will be created.
+
+If a parameter `rules` is not set, it will be auto-generated with values: 
+
+```
+{
+    "version": {
+        "major": 2,
+        "minor": 6
+    },
+    "containerID": {
+        "value": "%CID"
+    },
+    "records": [
+        {
+            "operation": "GET",
+            "action": "ALLOW",
+            "filters": [],
+            "targets": [
+                {
+                    "role": "OTHERS",
+                    "keys": []
+                }
+            ]
+        }
+    ]
+}
+```
+
+Example of a command to issue a secret with custom rules for multiple gates:
+```
+$ ./neofs-authmate issue-secret --neofs-key user.key \
+--peer 192.168.130.71:8080 \ 
+--rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \ 
+--gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
+--gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156
+
+{
+  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
+  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
+  "owner_private_key": "274fdd6e71fc6a6b8fe77bec500254115d66d6d17347d7db0880d2eb80afc72a"
+}
+```
+
+#### Obtaining of a secret
+
+Example of a command for obtaining of a secret stored in the NeoFS network:
+ 
+ ```
+ $ ./neofs-authmate obtain-secret --neofs-key user.key \
+ --peer 192.168.130.71:8080 \
+ --gate-private-key b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21 \
+ --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
+
+{
+  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c"
+}
+```
