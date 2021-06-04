@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/stretchr/testify/require"
@@ -83,11 +83,11 @@ func testNameFromObjectName(name string) (string, string) {
 func Test_objectInfoFromMeta(t *testing.T) {
 	uid := owner.NewID()
 	oid := object.NewID()
-	cid := container.NewID()
+	containerID := cid.New()
 
 	bkt := &BucketInfo{
 		Name:    "test-container",
-		CID:     cid,
+		CID:     containerID,
 		Owner:   uid,
 		Created: time.Now(),
 	}

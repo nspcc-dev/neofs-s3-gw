@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
@@ -21,7 +21,7 @@ type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
 		Get(context.Context, *object.Address) (*token.BearerToken, error)
-		Put(context.Context, *container.ID, *token.BearerToken, ...hcs.PublicKey) (*object.Address, error)
+		Put(context.Context, *cid.ID, *token.BearerToken, ...hcs.PublicKey) (*object.Address, error)
 	}
 
 	cred struct {
@@ -88,7 +88,7 @@ func (c *cred) Get(ctx context.Context, address *object.Address) (*token.BearerT
 	return box.Token(), nil
 }
 
-func (c *cred) Put(ctx context.Context, cid *container.ID, tkn *token.BearerToken, keys ...hcs.PublicKey) (*object.Address, error) {
+func (c *cred) Put(ctx context.Context, cid *cid.ID, tkn *token.BearerToken, keys ...hcs.PublicKey) (*object.Address, error) {
 	var (
 		err error
 		buf = c.acquireBuffer()
