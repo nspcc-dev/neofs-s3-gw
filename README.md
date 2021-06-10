@@ -49,6 +49,16 @@ $ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 \
   S3_GW_AUTH-KEY=a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab \
   neofs-s3-gw
 ```
+It's also possible to specify uri scheme (grpc or grpcs) when using `-p` or environment variables:
+```
+$ neofs-s3-gw -p grpc://192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
+  --auth-key a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab
+
+$ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
+  S3_GW_NEOFS-KEY=KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
+  S3_GW_AUTH-KEY=a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab \
+  neofs-s3-gw
+```
 
 ## Configuration
 
