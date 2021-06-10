@@ -1,81 +1,116 @@
-# NeoFS S3 Gate
+# NeoFS S3 Gateway
 
-S3Gate provides API compatible with Amazon S3 cloud storage service.
+NeoFS S3 gateway provides API compatible with Amazon S3 cloud storage service.
 
-## Notable make targets
+## Installation
 
-```
-  Usage:
+```go get -u github.com/nspcc-dev/neofs-s3-gw```
 
-    make <target>
+Or you can call `make` to build it from the cloned repository (the binary will
+end up in `bin/neofs-s3-gw` with authmate helper in `bin/neofs-authmate`).
 
-  Targets:
-
-    deps      Check and ensure dependencies
-    format    Reformat code
-    help      Show this help prompt
-    image     Build current docker image
-    publish   Publish docker image
-    version   Show current version
-```
-
-## Example of configuration
+Notable make targets:
 
 ```
-# Flags
-      --pprof                           enable pprof
-      --metrics                         enable prometheus metrics
-  -h, --help                            show help
-  -v, --version                         show version
-      --neofs-key string                set value to hex string, WIF string, or path to NeoFS private key file
-      --auth-key string                 set path to file with auth (curve25519) private key to use in auth scheme
-      --verbose                         set debug mode of gRPC connections
-      --request_timeout duration        set gRPC request timeout (default 15s)
-      --connect_timeout duration        set gRPC connect timeout (default 30s)
-      --rebalance_timer duration        set gRPC connection rebalance timer (default 15s)
-      --max_clients_count int           set max-clients count (default 100)
-      --max_clients_deadline duration   set max-clients deadline (default 30s)
-  -t, --con_ttl duration                set gRPC connection time to live (default 5m0s)
-      --listen_address string           set address to listen (default "0.0.0.0:8080")
-  -p, --peers stringArray               set NeoFS nodes
-  -d, --listen_domains stringArray      set domains to be listened
-
-# Environments
-
-S3_GW_AUTH-KEY = 
-S3_GW_NEOFS-KEY =
-S3_GW_CON_TTL = 5m0s
-S3_GW_CONNECT_TIMEOUT = 30s
-S3_GW_REBALANCE_TIMER = 15s
-S3_GW_REQUEST_TIMEOUT = 15s
-S3_GW_KEEPALIVE_PERMIT_WITHOUT_STREAM = true
-S3_GW_KEEPALIVE_TIME = 10s
-S3_GW_KEEPALIVE_TIMEOUT = 10s
-S3_GW_LISTEN_ADDRESS = 0.0.0.0:8080
-S3_GW_LISTEN_DOMAINS = []
-S3_GW_LOGGER_FORMAT = console
-S3_GW_LOGGER_LEVEL = debug
-S3_GW_LOGGER_NO_CALLER = false
-S3_GW_LOGGER_NO_DISCLAIMER = true
-S3_GW_LOGGER_SAMPLING_INITIAL = 1000
-S3_GW_LOGGER_SAMPLING_THEREAFTER = 1000
-S3_GW_LOGGER_TRACE_LEVEL = panic
-S3_GW_MAX_CLIENTS_COUNT = 100
-S3_GW_MAX_CLIENTS_DEADLINE = 30s
-S3_GW_METRICS = false
-S3_GW_PPROF = false
-S3_GW_VERBOSE = false
-
-# Peers preset
-
-S3_GW_PEERS_[N]_ADDRESS = string
-S3_GW_PEERS_[N]_WEIGHT = 0..1 (float)
+dep          Check and ensure dependencies
+image        Build clean docker image
+dirty-image  Build dirty docker image with host-built binaries
+format       Run all code formatters
+lint         Run linters
+version      Show current version
 ```
 
-## Reference Resources
+Or you can also use a [Docker
+image](https://hub.docker.com/r/nspccdev/neofs-s3-gw) provided for released
+(and occasionally unreleased) versions of gateway (`:latest` points to the
+latest stable release).
 
+## Execution
+
+Minimalistic S3 gateway setup needs:
+ * NeoFS node(s) address (S3 gateway itself is not a NeoFS node)
+   Passed via `-p` parameter or via `S3_GW_PEERS_<N>_ADDRESS` and
+   `S3_GW_PEERS_<N>_WEIGHT` environment variables (gateway supports multiple
+   NeoFS nodes with weighted load balancing).
+ * a key used to communicate with NeoFS nodes
+   Passed via `--neofs-key` parameter or `S3_GW_NEOFS-KEY` environment variable.
+ * a key used for client authentication
+   Passed via `--auth-key` parameter or `S3_GW_AUTH-KEY` environment variable.
+   To generate it use `neofs-authmate generate-keys` command.
+
+These two commands are functionally equivalent, they run the gate with one
+backend node, some keys and otherwise default settings:
+```
+$ neofs-s3-gw -p 192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
+  --auth-key a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab
+
+$ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 \
+  S3_GW_NEOFS-KEY=KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
+  S3_GW_AUTH-KEY=a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab \
+  neofs-s3-gw
+```
+
+## Configuration
+
+In general, everything available as CLI parameter can also be specified via
+environment variables, so they're not specifically mentioned in most cases
+(see `--help` also).
+
+### Nodes and weights
+
+You can specify multiple `-p` options to add more NeoFS nodes, this will make
+gateway spread requests equally among them (using weight 1 for every node):
+
+```
+$ neofs-s3-gw -p 192.168.130.72:8080 -p 192.168.130.71:8080
+```
+If you want some specific load distribution proportions, use weights, but they
+can only be specified via environment variables:
+
+```
+$ HTTP_GW_PEERS_0_ADDRESS=192.168.130.72:8080 HTTP_GW_PEERS_0_WEIGHT=9 \
+  HTTP_GW_PEERS_1_ADDRESS=192.168.130.71:8080 HTTP_GW_PEERS_1_WEIGHT=1 neofs-s3-gw
+```
+This command will make gateway use 192.168.130.72 for 90% of requests and
+192.168.130.71 for remaining 10%.
+
+### Keys
+
+NeoFS (`--neofs-key`) and authentication (`--auth-key`) keys are mandatory
+parameters. NeoFS key can be a path to private key file (as raw bytes), a hex
+string or (unencrypted) WIF string. Authentication key is either a path to
+raw private key file or a hex string.
+
+### Binding and TLS
+
+Gateway binds to `0.0.0.0:8080` by default and you can change that with
+`--listen_address` option.
+
+It can also provide TLS interface for its users, just specify paths to key and
+certificate files via `--tls.key_file` and `--tls.cert_file` parameters. Note
+that using these options makes gateway TLS-only, if you need to serve both TLS
+and plain text you either have to run two gateway instances or use some
+external redirecting solution.
+
+Example to bind to `192.168.130.130:443` and serve TLS there (keys and nodes
+omitted):
+
+```
+$ neofs-s3-gw --listen_address 192.168.130.130:443 \
+  --tls.key_file=key.pem --tls.cert_file=cert.pem
+```
+
+### Monitoring and metrics
+
+Pprof and Prometheus are integrated into the gateway, but not enabled by
+default. To enable them use `--pprof` and `--metrics` flags or
+`HTTP_GW_PPROF`/`HTTP_GW_METRICS` environment variables.
+
+
+## S3 API supported
+
+Reference:
 * [AWS S3 API Reference](https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf)
-
 
 ### Bucket/Object-Level Actions
 
@@ -143,9 +178,28 @@ S3_GW_PEERS_[N]_WEIGHT = 0..1 (float)
 
 ## NeoFS AuthMate
 
+Authmate is a tool to create gateway key pairs and AWS credentials. AWS users
+are authenticated with access key IDs and secrets, while NeoFS users are
+authenticated with key pairs. To complicate things further we have S3 gateway
+that usually acts on behalf of some user, but user doesn't necessarily want to
+give his keys to the gateway.
+
+To solve this we use NeoFS bearer tokens that are signed by the owner (NeoFS
+"user") and that can implement any kind of policy for NeoFS requests allowed
+using this token. But tokens can't be used directly as AWS credentials, thus
+they're stored on NeoFS as regular objects and access key ID is just an
+address of this object while secret is an SHA256 hash of this key.
+
+Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
+gateway keys. So in order for gateway to be able to successfully extract bearer
+token the object needs to be stored in a container available for the gateway
+to read and it needs to be encrypted with this gateway's key (among others
+potentially).
+
 #### Generation of key pairs
 
-To generate key pairs for gates, run the following command: 
+To generate key pairs for gateways, run the following command (`--count` is 1
+by default):
 
 ```
 $ ./neofs-authmate generate-keys --count=2
@@ -162,10 +216,14 @@ $ ./neofs-authmate generate-keys --count=2
 ]
 ```
 
-#### Issuing of a secret
+Private key is the one to use for `neofs-s3-gw` command, public one can be
+used to create new AWS credentials.
 
-To issue a secret means to create a Bearer token and put it into a container in 
-the NeoFS network as an object. 
+#### Issuance of a secret
+
+To issue a secret means to create a Bearer token and put it as an object into
+container on the NeoFS network. The token is encrypted by a set of gateway
+keys, so you need to pass them as well.
 
 If a parameter `container-id`  is not set, a new container will be created.
 
@@ -211,9 +269,13 @@ $ ./neofs-authmate issue-secret --neofs-key user.key \
 }
 ```
 
-#### Obtaining of a secret
+Access key ID and secret access key are AWS credentials that you can use with
+any S3 client.
 
-Example of a command for obtaining of a secret stored in the NeoFS network:
+#### Obtainment of a secret access key
+
+You can get a secret access key associated with access key ID by obtaining a
+secret stored on the NeoFS network:
  
  ```
  $ ./neofs-authmate obtain-secret --neofs-key user.key \
