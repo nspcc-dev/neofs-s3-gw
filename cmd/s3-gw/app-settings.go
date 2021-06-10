@@ -184,6 +184,9 @@ func newSettings() *viper.Viper {
 	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "set gRPC connection time to live")
 
 	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
+	flags.String(cfgTLSCertFile, "", "TLS certificate file to use")
+	flags.String(cfgTLSKeyFile, "", "TLS key file to use")
+
 	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
 
 	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
