@@ -19,17 +19,17 @@ var BearerTokenKey = KeyWrapper("__context_bearer_token_key")
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 	router.Use(func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var ctx context.Context
 			token, err := center.Authenticate(r)
 			if err != nil {
-				log.Error("failed to pass authentication", zap.Error(err))
-				WriteErrorResponse(r.Context(), w, GetAPIError(ErrAccessDenied), r.URL)
-				return
-			}
-
-			var ctx context.Context
-			if token == nil {
-				log.Info("couldn't receive bearer token, switch to use neofs-key")
-				ctx = r.Context()
+				if err == auth.ErrNoAuthorizationHeader {
+					log.Debug("couldn't receive bearer token, using neofs-key")
+					ctx = r.Context()
+				} else {
+					log.Error("failed to pass authentication", zap.Error(err))
+					WriteErrorResponse(r.Context(), w, GetAPIError(ErrAccessDenied), r.URL)
+					return
+				}
 			} else {
 				ctx = context.WithValue(r.Context(), BearerTokenKey, token)
 			}
