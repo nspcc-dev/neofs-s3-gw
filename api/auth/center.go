@@ -70,7 +70,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 
 	authHeaderField := r.Header["Authorization"]
 	if len(authHeaderField) != 1 {
-		return nil, errors.New("unsupported request: wrong length of Authorization header field")
+		return nil, nil
 	}
 
 	sms1 := c.reg.getSubmatches(authHeaderField[0])

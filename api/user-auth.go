@@ -26,8 +26,15 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 				return
 			}
 
-			h.ServeHTTP(w, r.WithContext(
-				context.WithValue(r.Context(), BearerTokenKey, token)))
+			var ctx context.Context
+			if token == nil {
+				log.Info("couldn't receive bearer token, switch to use neofs-key")
+				ctx = r.Context()
+			} else {
+				ctx = context.WithValue(r.Context(), BearerTokenKey, token)
+			}
+
+			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
 }
