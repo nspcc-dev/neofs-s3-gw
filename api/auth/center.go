@@ -44,6 +44,8 @@ type (
 	prs int
 )
 
+var ErrNoAuthorizationHeader = errors.New("no authorization header")
+
 func (p prs) Read(_ []byte) (n int, err error) {
 	panic("implement me")
 }
@@ -70,7 +72,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 
 	authHeaderField := r.Header["Authorization"]
 	if len(authHeaderField) != 1 {
-		return nil, nil
+		return nil, ErrNoAuthorizationHeader
 	}
 
 	sms1 := c.reg.getSubmatches(authHeaderField[0])
