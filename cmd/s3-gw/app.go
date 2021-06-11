@@ -111,9 +111,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		NodeRequestTimeout:      reqTimeout,
 		ClientRebalanceInterval: reBalance,
 		SessionExpirationEpoch:  math.MaxUint64,
-		KeepaliveTime:           v.GetDuration(cfgKeepaliveTime),
-		KeepaliveTimeout:        v.GetDuration(cfgKeepaliveTimeout),
-		KeepalivePermitWoStream: v.GetBool(cfgKeepalivePermitWithoutStream),
 	}
 	conns, err = poolPeers.Build(ctx, opts)
 	if err != nil {

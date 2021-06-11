@@ -45,11 +45,6 @@ const ( // Settings.
 	cfgLoggerSamplingInitial    = "logger.sampling.initial"
 	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
 
-	// KeepAlive.
-	cfgKeepaliveTime                = "keepalive.time"
-	cfgKeepaliveTimeout             = "keepalive.timeout"
-	cfgKeepalivePermitWithoutStream = "keepalive.permit_without_stream"
-
 	// Keys.
 	cfgNeoFSPrivateKey    = "neofs-key"
 	cfgGateAuthPrivateKey = "auth-key"
@@ -205,12 +200,6 @@ func newSettings() *viper.Viper {
 	v.SetDefault(cfgLoggerNoDisclaimer, true)
 	v.SetDefault(cfgLoggerSamplingInitial, 1000)
 	v.SetDefault(cfgLoggerSamplingThereafter, 1000)
-
-	// keepalive:
-	// If set below 10s, a minimum value of 10s will be used instead.
-	v.SetDefault(cfgKeepaliveTime, defaultKeepaliveTime)
-	v.SetDefault(cfgKeepaliveTimeout, defaultKeepaliveTimeout)
-	v.SetDefault(cfgKeepalivePermitWithoutStream, true)
 
 	if err := v.BindPFlags(flags); err != nil {
 		panic(err)
