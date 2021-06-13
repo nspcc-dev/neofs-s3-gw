@@ -132,7 +132,17 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 
 	containerID := new(cid.ID)
 	if err := containerID.Parse(name); err != nil {
-		return nil, err
+		list, err := n.containerList(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bkt := range list {
+			if bkt.Name == name {
+				return bkt, nil
+			}
+		}
+
+		return nil, status.Error(codes.NotFound, "bucket not found")
 	}
 
 	return n.containerInfo(ctx, containerID)
