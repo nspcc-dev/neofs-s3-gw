@@ -15,8 +15,8 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
@@ -31,7 +31,7 @@ type (
 
 	center struct {
 		reg *regexpSubmatcher
-		cli bearer.Credentials
+		cli tokens.Credentials
 	}
 
 	// Params stores node connection parameters.
@@ -57,7 +57,7 @@ var _ io.ReadSeeker = prs(0)
 // New creates an instance of AuthCenter.
 func New(conns pool.Pool, key hcs.PrivateKey) Center {
 	return &center{
-		cli: bearer.New(conns, key),
+		cli: tokens.New(conns, key),
 		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
 	}
 }
@@ -96,7 +96,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, fmt.Errorf("could not parse AccessBox address: %s : %w", accessKeyID, err)
 	}
 
-	tkn, err := c.cli.Get(r.Context(), address)
+	tkn, err := c.cli.GetBearerToken(r.Context(), address)
 	if err != nil {
 		return nil, err
 	}
