@@ -1,4 +1,4 @@
-package bearer
+package tokens
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
@@ -20,8 +22,9 @@ import (
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
-		Get(context.Context, *object.Address) (*token.BearerToken, error)
-		Put(context.Context, *cid.ID, *token.BearerToken, ...hcs.PublicKey) (*object.Address, error)
+		GetBearerToken(context.Context, *object.Address) (*token.BearerToken, error)
+		GetSessionToken(context.Context, *object.Address) (*session.Token, error)
+		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, ...hcs.PublicKey) (*object.Address, error)
 	}
 
 	cred struct {
@@ -59,11 +62,39 @@ func (c *cred) releaseBuffer(buf *bytes.Buffer) {
 	bufferPool.Put(buf)
 }
 
-func (c *cred) Get(ctx context.Context, address *object.Address) (*token.BearerToken, error) {
-	buf := c.acquireBuffer()
-	defer c.releaseBuffer(buf)
+func (c *cred) GetBearerToken(ctx context.Context, address *object.Address) (*token.BearerToken, error) {
+	box, err := c.getAccessBox(ctx, address)
+	if err != nil {
+		return nil, err
+	}
 
-	box := accessbox.NewBearerBox(nil)
+	tkn, err := box.GetBearerToken(c.key)
+	if err != nil {
+		return nil, err
+	}
+	return tkn, nil
+}
+
+func (c *cred) GetSessionToken(ctx context.Context, address *object.Address) (*session.Token, error) {
+	box, err := c.getAccessBox(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+
+	tkn, err := box.GetSessionToken(c.key)
+	if err != nil {
+		return nil, err
+	}
+
+	return tkn, nil
+}
+
+func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*accessbox.AccessBox, error) {
+	var (
+		box accessbox.AccessBox
+		buf = c.acquireBuffer()
+	)
+	defer c.releaseBuffer(buf)
 
 	conn, tok, err := c.pool.Connection()
 	if err != nil {
@@ -80,30 +111,25 @@ func (c *cred) Get(ctx context.Context, address *object.Address) (*token.BearerT
 		return nil, err
 	}
 
-	err = accessbox.NewDecoder(buf, c.key).Decode(box)
-	if err != nil {
+	if err = box.Unmarshal(buf.Bytes()); err != nil {
 		return nil, err
 	}
-
-	return box.Token(), nil
+	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, cid *cid.ID, tkn *token.BearerToken, keys ...hcs.PublicKey) (*object.Address, error) {
+func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, keys ...hcs.PublicKey) (*object.Address, error) {
 	var (
 		err error
-		buf = c.acquireBuffer()
-		box = accessbox.NewBearerBox(tkn)
-
 		created = strconv.FormatInt(time.Now().Unix(), 10)
 	)
 
-	defer c.releaseBuffer(buf)
-
 	if len(keys) == 0 {
 		return nil, ErrEmptyPublicKeys
-	} else if tkn == nil {
+	} else if box == nil {
 		return nil, ErrEmptyBearerToken
-	} else if err = accessbox.NewEncoder(buf, c.key, keys...).Encode(box); err != nil {
+	}
+	data, err := box.Marshal()
+	if err != nil {
 		return nil, err
 	}
 
@@ -121,10 +147,10 @@ func (c *cred) Put(ctx context.Context, cid *cid.ID, tkn *token.BearerToken, key
 
 	raw := object.NewRaw()
 	raw.SetContainerID(cid)
-	raw.SetOwnerID(tkn.Issuer())
+	raw.SetOwnerID(issuer)
 	raw.SetAttributes(filename, timestamp)
 
-	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(buf)
+	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(bytes.NewBuffer(data))
 	oid, err := conn.PutObject(
 		ctx,
 		ops,

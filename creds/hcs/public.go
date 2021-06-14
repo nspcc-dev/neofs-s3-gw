@@ -26,7 +26,8 @@ func (p *public) WriteTo(w io.Writer) (int64, error) {
 	return int64(pl), err
 }
 
-func publicKeyFromBytes(v []byte) (PublicKey, error) {
+// PublicKeyFromBytes reads a public key from given bytes.
+func PublicKeyFromBytes(v []byte) (PublicKey, error) {
 	pub := public(v)
 	return &pub, nil
 }
@@ -37,7 +38,7 @@ func publicKeyFromString(val string) (PublicKey, error) {
 		return nil, err
 	}
 
-	return publicKeyFromBytes(v)
+	return PublicKeyFromBytes(v)
 }
 
 // NewPublicKeyFromReader reads new public key from given reader.
@@ -47,7 +48,7 @@ func NewPublicKeyFromReader(r io.Reader) (PublicKey, error) {
 		return nil, err
 	}
 
-	return publicKeyFromBytes(data)
+	return PublicKeyFromBytes(data)
 }
 
 // LoadPublicKey loads public key from given file or (serialized) string.
@@ -61,5 +62,5 @@ func LoadPublicKey(val string) (PublicKey, error) {
 		return nil, err
 	}
 
-	return publicKeyFromBytes(data)
+	return PublicKeyFromBytes(data)
 }

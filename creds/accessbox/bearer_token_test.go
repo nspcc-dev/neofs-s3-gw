@@ -1,12 +1,9 @@
 package accessbox
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/binary"
-	"strconv"
 	"testing"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
@@ -15,9 +12,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_encrypt_decrypt(t *testing.T) {
-	tkn := token.NewBearerToken()
-	box := NewBearerBox(tkn)
+func Test_tokens_encode_decode(t *testing.T) {
+	var (
+		tkn  = token.NewBearerToken()
+		tkn2 = token.NewBearerToken()
+	)
+	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	cred, err := hcs.Generate(rand.Reader)
+	require.NoError(t, err)
+
+	tkn.SetEACLTable(eacl.NewTable())
+	require.NoError(t, tkn.SignToken(sec))
+
+	data, err := encodeToken(tkn, cred.PrivateKey(), cred.PublicKey())
+	require.NoError(t, err)
+
+	err = decodeToken(data, tkn2, cred.PrivateKey(), cred.PublicKey())
+	require.NoError(t, err)
+
+	require.Equal(t, tkn, tkn2)
+}
+
+func Test_bearer_token_in_access_box(t *testing.T) {
+	var (
+		box, box2 AccessBox
+		tkn       = token.NewBearerToken()
+	)
 
 	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -27,92 +49,30 @@ func Test_encrypt_decrypt(t *testing.T) {
 
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
+
+	box.SetOwnerPublicKey(cred.PublicKey())
+
+	err = box.AddBearerToken(tkn, cred.PrivateKey(), cred.PublicKey())
+	require.NoError(t, err)
 
 	data, err := box.Marshal()
 	require.NoError(t, err)
 
-	encrypted, err := encrypt(cred.PrivateKey(), cred.PublicKey(), data)
+	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	decrypted, err := decrypt(cred.PrivateKey(), cred.PublicKey(), encrypted)
+	tkn2, err := box2.GetBearerToken(cred.PrivateKey())
 	require.NoError(t, err)
 
-	require.Equal(t, data, decrypted)
+	require.Equal(t, tkn, tkn2)
 }
 
-func Test_encrypt_decrypt_step_by_step(t *testing.T) {
-	tkn := token.NewBearerToken()
-	box := NewBearerBox(tkn)
+func Test_accessbox_multiple_keys(t *testing.T) {
+	var (
+		box AccessBox
+		tkn = token.NewBearerToken()
+	)
 
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	cred, err := hcs.Generate(rand.Reader)
-	require.NoError(t, err)
-
-	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(sec))
-
-	data, err := box.Marshal()
-	require.NoError(t, err)
-
-	buf := new(bytes.Buffer)
-	_, err = cred.PublicKey().WriteTo(buf)
-	require.NoError(t, err)
-
-	encrypted, err := encrypt(cred.PrivateKey(), cred.PublicKey(), data)
-	require.NoError(t, err)
-
-	length := len(encrypted)
-	temp := make([]byte, length+binary.MaxVarintLen64)
-	size := binary.PutVarint(temp, int64(length))
-	copy(temp[size:], encrypted)
-	buf.Write(temp[:length+size])
-
-	sender, err := hcs.NewPublicKeyFromReader(buf)
-	require.NoError(t, err)
-
-	require.Equal(t, cred.PublicKey(), sender)
-
-	ln, err := binary.ReadVarint(buf)
-	require.NoError(t, err)
-	require.Equal(t, int64(length), ln)
-
-	enc := make([]byte, ln)
-	n, err := buf.Read(enc)
-	require.NoError(t, err)
-	require.Equal(t, length, n)
-	require.Equal(t, encrypted, enc)
-
-	decrypted, err := decrypt(cred.PrivateKey(), sender, enc)
-	require.NoError(t, err)
-	require.Equal(t, data, decrypted)
-}
-
-func TestSingleKey_AccessBox(t *testing.T) {
-	tkn := token.NewBearerToken()
-	expect := NewBearerBox(tkn)
-	actual := NewBearerBox(nil)
-
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	cred, err := hcs.Generate(rand.Reader)
-	require.NoError(t, err)
-
-	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(sec))
-
-	data, err := Encode(expect, cred.PrivateKey(), cred.PublicKey())
-	require.NoError(t, err)
-
-	require.NoError(t, Decode(data, actual, cred.PrivateKey()))
-	require.Equal(t, expect, actual)
-}
-
-func TestBearerToken_AccessBox(t *testing.T) {
-	tkn := token.NewBearerToken()
-	box := NewBearerBox(tkn)
 	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
@@ -135,27 +95,41 @@ func TestBearerToken_AccessBox(t *testing.T) {
 		}
 	}
 
-	buf := new(bytes.Buffer)
-	require.NoError(t, NewEncoder(buf, cred.PrivateKey(), pubs...).Encode(box))
+	box.SetOwnerPublicKey(cred.PublicKey())
 
-	data := buf.Bytes()
+	err = box.AddBearerToken(tkn, cred.PrivateKey(), pubs...)
+	require.NoError(t, err)
 
-	for i := range keys {
-		key := keys[i]
-		t.Run("try with key "+strconv.Itoa(i), func(t *testing.T) {
-			r := bytes.NewReader(data)
-			nbx := NewBearerBox(nil)
-			require.NoError(t, NewDecoder(r, key).Decode(nbx))
-			require.Equal(t, tkn, nbx.Token())
-		})
+	for i, k := range keys {
+		tkn2, err := box.GetBearerToken(k)
+		require.NoError(t, err, "key #%d: %s failed", i, k)
+		require.Equal(t, tkn2, tkn)
 	}
+}
 
-	t.Run("should fail for unknown key", func(t *testing.T) {
-		cred, err = hcs.Generate(rand.Reader)
-		require.NoError(t, err)
+func Test_unknown_key(t *testing.T) {
+	var (
+		box AccessBox
+		tkn = token.NewBearerToken()
+	)
 
-		r := bytes.NewReader(data)
-		nbx := NewBearerBox(nil)
-		require.EqualError(t, NewDecoder(r, cred.PrivateKey()).Decode(nbx), "chacha20poly1305: message authentication failed")
-	})
+	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	cred, err := hcs.Generate(rand.Reader)
+	require.NoError(t, err)
+
+	wrongCred, err := hcs.Generate(rand.Reader)
+	require.NoError(t, err)
+
+	tkn.SetEACLTable(eacl.NewTable())
+	require.NoError(t, tkn.SignToken(sec))
+
+	box.SetOwnerPublicKey(cred.PublicKey())
+
+	err = box.AddBearerToken(tkn, cred.PrivateKey(), cred.PublicKey())
+	require.NoError(t, err)
+
+	_, err = box.GetBearerToken(wrongCred.PrivateKey())
+	require.Error(t, err)
 }
