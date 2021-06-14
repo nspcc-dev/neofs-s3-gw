@@ -109,3 +109,12 @@ help:
 # Clean up
 clean:
 	rm -rf $(BINDIR)
+
+protoc:
+	# Protoc generate
+	@for f in `find . -type f -name '*.proto' -not -path './vendor/*'`; do \
+		echo "⇒ Processing $$f "; \
+		protoc \
+			--go_out=paths=source_relative:. $$f; \
+	done
+	rm -rf vendor

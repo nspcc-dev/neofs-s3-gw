@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/aws/aws-sdk-go v1.37.9
+	github.com/golang/protobuf v1.4.3
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/nspcc-dev/neofs-api-go v1.27.0
@@ -21,4 +22,5 @@ require (
 	golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073 // indirect
 	golang.org/x/text v0.3.5 // indirect
 	google.golang.org/grpc v1.36.1
+	google.golang.org/protobuf v1.25.0
 )
