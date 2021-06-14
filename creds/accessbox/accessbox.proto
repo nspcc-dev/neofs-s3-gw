@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package accessbox;
+
+option go_package = "github.com/nspcc-dev/neofs-s3-gw/creds/tokenbox;accessbox";
+
+
+
+message AccessBox {
+    message Token {
+        bytes token = 1 [json_name = "token"];
+        bytes gatePublicKey = 2 [json_name = "gatePublicKey"];
+    }
+
+    bytes ownerPublicKey = 1 [json_name = "oownerPublicKey"];
+    repeated Token bearerTokens = 2 [json_name = "bearerTokens"];
+    repeated Token sessionTokens = 3 [json_name = "sessionTokens"];
+}
+
