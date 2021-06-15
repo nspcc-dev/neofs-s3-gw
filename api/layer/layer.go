@@ -115,12 +115,8 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
-	conn, tok, err := n.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
 	ops := new(client.GetObjectParams).WithAddress(address)
-	return conn.GetObject(ctx, ops, client.WithSession(tok))
+	return n.pool.GetObject(ctx, ops)
 }
 
 // GetBucketInfo returns bucket info by name.
