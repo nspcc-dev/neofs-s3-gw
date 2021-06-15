@@ -20,8 +20,9 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/bearer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
@@ -129,6 +130,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	var (
 		err error
 		cid *cid.ID
+		box accessbox.AccessBox
 	)
 
 	a.log.Info("check container", zap.Stringer("cid", options.ContainerID))
@@ -148,12 +150,18 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("failed to build bearer token: %w", err)
 	}
 
+	box.SetOwnerPublicKey(options.OwnerPrivateKey.PublicKey())
+	err = box.AddBearerToken(tkn, options.OwnerPrivateKey, options.GatesPublicKeys...)
+	if err != nil {
+		return fmt.Errorf("failed to add token to accessbox: %w", err)
+	}
+
 	a.log.Info("store bearer token into NeoFS",
 		zap.Stringer("owner_tkn", tkn.Issuer()))
 
-	address, err := bearer.
+	address, err := tokens.
 		New(a.pool, options.OwnerPrivateKey).
-		Put(ctx, cid, tkn, options.GatesPublicKeys...)
+		Put(ctx, cid, tkn.Issuer(), &box, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
@@ -179,13 +187,13 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
-	bearerCreds := bearer.New(a.pool, options.GatePrivateKey)
+	bearerCreds := tokens.New(a.pool, options.GatePrivateKey)
 	address := object.NewAddress()
 	if err := address.Parse(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
-	tkn, err := bearerCreds.Get(ctx, address)
+	tkn, err := bearerCreds.GetBearerToken(ctx, address)
 	if err != nil {
 		return fmt.Errorf("failed to get bearer token: %w", err)
 	}
