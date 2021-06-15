@@ -96,16 +96,11 @@ func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*acce
 	)
 	defer c.releaseBuffer(buf)
 
-	conn, tok, err := c.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
 	ops := new(client.GetObjectParams).WithAddress(address).WithPayloadWriter(buf)
 
-	_, err = conn.GetObject(
+	_, err := c.pool.GetObject(
 		ctx,
 		ops,
-		client.WithSession(tok),
 	)
 	if err != nil {
 		return nil, err
@@ -133,10 +128,6 @@ func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *acce
 		return nil, err
 	}
 
-	conn, tok, err := c.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
 	timestamp := object.NewAttribute()
 	timestamp.SetKey(object.AttributeTimestamp)
 	timestamp.SetValue(created)
@@ -151,10 +142,9 @@ func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *acce
 	raw.SetAttributes(filename, timestamp)
 
 	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(bytes.NewBuffer(data))
-	oid, err := conn.PutObject(
+	oid, err := c.pool.PutObject(
 		ctx,
 		ops,
-		client.WithSession(tok),
 	)
 	if err != nil {
 		return nil, err

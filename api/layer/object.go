@@ -42,11 +42,7 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	} else if filename != "" {
 		opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
 	}
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
-	return conn.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts))
+	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts))
 }
 
 // objectFindID returns object id (uuid) based on it's nice name in s3. If
@@ -65,24 +61,16 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, address *object.Address) (*object.Object, error) {
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
 	ops := new(client.ObjectHeaderParams).WithAddress(address).WithAllFields()
-	return conn.GetObjectHeader(ctx, ops)
+	return n.pool.GetObjectHeader(ctx, ops)
 }
 
 // objectGet and write it into provided io.Reader.
 func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, error) {
-	conn, tok, err := n.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
 	// prepare length/offset writer
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.GetObjectParams).WithAddress(p.address).WithPayloadWriter(w)
-	return conn.GetObject(ctx, ops, client.WithSession(tok))
+	return n.pool.GetObject(ctx, ops)
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
@@ -135,16 +123,11 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	raw.SetAttributes(attributes...)
 
 	r := newDetector(p.Reader)
-	conn, tok, err := n.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
 
 	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(r)
-	oid, err := conn.PutObject(
+	oid, err := n.pool.PutObject(
 		ctx,
 		ops,
-		client.WithSession(tok),
 	)
 	if err != nil {
 		return nil, err
@@ -165,11 +148,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 // objectDelete puts tombstone object into neofs.
 func (n *layer) objectDelete(ctx context.Context, address *object.Address) error {
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		return err
-	}
 	dop := new(client.DeleteObjectParams)
 	dop.WithAddress(address)
-	return conn.DeleteObject(ctx, dop)
+	return n.pool.DeleteObject(ctx, dop)
 }
