@@ -114,7 +114,7 @@ func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*acce
 
 func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, keys ...hcs.PublicKey) (*object.Address, error) {
 	var (
-		err error
+		err     error
 		created = strconv.FormatInt(time.Now().Unix(), 10)
 	)
 
