@@ -2,14 +2,19 @@ package accessbox
 
 import (
 	"bytes"
+	"crypto/cipher"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
+	"io"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
+	crypto "github.com/nspcc-dev/neofs-crypto"
 	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,43 +33,34 @@ func (x *AccessBox) Unmarshal(data []byte) error {
 	return proto.Unmarshal(data, x)
 }
 
-// AddBearerToken adds a bearer token to BearerTokens list.
-func (x *AccessBox) AddBearerToken(tkn *token.BearerToken, owner hcs.PrivateKey, keys ...hcs.PublicKey) error {
-	if x.OwnerPublicKey == nil {
-		return fmt.Errorf("owner's public key is nil")
+// PackTokens adds a bearer and session tokens to BearerTokens and SessionToken lists respectively.
+// Session token can be nil.
+func PackTokens(bearer *token.BearerToken, sess *session.Token, keys ...*ecdsa.PublicKey) (*AccessBox, *ecdsa.PrivateKey, error) {
+	box := &AccessBox{}
+	ephemeralKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
 	}
-	// restriction to rewrite token for the second time
-	if len(x.BearerTokens) > 0 {
-		return fmt.Errorf("bearer token is already set")
-	}
-	return x.addToken(tkn, &x.BearerTokens, owner, keys...)
-}
+	box.OwnerPublicKey = crypto.MarshalPublicKey(&ephemeralKey.PublicKey)
 
-// AddSessionToken adds a session token to SessionTokens list.
-func (x *AccessBox) AddSessionToken(tkn *session.Token, owner hcs.PrivateKey, keys ...hcs.PublicKey) error {
-	if x.OwnerPublicKey == nil {
-		return fmt.Errorf("owner's public key is nil")
+	if err := box.addToken(bearer, &box.BearerTokens, ephemeralKey, keys...); err != nil {
+		return nil, nil, fmt.Errorf("failed to add bearer token to accessbox: %w", err)
 	}
-	//restriction to rewrite token for the second time
-	if len(x.SessionTokens) > 0 {
-		return fmt.Errorf("bearer token is already set")
+	if sess != nil {
+		if err := box.addToken(sess, &box.SessionTokens, ephemeralKey, keys...); err != nil {
+			return nil, nil, fmt.Errorf("failed to add session token to accessbox: %w", err)
+		}
 	}
-	return x.addToken(tkn, &x.SessionTokens, owner, keys...)
-}
 
-// SetOwnerPublicKey sets a public key of an issuer.
-func (x *AccessBox) SetOwnerPublicKey(key hcs.PublicKey) {
-	x.OwnerPublicKey = key.Bytes()
+	return box, ephemeralKey, err
 }
 
 // GetBearerToken returns bearer token from AccessBox.
-func (x *AccessBox) GetBearerToken(owner hcs.PrivateKey) (*token.BearerToken, error) {
-	sender, err := hcs.PublicKeyFromBytes(x.OwnerPublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load owner public key from AccessBox: %w", err)
-	}
+func (x *AccessBox) GetBearerToken(owner *ecdsa.PrivateKey) (*token.BearerToken, error) {
+	sender := crypto.UnmarshalPublicKey(x.OwnerPublicKey)
+	ownerKey := crypto.MarshalPublicKey(&owner.PublicKey)
 	for _, data := range x.BearerTokens {
-		if !bytes.Equal(data.GatePublicKey, owner.PublicKey().Bytes()) {
+		if !bytes.Equal(data.GatePublicKey, ownerKey) {
 			continue
 		}
 		tkn := token.NewBearerToken()
@@ -74,17 +70,15 @@ func (x *AccessBox) GetBearerToken(owner hcs.PrivateKey) (*token.BearerToken, er
 		return tkn, nil
 	}
 
-	return nil, fmt.Errorf("no bearer token for key  %s was found", owner.String())
+	return nil, fmt.Errorf("no bearer token for key  %x was found", ownerKey)
 }
 
 // GetSessionToken returns session token from AccessBox.
-func (x *AccessBox) GetSessionToken(owner hcs.PrivateKey) (*session.Token, error) {
-	sender, err := hcs.PublicKeyFromBytes(x.OwnerPublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load owner public key from AccessBox: %w", err)
-	}
+func (x *AccessBox) GetSessionToken(owner *ecdsa.PrivateKey) (*session.Token, error) {
+	sender := crypto.UnmarshalPublicKey(x.OwnerPublicKey)
+	ownerKey := crypto.MarshalPublicKey(&owner.PublicKey)
 	for _, data := range x.SessionTokens {
-		if !bytes.Equal(data.GatePublicKey, owner.PublicKey().Bytes()) {
+		if !bytes.Equal(data.GatePublicKey, ownerKey) {
 			continue
 		}
 		tkn := session.NewToken()
@@ -95,16 +89,16 @@ func (x *AccessBox) GetSessionToken(owner hcs.PrivateKey) (*session.Token, error
 		return tkn, nil
 	}
 
-	return nil, fmt.Errorf("no session token for key  %s was found", owner.String())
+	return nil, fmt.Errorf("no session token for key  %x was found", ownerKey)
 }
 
-func (x *AccessBox) addToken(tkn tokenInterface, list *[]*AccessBox_Token, owner hcs.PrivateKey, keys ...hcs.PublicKey) error {
+func (x *AccessBox) addToken(tkn tokenInterface, list *[]*AccessBox_Token, owner *ecdsa.PrivateKey, keys ...*ecdsa.PublicKey) error {
 	for i, sender := range keys {
 		data, err := encodeToken(tkn, owner, sender)
 		if err != nil {
 			return fmt.Errorf("%w, sender = %d", err, i)
 		}
-		*list = append(*list, newToken(data, sender.Bytes()))
+		*list = append(*list, newToken(data, crypto.MarshalPublicKey(sender)))
 	}
 	return nil
 }
@@ -116,7 +110,7 @@ func newToken(data []byte, key []byte) *AccessBox_Token {
 	return res
 }
 
-func encodeToken(tkn tokenInterface, owner hcs.PrivateKey, sender hcs.PublicKey) ([]byte, error) {
+func encodeToken(tkn tokenInterface, owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey) ([]byte, error) {
 	data, err := tkn.Marshal()
 	if err != nil {
 		return nil, err
@@ -129,7 +123,7 @@ func encodeToken(tkn tokenInterface, owner hcs.PrivateKey, sender hcs.PublicKey)
 	return encrypted, nil
 }
 
-func decodeToken(data []byte, tkn tokenInterface, owner hcs.PrivateKey, sender hcs.PublicKey) error {
+func decodeToken(data []byte, tkn tokenInterface, owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey) error {
 	decoded, err := decrypt(owner, sender, data)
 	if err != nil {
 		return err
@@ -143,13 +137,32 @@ func decodeToken(data []byte, tkn tokenInterface, owner hcs.PrivateKey, sender h
 	return nil
 }
 
-func encrypt(owner hcs.PrivateKey, sender hcs.PublicKey, data []byte) ([]byte, error) {
-	key, err := curve25519.X25519(owner.Bytes(), sender.Bytes())
-	if err != nil {
-		return nil, err
+func generateShared256(prv *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (sk []byte, err error) {
+	if prv.PublicKey.Curve != pub.Curve {
+		return nil, fmt.Errorf("not equal curves")
 	}
 
-	enc, err := chacha20poly1305.NewX(key)
+	x, _ := pub.Curve.ScalarMult(pub.X, pub.Y, prv.D.Bytes())
+	if x == nil {
+		return nil, fmt.Errorf("shared key is point at infinity")
+	}
+
+	sk = make([]byte, 32)
+	skBytes := x.Bytes()
+	copy(sk[len(sk)-len(skBytes):], skBytes)
+	return sk, nil
+}
+
+func deriveKey(secret []byte) ([]byte, error) {
+	hash := sha256.New
+	kdf := hkdf.New(hash, secret, nil, nil)
+	key := make([]byte, 32)
+	_, err := io.ReadFull(kdf, key)
+	return key, err
+}
+
+func encrypt(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey, data []byte) ([]byte, error) {
+	enc, err := getCipher(owner, sender)
 	if err != nil {
 		return nil, err
 	}
@@ -162,15 +175,8 @@ func encrypt(owner hcs.PrivateKey, sender hcs.PublicKey, data []byte) ([]byte, e
 	return enc.Seal(nonce, nonce, data, nil), nil
 }
 
-func decrypt(owner hcs.PrivateKey, sender hcs.PublicKey, data []byte) ([]byte, error) {
-	sb := sender.Bytes()
-
-	key, err := curve25519.X25519(owner.Bytes(), sb)
-	if err != nil {
-		return nil, err
-	}
-
-	dec, err := chacha20poly1305.NewX(key)
+func decrypt(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey, data []byte) ([]byte, error) {
+	dec, err := getCipher(owner, sender)
 	if err != nil {
 		return nil, err
 	}
@@ -181,4 +187,22 @@ func decrypt(owner hcs.PrivateKey, sender hcs.PublicKey, data []byte) ([]byte, e
 
 	nonce, cypher := data[:dec.NonceSize()], data[dec.NonceSize():]
 	return dec.Open(nil, nonce, cypher, nil)
+}
+
+func getCipher(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey) (cipher.AEAD, error) {
+	secret, err := generateShared256(owner, sender)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := deriveKey(secret)
+	if err != nil {
+		return nil, err
+	}
+
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, err
+	}
+	return aead, nil
 }

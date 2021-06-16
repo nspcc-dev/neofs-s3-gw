@@ -3,6 +3,7 @@ package tokens
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"strconv"
 	"sync"
@@ -15,7 +16,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 )
 
@@ -24,11 +24,11 @@ type (
 	Credentials interface {
 		GetBearerToken(context.Context, *object.Address) (*token.BearerToken, error)
 		GetSessionToken(context.Context, *object.Address) (*session.Token, error)
-		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, ...hcs.PublicKey) (*object.Address, error)
+		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, ...*ecdsa.PublicKey) (*object.Address, error)
 	}
 
 	cred struct {
-		key  hcs.PrivateKey
+		key  *ecdsa.PrivateKey
 		pool pool.Pool
 	}
 )
@@ -49,7 +49,7 @@ var bufferPool = sync.Pool{
 var _ = New
 
 // New creates new Credentials instance using given cli and key.
-func New(conns pool.Pool, key hcs.PrivateKey) Credentials {
+func New(conns pool.Pool, key *ecdsa.PrivateKey) Credentials {
 	return &cred{pool: conns, key: key}
 }
 
@@ -112,7 +112,7 @@ func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*acce
 	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, keys ...hcs.PublicKey) (*object.Address, error) {
+func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, keys ...*ecdsa.PublicKey) (*object.Address, error) {
 	var (
 		err     error
 		created = strconv.FormatInt(time.Now().Unix(), 10)
