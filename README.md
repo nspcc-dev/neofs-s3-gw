@@ -231,13 +231,18 @@ used to create new AWS credentials.
 
 #### Issuance of a secret
 
-To issue a secret means to create a Bearer token and put it as an object into
-container on the NeoFS network. The token is encrypted by a set of gateway
-keys, so you need to pass them as well.
+To issue a secret means to create a Bearer and  (optionally) Session tokens and 
+put them as an object into container on the NeoFS network. The tokens are 
+encrypted by a set of gateway keys, so you need to pass them as well.
 
 If a parameter `container-id`  is not set, a new container will be created.
 
-If a parameter `rules` is not set, it will be auto-generated with values: 
+Creation of the bearer token is mandatory, and creation of the session token is 
+optional. If you want to add the session token you need to add a parameter 
+`create-session-token`. 
+
+Rules for bearer token can be set via param `bearer-rules`, if it is not set, 
+it will be auto-generated with values: 
 
 ```
 {
@@ -264,13 +269,27 @@ If a parameter `rules` is not set, it will be auto-generated with values:
 }
 ```
 
+Rules for session token can be set via param `session-rules`, default value is:
+```
+{
+    "verb": "PUT",
+    "wildcard": true,
+    "containerID": null
+}
+```
+
+If `session-rules` is set, but `create-session-token` is not, the session
+token will not be created.
+
 Example of a command to issue a secret with custom rules for multiple gates:
 ```
 $ ./neofs-authmate issue-secret --neofs-key user.key \
 --peer 192.168.130.71:8080 \ 
---rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \ 
+--bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \ 
 --gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
---gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156
+--gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156 \
+--create-session-token \
+--session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
 
 {
   "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",

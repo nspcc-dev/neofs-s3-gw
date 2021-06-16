@@ -37,6 +37,7 @@ var (
 	neoFSKeyPathFlag      string
 	peerAddressFlag       string
 	eaclRulesFlag         string
+	contextRulesFlag      string
 	gatePrivateKeyFlag    string
 	accessKeyIDFlag       string
 	ownerPrivateKeyFlag   string
@@ -46,6 +47,7 @@ var (
 	gatesKeysCountFlag    int
 	logEnabledFlag        bool
 	logDebugEnabledFlag   bool
+	sessionTokenFlag      bool
 )
 
 var zapConfig = zap.Config{
@@ -198,10 +200,16 @@ func issueSecret() *cli.Command {
 				Destination: &peerAddressFlag,
 			},
 			&cli.StringFlag{
-				Name:        "rules",
-				Usage:       "eacl rules as plain json string",
+				Name:        "bearer-rules",
+				Usage:       "rules for bearer token as plain json string",
 				Required:    false,
 				Destination: &eaclRulesFlag,
+			},
+			&cli.StringFlag{
+				Name:        "session-rules",
+				Usage:       "rules for session token as plain json string",
+				Required:    false,
+				Destination: &contextRulesFlag,
 			},
 			&cli.StringSliceFlag{
 				Name:        "gate-public-key",
@@ -227,6 +235,13 @@ func issueSecret() *cli.Command {
 				Required:    false,
 				Destination: &containerFriendlyName,
 				Value:       "auth-container",
+			},
+			&cli.BoolFlag{
+				Name:        "create-session-token",
+				Usage:       "create session token",
+				Required:    false,
+				Destination: &sessionTokenFlag,
+				Value:       false,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -275,6 +290,8 @@ func issueSecret() *cli.Command {
 				OwnerPrivateKey:       owner.PrivateKey(),
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             []byte(eaclRulesFlag),
+				ContextRules:          []byte(contextRulesFlag),
+				SessionTkn:            sessionTokenFlag,
 			}
 
 			if err = agent.IssueSecret(ctx, os.Stdout, issueSecretOptions); err != nil {
