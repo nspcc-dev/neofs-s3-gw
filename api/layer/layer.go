@@ -113,10 +113,19 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 	return n.pool.OwnerID()
 }
 
+// BearerOpt returns client.WithBearer call option with token from context or with nil token.
+func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
+	if tkn, ok := ctx.Value(api.BearerTokenKey).(*token.BearerToken); ok && tkn != nil {
+		return client.WithBearer(tkn)
+	}
+
+	return client.WithBearer(nil)
+}
+
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
 	ops := new(client.GetObjectParams).WithAddress(address)
-	return n.pool.GetObject(ctx, ops)
+	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
 }
 
 // GetBucketInfo returns bucket info by name.

@@ -33,9 +33,10 @@ type (
 
 func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, error) {
 	var (
-		err error
-		res *container.Container
-		rid = api.GetRequestID(ctx)
+		err       error
+		res       *container.Container
+		rid       = api.GetRequestID(ctx)
+		bearerOpt = n.BearerOpt(ctx)
 
 		info = &BucketInfo{
 			CID:  cid,
@@ -50,7 +51,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 			zap.Error(err))
 		return nil, err
 	}
-	res, err = conn.GetContainer(ctx, cid)
+	res, err = conn.GetContainer(ctx, cid, bearerOpt)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.Stringer("cid", cid),
@@ -87,10 +88,11 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 
 func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	var (
-		err error
-		own = n.Owner(ctx)
-		res []*cid.ID
-		rid = api.GetRequestID(ctx)
+		err       error
+		own       = n.Owner(ctx)
+		bearerOpt = n.BearerOpt(ctx)
+		res       []*cid.ID
+		rid       = api.GetRequestID(ctx)
 	)
 
 	conn, _, err := n.pool.Connection()
@@ -100,7 +102,7 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 			zap.Error(err))
 		return nil, err
 	}
-	res, err = conn.ListContainers(ctx, own)
+	res, err = conn.ListContainers(ctx, own, bearerOpt)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
