@@ -34,29 +34,22 @@ Minimalistic S3 gateway setup needs:
    NeoFS nodes with weighted load balancing).
  * a key used to communicate with NeoFS nodes
    Passed via `--neofs-key` parameter or `S3_GW_NEOFS-KEY` environment variable.
- * a key used for client authentication
-   Passed via `--auth-key` parameter or `S3_GW_AUTH-KEY` environment variable.
-   To generate it use `neofs-authmate generate-keys` command.
 
 These two commands are functionally equivalent, they run the gate with one
 backend node, some keys and otherwise default settings:
 ```
-$ neofs-s3-gw -p 192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
-  --auth-key a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab
+$ neofs-s3-gw -p 192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr
 
 $ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 \
   S3_GW_NEOFS-KEY=KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
-  S3_GW_AUTH-KEY=a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab \
   neofs-s3-gw
 ```
 It's also possible to specify uri scheme (grpc or grpcs) when using `-p` or environment variables:
 ```
-$ neofs-s3-gw -p grpc://192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
-  --auth-key a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab
+$ neofs-s3-gw -p grpc://192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr
 
 $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
   S3_GW_NEOFS-KEY=KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
-  S3_GW_AUTH-KEY=a04edd5b3c497eed83be25fb136bafd056928c17986440745775223615f2cbab \
   neofs-s3-gw
 ```
 
@@ -84,12 +77,10 @@ $ HTTP_GW_PEERS_0_ADDRESS=192.168.130.72:8080 HTTP_GW_PEERS_0_WEIGHT=9 \
 This command will make gateway use 192.168.130.72 for 90% of requests and
 192.168.130.71 for remaining 10%.
 
-### Keys
+### Key
 
-NeoFS (`--neofs-key`) and authentication (`--auth-key`) keys are mandatory
-parameters. NeoFS key can be a path to private key file (as raw bytes), a hex
-string or (unencrypted) WIF string. Authentication key is either a path to
-raw private key file or a hex string.
+NeoFS (`--neofs-key`) is mandatory parameter. NeoFS key can be a path to private key file (as raw bytes), 
+a hex string or (unencrypted) WIF string.
 
 ### Binding and TLS
 
@@ -208,7 +199,7 @@ potentially).
 
 #### Generation of key pairs
 
-To generate key pairs for gateways, run the following command (`--count` is 1
+To generate neofs key pairs for gateways, run the following command (`--count` is 1
 by default):
 
 ```
