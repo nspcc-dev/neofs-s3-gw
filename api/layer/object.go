@@ -42,7 +42,7 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	} else if filename != "" {
 		opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
 	}
-	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts))
+	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts), n.BearerOpt(ctx))
 }
 
 // objectFindID returns object id (uuid) based on it's nice name in s3. If
@@ -62,7 +62,7 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, address *object.Address) (*object.Object, error) {
 	ops := new(client.ObjectHeaderParams).WithAddress(address).WithAllFields()
-	return n.pool.GetObjectHeader(ctx, ops)
+	return n.pool.GetObjectHeader(ctx, ops, n.BearerOpt(ctx))
 }
 
 // objectGet and write it into provided io.Reader.
@@ -70,7 +70,7 @@ func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, er
 	// prepare length/offset writer
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.GetObjectParams).WithAddress(p.address).WithPayloadWriter(w)
-	return n.pool.GetObject(ctx, ops)
+	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
@@ -128,6 +128,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	oid, err := n.pool.PutObject(
 		ctx,
 		ops,
+		n.BearerOpt(ctx),
 	)
 	if err != nil {
 		return nil, err
@@ -150,5 +151,5 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 func (n *layer) objectDelete(ctx context.Context, address *object.Address) error {
 	dop := new(client.DeleteObjectParams)
 	dop.WithAddress(address)
-	return n.pool.DeleteObject(ctx, dop)
+	return n.pool.DeleteObject(ctx, dop, n.BearerOpt(ctx))
 }
