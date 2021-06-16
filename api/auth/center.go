@@ -44,6 +44,7 @@ type (
 	prs int
 )
 
+// ErrNoAuthorizationHeader is returned for unauthenticated requests.
 var ErrNoAuthorizationHeader = errors.New("no authorization header")
 
 func (p prs) Read(_ []byte) (n int, err error) {

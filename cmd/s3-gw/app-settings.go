@@ -28,9 +28,6 @@ const (
 	defaultConnectTimeout  = 30 * time.Second
 	defaultShutdownTimeout = 15 * time.Second
 
-	defaultKeepaliveTime    = 10 * time.Second
-	defaultKeepaliveTimeout = 10 * time.Second
-
 	defaultMaxClientsCount    = 100
 	defaultMaxClientsDeadline = time.Second * 30
 )
