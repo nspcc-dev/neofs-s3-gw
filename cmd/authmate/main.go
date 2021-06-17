@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,7 +17,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/urfave/cli/v2"
@@ -40,7 +41,6 @@ var (
 	contextRulesFlag      string
 	gatePrivateKeyFlag    string
 	accessKeyIDFlag       string
-	ownerPrivateKeyFlag   string
 	containerIDFlag       string
 	containerFriendlyName string
 	gatesPublicKeysFlag   cli.StringSlice
@@ -124,14 +124,14 @@ func appCommands() []*cli.Command {
 	}
 }
 
-func generateGatesKeys(count int) ([]hcs.Credentials, error) {
+func generateGatesKeys(count int) ([]*ecdsa.PrivateKey, error) {
 	var (
 		err error
-		res = make([]hcs.Credentials, count)
+		res = make([]*ecdsa.PrivateKey, count)
 	)
 
 	for i := 0; i < count; i++ {
-		if res[i], err = hcs.Generate(rand.Reader); err != nil {
+		if res[i], err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader); err != nil {
 			return nil, err
 		}
 	}
@@ -146,7 +146,7 @@ func generateKeys() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:        "count",
-				Usage:       "number of x25519 key pairs to generate",
+				Usage:       "number of 256r1 key pairs to generate",
 				Value:       1,
 				Destination: &gatesKeysCountFlag,
 			},
@@ -154,18 +154,18 @@ func generateKeys() *cli.Command {
 		Action: func(c *cli.Context) error {
 			_, log := prepare()
 
-			log.Info("start generating x25519 keys")
+			log.Info("start generating P-256 keys")
 
 			csl, err := generateGatesKeys(gatesKeysCountFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create key pairs of gates: %s", err), 1)
 			}
 
-			log.Info("generated x25519 keys")
+			log.Info("generated P-256 keys")
 
 			gatesKeys := make([]gateKey, len(csl))
 			for i, cs := range csl {
-				privateKey, publicKey := cs.PrivateKey().String(), cs.PublicKey().String()
+				privateKey, publicKey := hex.EncodeToString(cs.D.Bytes()), hex.EncodeToString(crypto.MarshalPublicKey(&cs.PublicKey))
 				gatesKeys[i] = gateKey{PrivateKey: privateKey, PublicKey: publicKey}
 			}
 
@@ -213,15 +213,9 @@ func issueSecret() *cli.Command {
 			},
 			&cli.StringSliceFlag{
 				Name:        "gate-public-key",
-				Usage:       "public x25519 key of a gate (use flags repeatedly for multiple gates)",
+				Usage:       "public 256r1 key of a gate (use flags repeatedly for multiple gates)",
 				Required:    true,
 				Destination: &gatesPublicKeysFlag,
-			},
-			&cli.StringFlag{
-				Name:        "owner-private-key",
-				Usage:       "owner's private x25519 key",
-				Required:    false,
-				Destination: &ownerPrivateKeyFlag,
 			},
 			&cli.StringFlag{
 				Name:        "container-id",
@@ -269,14 +263,9 @@ func issueSecret() *cli.Command {
 				}
 			}
 
-			var owner hcs.Credentials
-			if owner, err = fetchHCSCredentials(ownerPrivateKeyFlag); err != nil {
-				return cli.Exit(fmt.Sprintf("failed to create owner's private key: %s", err), 4)
-			}
-
-			var gatesPublicKeys []hcs.PublicKey
+			var gatesPublicKeys []*ecdsa.PublicKey
 			for _, key := range gatesPublicKeysFlag.Value() {
-				gpk, err := hcs.LoadPublicKey(key)
+				gpk, err := authmate.LoadPublicKey(key)
 				if err != nil {
 					return cli.Exit(fmt.Sprintf("failed to load gate's public key: %s", err), 5)
 				}
@@ -287,7 +276,6 @@ func issueSecret() *cli.Command {
 				ContainerID:           containerID,
 				ContainerFriendlyName: containerFriendlyName,
 				NeoFSKey:              key,
-				OwnerPrivateKey:       owner.PrivateKey(),
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             []byte(eaclRulesFlag),
 				ContextRules:          []byte(contextRulesFlag),
@@ -355,7 +343,7 @@ func obtainSecret() *cli.Command {
 
 			var _ = agent
 
-			gateCreds, err := hcs.NewCredentials(gatePrivateKeyFlag)
+			gateCreds, err := crypto.LoadPrivateKey(gatePrivateKeyFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create owner's private key: %s", err), 4)
 			}
@@ -364,7 +352,7 @@ func obtainSecret() *cli.Command {
 
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
 				SecretAddress:  secretAddress,
-				GatePrivateKey: gateCreds.PrivateKey(),
+				GatePrivateKey: gateCreds,
 			}
 
 			if err = agent.ObtainSecret(ctx, os.Stdout, obtainSecretOptions); err != nil {
@@ -375,14 +363,6 @@ func obtainSecret() *cli.Command {
 		},
 	}
 	return command
-}
-
-func fetchHCSCredentials(val string) (hcs.Credentials, error) {
-	if val == "" {
-		return hcs.Generate(rand.Reader)
-	}
-
-	return hcs.NewCredentials(val)
 }
 
 func createSDKClient(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, peerAddress string) (pool.Pool, error) {

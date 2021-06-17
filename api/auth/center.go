@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
@@ -15,7 +16,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
@@ -36,9 +36,8 @@ type (
 
 	// Params stores node connection parameters.
 	Params struct {
-		Pool       pool.Pool
-		Logger     *zap.Logger
-		Credential hcs.Credentials
+		Pool   pool.Pool
+		Logger *zap.Logger
 	}
 
 	prs int
@@ -58,7 +57,7 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(conns pool.Pool, key hcs.PrivateKey) Center {
+func New(conns pool.Pool, key *ecdsa.PrivateKey) Center {
 	return &center{
 		cli: tokens.New(conns, key),
 		reg: &regexpSubmatcher{re: authorizationFieldRegexp},

@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -51,8 +50,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		ctr    auth.Center
 		obj    layer.Client
 
-		hcsCred hcs.Credentials
-
 		poolPeers = fetchPeers(l, v)
 
 		reBalance  = defaultRebalanceTimer
@@ -62,7 +59,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		maxClientsCount    = defaultMaxClientsCount
 		maxClientsDeadline = defaultMaxClientsDeadline
 
-		hcsCredential = v.GetString(cfgGateAuthPrivateKey)
 		nfsCredential = v.GetString(cfgNeoFSPrivateKey)
 	)
 
@@ -90,10 +86,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("could not load NeoFS private key")
 	}
 
-	if hcsCred, err = hcs.NewCredentials(hcsCredential); err != nil {
-		l.Fatal("could not load gate auth key")
-	}
-
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
 		tls = &tlsConfig{
 			KeyFile:  v.GetString(cfgTLSKeyFile),
@@ -102,7 +94,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	l.Info("using credentials",
-		zap.String("HCS", hcsCredential),
 		zap.String("NeoFS", nfsCredential))
 
 	opts := &pool.BuilderOptions{
@@ -121,7 +112,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	obj = layer.NewLayer(l, conns)
 
 	// prepare auth center
-	ctr = auth.New(conns, hcsCred.PrivateKey())
+	ctr = auth.New(conns, key)
 
 	if caller, err = handler.New(l, obj); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
