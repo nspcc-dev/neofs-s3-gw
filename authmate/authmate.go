@@ -12,12 +12,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
@@ -53,6 +55,8 @@ type (
 		OwnerPrivateKey       hcs.PrivateKey
 		GatesPublicKeys       []hcs.PublicKey
 		EACLRules             []byte
+		ContextRules          []byte
+		SessionTkn            bool
 	}
 
 	// ObtainSecretOptions contains options for passing to Agent.ObtainSecret method.
@@ -138,35 +142,64 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
-	a.log.Info("prepare eACL table")
+	box.SetOwnerPublicKey(options.OwnerPrivateKey.PublicKey())
 
-	table, err := buildEACLTable(cid, options.EACLRules)
+	oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	a.log.Info("prepare eACL table")
+	bearerRules, err := buildEACLTable(cid, options.EACLRules)
 	if err != nil {
 		return fmt.Errorf("failed to build eacl table: %w", err)
 	}
 
-	tkn, err := buildBearerToken(options.NeoFSKey, table)
+	bearerTkn, err := buildBearerToken(options.NeoFSKey, oid, bearerRules)
 	if err != nil {
 		return fmt.Errorf("failed to build bearer token: %w", err)
 	}
 
-	box.SetOwnerPublicKey(options.OwnerPrivateKey.PublicKey())
-	err = box.AddBearerToken(tkn, options.OwnerPrivateKey, options.GatesPublicKeys...)
+	err = box.AddBearerToken(bearerTkn, options.OwnerPrivateKey, options.GatesPublicKeys...)
 	if err != nil {
-		return fmt.Errorf("failed to add token to accessbox: %w", err)
+		return fmt.Errorf("failed to add bearer token to accessbox: %w", err)
+	}
+	a.log.Info("store bearer token into NeoFS",
+		zap.Stringer("owner_tkn", bearerTkn.Issuer()))
+
+	if options.SessionTkn {
+		sessionRules, err := buildContext(options.ContextRules)
+		if err != nil {
+			return fmt.Errorf("failed to build context for session token: %w", err)
+		}
+
+		sessionTkn, err := buildSessionToken(options.NeoFSKey, oid, sessionRules)
+		if err != nil {
+			return fmt.Errorf("failed to create session token: %w", err)
+		}
+
+		err = box.AddSessionToken(sessionTkn, options.OwnerPrivateKey, options.GatesPublicKeys...)
+		if err != nil {
+			return fmt.Errorf("failed to add session token to accessbox: %w", err)
+		}
 	}
 
-	a.log.Info("store bearer token into NeoFS",
-		zap.Stringer("owner_tkn", tkn.Issuer()))
+	if !options.SessionTkn && len(options.ContextRules) > 0 {
+		_, err := w.Write([]byte("Warning: rules for session token were set but --create-session flag wasn't, " +
+			"so session token was not created\n"))
+		if err != nil {
+			return err
+		}
+	}
 
 	address, err := tokens.
 		New(a.pool, options.OwnerPrivateKey).
-		Put(ctx, cid, tkn.Issuer(), &box, options.GatesPublicKeys...)
+		Put(ctx, cid, oid, &box, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
-	secret, err := BearerToAccessKey(tkn)
+	secret, err := BearerToAccessKey(bearerTkn)
 	if err != nil {
 		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
@@ -267,19 +300,42 @@ func buildEACLTable(cid *cid.ID, eaclTable []byte) (*eacl.Table, error) {
 	return table, nil
 }
 
-func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table) (*token.BearerToken, error) {
-	wallet, err := owner.NEO3WalletFromPublicKey(&key.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-	oid := owner.NewIDFromNeo3Wallet(wallet)
+func buildContext(rules []byte) (*session.ContainerContext, error) {
+	sessionCtx := session.NewContainerContext() // wildcard == true on by default
 
+	if len(rules) != 0 {
+		// cast ToV2 temporary, because there is no method for unmarshalling in ContainerContext in api-go
+		err := sessionCtx.ToV2().UnmarshalJSON(rules)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read rules for session token: %w", err)
+		}
+		return sessionCtx, nil
+	}
+	sessionCtx.ForPut()
+	sessionCtx.ApplyTo(nil)
+	return sessionCtx, nil
+}
+
+func buildBearerToken(key *ecdsa.PrivateKey, oid *owner.ID, table *eacl.Table) (*token.BearerToken, error) {
 	bearerToken := token.NewBearerToken()
 	bearerToken.SetEACLTable(table)
 	bearerToken.SetOwner(oid)
 	bearerToken.SetLifetime(math.MaxUint64, 0, 0)
 
 	return bearerToken, bearerToken.SignToken(key)
+}
+
+func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext) (*session.Token, error) {
+	tok := session.NewToken()
+	tok.SetContext(ctx)
+	uid, err := uuid.New().MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	tok.SetID(uid)
+	tok.SetOwnerID(oid)
+
+	return tok, tok.Sign(key)
 }
 
 // BearerToAccessKey returns secret access key generated from given BearerToken.
@@ -291,4 +347,12 @@ func BearerToAccessKey(tkn *token.BearerToken) (string, error) {
 
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:]), nil
+}
+
+func ownerIDFromNeoFSKey(key *ecdsa.PublicKey) (*owner.ID, error) {
+	wallet, err := owner.NEO3WalletFromPublicKey(key)
+	if err != nil {
+		return nil, err
+	}
+	return owner.NewIDFromNeo3Wallet(wallet), nil
 }
