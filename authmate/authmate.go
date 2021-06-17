@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001100
+	defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001110
 	containerCreationTimeout            = 120 * time.Second
 	containerPollInterval               = 5 * time.Second
 )
