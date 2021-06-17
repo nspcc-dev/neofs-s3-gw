@@ -8,7 +8,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/hcs"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,16 +19,16 @@ func Test_tokens_encode_decode(t *testing.T) {
 	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	cred, err := hcs.Generate(rand.Reader)
+	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
-	data, err := encodeToken(tkn, cred.PrivateKey(), cred.PublicKey())
+	data, err := encodeToken(tkn, cred, &cred.PublicKey)
 	require.NoError(t, err)
 
-	err = decodeToken(data, tkn2, cred.PrivateKey(), cred.PublicKey())
+	err = decodeToken(data, tkn2, cred, &cred.PublicKey)
 	require.NoError(t, err)
 
 	require.Equal(t, tkn, tkn2)
@@ -37,22 +36,21 @@ func Test_tokens_encode_decode(t *testing.T) {
 
 func Test_bearer_token_in_access_box(t *testing.T) {
 	var (
-		box, box2 AccessBox
-		tkn       = token.NewBearerToken()
+		box  *AccessBox
+		box2 AccessBox
+		tkn  = token.NewBearerToken()
 	)
 
 	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	cred, err := hcs.Generate(rand.Reader)
+	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
-	box.SetOwnerPublicKey(cred.PublicKey())
-
-	err = box.AddBearerToken(tkn, cred.PrivateKey(), cred.PublicKey())
+	box, _, err = PackTokens(tkn, nil, &cred.PublicKey)
 	require.NoError(t, err)
 
 	data, err := box.Marshal()
@@ -61,7 +59,7 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	tkn2, err := box2.GetBearerToken(cred.PrivateKey())
+	tkn2, err := box2.GetBearerToken(cred)
 	require.NoError(t, err)
 
 	require.Equal(t, tkn, tkn2)
@@ -69,35 +67,30 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 
 func Test_accessbox_multiple_keys(t *testing.T) {
 	var (
-		box AccessBox
+		box *AccessBox
 		tkn = token.NewBearerToken()
 	)
 
 	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	cred, err := hcs.Generate(rand.Reader)
-	require.NoError(t, err)
-
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
 	count := 10
-	pubs := make([]hcs.PublicKey, 0, count)
-	keys := make([]hcs.PrivateKey, 0, count)
+	pubs := make([]*ecdsa.PublicKey, 0, count)
+	keys := make([]*ecdsa.PrivateKey, 0, count)
 	{ // generate keys
 		for i := 0; i < count; i++ {
-			cred, err := hcs.Generate(rand.Reader)
+			cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 			require.NoError(t, err)
 
-			pubs = append(pubs, cred.PublicKey())
-			keys = append(keys, cred.PrivateKey())
+			pubs = append(pubs, &cred.PublicKey)
+			keys = append(keys, cred)
 		}
 	}
 
-	box.SetOwnerPublicKey(cred.PublicKey())
-
-	err = box.AddBearerToken(tkn, cred.PrivateKey(), pubs...)
+	box, _, err = PackTokens(tkn, nil, pubs...)
 	require.NoError(t, err)
 
 	for i, k := range keys {
@@ -109,27 +102,25 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 
 func Test_unknown_key(t *testing.T) {
 	var (
-		box AccessBox
+		box *AccessBox
 		tkn = token.NewBearerToken()
 	)
 
 	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	cred, err := hcs.Generate(rand.Reader)
+	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	wrongCred, err := hcs.Generate(rand.Reader)
+	wrongCred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
-	box.SetOwnerPublicKey(cred.PublicKey())
-
-	err = box.AddBearerToken(tkn, cred.PrivateKey(), cred.PublicKey())
+	box, _, err = PackTokens(tkn, nil, &cred.PublicKey)
 	require.NoError(t, err)
 
-	_, err = box.GetBearerToken(wrongCred.PrivateKey())
+	_, err = box.GetBearerToken(wrongCred)
 	require.Error(t, err)
 }
