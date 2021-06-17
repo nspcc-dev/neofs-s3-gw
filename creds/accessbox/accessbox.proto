@@ -7,13 +7,18 @@ option go_package = "github.com/nspcc-dev/neofs-s3-gw/creds/tokenbox;accessbox";
 
 
 message AccessBox {
-    message Token {
-        bytes token = 1 [json_name = "token"];
+    message Gate {
+        bytes tokens = 1 [json_name = "tokens"];
         bytes gatePublicKey = 2 [json_name = "gatePublicKey"];
     }
 
-    bytes ownerPublicKey = 1 [json_name = "oownerPublicKey"];
-    repeated Token bearerTokens = 2 [json_name = "bearerTokens"];
-    repeated Token sessionTokens = 3 [json_name = "sessionTokens"];
+    bytes ownerPublicKey = 1 [json_name = "ownerPublicKey"];
+    repeated Gate gates = 2 [json_name = "gates"];
+}
+
+message Tokens {
+    bytes accessKey = 1 [json_name = "accessKey"];
+    bytes bearerToken = 2 [json_name = "bearerToken"];
+    bytes sessionToken = 3 [json_name = "sessionToken"];
 }
 
