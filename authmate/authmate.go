@@ -140,28 +140,17 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
-	oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
-	if err != nil {
-		return err
-	}
-
-	a.log.Info("prepare eACL table")
-	bearerRules, err := buildEACLTable(cid, options.EACLRules)
-	if err != nil {
-		return fmt.Errorf("failed to build eacl table: %w", err)
-	}
-
-	gatesData, err := buildBearerTokens(options.NeoFSKey, bearerRules, options.GatesPublicKeys)
+	gatesData, err := createTokens(options, cid)
 	if err != nil {
 		return fmt.Errorf("failed to build bearer token: %w", err)
 	}
 
-	sessionTkn, err := createSessionToken(options, oid)
+	box, secrets, err := accessbox.PackTokens(gatesData)
 	if err != nil {
-		return fmt.Errorf("failed to create session token: %w", err)
+		return err
 	}
 
-	box, secrets, err := accessbox.PackTokens(gatesData, sessionTkn)
+	oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -291,8 +280,8 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 	return sessionCtx, nil
 }
 
-func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, ownerKey *ecdsa.PublicKey) (*token.BearerToken, error) {
-	oid, err := ownerIDFromNeoFSKey(ownerKey)
+func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, gateKey *ecdsa.PublicKey) (*token.BearerToken, error) {
+	oid, err := ownerIDFromNeoFSKey(gateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -305,19 +294,19 @@ func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, ownerKey *ecdsa.
 	return bearerToken, bearerToken.SignToken(key)
 }
 
-func buildBearerTokens(key *ecdsa.PrivateKey, table *eacl.Table, ownerKeys []*ecdsa.PublicKey) ([]*accessbox.GateData, error) {
-	gatesData := make([]*accessbox.GateData, 0, len(ownerKeys))
-	for _, ownerKey := range ownerKeys {
-		tkn, err := buildBearerToken(key, table, ownerKey)
+func buildBearerTokens(key *ecdsa.PrivateKey, table *eacl.Table, gatesKeys []*ecdsa.PublicKey) ([]*token.BearerToken, error) {
+	bearerTokens := make([]*token.BearerToken, 0, len(gatesKeys))
+	for _, gateKey := range gatesKeys {
+		tkn, err := buildBearerToken(key, table, gateKey)
 		if err != nil {
 			return nil, err
 		}
-		gatesData = append(gatesData, accessbox.NewGateData(tkn, ownerKey))
+		bearerTokens = append(bearerTokens, tkn)
 	}
-	return gatesData, nil
+	return bearerTokens, nil
 }
 
-func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext) (*session.Token, error) {
+func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gateKey *ecdsa.PublicKey) (*session.Token, error) {
 	tok := session.NewToken()
 	tok.SetContext(ctx)
 	uid, err := uuid.New().MarshalBinary()
@@ -326,19 +315,58 @@ func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.Contai
 	}
 	tok.SetID(uid)
 	tok.SetOwnerID(oid)
+	tok.SetSessionKey(crypto.MarshalPublicKey(gateKey))
 
 	return tok, tok.Sign(key)
 }
 
-func createSessionToken(options *IssueSecretOptions, oid *owner.ID) (*session.Token, error) {
+func buildSessionTokens(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gatesKeys []*ecdsa.PublicKey) ([]*session.Token, error) {
+	sessionTokens := make([]*session.Token, 0, len(gatesKeys))
+	for _, gateKey := range gatesKeys {
+		tkn, err := buildSessionToken(key, oid, ctx, gateKey)
+		if err != nil {
+			return nil, err
+		}
+		sessionTokens = append(sessionTokens, tkn)
+	}
+	return sessionTokens, nil
+}
+
+func createTokens(options *IssueSecretOptions, cid *cid.ID) ([]*accessbox.GateData, error) {
+	gates := make([]*accessbox.GateData, len(options.GatesPublicKeys))
+
+	table, err := buildEACLTable(cid, options.EACLRules)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build eacl table: %w", err)
+	}
+	bearerTokens, err := buildBearerTokens(options.NeoFSKey, table, options.GatesPublicKeys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build bearer tokens: %w", err)
+	}
+	for i, gateKey := range options.GatesPublicKeys {
+		gates[i] = accessbox.NewGateData(gateKey, bearerTokens[i])
+	}
+
 	if options.SessionTkn {
 		sessionRules, err := buildContext(options.ContextRules)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
-		return buildSessionToken(options.NeoFSKey, oid, sessionRules)
+		oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+
+		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, sessionRules, options.GatesPublicKeys)
+		if err != nil {
+			return nil, err
+		}
+		for i, sessionToken := range sessionTokens {
+			gates[i].SessionToken = sessionToken
+		}
 	}
-	return nil, nil
+
+	return gates, nil
 }
 
 func ownerIDFromNeoFSKey(key *ecdsa.PublicKey) (*owner.ID, error) {
