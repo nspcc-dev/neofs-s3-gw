@@ -24,12 +24,12 @@ type GateData struct {
 	AccessKey    string
 	BearerToken  *token.BearerToken
 	SessionToken *session.Token
-	OwnerKey     *ecdsa.PublicKey
+	GateKey      *ecdsa.PublicKey
 }
 
-// NewGateData returns GateData from provided bearer token and public key.
-func NewGateData(bearerTkn *token.BearerToken, ownerKey *ecdsa.PublicKey) *GateData {
-	return &GateData{BearerToken: bearerTkn, OwnerKey: ownerKey}
+// NewGateData returns GateData from provided bearer token and public gate key.
+func NewGateData(gateKey *ecdsa.PublicKey, bearerTkn *token.BearerToken) *GateData {
+	return &GateData{GateKey: gateKey, BearerToken: bearerTkn}
 }
 
 // Secrets represents AccessKey and key to encrypt gate tokens.
@@ -50,7 +50,7 @@ func (x *AccessBox) Unmarshal(data []byte) error {
 
 // PackTokens adds a bearer and session tokens to BearerTokens and SessionToken lists respectively.
 // Session token can be nil.
-func PackTokens(gatesData []*GateData, sess *session.Token) (*AccessBox, *Secrets, error) {
+func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	box := &AccessBox{}
 	ephemeralKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -63,7 +63,7 @@ func PackTokens(gatesData []*GateData, sess *session.Token) (*AccessBox, *Secret
 		return nil, nil, fmt.Errorf("failed to generate accessKey as hex: %w", err)
 	}
 
-	if err := box.addTokens(gatesData, ephemeralKey, sess, secret); err != nil {
+	if err := box.addTokens(gatesData, ephemeralKey, secret); err != nil {
 		return nil, nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
 	}
 
@@ -89,14 +89,14 @@ func (x *AccessBox) GetTokens(owner *ecdsa.PrivateKey) (*GateData, error) {
 	return nil, fmt.Errorf("no gate data for key  %x was found", ownerKey)
 }
 
-func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *ecdsa.PrivateKey, sess *session.Token, secret []byte) error {
+func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *ecdsa.PrivateKey, secret []byte) error {
 	for i, gate := range gatesData {
 		encBearer, err := gate.BearerToken.Marshal()
 		if err != nil {
 			return fmt.Errorf("%w, sender = %d", err, i)
 		}
 		var encSession []byte
-		if sess != nil {
+		if gate.SessionToken != nil {
 			encSession, err = gate.SessionToken.Marshal()
 			if err != nil {
 				return fmt.Errorf("%w, sender = %d", err, i)
@@ -108,7 +108,7 @@ func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *ecdsa.Private
 		tokens.BearerToken = encBearer
 		tokens.SessionToken = encSession
 
-		boxGate, err := encodeGate(ephemeralKey, gate.OwnerKey, tokens)
+		boxGate, err := encodeGate(ephemeralKey, gate.GateKey, tokens)
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func decodeGate(gate *AccessBox_Gate, owner *ecdsa.PrivateKey, sender *ecdsa.Pub
 		return nil, err
 	}
 
-	gateData := NewGateData(bearerTkn, &owner.PublicKey)
+	gateData := NewGateData(&owner.PublicKey, bearerTkn)
 	gateData.SessionToken = sessionTkn
 	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
 	return gateData, nil
