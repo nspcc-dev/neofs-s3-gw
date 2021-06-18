@@ -15,7 +15,6 @@ import (
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
@@ -98,12 +97,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, fmt.Errorf("could not parse AccessBox address: %s : %w", accessKeyID, err)
 	}
 
-	tkn, err := c.cli.GetBearerToken(r.Context(), address)
-	if err != nil {
-		return nil, err
-	}
-
-	secret, err := authmate.BearerToAccessKey(tkn)
+	tkns, err := c.cli.GetTokens(r.Context(), address)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +113,7 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		}
 	}
 
-	awsCreds := credentials.NewStaticCredentials(accessKeyID, secret, "")
+	awsCreds := credentials.NewStaticCredentials(accessKeyID, tkns.AccessKey, "")
 	signer := v4.NewSigner(awsCreds)
 	signer.DisableURIPathEscaping = true
 
@@ -133,5 +127,5 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, errors.New("failed to pass authentication procedure")
 	}
 
-	return tkn, nil
+	return tkns.BearerToken, nil
 }

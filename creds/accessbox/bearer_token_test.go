@@ -6,12 +6,15 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
+	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/stretchr/testify/require"
 )
 
-func Test_tokens_encode_decode(t *testing.T) {
+func Test_tokens_encrypt_decrypt(t *testing.T) {
 	var (
 		tkn  = token.NewBearerToken()
 		tkn2 = token.NewBearerToken()
@@ -25,10 +28,16 @@ func Test_tokens_encode_decode(t *testing.T) {
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
-	data, err := encodeToken(tkn, cred, &cred.PublicKey)
+	rawTkn, err := tkn.Marshal()
 	require.NoError(t, err)
 
-	err = decodeToken(data, tkn2, cred, &cred.PublicKey)
+	data, err := encrypt(cred, &cred.PublicKey, rawTkn)
+	require.NoError(t, err)
+
+	rawTkn2, err := decrypt(cred, &cred.PublicKey, data)
+	require.NoError(t, err)
+
+	err = tkn2.Unmarshal(rawTkn2)
 	require.NoError(t, err)
 
 	require.Equal(t, tkn, tkn2)
@@ -50,7 +59,8 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
-	box, _, err = PackTokens(tkn, nil, &cred.PublicKey)
+	gate := NewGateData(&cred.PublicKey, tkn)
+	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
 	data, err := box.Marshal()
@@ -59,10 +69,48 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	tkn2, err := box2.GetBearerToken(cred)
+	tkns, err := box2.GetTokens(cred)
 	require.NoError(t, err)
 
-	require.Equal(t, tkn, tkn2)
+	require.Equal(t, tkn, tkns.BearerToken)
+}
+
+func Test_session_token_in_access_box(t *testing.T) {
+	var (
+		box  *AccessBox
+		box2 AccessBox
+		tkn  = session.NewToken()
+	)
+
+	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	tok := session.NewToken()
+	tok.SetContext(session.NewContainerContext())
+	uid, err := uuid.New().MarshalBinary()
+	require.NoError(t, err)
+	tok.SetID(uid)
+	tok.SetSessionKey(crypto.MarshalPublicKey(&sec.PublicKey))
+	require.NoError(t, tkn.Sign(sec))
+
+	gate := NewGateData(&cred.PublicKey, token.NewBearerToken())
+	gate.SessionToken = tkn
+	box, _, err = PackTokens([]*GateData{gate})
+	require.NoError(t, err)
+
+	data, err := box.Marshal()
+	require.NoError(t, err)
+
+	err = box2.Unmarshal(data)
+	require.NoError(t, err)
+
+	tkns, err := box2.GetTokens(cred)
+	require.NoError(t, err)
+
+	require.Equal(t, tkn, tkns.SessionToken)
 }
 
 func Test_accessbox_multiple_keys(t *testing.T) {
@@ -78,25 +126,25 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 	require.NoError(t, tkn.SignToken(sec))
 
 	count := 10
-	pubs := make([]*ecdsa.PublicKey, 0, count)
+	gates := make([]*GateData, 0, count)
 	keys := make([]*ecdsa.PrivateKey, 0, count)
 	{ // generate keys
 		for i := 0; i < count; i++ {
 			cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 			require.NoError(t, err)
 
-			pubs = append(pubs, &cred.PublicKey)
+			gates = append(gates, NewGateData(&cred.PublicKey, tkn))
 			keys = append(keys, cred)
 		}
 	}
 
-	box, _, err = PackTokens(tkn, nil, pubs...)
+	box, _, err = PackTokens(gates)
 	require.NoError(t, err)
 
 	for i, k := range keys {
-		tkn2, err := box.GetBearerToken(k)
+		tkns, err := box.GetTokens(k)
 		require.NoError(t, err, "key #%d: %s failed", i, k)
-		require.Equal(t, tkn2, tkn)
+		require.Equal(t, tkns.BearerToken, tkn)
 	}
 }
 
@@ -118,9 +166,10 @@ func Test_unknown_key(t *testing.T) {
 	tkn.SetEACLTable(eacl.NewTable())
 	require.NoError(t, tkn.SignToken(sec))
 
-	box, _, err = PackTokens(tkn, nil, &cred.PublicKey)
+	gate := NewGateData(&cred.PublicKey, tkn)
+	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
-	_, err = box.GetBearerToken(wrongCred)
+	_, err = box.GetTokens(wrongCred)
 	require.Error(t, err)
 }

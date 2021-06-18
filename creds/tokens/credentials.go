@@ -13,8 +13,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/session"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 )
@@ -22,8 +20,7 @@ import (
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
-		GetBearerToken(context.Context, *object.Address) (*token.BearerToken, error)
-		GetSessionToken(context.Context, *object.Address) (*session.Token, error)
+		GetTokens(context.Context, *object.Address) (*accessbox.GateData, error)
 		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, ...*ecdsa.PublicKey) (*object.Address, error)
 	}
 
@@ -62,31 +59,13 @@ func (c *cred) releaseBuffer(buf *bytes.Buffer) {
 	bufferPool.Put(buf)
 }
 
-func (c *cred) GetBearerToken(ctx context.Context, address *object.Address) (*token.BearerToken, error) {
+func (c *cred) GetTokens(ctx context.Context, address *object.Address) (*accessbox.GateData, error) {
 	box, err := c.getAccessBox(ctx, address)
 	if err != nil {
 		return nil, err
 	}
 
-	tkn, err := box.GetBearerToken(c.key)
-	if err != nil {
-		return nil, err
-	}
-	return tkn, nil
-}
-
-func (c *cred) GetSessionToken(ctx context.Context, address *object.Address) (*session.Token, error) {
-	box, err := c.getAccessBox(ctx, address)
-	if err != nil {
-		return nil, err
-	}
-
-	tkn, err := box.GetSessionToken(c.key)
-	if err != nil {
-		return nil, err
-	}
-
-	return tkn, nil
+	return box.GetTokens(c.key)
 }
 
 func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*accessbox.AccessBox, error) {
