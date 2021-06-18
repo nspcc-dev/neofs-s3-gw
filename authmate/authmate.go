@@ -3,7 +3,6 @@ package authmate
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -141,34 +140,23 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
+	gatesData, err := createTokens(options, cid)
+	if err != nil {
+		return fmt.Errorf("failed to build bearer token: %w", err)
+	}
+
+	box, secrets, err := accessbox.PackTokens(gatesData)
+	if err != nil {
+		return err
+	}
+
 	oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
 	if err != nil {
 		return err
 	}
 
-	a.log.Info("prepare eACL table")
-	bearerRules, err := buildEACLTable(cid, options.EACLRules)
-	if err != nil {
-		return fmt.Errorf("failed to build eacl table: %w", err)
-	}
-
-	bearerTkn, err := buildBearerToken(options.NeoFSKey, bearerRules, options.GatesPublicKeys[0])
-	if err != nil {
-		return fmt.Errorf("failed to build bearer token: %w", err)
-	}
-
-	sessionTkn, err := createSessionToken(options, oid)
-	if err != nil {
-		return fmt.Errorf("failed to create session token: %w", err)
-	}
-
-	box, ownerKey, err := accessbox.PackTokens(bearerTkn, sessionTkn, options.GatesPublicKeys...)
-	if err != nil {
-		return err
-	}
-
 	a.log.Info("store bearer token into NeoFS",
-		zap.Stringer("owner_tkn", bearerTkn.Issuer()))
+		zap.Stringer("owner_tkn", oid))
 
 	if !options.SessionTkn && len(options.ContextRules) > 0 {
 		_, err := w.Write([]byte("Warning: rules for session token were set but --create-session flag wasn't, " +
@@ -179,23 +167,18 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	}
 
 	address, err := tokens.
-		New(a.pool, ownerKey).
+		New(a.pool, secrets.EphemeralKey).
 		Put(ctx, cid, oid, box, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
-	}
-
-	secret, err := BearerToAccessKey(bearerTkn)
-	if err != nil {
-		return fmt.Errorf("failed to get bearer token secret key: %w", err)
 	}
 
 	accessKeyID := address.ContainerID().String() + "_" + address.ObjectID().String()
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
-		SecretAccessKey: secret,
-		OwnerPrivateKey: hex.EncodeToString(crypto.MarshalPrivateKey(ownerKey)),
+		SecretAccessKey: secrets.AccessKey,
+		OwnerPrivateKey: hex.EncodeToString(crypto.MarshalPrivateKey(secrets.EphemeralKey)),
 	}
 
 	enc := json.NewEncoder(w)
@@ -212,19 +195,14 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 		return fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
-	tkn, err := bearerCreds.GetBearerToken(ctx, address)
+	tkns, err := bearerCreds.GetTokens(ctx, address)
 	if err != nil {
-		return fmt.Errorf("failed to get bearer token: %w", err)
-	}
-
-	secret, err := BearerToAccessKey(tkn)
-	if err != nil {
-		return fmt.Errorf("failed to get bearer token secret key: %w", err)
+		return fmt.Errorf("failed to get tokens: %w", err)
 	}
 
 	or := &obtainingResult{
-		BearerToken:     tkn,
-		SecretAccessKey: secret,
+		BearerToken:     tkns.BearerToken,
+		SecretAccessKey: tkns.AccessKey,
 	}
 
 	enc := json.NewEncoder(w)
@@ -302,8 +280,8 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 	return sessionCtx, nil
 }
 
-func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, ownerKey *ecdsa.PublicKey) (*token.BearerToken, error) {
-	oid, err := ownerIDFromNeoFSKey(ownerKey)
+func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, gateKey *ecdsa.PublicKey) (*token.BearerToken, error) {
+	oid, err := ownerIDFromNeoFSKey(gateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +294,19 @@ func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, ownerKey *ecdsa.
 	return bearerToken, bearerToken.SignToken(key)
 }
 
-func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext) (*session.Token, error) {
+func buildBearerTokens(key *ecdsa.PrivateKey, table *eacl.Table, gatesKeys []*ecdsa.PublicKey) ([]*token.BearerToken, error) {
+	bearerTokens := make([]*token.BearerToken, 0, len(gatesKeys))
+	for _, gateKey := range gatesKeys {
+		tkn, err := buildBearerToken(key, table, gateKey)
+		if err != nil {
+			return nil, err
+		}
+		bearerTokens = append(bearerTokens, tkn)
+	}
+	return bearerTokens, nil
+}
+
+func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gateKey *ecdsa.PublicKey) (*session.Token, error) {
 	tok := session.NewToken()
 	tok.SetContext(ctx)
 	uid, err := uuid.New().MarshalBinary()
@@ -325,30 +315,58 @@ func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.Contai
 	}
 	tok.SetID(uid)
 	tok.SetOwnerID(oid)
+	tok.SetSessionKey(crypto.MarshalPublicKey(gateKey))
 
 	return tok, tok.Sign(key)
 }
 
-func createSessionToken(options *IssueSecretOptions, oid *owner.ID) (*session.Token, error) {
+func buildSessionTokens(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gatesKeys []*ecdsa.PublicKey) ([]*session.Token, error) {
+	sessionTokens := make([]*session.Token, 0, len(gatesKeys))
+	for _, gateKey := range gatesKeys {
+		tkn, err := buildSessionToken(key, oid, ctx, gateKey)
+		if err != nil {
+			return nil, err
+		}
+		sessionTokens = append(sessionTokens, tkn)
+	}
+	return sessionTokens, nil
+}
+
+func createTokens(options *IssueSecretOptions, cid *cid.ID) ([]*accessbox.GateData, error) {
+	gates := make([]*accessbox.GateData, len(options.GatesPublicKeys))
+
+	table, err := buildEACLTable(cid, options.EACLRules)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build eacl table: %w", err)
+	}
+	bearerTokens, err := buildBearerTokens(options.NeoFSKey, table, options.GatesPublicKeys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build bearer tokens: %w", err)
+	}
+	for i, gateKey := range options.GatesPublicKeys {
+		gates[i] = accessbox.NewGateData(gateKey, bearerTokens[i])
+	}
+
 	if options.SessionTkn {
 		sessionRules, err := buildContext(options.ContextRules)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
-		return buildSessionToken(options.NeoFSKey, oid, sessionRules)
-	}
-	return nil, nil
-}
+		oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
+		if err != nil {
+			return nil, err
+		}
 
-// BearerToAccessKey returns secret access key generated from given BearerToken.
-func BearerToAccessKey(tkn *token.BearerToken) (string, error) {
-	data, err := tkn.Marshal()
-	if err != nil {
-		return "", err
+		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, sessionRules, options.GatesPublicKeys)
+		if err != nil {
+			return nil, err
+		}
+		for i, sessionToken := range sessionTokens {
+			gates[i].SessionToken = sessionToken
+		}
 	}
 
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:]), nil
+	return gates, nil
 }
 
 func ownerIDFromNeoFSKey(key *ecdsa.PublicKey) (*owner.ID, error) {
