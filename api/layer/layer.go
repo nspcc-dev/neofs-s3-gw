@@ -13,8 +13,8 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -106,8 +106,8 @@ func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
-	if tkn, ok := ctx.Value(api.BearerTokenKey).(*token.BearerToken); ok && tkn != nil {
-		return tkn.Issuer()
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		return data.BearerToken.Issuer()
 	}
 
 	return n.pool.OwnerID()
@@ -115,11 +115,20 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 
 // BearerOpt returns client.WithBearer call option with token from context or with nil token.
 func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
-	if tkn, ok := ctx.Value(api.BearerTokenKey).(*token.BearerToken); ok && tkn != nil {
-		return client.WithBearer(tkn)
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		return client.WithBearer(data.BearerToken)
 	}
 
 	return client.WithBearer(nil)
+}
+
+// SessionOpt returns client.WithSession call option with token from context or with nil token.
+func (n *layer) SessionOpt(ctx context.Context) client.CallOption {
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		return client.WithSession(data.SessionToken)
+	}
+
+	return client.WithSession(nil)
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
