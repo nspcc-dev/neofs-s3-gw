@@ -107,6 +107,136 @@ Pprof and Prometheus are integrated into the gateway, but not enabled by
 default. To enable them use `--pprof` and `--metrics` flags or
 `HTTP_GW_PPROF`/`HTTP_GW_METRICS` environment variables.
 
+## NeoFS AuthMate
+
+Authmate is a tool to create gateway key pairs and AWS credentials. AWS users
+are authenticated with access key IDs and secrets, while NeoFS users are
+authenticated with key pairs. To complicate things further we have S3 gateway
+that usually acts on behalf of some user, but user doesn't necessarily want to
+give his keys to the gateway.
+
+To solve this we use NeoFS bearer tokens that are signed by the owner (NeoFS
+"user") and that can implement any kind of policy for NeoFS requests allowed
+using this token. But tokens can't be used directly as AWS credentials, thus
+they're stored on NeoFS as regular objects and access key ID is just an
+address of this object while secret is an SHA256 hash of this key.
+
+Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
+gateway keys. So in order for gateway to be able to successfully extract bearer
+token the object needs to be stored in a container available for the gateway
+to read and it needs to be encrypted with this gateway's key (among others
+potentially).
+
+#### Generation of key pairs
+
+To generate neofs key pairs for gateways, run the following command (`--count` is 1
+by default):
+
+```
+$ ./neofs-authmate generate-keys --count=2
+
+[
+  {
+    "private_key": "b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21",
+    "public_key": "dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64"
+  },
+  {
+    "private_key": "407c351b17446ca07521faceb8b7d3e738319635f39f892419e2bf94462b4419",
+    "public_key": "20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156"
+  }
+]
+```
+
+Private key is the one to use for `neofs-s3-gw` command, public one can be
+used to create new AWS credentials.
+
+#### Issuance of a secret
+
+To issue a secret means to create a Bearer and  (optionally) Session tokens and
+put them as an object into container on the NeoFS network. The tokens are
+encrypted by a set of gateway keys, so you need to pass them as well.
+
+If a parameter `container-id`  is not set, a new container will be created.
+
+Creation of the bearer token is mandatory, and creation of the session token is
+optional. If you want to add the session token you need to add a parameter
+`create-session-token`.
+
+Rules for bearer token can be set via param `bearer-rules`, if it is not set,
+it will be auto-generated with values:
+
+```
+{
+    "version": {
+        "major": 2,
+        "minor": 6
+    },
+    "containerID": {
+        "value": "%CID"
+    },
+    "records": [
+        {
+            "operation": "GET",
+            "action": "ALLOW",
+            "filters": [],
+            "targets": [
+                {
+                    "role": "OTHERS",
+                    "keys": []
+                }
+            ]
+        }
+    ]
+}
+```
+
+Rules for session token can be set via param `session-rules`, default value is:
+```
+{
+    "verb": "PUT",
+    "wildcard": true,
+    "containerID": null
+}
+```
+
+If `session-rules` is set, but `create-session-token` is not, the session
+token will not be created.
+
+Example of a command to issue a secret with custom rules for multiple gates:
+```
+$ ./neofs-authmate issue-secret --neofs-key user.key \
+--peer 192.168.130.71:8080 \
+--bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \
+--gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
+--gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156 \
+--create-session-token \
+--session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
+
+{
+  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
+  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
+  "owner_private_key": "274fdd6e71fc6a6b8fe77bec500254115d66d6d17347d7db0880d2eb80afc72a"
+}
+```
+
+Access key ID and secret access key are AWS credentials that you can use with
+any S3 client.
+
+#### Obtainment of a secret access key
+
+You can get a secret access key associated with access key ID by obtaining a
+secret stored on the NeoFS network:
+
+```
+ $ ./neofs-authmate obtain-secret --neofs-key user.key \
+ --peer 192.168.130.71:8080 \
+ --gate-private-key b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21 \
+ --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
+
+{
+  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c"
+}
+```
 
 ## S3 API supported
 
@@ -340,134 +470,3 @@ See also `GetObject` and other method parameters.
 | DeleteBucketWebsite       | Unsupported             |
 | GetBucketWebsite          | Unsupported             |
 | PutBucketWebsite          | Unsupported             |
-
-## NeoFS AuthMate
-
-Authmate is a tool to create gateway key pairs and AWS credentials. AWS users
-are authenticated with access key IDs and secrets, while NeoFS users are
-authenticated with key pairs. To complicate things further we have S3 gateway
-that usually acts on behalf of some user, but user doesn't necessarily want to
-give his keys to the gateway.
-
-To solve this we use NeoFS bearer tokens that are signed by the owner (NeoFS
-"user") and that can implement any kind of policy for NeoFS requests allowed
-using this token. But tokens can't be used directly as AWS credentials, thus
-they're stored on NeoFS as regular objects and access key ID is just an
-address of this object while secret is an SHA256 hash of this key.
-
-Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
-gateway keys. So in order for gateway to be able to successfully extract bearer
-token the object needs to be stored in a container available for the gateway
-to read and it needs to be encrypted with this gateway's key (among others
-potentially).
-
-#### Generation of key pairs
-
-To generate neofs key pairs for gateways, run the following command (`--count` is 1
-by default):
-
-```
-$ ./neofs-authmate generate-keys --count=2
-
-[
-  {
-    "private_key": "b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21",
-    "public_key": "dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64"
-  },
-  {
-    "private_key": "407c351b17446ca07521faceb8b7d3e738319635f39f892419e2bf94462b4419",
-    "public_key": "20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156"
-  }
-]
-```
-
-Private key is the one to use for `neofs-s3-gw` command, public one can be
-used to create new AWS credentials.
-
-#### Issuance of a secret
-
-To issue a secret means to create a Bearer and  (optionally) Session tokens and 
-put them as an object into container on the NeoFS network. The tokens are 
-encrypted by a set of gateway keys, so you need to pass them as well.
-
-If a parameter `container-id`  is not set, a new container will be created.
-
-Creation of the bearer token is mandatory, and creation of the session token is 
-optional. If you want to add the session token you need to add a parameter 
-`create-session-token`. 
-
-Rules for bearer token can be set via param `bearer-rules`, if it is not set, 
-it will be auto-generated with values: 
-
-```
-{
-    "version": {
-        "major": 2,
-        "minor": 6
-    },
-    "containerID": {
-        "value": "%CID"
-    },
-    "records": [
-        {
-            "operation": "GET",
-            "action": "ALLOW",
-            "filters": [],
-            "targets": [
-                {
-                    "role": "OTHERS",
-                    "keys": []
-                }
-            ]
-        }
-    ]
-}
-```
-
-Rules for session token can be set via param `session-rules`, default value is:
-```
-{
-    "verb": "PUT",
-    "wildcard": true,
-    "containerID": null
-}
-```
-
-If `session-rules` is set, but `create-session-token` is not, the session
-token will not be created.
-
-Example of a command to issue a secret with custom rules for multiple gates:
-```
-$ ./neofs-authmate issue-secret --neofs-key user.key \
---peer 192.168.130.71:8080 \ 
---bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \ 
---gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
---gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156 \
---create-session-token \
---session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
-
-{
-  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
-  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
-  "owner_private_key": "274fdd6e71fc6a6b8fe77bec500254115d66d6d17347d7db0880d2eb80afc72a"
-}
-```
-
-Access key ID and secret access key are AWS credentials that you can use with
-any S3 client.
-
-#### Obtainment of a secret access key
-
-You can get a secret access key associated with access key ID by obtaining a
-secret stored on the NeoFS network:
- 
- ```
- $ ./neofs-authmate obtain-secret --neofs-key user.key \
- --peer 192.168.130.71:8080 \
- --gate-private-key b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21 \
- --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
-
-{
-  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c"
-}
-```
