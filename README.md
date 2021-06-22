@@ -107,76 +107,6 @@ Pprof and Prometheus are integrated into the gateway, but not enabled by
 default. To enable them use `--pprof` and `--metrics` flags or
 `HTTP_GW_PPROF`/`HTTP_GW_METRICS` environment variables.
 
-
-## S3 API supported
-
-Reference:
-* [AWS S3 API Reference](https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf)
-
-### Bucket/Object-Level Actions
-
-| #   | Method Name               | Status                  |
-|:---:| ------------------------- | ----------------------- |
-| 1   | AbortMultipartUpload      | Unsupported             |
-| 2   | CompleteMultipartUpload   | Unsupported             |
-| 3   | CopyObject                | Supported               |
-| 4   | CopyObjectPart            | Unsupported             |
-| 5   | DeleteBucket              | Unsupported             |
-| 6   | DeleteBucketEncryption    | Unsupported             |
-| 7   | DeleteBucketLifecycle     | Unsupported             |
-| 8   | DeleteBucketPolicy        | Unsupported             |
-| 9   | DeleteBucketTagging       | Unsupported             |
-| 10  | DeleteBucketWebsite       | Unsupported             |
-| 11  | DeleteMultipleObjects     | Supported               |
-| 12  | DeleteObject              | Supported               |
-| 13  | DeleteObjectTagging       | Unsupported             |
-| 14  | GetBucketACL              | Unsupported             |
-| 15  | GetBucketAccelerate       | Supported               |
-| 16  | GetBucketCors             | Unsupported             |
-| 17  | GetBucketEncryption       | Unsupported             |
-| 18  | GetBucketLifecycle        | Unsupported             |
-| 19  | GetBucketLocation         | Unsupported             |
-| 20  | GetBucketLogging          | Unsupported             |
-| 21  | GetBucketNotification     | Unsupported             |
-| 22  | GetBucketObjectLockConfig | Unsupported             |
-| 23  | GetBucketPolicy           | Unsupported             |
-| 24  | GetBucketReplication      | Unsupported             |
-| 25  | GetBucketRequestPayment   | Unsupported             |
-| 26  | GetBucketTagging          | Unsupported             |
-| 27  | GetBucketVersioning       | Unsupported             |
-| 28  | GetBucketWebsite          | Unsupported             |
-| 29  | GetObject                 | Supported               |
-| 30  | GetObjectACL              | Unsupported             |
-| 31  | GetObjectLegalHold        | Unsupported             |
-| 32  | GetObjectRetention        | Unsupported             |
-| 33  | HeadBucket                | Supported               |
-| 34  | HeadObject                | Supported               |
-| 35  | ListBucketObjectVersions  | Unsupported             |
-| 36  | ListBuckets               | Supported               |
-| 37  | ListMultipartUploads      | Unsupported             |
-| 38  | ListObjectParts           | Unsupported             |
-| 39  | ListObjectsV1             | Supported               |
-| 40  | ListObjectsV2             | Supported               |
-| 41  | ListenBucketNotification  | Unsupported             |
-| 42  | NewMultipartUpload        | Unsupported             |
-| 43  | PostPolicyBucket          | Unsupported             |
-| 44  | PutBucket                 | Unsupported             |
-| 45  | PutBucketACL              | Unsupported             |
-| 46  | PutBucketEncryption       | Unsupported             |
-| 47  | PutBucketLifecycle        | Unsupported             |
-| 48  | PutBucketNotification     | Unsupported             |
-| 49  | PutBucketObjectLockConfig | Unsupported             |
-| 50  | PutBucketPolicy           | Unsupported             |
-| 51  | PutBucketTagging          | Unsupported             |
-| 52  | PutBucketVersioning       | Unsupported             |
-| 53  | PutObject                 | Supported               |
-| 54  | PutObjectACL              | Unsupported             |
-| 55  | PutObjectLegalHold        | Unsupported             |
-| 56  | PutObjectPart             | Unsupported             |
-| 57  | PutObjectRetention        | Unsupported             |
-| 58  | PutObjectTagging          | Unsupported             |
-| 59  | SelectObjectContent       | Unsupported             |
-
 ## NeoFS AuthMate
 
 Authmate is a tool to create gateway key pairs and AWS credentials. AWS users
@@ -222,18 +152,18 @@ used to create new AWS credentials.
 
 #### Issuance of a secret
 
-To issue a secret means to create a Bearer and  (optionally) Session tokens and 
-put them as an object into container on the NeoFS network. The tokens are 
+To issue a secret means to create a Bearer and  (optionally) Session tokens and
+put them as an object into container on the NeoFS network. The tokens are
 encrypted by a set of gateway keys, so you need to pass them as well.
 
 If a parameter `container-id`  is not set, a new container will be created.
 
-Creation of the bearer token is mandatory, and creation of the session token is 
-optional. If you want to add the session token you need to add a parameter 
-`create-session-token`. 
+Creation of the bearer token is mandatory, and creation of the session token is
+optional. If you want to add the session token you need to add a parameter
+`create-session-token`.
 
-Rules for bearer token can be set via param `bearer-rules`, if it is not set, 
-it will be auto-generated with values: 
+Rules for bearer token can be set via param `bearer-rules`, if it is not set,
+it will be auto-generated with values:
 
 ```
 {
@@ -275,8 +205,8 @@ token will not be created.
 Example of a command to issue a secret with custom rules for multiple gates:
 ```
 $ ./neofs-authmate issue-secret --neofs-key user.key \
---peer 192.168.130.71:8080 \ 
---bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \ 
+--peer 192.168.130.71:8080 \
+--bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \
 --gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
 --gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156 \
 --create-session-token \
@@ -296,8 +226,8 @@ any S3 client.
 
 You can get a secret access key associated with access key ID by obtaining a
 secret stored on the NeoFS network:
- 
- ```
+
+```
  $ ./neofs-authmate obtain-secret --neofs-key user.key \
  --peer 192.168.130.71:8080 \
  --gate-private-key b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21 \
@@ -307,3 +237,236 @@ secret stored on the NeoFS network:
   "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c"
 }
 ```
+
+## S3 API supported
+
+Reference:
+* [AWS S3 API Reference](https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf)
+
+### Object
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| CopyObject                | Supported               |
+| DeleteObject              | Supported               |
+| DeleteObjects             | Supported, aka DeleteMultipleObjects |
+| GetObject                 | Supported               |
+| GetObjectTorrent          | Unsupported, won't be   |
+| HeadObject                | Supported               |
+| ListObjectParts           | Unsupported             |
+| ListObjects               | Supported               |
+| ListObjectsV2             | Supported               |
+| PutObject                 | Supported (Content-MD5 option is not supported) |
+| SelectObjectContent       | Unsupported             |
+| WriteGetObjectResponse    | Unsupported             |
+
+#### ACL
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| GetObjectAcl              | Unsupported             |
+| PutObjectAcl              | Unsupported             |
+
+#### Locking
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| GetObjectLegalHold        | Unsupported             |
+| GetObjectLockConfiguration| Unsupported, aka GetBucketObjectLockConfig |
+| GetObjectRetention        | Unsupported             |
+| PutObjectLegalHold        | Unsupported             |
+| PutObjectLockConfiguration| Unsupported, aka PutBucketObjectLockConfig |
+| PutObjectRetention        | Unsupported             |
+
+#### Multipart
+
+Should be supported eventually.
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| AbortMultipartUpload      | Unsupported             |
+| CompleteMultipartUpload   | Unsupported             |
+| CreateMultipartUpload     | Unsupported, aka InitiateMultipartUpload and NewMultipartUpload |
+| ListMultipartUploads      | Unsupported             |
+| ListParts                 | Unsupported             |
+| UploadPart                | Unsupported, aka PutObjectPart  |
+| UploadPartCopy            | Unsupported, aka CopyObjectPart |
+
+#### Tagging
+
+Also passed in `PutObject` parameters. We can support adding via `PutObject`
+and getting via `GetBucketTagging`, but deleting and putting can't be
+supported normally.
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| DeleteObjectTagging       | Unsupported             |
+| GetObjectTagging          | Unsupported             |
+| PutObjectTagging          | Unsupported             |
+
+#### Versioning
+
+See also `GetObject` and other method parameters.
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| ListObjectVersions        | Unsupported, aka ListBucketObjectVersions |
+| RestoreObject             | Unsupported             |
+
+### Bucket
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| CreateBucket              | Unsupported, aka PutBucket |
+| DeleteBucket              | Unsupported             |
+| GetBucketLocation         | Unsupported             |
+| HeadBucket                | Supported               |
+| ListBuckets               | Supported               |
+| PutPublicAccessBlock      | Unsupported             |
+
+#### Acceleration
+
+| Method                             | Status                  |
+| ---------------------------------- | ----------------------- |
+| GetBucketAccelerateConfiguration   | Unsupported, aka GetBucketAccelerate |
+| PutBucketAccelerateConfiguration   | Unsupported             |
+
+#### ACL
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| GetBucketAcl              | Unsupported             |
+| PutBucketAcl              | Unsupported             |
+
+#### Analytics
+
+| Method                             | Status                  |
+| ---------------------------------- | ----------------------- |
+| DeleteBucketAnalyticsConfiguration | Unsupported             |
+| GetBucketAnalyticsConfiguration    | Unsupported             |
+| ListBucketAnalyticsConfigurations  | Unsupported             |
+| PutBucketAnalyticsConfiguration    | Unsupported             |
+
+
+#### Cors
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| DeleteBucketCors          | Unsupported             |
+| GetBucketCors             | Unsupported             |
+| PutBucketCors             | Unsupported             |
+
+
+#### Encryption
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| DeleteBucketEncryption    | Unsupported             |
+| GetBucketEncryption       | Unsupported             |
+| PutBucketEncryption       | Unsupported             |
+
+#### Inventory
+
+| Method                             | Status                  |
+| ---------------------------------- | ----------------------- |
+| DeleteBucketInventoryConfiguration | Unsupported             |
+| GetBucketInventoryConfiguration    | Unsupported             |
+| ListBucketInventoryConfigurations  | Unsupported             |
+| PutBucketInventoryConfiguration    | Unsupported             |
+
+#### Lifecycle
+
+| Method                          | Status                  |
+| ------------------------------- | ----------------------- |
+| DeleteBucketLifecycle           | Unsupported             |
+| GetBucketLifecycle              | Unsupported             |
+| GetBucketLifecycleConfiguration | Unsupported             |
+| PutBucketLifecycle              | Unsupported             |
+| PutBucketLifecycleConfiguration | Unsupported             |
+
+#### Logging
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| GetBucketLogging          | Unsupported             |
+| PutBucketLogging          | Unsupported             |
+
+#### Metrics
+
+| Method                           | Status                  |
+| -------------------------------- | ----------------------- |
+| DeleteBucketMetricsConfiguration | Unsupported             |
+| GetBucketMetricsConfiguration    | Unsupported             |
+| ListBucketMetricsConfigurations  | Unsupported             |
+| PutBucketMetricsConfiguration    | Unsupported             |
+
+#### Notifications
+
+| Method                             | Status                  |
+| ---------------------------------- | ----------------------- |
+| GetBucketNotification              | Unsupported             |
+| GetBucketNotificationConfiguration | Unsupported             |
+| ListenBucketNotification           | Unsupported, non-standard? |
+| PutBucketNotification              | Unsupported             |
+| PutBucketNotificationConfiguration | Unsupported             |
+
+#### Ownership controls
+
+| Method                        | Status                  |
+| ----------------------------- | ----------------------- |
+| DeleteBucketOwnershipControls | Unsupported             |
+| GetBucketOwnershipControls    | Unsupported             |
+| PutBucketOwnershipControls    | Unsupported             |
+
+#### Policy and replication
+
+| Method                  | Status                  |
+| ----------------------- | ----------------------- |
+| DeleteBucketPolicy      | Unsupported             |
+| DeleteBucketReplication | Unsupported             |
+| DeletePublicAccessBlock | Unsupported             |
+| GetBucketPolicy         | Unsupported             |
+| GetBucketPolicyStatus   | Unsupported             |
+| GetBucketReplication    | Unsupported             |
+| PostPolicyBucket        | Unsupported, non-standard? |
+| PutBucketPolicy         | Unsupported             |
+| PutBucketReplication    | Unsupported             |
+
+#### Request payment
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| GetBucketRequestPayment   | Unsupported             |
+| PutBucketRequestPayment   | Unsupported             |
+
+#### Tagging
+
+| Method                  | Status                  |
+| ----------------------- | ----------------------- |
+| DeleteBucketTagging     | Unsupported             |
+| GetBucketTagging        | Unsupported             |
+| PutBucketTagging        | Unsupported             |
+
+#### Tiering
+
+| Method                                         | Status                  |
+| ---------------------------------------------- | ----------------------- |
+| DeleteBucketIntelligentTieringConfiguration    | Unsupported             |
+| GetBucketIntelligentTieringConfiguration       | Unsupported             |
+| ListBucketIntelligentTieringConfigurations     | Unsupported             |
+| PutBucketIntelligentTieringConfiguration       | Unsupported             |
+
+#### Versioning
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| GetBucketVersioning       | Unsupported             |
+| PutBucketVersioning       | Unsupported             |
+
+#### Website
+
+| Method                    | Status                  |
+| ------------------------- | ----------------------- |
+| DeleteBucketWebsite       | Unsupported             |
+| GetBucketWebsite          | Unsupported             |
+| PutBucketWebsite          | Unsupported             |
