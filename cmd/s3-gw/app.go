@@ -3,9 +3,15 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
+	"fmt"
 	"math"
 	"net"
 	"net/http"
+
+	"github.com/nspcc-dev/neo-go/cli/flags"
+	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/wallet"
 
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -58,8 +64,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 		maxClientsCount    = defaultMaxClientsCount
 		maxClientsDeadline = defaultMaxClientsDeadline
-
-		nfsCredential = v.GetString(cfgNeoFSPrivateKey)
 	)
 
 	if v := v.GetDuration(cfgConnectTimeout); v > 0 {
@@ -82,8 +86,8 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		reBalance = v
 	}
 
-	if key, err = crypto.LoadPrivateKey(nfsCredential); err != nil {
-		l.Fatal("could not load NeoFS private key")
+	if key, err = getKeyFromWallet(v.GetString(cfgWallet), v.GetString(cfgAddress), v.GetString(cfgWalletPassphrase)); err != nil {
+		l.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
 	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
@@ -94,7 +98,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	l.Info("using credentials",
-		zap.String("NeoFS", nfsCredential))
+		zap.String("NeoFS", hex.EncodeToString(crypto.MarshalPrivateKey(key))))
 
 	opts := &pool.BuilderOptions{
 		Key:                     key,
@@ -132,6 +136,37 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 		maxClients: api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline),
 	}
+}
+
+func getKeyFromWallet(walletPath, addrStr, password string) (*ecdsa.PrivateKey, error) {
+	if len(walletPath) == 0 {
+		return nil, fmt.Errorf("wallet path must not be empty")
+	}
+	w, err := wallet.NewWalletFromFile(walletPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var addr util.Uint160
+	if len(addrStr) == 0 {
+		addr = w.GetChangeAddress()
+	} else {
+		addr, err = flags.ParseAddress(addrStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid address")
+		}
+	}
+
+	acc := w.GetAccount(addr)
+	if acc == nil {
+		return nil, fmt.Errorf("couldn't find wallet account for %s", addrStr)
+	}
+
+	if err := acc.Decrypt(password, w.Scrypt); err != nil {
+		return nil, fmt.Errorf("couldn't decrypt account: %w", err)
+	}
+
+	return &acc.PrivateKey().PrivateKey, nil
 }
 
 // Wait waits for application to finish.
