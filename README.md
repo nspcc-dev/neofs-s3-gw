@@ -127,28 +127,58 @@ token the object needs to be stored in a container available for the gateway
 to read and it needs to be encrypted with this gateway's key (among others
 potentially).
 
-#### Generation of key pairs
+#### Generation of wallet
 
-To generate neofs key pairs for gateways, run the following command (`--count` is 1
-by default):
+To generate wallets for gateways, run the following command:
 
 ```
-$ ./neofs-authmate generate-keys --count=2
+$ ./neo-go wallet init -a -w wallet.json
 
-[
-  {
-    "private_key": "b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21",
-    "public_key": "dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64"
-  },
-  {
-    "private_key": "407c351b17446ca07521faceb8b7d3e738319635f39f892419e2bf94462b4419",
-    "public_key": "20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156"
-  }
-]
+Enter the name of the account > AccountTestName
+Enter passphrase > 
+Confirm passphrase > 
+
+{
+ 	"version": "3.0",
+ 	"accounts": [
+ 		{
+ 			"address": "NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p",
+ 			"key": "6PYUFyYpJ1JGyMrYV8NqeUFLKfpEVHsGGjCYtTDkjnKaSgYizRBZxVerte",
+ 			"label": "AccountTestName",
+ 			"contract": {
+ 				"script": "DCECXCsUZPwUyKHs6nAyyCvJ5s/vLwZkkVtWNC0zWzH8a9dBVuezJw==",
+ 				"parameters": [
+ 					{
+ 						"name": "parameter0",
+ 						"type": "Signature"
+ 					}
+ 				],
+ 				"deployed": false
+ 			},
+ 			"lock": false,
+ 			"isDefault": false
+ 		}
+ 	],
+ 	"scrypt": {
+ 		"n": 16384,
+ 		"r": 8,
+ 		"p": 8
+ 	},
+ 	"extra": {
+ 		"Tokens": null
+ 	}
+ }
+
+wallet successfully created, file location is wallet.json
 ```
 
-Private key is the one to use for `neofs-s3-gw` command, public one can be
-used to create new AWS credentials.
+To get public key from wallet run:
+```
+$ ./bin/neo-go wallet dump-keys -w wallet.json
+
+NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
+025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7
+```
 
 #### Issuance of a secret
 
