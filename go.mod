@@ -4,10 +4,10 @@ go 1.16
 
 require (
 	github.com/aws/aws-sdk-go v1.37.9
-	github.com/golang/protobuf v1.4.3
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
-	github.com/nspcc-dev/neofs-api-go v1.27.0
+	github.com/nspcc-dev/neo-go v0.95.3
+	github.com/nspcc-dev/neofs-api-go v1.27.1
 	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/nspcc-dev/neofs-node v1.22.0
 	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210615074944-86a9aa92599b
