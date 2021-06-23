@@ -151,3 +151,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 
 	return cid, nil
 }
+
+func (n *layer) deleteContainer(ctx context.Context, cid *cid.ID) error {
+	return n.pool.DeleteContainer(ctx, cid, n.SessionOpt(ctx))
+}
