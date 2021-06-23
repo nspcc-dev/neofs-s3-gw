@@ -42,8 +42,10 @@ const ( // Settings.
 	cfgLoggerSamplingInitial    = "logger.sampling.initial"
 	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
 
-	// Keys.
-	cfgNeoFSPrivateKey = "neofs-key"
+	// Wallet.
+	cfgWallet           = "wallet"
+	cfgAddress          = "address"
+	cfgWalletPassphrase = "wallet.passphrase"
 
 	// HTTPS/TLS.
 	cfgTLSKeyFile  = "tls.key_file"
@@ -161,7 +163,8 @@ func newSettings() *viper.Viper {
 	help := flags.BoolP(cmdHelp, "h", false, "show help")
 	versionFlag := flags.BoolP(cmdVersion, "v", false, "show version")
 
-	flags.String(cfgNeoFSPrivateKey, "", "set value to hex string, WIF string, or path to NeoFS private key file")
+	flags.StringP(cfgWallet, "w", "", `path to the wallet`)
+	flags.String(cfgAddress, "", `address of wallet account`)
 
 	flags.Bool(cfgGRPCVerbose, false, "set debug mode of gRPC connections")
 	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")

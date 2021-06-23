@@ -3,10 +3,6 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -24,11 +20,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type gateKey struct {
-	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
-}
-
 const (
 	poolConnectTimeout = 5 * time.Second
 	poolRequestTimeout = 5 * time.Second
@@ -44,7 +35,6 @@ var (
 	containerIDFlag       string
 	containerFriendlyName string
 	gatesPublicKeysFlag   cli.StringSlice
-	gatesKeysCountFlag    int
 	logEnabledFlag        bool
 	logDebugEnabledFlag   bool
 	sessionTokenFlag      bool
@@ -120,63 +110,6 @@ func appCommands() []*cli.Command {
 	return []*cli.Command{
 		issueSecret(),
 		obtainSecret(),
-		generateKeys(),
-	}
-}
-
-func generateGatesKeys(count int) ([]*ecdsa.PrivateKey, error) {
-	var (
-		err error
-		res = make([]*ecdsa.PrivateKey, count)
-	)
-
-	for i := 0; i < count; i++ {
-		if res[i], err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader); err != nil {
-			return nil, err
-		}
-	}
-
-	return res, nil
-}
-
-func generateKeys() *cli.Command {
-	return &cli.Command{
-		Name:  "generate-keys",
-		Usage: "Generate key pairs for gates",
-		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:        "count",
-				Usage:       "number of 256r1 key pairs to generate",
-				Value:       1,
-				Destination: &gatesKeysCountFlag,
-			},
-		},
-		Action: func(c *cli.Context) error {
-			_, log := prepare()
-
-			log.Info("start generating P-256 keys")
-
-			csl, err := generateGatesKeys(gatesKeysCountFlag)
-			if err != nil {
-				return cli.Exit(fmt.Sprintf("failed to create key pairs of gates: %s", err), 1)
-			}
-
-			log.Info("generated P-256 keys")
-
-			gatesKeys := make([]gateKey, len(csl))
-			for i, cs := range csl {
-				privateKey, publicKey := hex.EncodeToString(cs.D.Bytes()), hex.EncodeToString(crypto.MarshalPublicKey(&cs.PublicKey))
-				gatesKeys[i] = gateKey{PrivateKey: privateKey, PublicKey: publicKey}
-			}
-
-			keys, err := json.MarshalIndent(gatesKeys, "", "  ")
-			if err != nil {
-				return cli.Exit(fmt.Sprintf("failed to marshal key pairs of gates: %s", err), 2)
-			}
-
-			fmt.Println(string(keys))
-			return nil
-		},
 	}
 }
 
