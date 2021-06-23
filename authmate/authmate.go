@@ -30,8 +30,6 @@ import (
 
 const (
 	defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001110
-	containerCreationTimeout            = 120 * time.Second
-	containerPollInterval               = 5 * time.Second
 )
 
 // Agent contains client communicating with NeoFS and logger.
@@ -78,14 +76,9 @@ type (
 )
 
 func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName string) (*cid.ID, error) {
-	conn, _, err := a.pool.Connection()
-	if err != nil {
-		return nil, err
-	}
-
 	if cid != nil {
 		// check that container exists
-		_, err = conn.GetContainer(ctx, cid)
+		_, err := a.pool.GetContainer(ctx, cid)
 		return cid, err
 	}
 
@@ -100,31 +93,15 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 		container.WithAttribute(container.AttributeName, friendlyName),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
 
-	cid, err = conn.PutContainer(ctx, cnr)
+	cid, err = a.pool.PutContainer(ctx, cnr)
 	if err != nil {
 		return nil, err
 	}
 
-	wctx, cancel := context.WithTimeout(ctx, containerCreationTimeout)
-	defer cancel()
-	ticker := time.NewTimer(containerPollInterval)
-	defer ticker.Stop()
-	wdone := wctx.Done()
-	done := ctx.Done()
-	for {
-		select {
-		case <-done:
-			return nil, ctx.Err()
-		case <-wdone:
-			return nil, wctx.Err()
-		case <-ticker.C:
-			_, err = conn.GetContainer(ctx, cid)
-			if err == nil {
-				return cid, nil
-			}
-			ticker.Reset(containerPollInterval)
-		}
+	if err := a.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams()); err != nil {
+		return nil, err
 	}
+	return cid, nil
 }
 
 // IssueSecret creates an auth token, puts it in the NeoFS network and writes to io.Writer a new secret access key.
