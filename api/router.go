@@ -68,7 +68,7 @@ type (
 		PutBucketTaggingHandler(http.ResponseWriter, *http.Request)
 		PutBucketVersioningHandler(http.ResponseWriter, *http.Request)
 		PutBucketNotificationHandler(http.ResponseWriter, *http.Request)
-		PutBucketHandler(http.ResponseWriter, *http.Request)
+		CreateBucketHandler(http.ResponseWriter, *http.Request)
 		HeadBucketHandler(http.ResponseWriter, *http.Request)
 		PostPolicyBucketHandler(http.ResponseWriter, *http.Request)
 		DeleteMultipleObjectsHandler(http.ResponseWriter, *http.Request)
@@ -412,10 +412,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("putbucketnotification", h.PutBucketNotificationHandler))).Queries("notification", "").
 			Name("PutBucketNotification")
-		// PutBucket
+		// CreateBucket
 		bucket.Methods(http.MethodPut).HandlerFunc(
-			m.Handle(metrics.APIStats("putbucket", h.PutBucketHandler))).
-			Name("PutBucket")
+			m.Handle(metrics.APIStats("createbucket", h.CreateBucketHandler))).
+			Name("CreateBucket")
 		// HeadBucket
 		bucket.Methods(http.MethodHead).HandlerFunc(
 			m.Handle(metrics.APIStats("headbucket", h.HeadBucketHandler))).

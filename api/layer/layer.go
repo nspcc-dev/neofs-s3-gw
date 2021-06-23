@@ -11,10 +11,11 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
+	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -61,6 +62,16 @@ type (
 		DstObject string
 		Header    map[string]string
 	}
+	// CreateBucketParams stores bucket create request parameters.
+	CreateBucketParams struct {
+		Name   string
+		ACL    uint32
+		Policy *netmap.PlacementPolicy
+	}
+	// DeleteBucketParams stores delete bucket request parameters.
+	DeleteBucketParams struct {
+		Name string
+	}
 
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
@@ -73,6 +84,8 @@ type (
 
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
+		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
+		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectInfo(ctx context.Context, bucketName, objectName string) (*ObjectInfo, error)
@@ -106,8 +119,8 @@ func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
-	if tkn, ok := ctx.Value(api.BearerTokenKey).(*token.BearerToken); ok && tkn != nil {
-		return tkn.Issuer()
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		return data.BearerToken.Issuer()
 	}
 
 	return n.pool.OwnerID()
@@ -115,11 +128,20 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 
 // BearerOpt returns client.WithBearer call option with token from context or with nil token.
 func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
-	if tkn, ok := ctx.Value(api.BearerTokenKey).(*token.BearerToken); ok && tkn != nil {
-		return client.WithBearer(tkn)
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		return client.WithBearer(data.BearerToken)
 	}
 
 	return client.WithBearer(nil)
+}
+
+// SessionOpt returns client.WithSession call option with token from context or with nil token.
+func (n *layer) SessionOpt(ctx context.Context) client.CallOption {
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		return client.WithSession(data.SessionToken)
+	}
+
+	return client.WithSession(nil)
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
@@ -398,4 +420,17 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 	}
 
 	return errs
+}
+
+func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+	return n.createContainer(ctx, p)
+}
+
+func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
+	bucketInfo, err := n.GetBucketInfo(ctx, p.Name)
+	if err != nil {
+		return err
+	}
+
+	return n.deleteContainer(ctx, bucketInfo.CID)
 }
