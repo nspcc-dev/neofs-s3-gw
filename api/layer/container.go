@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
 
@@ -124,4 +127,27 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	}
 
 	return list, nil
+}
+
+func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+	cnr := container.New(
+		container.WithPolicy(p.Policy),
+		container.WithCustomBasicACL(p.ACL),
+		container.WithAttribute(container.AttributeName, p.Name),
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
+
+	cnr.SetSessionToken(ctx.Value(api.GateData).(*accessbox.GateData).SessionToken)
+	cnr.SetOwnerID(n.Owner(ctx))
+
+	cid, err := n.pool.PutContainer(ctx, cnr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a bucket: %w", err)
+	}
+
+	err = n.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams())
+	if err != nil {
+		return nil, err
+	}
+
+	return cid, nil
 }

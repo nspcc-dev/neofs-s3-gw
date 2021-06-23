@@ -11,6 +11,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
+	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -61,6 +62,12 @@ type (
 		DstObject string
 		Header    map[string]string
 	}
+	// CreateBucketParams stores bucket create request parameters.
+	CreateBucketParams struct {
+		Name   string
+		ACL    uint32
+		Policy *netmap.PlacementPolicy
+	}
 
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
@@ -73,6 +80,7 @@ type (
 
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
+		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectInfo(ctx context.Context, bucketName, objectName string) (*ObjectInfo, error)
@@ -407,4 +415,8 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 	}
 
 	return errs
+}
+
+func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+	return n.createContainer(ctx, p)
 }

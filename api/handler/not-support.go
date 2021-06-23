@@ -62,11 +62,3 @@ func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 		HTTPStatusCode: http.StatusNotImplemented,
 	}, r.URL)
 }
-
-func (h *handler) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           api.GetAPIError(api.ErrBadRequest).Code,
-		Description:    notSupported + mux.CurrentRoute(r).GetName(),
-		HTTPStatusCode: http.StatusNotImplemented,
-	}, r.URL)
-}
