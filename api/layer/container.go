@@ -46,15 +46,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 			Name: cid.String(),
 		}
 	)
-
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		n.log.Error("failed to get connection from the pool",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-	res, err = conn.GetContainer(ctx, cid, bearerOpt)
+	res, err = n.pool.GetContainer(ctx, cid, bearerOpt)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.Stringer("cid", cid),
@@ -97,15 +89,7 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 		res       []*cid.ID
 		rid       = api.GetRequestID(ctx)
 	)
-
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		n.log.Error("failed to get connection from the pool",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-	res, err = conn.ListContainers(ctx, own, bearerOpt)
+	res, err = n.pool.ListContainers(ctx, own, bearerOpt)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
