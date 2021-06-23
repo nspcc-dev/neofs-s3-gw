@@ -68,6 +68,10 @@ type (
 		ACL    uint32
 		Policy *netmap.PlacementPolicy
 	}
+	// DeleteBucketParams stores delete bucket request parameters.
+	DeleteBucketParams struct {
+		Name string
+	}
 
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
@@ -81,6 +85,7 @@ type (
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
 		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
+		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectInfo(ctx context.Context, bucketName, objectName string) (*ObjectInfo, error)
@@ -419,4 +424,13 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	return n.createContainer(ctx, p)
+}
+
+func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
+	bucketInfo, err := n.GetBucketInfo(ctx, p.Name)
+	if err != nil {
+		return err
+	}
+
+	return n.deleteContainer(ctx, bucketInfo.CID)
 }
