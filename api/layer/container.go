@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
 
@@ -43,15 +46,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 			Name: cid.String(),
 		}
 	)
-
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		n.log.Error("failed to get connection from the pool",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-	res, err = conn.GetContainer(ctx, cid, bearerOpt)
+	res, err = n.pool.GetContainer(ctx, cid, bearerOpt)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.Stringer("cid", cid),
@@ -94,15 +89,7 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 		res       []*cid.ID
 		rid       = api.GetRequestID(ctx)
 	)
-
-	conn, _, err := n.pool.Connection()
-	if err != nil {
-		n.log.Error("failed to get connection from the pool",
-			zap.String("request_id", rid),
-			zap.Error(err))
-		return nil, err
-	}
-	res, err = conn.ListContainers(ctx, own, bearerOpt)
+	res, err = n.pool.ListContainers(ctx, own, bearerOpt)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
@@ -124,4 +111,31 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	}
 
 	return list, nil
+}
+
+func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+	cnr := container.New(
+		container.WithPolicy(p.Policy),
+		container.WithCustomBasicACL(p.ACL),
+		container.WithAttribute(container.AttributeName, p.Name),
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
+
+	cnr.SetSessionToken(ctx.Value(api.GateData).(*accessbox.GateData).SessionToken)
+	cnr.SetOwnerID(n.Owner(ctx))
+
+	cid, err := n.pool.PutContainer(ctx, cnr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a bucket: %w", err)
+	}
+
+	err = n.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams())
+	if err != nil {
+		return nil, err
+	}
+
+	return cid, nil
+}
+
+func (n *layer) deleteContainer(ctx context.Context, cid *cid.ID) error {
+	return n.pool.DeleteContainer(ctx, cid, n.SessionOpt(ctx))
 }

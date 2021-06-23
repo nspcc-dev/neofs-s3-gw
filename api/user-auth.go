@@ -12,15 +12,15 @@ import (
 // KeyWrapper is wrapper for context keys.
 type KeyWrapper string
 
-// BearerTokenKey is an ID used to store bearer token in a context.
-var BearerTokenKey = KeyWrapper("__context_bearer_token_key")
+// GateData is an ID used to store GateData in a context.
+var GateData = KeyWrapper("__context_gate_data_key")
 
 // AttachUserAuth adds user authentication via center to router using log for logging.
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 	router.Use(func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var ctx context.Context
-			token, err := center.Authenticate(r)
+			tokens, err := center.Authenticate(r)
 			if err != nil {
 				if err == auth.ErrNoAuthorizationHeader {
 					log.Debug("couldn't receive bearer token, using neofs-key")
@@ -31,7 +31,7 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 					return
 				}
 			} else {
-				ctx = context.WithValue(r.Context(), BearerTokenKey, token)
+				ctx = context.WithValue(r.Context(), GateData, tokens)
 			}
 
 			h.ServeHTTP(w, r.WithContext(ctx))

@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
@@ -25,7 +25,7 @@ var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(
 type (
 	// Center is a user authentication interface.
 	Center interface {
-		Authenticate(request *http.Request) (*token.BearerToken, error)
+		Authenticate(request *http.Request) (*accessbox.GateData, error)
 	}
 
 	center struct {
@@ -63,7 +63,7 @@ func New(conns pool.Pool, key *ecdsa.PrivateKey) Center {
 	}
 }
 
-func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
+func (c *center) Authenticate(r *http.Request) (*accessbox.GateData, error) {
 	queryValues := r.URL.Query()
 	if queryValues.Get("X-Amz-Algorithm") == "AWS4-HMAC-SHA256" {
 		return nil, errors.New("pre-signed form of request is not supported")
@@ -127,5 +127,5 @@ func (c *center) Authenticate(r *http.Request) (*token.BearerToken, error) {
 		return nil, errors.New("failed to pass authentication procedure")
 	}
 
-	return tkns.BearerToken, nil
+	return tkns, nil
 }

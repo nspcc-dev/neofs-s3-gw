@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/status"
 )
@@ -155,5 +156,27 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		}, r.URL)
 
 		return
+	}
+}
+
+func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		rid = api.GetRequestID(r.Context())
+		p   = layer.DeleteBucketParams{}
+		req = mux.Vars(r)
+	)
+	p.Name = req["bucket"]
+	err := h.obj.DeleteBucket(r.Context(), &p)
+	if err != nil {
+		h.log.Error("couldn't delete bucket",
+			zap.String("request_id", rid),
+			zap.String("bucket_name", p.Name),
+			zap.Error(err))
+
+		api.WriteErrorResponse(r.Context(), w, api.Error{
+			Code:           api.GetAPIError(api.ErrInternalError).Code,
+			Description:    err.Error(),
+			HTTPStatusCode: http.StatusInternalServerError,
+		}, r.URL)
 	}
 }
