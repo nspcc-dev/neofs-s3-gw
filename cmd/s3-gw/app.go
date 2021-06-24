@@ -3,20 +3,16 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"net"
 	"net/http"
 
-	"github.com/nspcc-dev/neo-go/cli/flags"
-	"github.com/nspcc-dev/neo-go/cli/input"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -85,12 +81,8 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		reBalance = v
 	}
 
-	var password *string
-	if v.IsSet(cfgWalletPassphrase) {
-		pwd := v.GetString(cfgWalletPassphrase)
-		password = &pwd
-	}
-	if key, err = getKeyFromWallet(v.GetString(cfgWallet), v.GetString(cfgAddress), password); err != nil {
+	password := wallet.GetPassword(v, cfgWalletPassphrase)
+	if key, err = wallet.GetKeyFromPath(v.GetString(cfgWallet), v.GetString(cfgAddress), password); err != nil {
 		l.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
@@ -120,7 +112,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	obj = layer.NewLayer(l, conns)
 
 	// prepare auth center
-	ctr = auth.New(conns, &key.PrivateKey)
+	ctr = auth.New(conns, key)
 
 	if caller, err = handler.New(l, obj); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
@@ -140,44 +132,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 		maxClients: api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline),
 	}
-}
-
-func getKeyFromWallet(walletPath, addrStr string, password *string) (*keys.PrivateKey, error) {
-	if len(walletPath) == 0 {
-		return nil, fmt.Errorf("wallet path must not be empty")
-	}
-	w, err := wallet.NewWalletFromFile(walletPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var addr util.Uint160
-	if len(addrStr) == 0 {
-		addr = w.GetChangeAddress()
-	} else {
-		addr, err = flags.ParseAddress(addrStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid address")
-		}
-	}
-
-	acc := w.GetAccount(addr)
-	if acc == nil {
-		return nil, fmt.Errorf("couldn't find wallet account for %s", addrStr)
-	}
-
-	if password == nil {
-		pwd, err := input.ReadPassword("Enter password > ")
-		if err != nil {
-			return nil, fmt.Errorf("couldn't read password")
-		}
-		password = &pwd
-	}
-	if err := acc.Decrypt(*password, w.Scrypt); err != nil {
-		return nil, fmt.Errorf("couldn't decrypt account: %w", err)
-	}
-
-	return acc.PrivateKey(), nil
 }
 
 // Wait waits for application to finish.
