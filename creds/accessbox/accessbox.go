@@ -3,7 +3,6 @@ package accessbox
 import (
 	"bytes"
 	"crypto/cipher"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,9 +10,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
@@ -24,18 +23,18 @@ type GateData struct {
 	AccessKey    string
 	BearerToken  *token.BearerToken
 	SessionToken *session.Token
-	GateKey      *ecdsa.PublicKey
+	GateKey      *keys.PublicKey
 }
 
 // NewGateData returns GateData from provided bearer token and public gate key.
-func NewGateData(gateKey *ecdsa.PublicKey, bearerTkn *token.BearerToken) *GateData {
+func NewGateData(gateKey *keys.PublicKey, bearerTkn *token.BearerToken) *GateData {
 	return &GateData{GateKey: gateKey, BearerToken: bearerTkn}
 }
 
 // Secrets represents AccessKey and key to encrypt gate tokens.
 type Secrets struct {
 	AccessKey    string
-	EphemeralKey *ecdsa.PrivateKey
+	EphemeralKey *keys.PrivateKey
 }
 
 // Marshal returns the wire-format of AccessBox.
@@ -52,11 +51,11 @@ func (x *AccessBox) Unmarshal(data []byte) error {
 // Session token can be nil.
 func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	box := &AccessBox{}
-	ephemeralKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	ephemeralKey, err := keys.NewPrivateKey()
 	if err != nil {
 		return nil, nil, err
 	}
-	box.OwnerPublicKey = crypto.MarshalPublicKey(&ephemeralKey.PublicKey)
+	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
 
 	secret, err := generateSecret()
 	if err != nil {
@@ -71,9 +70,12 @@ func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 }
 
 // GetTokens returns gate tokens from AccessBox.
-func (x *AccessBox) GetTokens(owner *ecdsa.PrivateKey) (*GateData, error) {
-	sender := crypto.UnmarshalPublicKey(x.OwnerPublicKey)
-	ownerKey := crypto.MarshalPublicKey(&owner.PublicKey)
+func (x *AccessBox) GetTokens(owner *keys.PrivateKey) (*GateData, error) {
+	sender, err := keys.NewPublicKeyFromBytes(x.OwnerPublicKey, elliptic.P256())
+	if err != nil {
+		return nil, fmt.Errorf("couldn't unmarshal OwnerPublicKey: %w", err)
+	}
+	ownerKey := owner.PublicKey().Bytes()
 	for _, gate := range x.Gates {
 		if !bytes.Equal(gate.GatePublicKey, ownerKey) {
 			continue
@@ -89,7 +91,7 @@ func (x *AccessBox) GetTokens(owner *ecdsa.PrivateKey) (*GateData, error) {
 	return nil, fmt.Errorf("no gate data for key  %x was found", ownerKey)
 }
 
-func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *ecdsa.PrivateKey, secret []byte) error {
+func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) error {
 	for i, gate := range gatesData {
 		encBearer, err := gate.BearerToken.Marshal()
 		if err != nil {
@@ -117,7 +119,7 @@ func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *ecdsa.Private
 	return nil
 }
 
-func encodeGate(ephemeralKey *ecdsa.PrivateKey, ownerKey *ecdsa.PublicKey, tokens *Tokens) (*AccessBox_Gate, error) {
+func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens *Tokens) (*AccessBox_Gate, error) {
 	data, err := proto.Marshal(tokens)
 	if err != nil {
 		return nil, err
@@ -129,12 +131,12 @@ func encodeGate(ephemeralKey *ecdsa.PrivateKey, ownerKey *ecdsa.PublicKey, token
 	}
 
 	gate := new(AccessBox_Gate)
-	gate.GatePublicKey = crypto.MarshalPublicKey(ownerKey)
+	gate.GatePublicKey = ownerKey.Bytes()
 	gate.Tokens = encrypted
 	return gate, nil
 }
 
-func decodeGate(gate *AccessBox_Gate, owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey) (*GateData, error) {
+func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.PublicKey) (*GateData, error) {
 	data, err := decrypt(owner, sender, gate.Tokens)
 	if err != nil {
 		return nil, err
@@ -153,14 +155,14 @@ func decodeGate(gate *AccessBox_Gate, owner *ecdsa.PrivateKey, sender *ecdsa.Pub
 		return nil, err
 	}
 
-	gateData := NewGateData(&owner.PublicKey, bearerTkn)
+	gateData := NewGateData(owner.PublicKey(), bearerTkn)
 	gateData.SessionToken = sessionTkn
 	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
 	return gateData, nil
 }
 
-func generateShared256(prv *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (sk []byte, err error) {
-	if prv.PublicKey.Curve != pub.Curve {
+func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, err error) {
+	if prv.PublicKey().Curve != pub.Curve {
 		return nil, fmt.Errorf("not equal curves")
 	}
 
@@ -183,7 +185,7 @@ func deriveKey(secret []byte) ([]byte, error) {
 	return key, err
 }
 
-func encrypt(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey, data []byte) ([]byte, error) {
+func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
 	enc, err := getCipher(owner, sender)
 	if err != nil {
 		return nil, err
@@ -197,7 +199,7 @@ func encrypt(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey, data []byte) ([]b
 	return enc.Seal(nonce, nonce, data, nil), nil
 }
 
-func decrypt(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey, data []byte) ([]byte, error) {
+func decrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
 	dec, err := getCipher(owner, sender)
 	if err != nil {
 		return nil, err
@@ -211,7 +213,7 @@ func decrypt(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey, data []byte) ([]b
 	return dec.Open(nil, nonce, cypher, nil)
 }
 
-func getCipher(owner *ecdsa.PrivateKey, sender *ecdsa.PublicKey) (cipher.AEAD, error) {
+func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey) (cipher.AEAD, error) {
 	secret, err := generateShared256(owner, sender)
 	if err != nil {
 		return nil, err

@@ -9,7 +9,6 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/nspcc-dev/neo-go v0.95.3
 	github.com/nspcc-dev/neofs-api-go v1.27.1
-	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/nspcc-dev/neofs-node v1.22.0
 	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210624072335-0348eb331c92
 	github.com/prometheus/client_golang v1.9.0

@@ -1,16 +1,13 @@
 package accessbox
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,22 +16,22 @@ func Test_tokens_encrypt_decrypt(t *testing.T) {
 		tkn  = token.NewBearerToken()
 		tkn2 = token.NewBearerToken()
 	)
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(sec))
+	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
 
 	rawTkn, err := tkn.Marshal()
 	require.NoError(t, err)
 
-	data, err := encrypt(cred, &cred.PublicKey, rawTkn)
+	data, err := encrypt(cred, cred.PublicKey(), rawTkn)
 	require.NoError(t, err)
 
-	rawTkn2, err := decrypt(cred, &cred.PublicKey, data)
+	rawTkn2, err := decrypt(cred, cred.PublicKey(), data)
 	require.NoError(t, err)
 
 	err = tkn2.Unmarshal(rawTkn2)
@@ -50,16 +47,16 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 		tkn  = token.NewBearerToken()
 	)
 
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(sec))
+	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
 
-	gate := NewGateData(&cred.PublicKey, tkn)
+	gate := NewGateData(cred.PublicKey(), tkn)
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
@@ -82,10 +79,10 @@ func Test_session_token_in_access_box(t *testing.T) {
 		tkn  = session.NewToken()
 	)
 
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
 	tok := session.NewToken()
@@ -93,10 +90,10 @@ func Test_session_token_in_access_box(t *testing.T) {
 	uid, err := uuid.New().MarshalBinary()
 	require.NoError(t, err)
 	tok.SetID(uid)
-	tok.SetSessionKey(crypto.MarshalPublicKey(&sec.PublicKey))
-	require.NoError(t, tkn.Sign(sec))
+	tok.SetSessionKey(sec.PublicKey().Bytes())
+	require.NoError(t, tkn.Sign(&sec.PrivateKey))
 
-	gate := NewGateData(&cred.PublicKey, token.NewBearerToken())
+	gate := NewGateData(cred.PublicKey(), token.NewBearerToken())
 	gate.SessionToken = tkn
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
@@ -119,29 +116,29 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 		tkn = token.NewBearerToken()
 	)
 
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(sec))
+	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
 
 	count := 10
 	gates := make([]*GateData, 0, count)
-	keys := make([]*ecdsa.PrivateKey, 0, count)
+	privateKeys := make([]*keys.PrivateKey, 0, count)
 	{ // generate keys
 		for i := 0; i < count; i++ {
-			cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			cred, err := keys.NewPrivateKey()
 			require.NoError(t, err)
 
-			gates = append(gates, NewGateData(&cred.PublicKey, tkn))
-			keys = append(keys, cred)
+			gates = append(gates, NewGateData(cred.PublicKey(), tkn))
+			privateKeys = append(privateKeys, cred)
 		}
 	}
 
 	box, _, err = PackTokens(gates)
 	require.NoError(t, err)
 
-	for i, k := range keys {
+	for i, k := range privateKeys {
 		tkns, err := box.GetTokens(k)
 		require.NoError(t, err, "key #%d: %s failed", i, k)
 		require.Equal(t, tkns.BearerToken, tkn)
@@ -154,19 +151,19 @@ func Test_unknown_key(t *testing.T) {
 		tkn = token.NewBearerToken()
 	)
 
-	sec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	cred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	wrongCred, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	wrongCred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
 	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(sec))
+	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
 
-	gate := NewGateData(&cred.PublicKey, tkn)
+	gate := NewGateData(cred.PublicKey(), tkn)
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
