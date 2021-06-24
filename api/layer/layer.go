@@ -38,11 +38,18 @@ type (
 
 	// GetObjectParams stores object get request parameters.
 	GetObjectParams struct {
+		Range  *RangeParams
 		Bucket string
 		Object string
 		Offset int64
 		Length int64
 		Writer io.Writer
+	}
+
+	// RangeParams stores range header request parameters.
+	RangeParams struct {
+		Start uint64
+		End   uint64
 	}
 
 	// PutObjectParams stores object put request parameters.
@@ -274,14 +281,23 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	addr.SetObjectID(oid)
 	addr.SetContainerID(bkt.CID)
 
-	_, err = n.objectGet(ctx, &getParams{
-		Writer: p.Writer,
-
+	params := &getParams{
+		Writer:  p.Writer,
 		address: addr,
+		offset:  p.Offset,
+		length:  p.Length,
+	}
 
-		offset: p.Offset,
-		length: p.Length,
-	})
+	if p.Range != nil {
+		objRange := object.NewRange()
+		objRange.SetOffset(p.Range.Start)
+		// Range header is inclusive
+		objRange.SetLength(p.Range.End - p.Range.Start + 1)
+		params.Range = objRange
+		_, err = n.objectRange(ctx, params)
+	} else {
+		_, err = n.objectGet(ctx, params)
+	}
 
 	if err != nil {
 		return fmt.Errorf("couldn't get object, cid: %s : %w", bkt.CID, err)
