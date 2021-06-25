@@ -24,6 +24,7 @@ type (
 
 	getParams struct {
 		io.Writer
+		*object.Range
 
 		offset  int64
 		length  int64
@@ -71,6 +72,13 @@ func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, er
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.GetObjectParams).WithAddress(p.address).WithPayloadWriter(w)
 	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
+}
+
+// objectRange gets object range and writes it into provided io.Writer.
+func (n *layer) objectRange(ctx context.Context, p *getParams) ([]byte, error) {
+	w := newWriter(p.Writer, p.offset, p.length)
+	ops := new(client.RangeDataParams).WithAddress(p.address).WithDataWriter(w).WithRange(p.Range)
+	return n.pool.ObjectPayloadRangeData(ctx, ops, n.BearerOpt(ctx))
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
