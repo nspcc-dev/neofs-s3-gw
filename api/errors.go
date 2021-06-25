@@ -24,6 +24,7 @@ const (
 	ErrEntityTooSmall
 	ErrEntityTooLarge
 	ErrPolicyTooLarge
+	ErrIllegalVersioningConfigurationException
 	ErrIncompleteBody
 	ErrInternalError
 	ErrInvalidAccessKeyID
@@ -381,6 +382,11 @@ var errorCodes = errorCodeMap{
 	ErrPolicyTooLarge: {
 		Code:           "PolicyTooLarge",
 		Description:    "Policy exceeds the maximum allowed document size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrIllegalVersioningConfigurationException: {
+		Code:           "IllegalVersioningConfigurationException",
+		Description:    "Indicates that the versioning configuration specified in the request is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrIncompleteBody: {

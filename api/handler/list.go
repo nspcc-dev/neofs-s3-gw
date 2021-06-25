@@ -13,13 +13,14 @@ import (
 )
 
 type listObjectsArgs struct {
-	Bucket    string
-	Delimeter string
-	Encode    string
-	Marker    string
-	MaxKeys   int
-	Prefix    string
-	Version   string
+	Bucket     string
+	Delimeter  string
+	Encode     string
+	Marker     string
+	StartAfter string
+	MaxKeys    int
+	Prefix     string
+	APIVersion int
 }
 
 // VersioningConfiguration contains VersioningConfiguration XML representation.
@@ -114,11 +115,17 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 		return nil, nil, err
 	}
 
+	marker := arg.Marker
+	if arg.APIVersion == 2 {
+		marker = arg.StartAfter
+	}
+
 	list, err := h.obj.ListObjects(r.Context(), &layer.ListObjectsParams{
 		Bucket:    arg.Bucket,
 		Prefix:    arg.Prefix,
 		MaxKeys:   arg.MaxKeys,
 		Delimiter: arg.Delimeter,
+		Marker:    marker,
 	})
 	if err != nil {
 		h.log.Error("something went wrong",
@@ -166,7 +173,7 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 		Delimiter:    arg.Delimeter,
 
 		IsTruncated: list.IsTruncated,
-		NextMarker:  list.NextContinuationToken,
+		NextMarker:  list.NextMarker,
 	}
 
 	// fill common prefixes
@@ -221,8 +228,10 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 		Name:         arg.Bucket,
 		EncodingType: arg.Encode,
 		Prefix:       arg.Prefix,
+		KeyCount:     len(list.Objects),
 		MaxKeys:      arg.MaxKeys,
 		Delimiter:    arg.Delimeter,
+		StartAfter:   arg.StartAfter,
 
 		IsTruncated: list.IsTruncated,
 
@@ -271,10 +280,19 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 	}
 
 	res.Prefix = r.URL.Query().Get("prefix")
-	res.Marker = r.URL.Query().Get("key-marker")
+	res.Marker = r.URL.Query().Get("marker")
 	res.Delimeter = r.URL.Query().Get("delimiter")
 	res.Encode = r.URL.Query().Get("encoding-type")
-	res.Version = r.URL.Query().Get("version-id-marker")
+	res.StartAfter = r.URL.Query().Get("start-after")
+	apiVersionStr := r.URL.Query().Get("list-type")
+
+	res.APIVersion = 1
+	if len(apiVersionStr) != 0 {
+		if apiVersion, err := strconv.Atoi(apiVersionStr); err != nil || apiVersion != 2 {
+			return nil, api.GetAPIError(api.ErrIllegalVersioningConfigurationException)
+		}
+		res.APIVersion = 2
+	}
 
 	if info := api.GetReqInfo(r.Context()); info != nil {
 		res.Bucket = info.BucketName
