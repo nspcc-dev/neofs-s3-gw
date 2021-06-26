@@ -151,6 +151,7 @@ func newSettings() *viper.Viper {
 	v.SetEnvPrefix(envPrefix)
 	v.SetConfigType("yaml")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AllowEmptyEnv(true)
 
 	// flags setup:
 	flags := pflag.NewFlagSet("commandline", pflag.ExitOnError)

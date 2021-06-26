@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
@@ -20,7 +21,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
@@ -48,8 +48,8 @@ type (
 	IssueSecretOptions struct {
 		ContainerID           *cid.ID
 		ContainerFriendlyName string
-		NeoFSKey              *ecdsa.PrivateKey
-		GatesPublicKeys       []*ecdsa.PublicKey
+		NeoFSKey              *keys.PrivateKey
+		GatesPublicKeys       []*keys.PublicKey
 		EACLRules             []byte
 		ContextRules          []byte
 		SessionTkn            bool
@@ -58,7 +58,7 @@ type (
 	// ObtainSecretOptions contains options for passing to Agent.ObtainSecret method.
 	ObtainSecretOptions struct {
 		SecretAddress  string
-		GatePrivateKey *ecdsa.PrivateKey
+		GatePrivateKey *keys.PrivateKey
 	}
 )
 
@@ -127,7 +127,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
-	oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
+	oid, err := ownerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secrets.AccessKey,
-		OwnerPrivateKey: hex.EncodeToString(crypto.MarshalPrivateKey(secrets.EphemeralKey)),
+		OwnerPrivateKey: hex.EncodeToString(secrets.EphemeralKey.Bytes()),
 	}
 
 	enc := json.NewEncoder(w)
@@ -257,7 +257,7 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 	return sessionCtx, nil
 }
 
-func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, gateKey *ecdsa.PublicKey) (*token.BearerToken, error) {
+func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, gateKey *keys.PublicKey) (*token.BearerToken, error) {
 	oid, err := ownerIDFromNeoFSKey(gateKey)
 	if err != nil {
 		return nil, err
@@ -268,10 +268,10 @@ func buildBearerToken(key *ecdsa.PrivateKey, table *eacl.Table, gateKey *ecdsa.P
 	bearerToken.SetOwner(oid)
 	bearerToken.SetLifetime(math.MaxUint64, 0, 0)
 
-	return bearerToken, bearerToken.SignToken(key)
+	return bearerToken, bearerToken.SignToken(&key.PrivateKey)
 }
 
-func buildBearerTokens(key *ecdsa.PrivateKey, table *eacl.Table, gatesKeys []*ecdsa.PublicKey) ([]*token.BearerToken, error) {
+func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, gatesKeys []*keys.PublicKey) ([]*token.BearerToken, error) {
 	bearerTokens := make([]*token.BearerToken, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
 		tkn, err := buildBearerToken(key, table, gateKey)
@@ -283,7 +283,7 @@ func buildBearerTokens(key *ecdsa.PrivateKey, table *eacl.Table, gatesKeys []*ec
 	return bearerTokens, nil
 }
 
-func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gateKey *ecdsa.PublicKey) (*session.Token, error) {
+func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gateKey *keys.PublicKey) (*session.Token, error) {
 	tok := session.NewToken()
 	tok.SetContext(ctx)
 	uid, err := uuid.New().MarshalBinary()
@@ -292,12 +292,12 @@ func buildSessionToken(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.Contai
 	}
 	tok.SetID(uid)
 	tok.SetOwnerID(oid)
-	tok.SetSessionKey(crypto.MarshalPublicKey(gateKey))
+	tok.SetSessionKey(gateKey.Bytes())
 
-	return tok, tok.Sign(key)
+	return tok, tok.Sign(&key.PrivateKey)
 }
 
-func buildSessionTokens(key *ecdsa.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gatesKeys []*ecdsa.PublicKey) ([]*session.Token, error) {
+func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gatesKeys []*keys.PublicKey) ([]*session.Token, error) {
 	sessionTokens := make([]*session.Token, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
 		tkn, err := buildSessionToken(key, oid, ctx, gateKey)
@@ -329,7 +329,7 @@ func createTokens(options *IssueSecretOptions, cid *cid.ID) ([]*accessbox.GateDa
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
-		oid, err := ownerIDFromNeoFSKey(&options.NeoFSKey.PublicKey)
+		oid, err := ownerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
 		if err != nil {
 			return nil, err
 		}
@@ -346,23 +346,10 @@ func createTokens(options *IssueSecretOptions, cid *cid.ID) ([]*accessbox.GateDa
 	return gates, nil
 }
 
-func ownerIDFromNeoFSKey(key *ecdsa.PublicKey) (*owner.ID, error) {
-	wallet, err := owner.NEO3WalletFromPublicKey(key)
+func ownerIDFromNeoFSKey(key *keys.PublicKey) (*owner.ID, error) {
+	wallet, err := owner.NEO3WalletFromPublicKey((*ecdsa.PublicKey)(key))
 	if err != nil {
 		return nil, err
 	}
 	return owner.NewIDFromNeo3Wallet(wallet), nil
-}
-
-// LoadPublicKey returns ecdsa.PublicKey from hex string.
-func LoadPublicKey(val string) (*ecdsa.PublicKey, error) {
-	data, err := hex.DecodeString(val)
-	if err != nil {
-		return nil, fmt.Errorf("unknown key format (%q), expect: hex-string", val)
-	}
-
-	if key := crypto.UnmarshalPublicKey(data); key != nil {
-		return key, nil
-	}
-	return nil, fmt.Errorf("couldn't unmarshal public key (%q)", val)
 }
