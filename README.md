@@ -109,7 +109,7 @@ default. To enable them use `--pprof` and `--metrics` flags or
 
 ## NeoFS AuthMate
 
-Authmate is a tool to create gateway key pairs and AWS credentials. AWS users
+Authmate is a tool to create gateway AWS credentials. AWS users
 are authenticated with access key IDs and secrets, while NeoFS users are
 authenticated with key pairs. To complicate things further we have S3 gateway
 that usually acts on behalf of some user, but user doesn't necessarily want to
@@ -119,13 +119,24 @@ To solve this we use NeoFS bearer tokens that are signed by the owner (NeoFS
 "user") and that can implement any kind of policy for NeoFS requests allowed
 using this token. But tokens can't be used directly as AWS credentials, thus
 they're stored on NeoFS as regular objects and access key ID is just an
-address of this object while secret is an SHA256 hash of this key.
+address of this object while secret is generated randomly.
 
 Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
 gateway keys. So in order for gateway to be able to successfully extract bearer
 token the object needs to be stored in a container available for the gateway
 to read and it needs to be encrypted with this gateway's key (among others
 potentially).
+
+### Variables
+Authmate support the following variables to decrypt wallets provided by `--wallet` and `--gate-wallet`
+parameters respectevely:
+* `AUTHMATE_WALLET_PASSPHRASE`
+* `AUTHMATE_WALLET_GATE_PASSPHRASE`
+  
+If the passphrase is not specified, you will be asked to enter the password interactively:
+```
+Enter password for wallet.json > 
+```
 
 #### Generation of wallet
 
@@ -234,7 +245,7 @@ token will not be created.
 
 Example of a command to issue a secret with custom rules for multiple gates:
 ```
-$ ./neofs-authmate issue-secret --neofs-key user.key \
+$ ./neofs-authmate issue-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
 --bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \
 --gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
@@ -242,6 +253,7 @@ $ ./neofs-authmate issue-secret --neofs-key user.key \
 --create-session-token \
 --session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
 
+Enter password for wallet.json > 
 {
   "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
   "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
@@ -255,14 +267,17 @@ any S3 client.
 #### Obtainment of a secret access key
 
 You can get a secret access key associated with access key ID by obtaining a
-secret stored on the NeoFS network:
+secret stored on the NeoFS network. Here example of providing one password (for `wallet.json`) via env variable 
+and other (for `gate-wallet.json`) interactively:
 
 ```
- $ ./neofs-authmate obtain-secret --neofs-key user.key \
+ $ AUTHMATE_WALLET_PASSPHRASE=some-pwd \
+  ./neofs-authmate obtain-secret --wallet wallet.json \
  --peer 192.168.130.71:8080 \
- --gate-private-key b8ba980eb70b959be99915d2e0ad377809984ccd1dac0a6551907f81c2b33d21 \
+ --gate-wallet gate-wallet.json \
  --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
 
+Enter password for gate-wallet.json >
 {
   "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c"
 }

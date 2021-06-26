@@ -10,11 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
-	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
+	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -26,18 +28,25 @@ const (
 )
 
 var (
-	neoFSKeyPathFlag      string
-	peerAddressFlag       string
-	eaclRulesFlag         string
-	contextRulesFlag      string
-	gatePrivateKeyFlag    string
-	accessKeyIDFlag       string
-	containerIDFlag       string
-	containerFriendlyName string
-	gatesPublicKeysFlag   cli.StringSlice
-	logEnabledFlag        bool
-	logDebugEnabledFlag   bool
-	sessionTokenFlag      bool
+	walletPathFlag         string
+	accountAddressFlag     string
+	peerAddressFlag        string
+	eaclRulesFlag          string
+	contextRulesFlag       string
+	gateWalletPathFlag     string
+	gateAccountAddressFlag string
+	accessKeyIDFlag        string
+	containerIDFlag        string
+	containerFriendlyName  string
+	gatesPublicKeysFlag    cli.StringSlice
+	logEnabledFlag         bool
+	logDebugEnabledFlag    bool
+	sessionTokenFlag       bool
+)
+
+const (
+	envWalletPassphrase     = "wallet.passphrase"
+	envWalletGatePassphrase = "wallet.gate.passphrase"
 )
 
 var zapConfig = zap.Config{
@@ -85,6 +94,11 @@ func main() {
 		Commands: appCommands(),
 	}
 
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("AUTHMATE")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AllowEmptyEnv(true)
+
 	if err := app.Run(os.Args); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(100)
@@ -119,11 +133,18 @@ func issueSecret() *cli.Command {
 		Usage: "Issue a secret in NeoFS network",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "neofs-key",
+				Name:        "wallet",
 				Value:       "",
-				Usage:       "path to owner's neofs private ecdsa key",
+				Usage:       "path to the wallet",
 				Required:    true,
-				Destination: &neoFSKeyPathFlag,
+				Destination: &walletPathFlag,
+			},
+			&cli.StringFlag{
+				Name:        "address",
+				Value:       "",
+				Usage:       "address of wallet account",
+				Required:    false,
+				Destination: &accountAddressFlag,
 			},
 			&cli.StringFlag{
 				Name:        "peer",
@@ -174,7 +195,8 @@ func issueSecret() *cli.Command {
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
 
-			key, err := crypto.LoadPrivateKey(neoFSKeyPathFlag)
+			password := wallet.GetPassword(viper.GetViper(), envWalletPassphrase)
+			key, err := wallet.GetKeyFromPath(walletPathFlag, accountAddressFlag, password)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to load neofs private key: %s", err), 1)
 			}
@@ -182,7 +204,7 @@ func issueSecret() *cli.Command {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			client, err := createSDKClient(ctx, log, key, peerAddressFlag)
+			client, err := createSDKClient(ctx, log, &key.PrivateKey, peerAddressFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
 			}
@@ -196,9 +218,9 @@ func issueSecret() *cli.Command {
 				}
 			}
 
-			var gatesPublicKeys []*ecdsa.PublicKey
+			var gatesPublicKeys []*keys.PublicKey
 			for _, key := range gatesPublicKeysFlag.Value() {
-				gpk, err := authmate.LoadPublicKey(key)
+				gpk, err := keys.NewPublicKeyFromString(key)
 				if err != nil {
 					return cli.Exit(fmt.Sprintf("failed to load gate's public key: %s", err), 5)
 				}
@@ -230,11 +252,18 @@ func obtainSecret() *cli.Command {
 		Usage: "Obtain a secret from NeoFS network",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "neofs-key",
+				Name:        "wallet",
 				Value:       "",
-				Usage:       "path to owner's neofs private ecdsa key",
+				Usage:       "path to the wallet",
 				Required:    true,
-				Destination: &neoFSKeyPathFlag,
+				Destination: &walletPathFlag,
+			},
+			&cli.StringFlag{
+				Name:        "address",
+				Value:       "",
+				Usage:       "address of wallet account",
+				Required:    false,
+				Destination: &accountAddressFlag,
 			},
 			&cli.StringFlag{
 				Name:        "peer",
@@ -244,10 +273,18 @@ func obtainSecret() *cli.Command {
 				Destination: &peerAddressFlag,
 			},
 			&cli.StringFlag{
-				Name:        "gate-private-key",
-				Usage:       "gate's private x25519 key",
+				Name:        "gate-wallet",
+				Value:       "",
+				Usage:       "path to the wallet",
 				Required:    true,
-				Destination: &gatePrivateKeyFlag,
+				Destination: &gateWalletPathFlag,
+			},
+			&cli.StringFlag{
+				Name:        "gate-address",
+				Value:       "",
+				Usage:       "address of wallet account",
+				Required:    false,
+				Destination: &gateAccountAddressFlag,
 			},
 			&cli.StringFlag{
 				Name:        "access-key-id",
@@ -259,7 +296,8 @@ func obtainSecret() *cli.Command {
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
 
-			key, err := crypto.LoadPrivateKey(neoFSKeyPathFlag)
+			password := wallet.GetPassword(viper.GetViper(), envWalletPassphrase)
+			key, err := wallet.GetKeyFromPath(walletPathFlag, accountAddressFlag, password)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to load neofs private key: %s", err), 1)
 			}
@@ -267,7 +305,7 @@ func obtainSecret() *cli.Command {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			client, err := createSDKClient(ctx, log, key, peerAddressFlag)
+			client, err := createSDKClient(ctx, log, &key.PrivateKey, peerAddressFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
 			}
@@ -276,7 +314,8 @@ func obtainSecret() *cli.Command {
 
 			var _ = agent
 
-			gateCreds, err := crypto.LoadPrivateKey(gatePrivateKeyFlag)
+			password = wallet.GetPassword(viper.GetViper(), envWalletGatePassphrase)
+			gateCreds, err := wallet.GetKeyFromPath(gateWalletPathFlag, gateAccountAddressFlag, password)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create owner's private key: %s", err), 4)
 			}

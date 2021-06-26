@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
@@ -56,7 +56,7 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(conns pool.Pool, key *ecdsa.PrivateKey) Center {
+func New(conns pool.Pool, key *keys.PrivateKey) Center {
 	return &center{
 		cli: tokens.New(conns, key),
 		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
