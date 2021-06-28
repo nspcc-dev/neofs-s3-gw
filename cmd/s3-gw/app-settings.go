@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -17,8 +16,6 @@ import (
 )
 
 const (
-	devNull = empty(0)
-
 	minimumTTLInMinutes = 5
 
 	defaultTTL = minimumTTLInMinutes * time.Minute
@@ -81,6 +78,7 @@ const ( // Settings.
 	// Command line args.
 	cmdHelp    = "help"
 	cmdVersion = "version"
+	cmdConfig  = "config"
 
 	// applicationName is gateway name.
 	applicationName = "neofs-s3-gw"
@@ -88,8 +86,6 @@ const ( // Settings.
 	// envPrefix is environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
 )
-
-type empty int
 
 var ignore = map[string]struct{}{
 	cfgApplicationName:      {},
@@ -101,8 +97,6 @@ var ignore = map[string]struct{}{
 	cmdHelp:    {},
 	cmdVersion: {},
 }
-
-func (empty) Read([]byte) (int, error) { return 0, io.EOF }
 
 func fetchPeers(l *zap.Logger, v *viper.Viper) *pool.Builder {
 	pb := new(pool.Builder)
@@ -166,6 +160,7 @@ func newSettings() *viper.Viper {
 
 	flags.StringP(cfgWallet, "w", "", `path to the wallet`)
 	flags.String(cfgAddress, "", `address of wallet account`)
+	config := flags.String(cmdConfig, "", "config path")
 
 	flags.Bool(cfgGRPCVerbose, false, "set debug mode of gRPC connections")
 	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")
@@ -201,10 +196,6 @@ func newSettings() *viper.Viper {
 	v.SetDefault(cfgLoggerSamplingThereafter, 1000)
 
 	if err := v.BindPFlags(flags); err != nil {
-		panic(err)
-	}
-
-	if err := v.ReadConfig(devNull); err != nil {
 		panic(err)
 	}
 
@@ -260,6 +251,14 @@ func newSettings() *viper.Viper {
 		os.Exit(0)
 	case ttl != nil && ttl.Minutes() < minimumTTLInMinutes:
 		fmt.Printf("connection ttl should not be less than %s", defaultTTL)
+	}
+
+	if v.IsSet(cmdConfig) {
+		if cfgFile, err := os.Open(*config); err != nil {
+			panic(err)
+		} else if err := v.ReadConfig(cfgFile); err != nil {
+			panic(err)
+		}
 	}
 
 	return v

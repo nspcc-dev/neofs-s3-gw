@@ -57,7 +57,7 @@ $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
 
 In general, everything available as CLI parameter can also be specified via
 environment variables, so they're not specifically mentioned in most cases
-(see `--help` also).
+(see `--help` also). If you prefer a config file you can use it in yaml format.
 
 ### Nodes and weights
 
@@ -107,6 +107,42 @@ $ neofs-s3-gw --listen_address 192.168.130.130:443 \
 Pprof and Prometheus are integrated into the gateway, but not enabled by
 default. To enable them use `--pprof` and `--metrics` flags or
 `HTTP_GW_PPROF`/`HTTP_GW_METRICS` environment variables.
+
+### Yaml file
+Configuration file is optional and can be used instead of environment variables/other parameters. 
+It can be specified with `--config` parameter:
+```
+$ neofs-s3-gw --config your-config.yaml
+```
+
+Configuration file example:
+```
+listen_address: 0.0.0.0:8084
+
+wallet:
+  passphrase: 123456
+
+logger:
+  level: debug
+
+peers:
+  0:
+    address: s01.neofs.devenv:8080
+    weight: 1
+```
+
+To know nesting level of variable you need to cut off the prefix `S3_GW` from variable and split the rest parts by `_`.
+For example variable `S3_GW_PEERS_0_WEIGHT=1` will be transformed to:
+```
+peers:
+  0:
+    weight: 1
+```
+
+If parameter doesn't support environment variable (e.g. `--listen_address 0.0.0.0:8084`) form it is used as is:
+```
+listen_address: 0.0.0.0:8084
+```
 
 ## NeoFS AuthMate
 
