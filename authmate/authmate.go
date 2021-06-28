@@ -53,6 +53,7 @@ type (
 		EACLRules             []byte
 		ContextRules          []byte
 		SessionTkn            bool
+		Lifetime              uint64
 	}
 
 	// ObtainSecretOptions contains options for passing to Agent.ObtainSecret method.
@@ -61,6 +62,12 @@ type (
 		GatePrivateKey *keys.PrivateKey
 	}
 )
+
+// lifetimeOptions holds NeoFS epochs, iat -- epoch, which a token was issued at, exp -- epoch, when the token expires.
+type lifetimeOptions struct {
+	Iat uint64
+	Exp uint64
+}
 
 type (
 	issuingResult struct {
@@ -104,20 +111,42 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 	return cid, nil
 }
 
+func (a *Agent) getCurrentEpoch(ctx context.Context) (uint64, error) {
+	if conn, _, err := a.pool.Connection(); err != nil {
+		return 0, err
+	} else if networkInfo, err := conn.NetworkInfo(ctx); err != nil {
+		return 0, err
+	} else {
+		return networkInfo.CurrentEpoch(), nil
+	}
+}
+
 // IssueSecret creates an auth token, puts it in the NeoFS network and writes to io.Writer a new secret access key.
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
-		err error
-		cid *cid.ID
-		box *accessbox.AccessBox
+		err      error
+		cid      *cid.ID
+		box      *accessbox.AccessBox
+		lifetime lifetimeOptions
 	)
+
+	lifetime.Iat, err = a.getCurrentEpoch(ctx)
+	if err != nil {
+		return err
+	}
+
+	if options.Lifetime >= math.MaxUint64-lifetime.Iat {
+		lifetime.Exp = math.MaxUint64
+	} else {
+		lifetime.Exp = lifetime.Iat + options.Lifetime
+	}
 
 	a.log.Info("check container", zap.Stringer("cid", options.ContainerID))
 	if cid, err = a.checkContainer(ctx, options.ContainerID, options.ContainerFriendlyName); err != nil {
 		return err
 	}
 
-	gatesData, err := createTokens(options, cid)
+	gatesData, err := createTokens(options, lifetime, cid)
 	if err != nil {
 		return fmt.Errorf("failed to build bearer token: %w", err)
 	}
@@ -257,7 +286,7 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 	return sessionCtx, nil
 }
 
-func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, gateKey *keys.PublicKey) (*token.BearerToken, error) {
+func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*token.BearerToken, error) {
 	oid, err := ownerIDFromNeoFSKey(gateKey)
 	if err != nil {
 		return nil, err
@@ -266,15 +295,15 @@ func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, gateKey *keys.Pub
 	bearerToken := token.NewBearerToken()
 	bearerToken.SetEACLTable(table)
 	bearerToken.SetOwner(oid)
-	bearerToken.SetLifetime(math.MaxUint64, 0, 0)
+	bearerToken.SetLifetime(lifetime.Exp, lifetime.Iat, lifetime.Iat)
 
 	return bearerToken, bearerToken.SignToken(&key.PrivateKey)
 }
 
-func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, gatesKeys []*keys.PublicKey) ([]*token.BearerToken, error) {
+func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gatesKeys []*keys.PublicKey) ([]*token.BearerToken, error) {
 	bearerTokens := make([]*token.BearerToken, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
-		tkn, err := buildBearerToken(key, table, gateKey)
+		tkn, err := buildBearerToken(key, table, lifetime, gateKey)
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +312,7 @@ func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, gatesKeys []*key
 	return bearerTokens, nil
 }
 
-func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gateKey *keys.PublicKey) (*session.Token, error) {
+func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOptions, ctx *session.ContainerContext, gateKey *keys.PublicKey) (*session.Token, error) {
 	tok := session.NewToken()
 	tok.SetContext(ctx)
 	uid, err := uuid.New().MarshalBinary()
@@ -294,13 +323,17 @@ func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, ctx *session.Contain
 	tok.SetOwnerID(oid)
 	tok.SetSessionKey(gateKey.Bytes())
 
+	tok.SetIat(lifetime.Iat)
+	tok.SetNbf(lifetime.Iat)
+	tok.SetExp(lifetime.Exp)
+
 	return tok, tok.Sign(&key.PrivateKey)
 }
 
-func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, ctx *session.ContainerContext, gatesKeys []*keys.PublicKey) ([]*session.Token, error) {
+func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOptions, ctx *session.ContainerContext, gatesKeys []*keys.PublicKey) ([]*session.Token, error) {
 	sessionTokens := make([]*session.Token, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
-		tkn, err := buildSessionToken(key, oid, ctx, gateKey)
+		tkn, err := buildSessionToken(key, oid, lifetime, ctx, gateKey)
 		if err != nil {
 			return nil, err
 		}
@@ -309,14 +342,14 @@ func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, ctx *session.Contai
 	return sessionTokens, nil
 }
 
-func createTokens(options *IssueSecretOptions, cid *cid.ID) ([]*accessbox.GateData, error) {
+func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *cid.ID) ([]*accessbox.GateData, error) {
 	gates := make([]*accessbox.GateData, len(options.GatesPublicKeys))
 
 	table, err := buildEACLTable(cid, options.EACLRules)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build eacl table: %w", err)
 	}
-	bearerTokens, err := buildBearerTokens(options.NeoFSKey, table, options.GatesPublicKeys)
+	bearerTokens, err := buildBearerTokens(options.NeoFSKey, table, lifetime, options.GatesPublicKeys)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bearer tokens: %w", err)
 	}
@@ -334,7 +367,7 @@ func createTokens(options *IssueSecretOptions, cid *cid.ID) ([]*accessbox.GateDa
 			return nil, err
 		}
 
-		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, sessionRules, options.GatesPublicKeys)
+		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, lifetime, sessionRules, options.GatesPublicKeys)
 		if err != nil {
 			return nil, err
 		}
