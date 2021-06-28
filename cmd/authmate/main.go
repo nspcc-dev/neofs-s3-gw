@@ -25,6 +25,8 @@ import (
 const (
 	poolConnectTimeout = 5 * time.Second
 	poolRequestTimeout = 5 * time.Second
+	// a number of 15-second blocks in a month.
+	defaultLifetime = 172800
 )
 
 var (
@@ -42,6 +44,7 @@ var (
 	logEnabledFlag         bool
 	logDebugEnabledFlag    bool
 	sessionTokenFlag       bool
+	lifetimeFlag           uint64
 )
 
 const (
@@ -191,6 +194,13 @@ func issueSecret() *cli.Command {
 				Destination: &sessionTokenFlag,
 				Value:       false,
 			},
+			&cli.Uint64Flag{
+				Name:        "lifetime",
+				Usage:       "Lifetime of tokens in NeoFS epoch (number of blocks in sidechain)",
+				Required:    false,
+				Destination: &lifetimeFlag,
+				Value:       defaultLifetime,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
@@ -222,9 +232,13 @@ func issueSecret() *cli.Command {
 			for _, key := range gatesPublicKeysFlag.Value() {
 				gpk, err := keys.NewPublicKeyFromString(key)
 				if err != nil {
-					return cli.Exit(fmt.Sprintf("failed to load gate's public key: %s", err), 5)
+					return cli.Exit(fmt.Sprintf("failed to load gate's public key: %s", err), 4)
 				}
 				gatesPublicKeys = append(gatesPublicKeys, gpk)
+			}
+
+			if lifetimeFlag <= 0 {
+				return cli.Exit(fmt.Sprintf("lifetime must be at least 1, current value: %d", lifetimeFlag), 5)
 			}
 
 			issueSecretOptions := &authmate.IssueSecretOptions{
@@ -235,6 +249,7 @@ func issueSecret() *cli.Command {
 				EACLRules:             []byte(eaclRulesFlag),
 				ContextRules:          []byte(contextRulesFlag),
 				SessionTkn:            sessionTokenFlag,
+				Lifetime:              lifetimeFlag,
 			}
 
 			if err = agent.IssueSecret(ctx, os.Stdout, issueSecretOptions); err != nil {
