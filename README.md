@@ -32,24 +32,24 @@ Minimalistic S3 gateway setup needs:
    Passed via `-p` parameter or via `S3_GW_PEERS_<N>_ADDRESS` and
    `S3_GW_PEERS_<N>_WEIGHT` environment variables (gateway supports multiple
    NeoFS nodes with weighted load balancing).
- * a key used to communicate with NeoFS nodes
-   Passed via `--neofs-key` parameter or `S3_GW_NEOFS-KEY` environment variable.
+ * a wallet used to fetch key and communicate with NeoFS nodes
+   Passed via `--wallet` parameter or `S3_GW_WALLET` environment variable.
 
 These two commands are functionally equivalent, they run the gate with one
 backend node, some keys and otherwise default settings:
 ```
-$ neofs-s3-gw -p 192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr
+$ neofs-s3-gw -p 192.168.130.72:8080 --wallet wallet.json
 
 $ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 \
-  S3_GW_NEOFS-KEY=KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
+  S3_GW_WALLET=wallet.json \
   neofs-s3-gw
 ```
 It's also possible to specify uri scheme (grpc or grpcs) when using `-p` or environment variables:
 ```
-$ neofs-s3-gw -p grpc://192.168.130.72:8080 --neofs-key KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr
+$ neofs-s3-gw -p grpc://192.168.130.72:8080 --wallet wallet.json
 
 $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
-  S3_GW_NEOFS-KEY=KxDgvEKzgSBPPfuVfw67oPQBSjidEiqTHURKSDL1R7yGaGYAeYnr \
+  S3_GW_WALLET=wallet.json \
   neofs-s3-gw
 ```
 
@@ -79,8 +79,9 @@ This command will make gateway use 192.168.130.72 for 90% of requests and
 
 ### Key
 
-NeoFS (`--neofs-key`) is mandatory parameter. NeoFS key can be a path to private key file (as raw bytes), 
-a hex string or (unencrypted) WIF string.
+Wallet (`--wallet`) is mandatory parameter. It is a path to wallet file. You can provide password to decrypt wallet
+via `S3_GW_WALLET_PASSPHRASE` variable or you will be asked to enter the password interactively. 
+You also can specify account address to use from wallet using `--address` parameter.
 
 ### Binding and TLS
 
