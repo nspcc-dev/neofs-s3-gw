@@ -43,6 +43,10 @@ type (
 		ContinuationToken     string
 		NextContinuationToken string
 
+		// When response is truncated (the IsTruncated element value in the response is true),
+		// you can use the key name in this field as marker in the subsequent request to get next set of objects.
+		NextMarker string
+
 		// List of objects info for this request.
 		Objects []*ObjectInfo
 

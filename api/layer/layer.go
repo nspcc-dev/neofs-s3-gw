@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
@@ -213,7 +214,6 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 	// todo: check what happens if there is more than maxKeys objects
 	if ln > p.MaxKeys {
 		ln = p.MaxKeys
-		result.IsTruncated = true
 	}
 
 	result.Objects = make([]*ObjectInfo, 0, ln)
@@ -253,6 +253,9 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		if oi := objectInfoFromMeta(bkt, meta, p.Prefix); oi != nil {
 			// use only unique dir names
 			if _, ok := uniqNames[oi.Name]; !ok {
+				if len(p.Marker) > 0 && oi.Name <= p.Marker {
+					continue
+				}
 				uniqNames[oi.Name] = struct{}{}
 
 				result.Objects = append(result.Objects, oi)
@@ -260,6 +263,15 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		}
 	}
 
+	sort.Slice(result.Objects, func(i, j int) bool {
+		return result.Objects[i].Name < result.Objects[j].Name
+	})
+
+	if len(result.Objects) > p.MaxKeys {
+		result.IsTruncated = true
+		result.Objects = result.Objects[:p.MaxKeys]
+		result.NextMarker = result.Objects[len(result.Objects)-1].Name
+	}
 	return &result, nil
 }
 

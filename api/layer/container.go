@@ -31,6 +31,7 @@ type (
 		Token     string
 		Delimiter string
 		MaxKeys   int
+		Marker    string
 	}
 )
 
