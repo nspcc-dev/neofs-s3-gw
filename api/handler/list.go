@@ -196,7 +196,7 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 				DisplayName: obj.Owner.String(),
 			},
 
-			// ETag:         "",
+			ETag: obj.HashSum,
 			// StorageClass: "",
 		})
 	}
@@ -259,7 +259,7 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 				DisplayName: obj.Owner.String(),
 			},
 
-			// ETag:         "",
+			ETag: obj.HashSum,
 			// StorageClass: "",
 		})
 	}

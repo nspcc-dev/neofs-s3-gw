@@ -22,6 +22,7 @@ type (
 		Size        int64
 		ContentType string
 		Created     time.Time
+		HashSum     string
 		Owner       *owner.ID
 		Headers     map[string]string
 	}
@@ -119,6 +120,7 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter 
 		Headers:     userHeaders,
 		Owner:       meta.OwnerID(),
 		Size:        size,
+		HashSum:     meta.PayloadChecksum().String(),
 	}
 }
 

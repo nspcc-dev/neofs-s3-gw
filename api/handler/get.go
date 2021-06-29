@@ -109,9 +109,10 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 }
 
 func writeHeaders(h http.Header, info *layer.ObjectInfo) {
-	h.Set("Content-Type", info.ContentType)
-	h.Set("Last-Modified", info.Created.Format(http.TimeFormat))
-	h.Set("Content-Length", strconv.FormatInt(info.Size, 10))
+	h.Set(api.ContentType, info.ContentType)
+	h.Set(api.LastModified, info.Created.Format(http.TimeFormat))
+	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
+	h.Set(api.ETag, info.HashSum)
 
 	for key, val := range info.Headers {
 		h.Set("X-"+key, val)
