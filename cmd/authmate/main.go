@@ -246,8 +246,8 @@ func issueSecret() *cli.Command {
 				ContainerFriendlyName: containerFriendlyName,
 				NeoFSKey:              key,
 				GatesPublicKeys:       gatesPublicKeys,
-				EACLRules:             []byte(eaclRulesFlag),
-				ContextRules:          []byte(contextRulesFlag),
+				EACLRules:             getJSONRules(eaclRulesFlag),
+				ContextRules:          getJSONRules(contextRulesFlag),
 				SessionTkn:            sessionTokenFlag,
 				Lifetime:              lifetimeFlag,
 			}
@@ -259,6 +259,14 @@ func issueSecret() *cli.Command {
 			return nil
 		},
 	}
+}
+
+func getJSONRules(val string) []byte {
+	if data, err := os.ReadFile(val); err == nil {
+		return data
+	}
+
+	return []byte(val)
 }
 
 func obtainSecret() *cli.Command {
