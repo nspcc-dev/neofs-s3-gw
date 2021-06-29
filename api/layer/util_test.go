@@ -3,7 +3,6 @@ package layer
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -40,7 +39,7 @@ func newTestObject(oid *object.ID, bkt *BucketInfo, name string) *object.Object 
 	return raw.Object()
 }
 
-func newTestInfo(oid *object.ID, bkt *BucketInfo, name, prefix string) *ObjectInfo {
+func newTestInfo(oid *object.ID, bkt *BucketInfo, name string, isDir bool) *ObjectInfo {
 	info := &ObjectInfo{
 		id:          oid,
 		Name:        name,
@@ -52,32 +51,14 @@ func newTestInfo(oid *object.ID, bkt *BucketInfo, name, prefix string) *ObjectIn
 		Headers:     make(map[string]string),
 	}
 
-	if prefix == rootSeparator {
-		return info
-	}
-
-	_, dirname := testNameFromObjectName(name)
-	if ln := len(prefix); ln > 0 && prefix[ln-1:] != PathSeparator {
-		prefix += PathSeparator
-	}
-
-	tail := strings.TrimPrefix(dirname, prefix)
-	if index := strings.Index(tail, PathSeparator); index >= 0 {
+	if isDir {
 		info.isDir = true
-
 		info.Size = 0
 		info.ContentType = ""
-		info.Name = tail[:index+1]
 		info.Headers = nil
 	}
 
 	return info
-}
-
-func testNameFromObjectName(name string) (string, string) {
-	ind := strings.LastIndex(name, PathSeparator)
-
-	return name[ind+1:], name[:ind+1]
 }
 
 func Test_objectInfoFromMeta(t *testing.T) {
@@ -93,99 +74,81 @@ func Test_objectInfoFromMeta(t *testing.T) {
 	}
 
 	cases := []struct {
-		name   string
-		prefix string
-		result *ObjectInfo
-		object *object.Object
-
-		infoName string
+		name      string
+		prefix    string
+		result    *ObjectInfo
+		object    *object.Object
+		delimiter string
 	}{
 		{
-			name:     "test.jpg",
-			prefix:   "",
-			infoName: "test.jpg",
-			result:   newTestInfo(oid, bkt, "test.jpg", ""),
-			object:   newTestObject(oid, bkt, "test.jpg"),
+			name:   "small.jpg",
+			result: newTestInfo(oid, bkt, "small.jpg", false),
+			object: newTestObject(oid, bkt, "small.jpg"),
 		},
-
 		{
-			name:     "test/small.jpg",
-			prefix:   "",
-			infoName: "test/",
-			result:   newTestInfo(oid, bkt, "test/small.jpg", ""),
-			object:   newTestObject(oid, bkt, "test/small.jpg"),
+			name:   "small.jpg not matched prefix",
+			prefix: "big",
+			result: nil,
+			object: newTestObject(oid, bkt, "small.jpg"),
 		},
-
 		{
-			name:     "test/small.jpg raw",
-			prefix:   rootSeparator,
-			infoName: "test/small.jpg",
-			result:   newTestInfo(oid, bkt, "test/small.jpg", rootSeparator),
-			object:   newTestObject(oid, bkt, "test/small.jpg"),
+			name:      "small.jpg delimiter",
+			delimiter: "/",
+			result:    newTestInfo(oid, bkt, "small.jpg", false),
+			object:    newTestObject(oid, bkt, "small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg",
-			prefix:   "",
-			infoName: "test/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", ""),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:   "test/small.jpg",
+			result: newTestInfo(oid, bkt, "test/small.jpg", false),
+			object: newTestObject(oid, bkt, "test/small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg",
-			prefix:   "test",
-			infoName: "a/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", "test"),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:      "test/small.jpg with prefix and delimiter",
+			prefix:    "test/",
+			delimiter: "/",
+			result:    newTestInfo(oid, bkt, "test/small.jpg", false),
+			object:    newTestObject(oid, bkt, "test/small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg",
-			prefix:   "test/a",
-			infoName: "b/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", "test/a"),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:   "a/b/small.jpg",
+			prefix: "a",
+			result: newTestInfo(oid, bkt, "a/b/small.jpg", false),
+			object: newTestObject(oid, bkt, "a/b/small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg",
-			prefix:   "test/a/b",
-			infoName: "c/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", "test/a/b"),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:      "a/b/small.jpg",
+			prefix:    "a/",
+			delimiter: "/",
+			result:    newTestInfo(oid, bkt, "a/b/", true),
+			object:    newTestObject(oid, bkt, "a/b/small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg with slash",
-			prefix:   "test/a/b/",
-			infoName: "c/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", "test/a/b/"),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:      "a/b/c/small.jpg",
+			prefix:    "a/",
+			delimiter: "/",
+			result:    newTestInfo(oid, bkt, "a/b/", true),
+			object:    newTestObject(oid, bkt, "a/b/c/small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg",
-			prefix:   "test/a/b/c",
-			infoName: "d/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", "test/a/b/c"),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:      "a/b/c/small.jpg",
+			prefix:    "a/b/c/s",
+			delimiter: "/",
+			result:    newTestInfo(oid, bkt, "a/b/c/small.jpg", false),
+			object:    newTestObject(oid, bkt, "a/b/c/small.jpg"),
 		},
-
 		{
-			name:     "test/a/b/c/d/e/f/g/h/small.jpg",
-			prefix:   "test/a/b/c/d",
-			infoName: "e/",
-			result:   newTestInfo(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg", "test/a/b/c/d"),
-			object:   newTestObject(oid, bkt, "test/a/b/c/d/e/f/g/h/small.jpg"),
+			name:      "a/b/c/big.jpg",
+			prefix:    "a/b/",
+			delimiter: "/",
+			result:    newTestInfo(oid, bkt, "a/b/c/", true),
+			object:    newTestObject(oid, bkt, "a/b/c/big.jpg"),
 		},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name+"_"+tc.infoName, func(t *testing.T) {
-			info := objectInfoFromMeta(bkt, tc.object, tc.prefix)
+		t.Run(tc.name, func(t *testing.T) {
+			info := objectInfoFromMeta(bkt, tc.object, tc.prefix, tc.delimiter)
 			require.Equal(t, tc.result, info)
-			require.Equal(t, tc.infoName, info.Name)
 		})
 	}
 }
