@@ -240,7 +240,7 @@ Creation of the bearer token is mandatory, and creation of the session token is
 optional. If you want to add the session token you need to add a parameter
 `create-session-token`.
 
-Rules for bearer token can be set via param `bearer-rules`, if it is not set,
+Rules for bearer token can be set via param `bearer-rules` (json-string and file path allowed), if it is not set,
 it will be auto-generated with values:
 
 ```
@@ -268,7 +268,7 @@ it will be auto-generated with values:
 }
 ```
 
-Rules for session token can be set via param `session-rules`, default value is:
+Rules for session token can be set via param `session-rules` (json-string and file path allowed), default value is:
 ```
 {
     "verb": "PUT",
