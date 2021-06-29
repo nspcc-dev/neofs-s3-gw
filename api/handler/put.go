@@ -24,11 +24,12 @@ const (
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err error
-		req = mux.Vars(r)
-		bkt = req["bucket"]
-		obj = req["object"]
-		rid = api.GetRequestID(r.Context())
+		err  error
+		info *layer.ObjectInfo
+		req  = mux.Vars(r)
+		bkt  = req["bucket"]
+		obj  = req["object"]
+		rid  = api.GetRequestID(r.Context())
 	)
 
 	if _, err := h.obj.GetBucketInfo(r.Context(), bkt); err != nil {
@@ -53,7 +54,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Size:   r.ContentLength,
 	}
 
-	if _, err = h.obj.PutObject(r.Context(), params); err != nil {
+	if info, err = h.obj.PutObject(r.Context(), params); err != nil {
 		h.log.Error("could not upload object",
 			zap.String("request_id", rid),
 			zap.String("bucket_name", bkt),
@@ -69,6 +70,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 

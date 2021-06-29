@@ -142,6 +142,14 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	}
 
+	addr := object.NewAddress()
+	addr.SetObjectID(oid)
+	addr.SetContainerID(bkt.CID)
+	meta, err := n.objectHead(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ObjectInfo{
 		id: oid,
 
@@ -152,6 +160,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		Created:     time.Now(),
 		Headers:     p.Header,
 		ContentType: r.contentType,
+		HashSum:     meta.PayloadChecksum().String(),
 	}, nil
 }
 
