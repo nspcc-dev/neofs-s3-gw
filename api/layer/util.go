@@ -55,11 +55,8 @@ type (
 	}
 )
 
-const (
-	rootSeparator = "root://"
-	// PathSeparator is a path components separator string.
-	PathSeparator = string(os.PathSeparator)
-)
+// PathSeparator is a path components separator string.
+const PathSeparator = string(os.PathSeparator)
 
 func userHeaders(attrs []*object.Attribute) map[string]string {
 	result := make(map[string]string, len(attrs))
@@ -71,30 +68,25 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	return result
 }
 
-func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix string) *ObjectInfo {
+func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter string) *ObjectInfo {
 	var (
-		isDir         bool
-		size          int64
-		mimeType      string
-		creation      time.Time
-		filename      = meta.ID().String()
-		name, dirname = nameFromObject(meta)
+		isDir    bool
+		size     int64
+		mimeType string
+		creation time.Time
+		filename = filenameFromObject(meta)
 	)
 
-	if !strings.HasPrefix(dirname, prefix) && prefix != rootSeparator {
+	if !strings.HasPrefix(filename, prefix) {
 		return nil
 	}
 
-	if ln := len(prefix); ln > 0 && prefix[ln-1:] != PathSeparator {
-		prefix += PathSeparator
-	}
-
 	userHeaders := userHeaders(meta.Attributes())
-	if val, ok := userHeaders[object.AttributeFileName]; ok {
-		filename = val
-		delete(userHeaders, object.AttributeFileName)
+	delete(userHeaders, object.AttributeFileName)
+	if contentType, ok := userHeaders[object.AttributeContentType]; ok {
+		mimeType = contentType
+		delete(userHeaders, object.AttributeContentType)
 	}
-
 	if val, ok := userHeaders[object.AttributeTimestamp]; !ok {
 		// ignore empty value
 	} else if dt, err := strconv.ParseInt(val, 10, 64); err == nil {
@@ -102,20 +94,18 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix string) *Ob
 		delete(userHeaders, object.AttributeTimestamp)
 	}
 
-	tail := strings.TrimPrefix(dirname, prefix)
-	index := strings.Index(tail, PathSeparator)
-
-	if prefix == rootSeparator {
-		size = int64(meta.PayloadSize())
-		mimeType = http.DetectContentType(meta.Payload())
-	} else if index < 0 {
-		filename = name
-		size = int64(meta.PayloadSize())
-		mimeType = http.DetectContentType(meta.Payload())
+	if len(delimiter) > 0 {
+		tail := strings.TrimPrefix(filename, prefix)
+		index := strings.Index(tail, delimiter)
+		if index >= 0 {
+			isDir = true
+			filename = prefix + tail[:index+1]
+			userHeaders = nil
+		} else {
+			size, mimeType = getSizeAndMimeType(meta, mimeType)
+		}
 	} else {
-		isDir = true
-		filename = tail[:index] + PathSeparator
-		userHeaders = nil
+		size, mimeType = getSizeAndMimeType(meta, mimeType)
 	}
 
 	return &ObjectInfo{
@@ -132,18 +122,23 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix string) *Ob
 	}
 }
 
-func nameFromObject(o *object.Object) (string, string) {
-	var name = o.ID().String()
+func getSizeAndMimeType(meta *object.Object, contentType string) (size int64, mimeType string) {
+	size = int64(meta.PayloadSize())
+	mimeType = contentType
+	if len(mimeType) == 0 {
+		mimeType = http.DetectContentType(meta.Payload())
+	}
+	return
+}
 
+func filenameFromObject(o *object.Object) string {
+	var name = o.ID().String()
 	for _, attr := range o.Attributes() {
 		if attr.Key() == object.AttributeFileName {
-			name = attr.Value()
-
-			break
+			return attr.Value()
 		}
 	}
-
-	return NameFromString(name)
+	return name
 }
 
 // NameFromString splits name into base file name and directory path.
