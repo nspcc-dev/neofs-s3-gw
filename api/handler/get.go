@@ -30,11 +30,13 @@ func newDetector(w io.Writer) *detector {
 
 func (d *detector) Write(data []byte) (int, error) {
 	d.Once.Do(func() {
+		d.contentType = http.DetectContentType(data)
 		if rw, ok := d.Writer.(http.ResponseWriter); ok {
 			rw.WriteHeader(http.StatusOK)
+			if len(rw.Header().Get(api.ContentType)) == 0 {
+				rw.Header().Set(api.ContentType, d.contentType)
+			}
 		}
-
-		d.contentType = http.DetectContentType(data)
 	})
 
 	return d.Writer.Write(data)
@@ -136,14 +138,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, h.log, "could not parse range header", rid, bkt, obj, err)
 		return
 	}
-	if inf.ContentType, err = h.contentTypeFetcherWithRange(r.Context(), w, inf, params); err != nil {
-		writeError(w, r, h.log, "could not get object", rid, bkt, obj, err)
-		return
-	}
-
 	writeHeaders(w.Header(), inf)
 	if params != nil {
 		writeRangeHeaders(w, params, inf.Size)
+	}
+	if inf.ContentType, err = h.contentTypeFetcherWithRange(r.Context(), w, inf, params); err != nil {
+		writeError(w, r, h.log, "could not get object", rid, bkt, obj, err)
+		return
 	}
 }
 
