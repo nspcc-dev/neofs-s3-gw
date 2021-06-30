@@ -201,7 +201,7 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		bkt       *BucketInfo
 		ids       []*object.ID
 		result    ListObjectsInfo
-		uniqNames = make(map[string]struct{})
+		uniqNames = make(map[string]bool)
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
@@ -250,16 +250,18 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		// and look for entities after prefix. If entity does not have any
 		// sub-entities, then it is a file, else directory.
 
-		if oi := objectInfoFromMeta(bkt, meta, p.Prefix); oi != nil {
+		if oi := objectInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); oi != nil {
 			// use only unique dir names
-			if _, ok := uniqNames[oi.Name]; !ok {
-				if len(p.Marker) > 0 && oi.Name <= p.Marker {
-					continue
-				}
-				uniqNames[oi.Name] = struct{}{}
-
-				result.Objects = append(result.Objects, oi)
+			if _, ok := uniqNames[oi.Name]; ok {
+				continue
 			}
+			if len(p.Marker) > 0 && oi.Name <= p.Marker {
+				continue
+			}
+
+			uniqNames[oi.Name] = oi.isDir
+
+			result.Objects = append(result.Objects, oi)
 		}
 	}
 
@@ -272,6 +274,14 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		result.Objects = result.Objects[:p.MaxKeys]
 		result.NextMarker = result.Objects[len(result.Objects)-1].Name
 	}
+
+	for i, oi := range result.Objects {
+		if isDir := uniqNames[oi.Name]; isDir {
+			result.Objects = append(result.Objects[:i], result.Objects[i+1:]...)
+			result.Prefixes = append(result.Prefixes, oi.Name)
+		}
+	}
+
 	return &result, nil
 }
 
@@ -358,7 +368,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 		return nil, err
 	}
 
-	return objectInfoFromMeta(bkt, meta, rootSeparator), nil
+	return objectInfoFromMeta(bkt, meta, "", ""), nil
 }
 
 // PutObject into storage.
