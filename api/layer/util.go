@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -22,6 +21,7 @@ type (
 		Size        int64
 		ContentType string
 		Created     time.Time
+		HashSum     string
 		Owner       *owner.ID
 		Headers     map[string]string
 	}
@@ -102,10 +102,10 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter 
 			filename = prefix + tail[:index+1]
 			userHeaders = nil
 		} else {
-			size, mimeType = getSizeAndMimeType(meta, mimeType)
+			size = int64(meta.PayloadSize())
 		}
 	} else {
-		size, mimeType = getSizeAndMimeType(meta, mimeType)
+		size = int64(meta.PayloadSize())
 	}
 
 	return &ObjectInfo{
@@ -119,16 +119,8 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter 
 		Headers:     userHeaders,
 		Owner:       meta.OwnerID(),
 		Size:        size,
+		HashSum:     meta.PayloadChecksum().String(),
 	}
-}
-
-func getSizeAndMimeType(meta *object.Object, contentType string) (size int64, mimeType string) {
-	size = int64(meta.PayloadSize())
-	mimeType = contentType
-	if len(mimeType) == 0 {
-		mimeType = http.DetectContentType(meta.Payload())
-	}
-	return
 }
 
 func filenameFromObject(o *object.Object) string {

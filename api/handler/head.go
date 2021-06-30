@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 
@@ -12,10 +13,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type devNull int
+const sizeToDetectType = 512
 
-func (d devNull) Write(p []byte) (n int, err error) {
-	return len(p), nil
+func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
+	end := uint64(maxSize)
+	if sizeToDetectType < end {
+		end = sizeToDetectType
+	}
+
+	return &layer.RangeParams{
+		Start: 0,
+		End:   end - 1,
+	}
 }
 
 func (h *handler) checkIsFolder(ctx context.Context, bucket, object string) *layer.ObjectInfo {
@@ -73,7 +82,15 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}, r.URL)
 
 		return
-	} else if inf.ContentType, err = h.contentTypeFetcher(r.Context(), devNull(0), inf); err != nil {
+	}
+	buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
+	getParams := &layer.GetObjectParams{
+		Bucket: inf.Bucket,
+		Object: inf.Name,
+		Writer: buffer,
+		Range:  getRangeToDetectContentType(inf.Size),
+	}
+	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.log.Error("could not get object",
 			zap.String("request_id", rid),
 			zap.String("bucket_name", bkt),
@@ -89,7 +106,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
-
+	inf.ContentType = http.DetectContentType(buffer.Bytes())
 	writeHeaders(w.Header(), inf)
 	w.WriteHeader(http.StatusOK)
 }
