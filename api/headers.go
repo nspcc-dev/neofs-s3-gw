@@ -1,6 +1,6 @@
 package api
 
-// Standard S3 HTTP response constants.
+// Standard S3 HTTP request/response constants.
 const (
 	LastModified       = "Last-Modified"
 	Date               = "Date"
@@ -22,4 +22,6 @@ const (
 	ContentDisposition = "Content-Disposition"
 	Authorization      = "Authorization"
 	Action             = "Action"
+	IfModifiedSince    = "If-Modified-Since"
+	IfUnmodifiedSince  = "If-Unmodified-Since"
 )

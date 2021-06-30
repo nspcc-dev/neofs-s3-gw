@@ -5,12 +5,18 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
+
+type getObjectArgs struct {
+	IfModifiedSince   time.Time
+	IfUnmodifiedSince time.Time
+}
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
 	const prefix = "bytes="
@@ -73,10 +79,25 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		rid = api.GetRequestID(r.Context())
 	)
 
+	args, err := parseGetObjectArgs(r.Header)
+	if err != nil {
+		return
+	}
+
 	if inf, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err != nil {
 		writeError(w, r, h.log, "could not find object", rid, bkt, obj, err)
 		return
 	}
+
+	if !args.IfModifiedSince.IsZero() && inf.Created.Before(args.IfModifiedSince) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if !args.IfUnmodifiedSince.IsZero() && inf.Created.After(args.IfUnmodifiedSince) {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+
 	if params, err = fetchRangeHeader(r.Header, uint64(inf.Size)); err != nil {
 		writeError(w, r, h.log, "could not parse range header", rid, bkt, obj, err)
 		return
@@ -95,6 +116,27 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		writeError(w, r, h.log, "could not get object", rid, bkt, obj, err)
 	}
+}
+
+func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
+	var err error
+	args := &getObjectArgs{}
+
+	ifModifiedSince := headers.Get(api.IfModifiedSince)
+	if len(ifModifiedSince) > 0 {
+		if args.IfModifiedSince, err = time.Parse(http.TimeFormat, ifModifiedSince); err != nil {
+			return nil, fmt.Errorf("couldn't parse %s header: %w", api.IfModifiedSince, err)
+		}
+	}
+
+	ifUnmodifiedSince := headers.Get(api.IfUnmodifiedSince)
+	if len(ifUnmodifiedSince) > 0 {
+		if args.IfUnmodifiedSince, err = time.Parse(http.TimeFormat, ifUnmodifiedSince); err != nil {
+			return nil, fmt.Errorf("couldn't parse %s header: %w", api.IfUnmodifiedSince, err)
+		}
+	}
+
+	return args, nil
 }
 
 func writeRangeHeaders(w http.ResponseWriter, params *layer.RangeParams, size int64) {
