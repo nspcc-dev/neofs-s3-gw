@@ -81,7 +81,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}, r.URL)
 
 		return
-	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: inf.Created.Format(time.RFC3339)}); err != nil {
+	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: inf.Created.Format(time.RFC3339), ETag: inf.HashSum}); err != nil {
 		h.log.Error("something went wrong",
 			zap.String("request_id", rid),
 			zap.String("dst_bucket_name", bkt),

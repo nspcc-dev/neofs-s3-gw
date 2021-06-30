@@ -1,74 +1,16 @@
 package handler
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
-
-type (
-	detector struct {
-		io.Writer
-		sync.Once
-
-		contentType string
-	}
-)
-
-func newDetector(w io.Writer) *detector {
-	return &detector{Writer: w}
-}
-
-func (d *detector) Write(data []byte) (int, error) {
-	d.Once.Do(func() {
-		if rw, ok := d.Writer.(http.ResponseWriter); ok {
-			rw.WriteHeader(http.StatusOK)
-		}
-
-		d.contentType = http.DetectContentType(data)
-	})
-
-	return d.Writer.Write(data)
-}
-
-func (h *handler) contentTypeFetcher(ctx context.Context, w io.Writer, info *layer.ObjectInfo) (string, error) {
-	return h.contentTypeFetcherWithRange(ctx, w, info, nil)
-}
-
-func (h *handler) contentTypeFetcherWithRange(ctx context.Context, w io.Writer, info *layer.ObjectInfo, rangeParams *layer.RangeParams) (string, error) {
-	if info.IsDir() {
-		if rangeParams != nil {
-			return "", fmt.Errorf("it is forbidden to request for a range in the directory")
-		}
-		return info.ContentType, nil
-	}
-
-	writer := newDetector(w)
-
-	params := &layer.GetObjectParams{
-		Bucket: info.Bucket,
-		Object: info.Name,
-		Writer: writer,
-		Range:  rangeParams,
-	}
-
-	// params.Length = inf.Size
-
-	if err := h.obj.GetObject(ctx, params); err != nil {
-		return "", err
-	}
-
-	return writer.contentType, nil
-}
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
 	const prefix = "bytes="
@@ -107,9 +49,12 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 }
 
 func writeHeaders(h http.Header, info *layer.ObjectInfo) {
-	h.Set("Content-Type", info.ContentType)
-	h.Set("Last-Modified", info.Created.Format(http.TimeFormat))
-	h.Set("Content-Length", strconv.FormatInt(info.Size, 10))
+	if len(info.ContentType) > 0 {
+		h.Set(api.ContentType, info.ContentType)
+	}
+	h.Set(api.LastModified, info.Created.Format(http.TimeFormat))
+	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
+	h.Set(api.ETag, info.HashSum)
 
 	for key, val := range info.Headers {
 		h.Set("X-"+key, val)
@@ -136,14 +81,19 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, h.log, "could not parse range header", rid, bkt, obj, err)
 		return
 	}
-	if inf.ContentType, err = h.contentTypeFetcherWithRange(r.Context(), w, inf, params); err != nil {
-		writeError(w, r, h.log, "could not get object", rid, bkt, obj, err)
-		return
-	}
-
 	writeHeaders(w.Header(), inf)
 	if params != nil {
 		writeRangeHeaders(w, params, inf.Size)
+	}
+
+	getParams := &layer.GetObjectParams{
+		Bucket: inf.Bucket,
+		Object: inf.Name,
+		Writer: w,
+		Range:  params,
+	}
+	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+		writeError(w, r, h.log, "could not get object", rid, bkt, obj, err)
 	}
 }
 
