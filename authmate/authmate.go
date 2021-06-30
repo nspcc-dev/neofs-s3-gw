@@ -275,7 +275,7 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 
 	if len(rules) != 0 {
 		// cast ToV2 temporary, because there is no method for unmarshalling in ContainerContext in api-go
-		err := sessionCtx.ToV2().UnmarshalJSON(rules)
+		err := sessionCtx.UnmarshalJSON(rules)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read rules for session token: %w", err)
 		}
