@@ -14,7 +14,7 @@ import (
 
 type listObjectsArgs struct {
 	Bucket     string
-	Delimeter  string
+	Delimiter  string
 	Encode     string
 	Marker     string
 	StartAfter string
@@ -124,7 +124,7 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 		Bucket:    arg.Bucket,
 		Prefix:    arg.Prefix,
 		MaxKeys:   arg.MaxKeys,
-		Delimiter: arg.Delimeter,
+		Delimiter: arg.Delimiter,
 		Marker:    marker,
 	})
 	if err != nil {
@@ -170,7 +170,7 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 		Marker:       arg.Marker,
 		Prefix:       arg.Prefix,
 		MaxKeys:      arg.MaxKeys,
-		Delimiter:    arg.Delimeter,
+		Delimiter:    arg.Delimiter,
 
 		IsTruncated: list.IsTruncated,
 		NextMarker:  list.NextMarker,
@@ -230,7 +230,7 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 		Prefix:       arg.Prefix,
 		KeyCount:     len(list.Objects),
 		MaxKeys:      arg.MaxKeys,
-		Delimiter:    arg.Delimeter,
+		Delimiter:    arg.Delimiter,
 		StartAfter:   arg.StartAfter,
 
 		IsTruncated: list.IsTruncated,
@@ -281,7 +281,7 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 
 	res.Prefix = r.URL.Query().Get("prefix")
 	res.Marker = r.URL.Query().Get("marker")
-	res.Delimeter = r.URL.Query().Get("delimiter")
+	res.Delimiter = r.URL.Query().Get("delimiter")
 	res.Encode = r.URL.Query().Get("encoding-type")
 	res.StartAfter = r.URL.Query().Get("start-after")
 	apiVersionStr := r.URL.Query().Get("list-type")
