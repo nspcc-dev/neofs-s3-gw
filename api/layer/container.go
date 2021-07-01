@@ -32,6 +32,7 @@ type (
 		Delimiter string
 		MaxKeys   int
 		Marker    string
+		Version   int
 	}
 )
 

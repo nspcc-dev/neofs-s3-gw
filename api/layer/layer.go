@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
@@ -116,6 +117,9 @@ var (
 	ErrObjectNotExists = errors.New("object not exists")
 )
 
+// ETag (hex encoded md5sum) of empty string.
+const emptyETag = "d41d8cd98f00b204e9800998ecf8427e"
+
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
 func NewLayer(log *zap.Logger, conns pool.Pool) Client {
@@ -216,6 +220,8 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		ln = p.MaxKeys
 	}
 
+	mostRecentModified := time.Time{}
+	needDirectoryAsKey := p.Version == 2 && len(p.Prefix) > 0 && len(p.Delimiter) > 0 && strings.HasSuffix(p.Prefix, p.Delimiter)
 	result.Objects = make([]*ObjectInfo, 0, ln)
 
 	for _, id := range ids {
@@ -251,6 +257,9 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		// sub-entities, then it is a file, else directory.
 
 		if oi := objectInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); oi != nil {
+			if needDirectoryAsKey && oi.Created.After(mostRecentModified) {
+				mostRecentModified = oi.Created
+			}
 			// use only unique dir names
 			if _, ok := uniqNames[oi.Name]; ok {
 				continue
@@ -275,11 +284,22 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		result.NextMarker = result.Objects[len(result.Objects)-1].Name
 	}
 
-	for i, oi := range result.Objects {
+	index := 0
+	for _, oi := range result.Objects {
 		if isDir := uniqNames[oi.Name]; isDir {
-			result.Objects = append(result.Objects[:i], result.Objects[i+1:]...)
+			result.Objects = append(result.Objects[:index], result.Objects[index+1:]...)
 			result.Prefixes = append(result.Prefixes, oi.Name)
+		} else {
+			index++
 		}
+	}
+	if needDirectoryAsKey {
+		res := []*ObjectInfo{{
+			Name:    p.Prefix,
+			Created: mostRecentModified,
+			HashSum: emptyETag,
+		}}
+		result.Objects = append(res, result.Objects...)
 	}
 
 	return &result, nil
