@@ -126,6 +126,7 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 		MaxKeys:   arg.MaxKeys,
 		Delimiter: arg.Delimiter,
 		Marker:    marker,
+		Version:   arg.APIVersion,
 	})
 	if err != nil {
 		h.log.Error("something went wrong",
