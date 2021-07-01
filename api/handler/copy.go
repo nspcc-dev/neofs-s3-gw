@@ -13,8 +13,8 @@ import (
 )
 
 type copyObjectArgs struct {
-	IfModifiedSince   time.Time
-	IfUnmodifiedSince time.Time
+	IfModifiedSince   *time.Time
+	IfUnmodifiedSince *time.Time
 }
 
 // path2BucketObject returns bucket and object.
@@ -74,11 +74,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !args.IfModifiedSince.IsZero() && inf.Created.Before(args.IfModifiedSince) {
+	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	if !args.IfUnmodifiedSince.IsZero() && inf.Created.After(args.IfUnmodifiedSince) {
+	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}

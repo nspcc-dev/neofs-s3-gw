@@ -14,8 +14,8 @@ import (
 )
 
 type getObjectArgs struct {
-	IfModifiedSince   time.Time
-	IfUnmodifiedSince time.Time
+	IfModifiedSince   *time.Time
+	IfUnmodifiedSince *time.Time
 }
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
@@ -90,11 +90,11 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !args.IfModifiedSince.IsZero() && inf.Created.Before(args.IfModifiedSince) {
+	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	if !args.IfUnmodifiedSince.IsZero() && inf.Created.After(args.IfUnmodifiedSince) {
+	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
@@ -133,18 +133,16 @@ func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
 	return args, nil
 }
 
-func parseHTTPTime(data string) (time.Time, error) {
-	var result time.Time
-	var err error
-
+func parseHTTPTime(data string) (*time.Time, error) {
 	if len(data) == 0 {
-		return result, nil
+		return nil, nil
 	}
 
-	if result, err = time.Parse(http.TimeFormat, data); err != nil {
-		return result, fmt.Errorf("couldn't parse http time %s: %w", data, err)
+	result, err := time.Parse(http.TimeFormat, data)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't parse http time %s: %w", data, err)
 	}
-	return result, nil
+	return &result, nil
 }
 
 func writeRangeHeaders(w http.ResponseWriter, params *layer.RangeParams, size int64) {
