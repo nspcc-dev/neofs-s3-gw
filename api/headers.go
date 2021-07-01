@@ -24,4 +24,7 @@ const (
 	Action             = "Action"
 	IfModifiedSince    = "If-Modified-Since"
 	IfUnmodifiedSince  = "If-Unmodified-Since"
+
+	AmzCopyIfModifiedSince   = "X-Amz-Copy-Source-If-Modified-Since"
+	AmzCopyIfUnmodifiedSince = "X-Amz-Copy-Source-If-Unmodified-Since"
 )
