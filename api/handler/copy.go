@@ -12,6 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
+type copyObjectArgs struct {
+	IfModifiedSince   time.Time
+	IfUnmodifiedSince time.Time
+}
+
 // path2BucketObject returns bucket and object.
 func path2BucketObject(path string) (bucket, prefix string) {
 	path = strings.TrimPrefix(path, api.SlashSeparator)
@@ -58,44 +63,40 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	srcBucket, srcObject := path2BucketObject(src)
 
+	args, err := parseCopyObjectArgs(r.Header)
+	if err != nil {
+		writeError(w, r, h.log, "could not parse request params ", rid, bkt, obj, err)
+		return
+	}
+
+	if inf, err = h.obj.GetObjectInfo(r.Context(), srcBucket, srcObject); err != nil {
+		writeError(w, r, h.log, "could not find object", rid, bkt, obj, err)
+		return
+	}
+
+	if !args.IfModifiedSince.IsZero() && inf.Created.Before(args.IfModifiedSince) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if !args.IfUnmodifiedSince.IsZero() && inf.Created.After(args.IfUnmodifiedSince) {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+
 	params := &layer.CopyObjectParams{
 		SrcBucket: srcBucket,
 		DstBucket: bkt,
 		SrcObject: srcObject,
 		DstObject: obj,
+		SrcSize:   inf.Size,
+		Header:    inf.Headers,
 	}
 
 	if inf, err = h.obj.CopyObject(r.Context(), params); err != nil {
-		h.log.Error("could not copy object",
-			zap.String("request_id", rid),
-			zap.String("dst_bucket_name", bkt),
-			zap.String("dst_object_name", obj),
-			zap.String("src_bucket_name", srcBucket),
-			zap.String("src_object_name", srcObject),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
-
+		writeErrorCopy(w, r, h.log, "could not copy object", rid, bkt, obj, srcBucket, srcObject, err)
 		return
 	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: inf.Created.Format(time.RFC3339), ETag: inf.HashSum}); err != nil {
-		h.log.Error("something went wrong",
-			zap.String("request_id", rid),
-			zap.String("dst_bucket_name", bkt),
-			zap.String("dst_object_name", obj),
-			zap.String("src_bucket_name", srcBucket),
-			zap.String("src_object_name", srcObject),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
-
+		writeErrorCopy(w, r, h.log, "something went wrong", rid, bkt, obj, srcBucket, srcObject, err)
 		return
 	}
 
@@ -103,4 +104,34 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		zap.String("bucket", inf.Bucket),
 		zap.String("object", inf.Name),
 		zap.Stringer("object_id", inf.ID()))
+}
+
+func writeErrorCopy(w http.ResponseWriter, r *http.Request, log *zap.Logger, msg, rid, bkt, obj, srcBucket, srcObject string, err error) {
+	log.Error(msg,
+		zap.String("request_id", rid),
+		zap.String("dst_bucket_name", bkt),
+		zap.String("dst_object_name", obj),
+		zap.String("src_bucket_name", srcBucket),
+		zap.String("src_object_name", srcObject),
+		zap.Error(err))
+
+	api.WriteErrorResponse(r.Context(), w, api.Error{
+		Code:           api.GetAPIError(api.ErrInternalError).Code,
+		Description:    err.Error(),
+		HTTPStatusCode: http.StatusInternalServerError,
+	}, r.URL)
+}
+
+func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
+	var err error
+	args := &copyObjectArgs{}
+
+	if args.IfModifiedSince, err = parseHTTPTime(headers.Get(api.AmzCopyIfModifiedSince)); err != nil {
+		return nil, err
+	}
+	if args.IfUnmodifiedSince, err = parseHTTPTime(headers.Get(api.AmzCopyIfUnmodifiedSince)); err != nil {
+		return nil, err
+	}
+
+	return args, nil
 }

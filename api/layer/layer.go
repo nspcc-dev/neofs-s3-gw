@@ -68,6 +68,7 @@ type (
 		DstBucket string
 		SrcObject string
 		DstObject string
+		SrcSize   int64
 		Header    map[string]string
 	}
 	// CreateBucketParams stores bucket create request parameters.
@@ -378,11 +379,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 // CopyObject from one bucket into another bucket.
 func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error) {
-	info, err := n.GetObjectInfo(ctx, p.SrcBucket, p.SrcObject)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get object info: %w", err)
-	}
-
 	pr, pw := io.Pipe()
 
 	go func() {
@@ -397,17 +393,12 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 		}
 	}()
 
-	// set custom headers
-	for k, v := range p.Header {
-		info.Headers[k] = v
-	}
-
 	return n.PutObject(ctx, &PutObjectParams{
 		Bucket: p.DstBucket,
 		Object: p.DstObject,
-		Size:   info.Size,
+		Size:   p.SrcSize,
 		Reader: pr,
-		Header: info.Headers,
+		Header: p.Header,
 	})
 }
 
