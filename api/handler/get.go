@@ -13,11 +13,15 @@ import (
 	"go.uber.org/zap"
 )
 
-type getObjectArgs struct {
+type conditionalArgs struct {
 	IfModifiedSince   *time.Time
 	IfUnmodifiedSince *time.Time
 	IfMatch           string
 	IfNoneMatch       string
+}
+
+type getObjectArgs struct {
+	Conditional *conditionalArgs
 }
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
@@ -92,7 +96,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := checkGetPreconditions(inf, args)
+	status := checkPreconditions(inf, args.Conditional)
 	if status != http.StatusOK {
 		w.WriteHeader(status)
 		return
@@ -118,7 +122,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkGetPreconditions(inf *layer.ObjectInfo, args *getObjectArgs) int {
+func checkPreconditions(inf *layer.ObjectInfo, args *conditionalArgs) int {
 	if len(args.IfMatch) > 0 && args.IfMatch != inf.HashSum {
 		return http.StatusPreconditionFailed
 	}
@@ -139,7 +143,7 @@ func checkGetPreconditions(inf *layer.ObjectInfo, args *getObjectArgs) int {
 
 func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
 	var err error
-	args := &getObjectArgs{
+	args := &conditionalArgs{
 		IfMatch:     headers.Get(api.IfMatch),
 		IfNoneMatch: headers.Get(api.IfNoneMatch),
 	}
@@ -151,7 +155,7 @@ func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
 		return nil, err
 	}
 
-	return args, nil
+	return &getObjectArgs{Conditional: args}, nil
 }
 
 func parseHTTPTime(data string) (*time.Time, error) {
