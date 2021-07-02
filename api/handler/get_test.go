@@ -57,84 +57,84 @@ func TestPreconditions(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		info     *layer.ObjectInfo
-		args     *getObjectArgs
+		args     *conditionalArgs
 		expected int
 	}{
 		{
 			name:     "no conditions",
 			info:     new(layer.ObjectInfo),
-			args:     new(getObjectArgs),
+			args:     new(conditionalArgs),
 			expected: http.StatusOK,
 		},
 		{
 			name:     "IfMatch true",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfMatch: etag},
+			args:     &conditionalArgs{IfMatch: etag},
 			expected: http.StatusOK,
 		},
 		{
 			name:     "IfMatch false",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfMatch: etag2},
+			args:     &conditionalArgs{IfMatch: etag2},
 			expected: http.StatusPreconditionFailed},
 		{
 			name:     "IfNoneMatch true",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfNoneMatch: etag2},
+			args:     &conditionalArgs{IfNoneMatch: etag2},
 			expected: http.StatusOK},
 		{
 			name:     "IfNoneMatch false",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfNoneMatch: etag},
+			args:     &conditionalArgs{IfNoneMatch: etag},
 			expected: http.StatusNotModified},
 		{
 			name:     "IfModifiedSince true",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfModifiedSince: &yesterday},
+			args:     &conditionalArgs{IfModifiedSince: &yesterday},
 			expected: http.StatusOK},
 		{
 			name:     "IfModifiedSince false",
 			info:     newInfo(etag, yesterday),
-			args:     &getObjectArgs{IfModifiedSince: &today},
+			args:     &conditionalArgs{IfModifiedSince: &today},
 			expected: http.StatusNotModified},
 		{
 			name:     "IfUnmodifiedSince true",
 			info:     newInfo(etag, yesterday),
-			args:     &getObjectArgs{IfUnmodifiedSince: &today},
+			args:     &conditionalArgs{IfUnmodifiedSince: &today},
 			expected: http.StatusOK},
 		{
 			name:     "IfUnmodifiedSince false",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfUnmodifiedSince: &yesterday},
+			args:     &conditionalArgs{IfUnmodifiedSince: &yesterday},
 			expected: http.StatusPreconditionFailed},
 
 		{
 			name:     "IfMatch true, IfUnmodifiedSince false",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfMatch: etag, IfUnmodifiedSince: &yesterday},
+			args:     &conditionalArgs{IfMatch: etag, IfUnmodifiedSince: &yesterday},
 			expected: http.StatusOK,
 		},
 		{
 			name:     "IfMatch false, IfUnmodifiedSince true",
 			info:     newInfo(etag, yesterday),
-			args:     &getObjectArgs{IfMatch: etag2, IfUnmodifiedSince: &today},
+			args:     &conditionalArgs{IfMatch: etag2, IfUnmodifiedSince: &today},
 			expected: http.StatusPreconditionFailed,
 		},
 		{
 			name:     "IfNoneMatch false, IfModifiedSince true",
 			info:     newInfo(etag, today),
-			args:     &getObjectArgs{IfNoneMatch: etag, IfModifiedSince: &yesterday},
+			args:     &conditionalArgs{IfNoneMatch: etag, IfModifiedSince: &yesterday},
 			expected: http.StatusNotModified,
 		},
 		{
 			name:     "IfNoneMatch true, IfModifiedSince false",
 			info:     newInfo(etag, yesterday),
-			args:     &getObjectArgs{IfNoneMatch: etag2, IfModifiedSince: &today},
+			args:     &conditionalArgs{IfNoneMatch: etag2, IfModifiedSince: &today},
 			expected: http.StatusNotModified,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := checkGetPreconditions(tc.info, tc.args)
+			actual := checkPreconditions(tc.info, tc.args)
 			require.Equal(t, tc.expected, actual)
 		})
 	}

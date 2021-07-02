@@ -13,8 +13,7 @@ import (
 )
 
 type copyObjectArgs struct {
-	IfModifiedSince   *time.Time
-	IfUnmodifiedSince *time.Time
+	Conditional *conditionalArgs
 }
 
 // path2BucketObject returns bucket and object.
@@ -74,12 +73,9 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
-		w.WriteHeader(http.StatusPreconditionFailed)
+	status := checkPreconditions(inf, args.Conditional)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
 		return
 	}
 
@@ -124,7 +120,10 @@ func writeErrorCopy(w http.ResponseWriter, r *http.Request, log *zap.Logger, msg
 
 func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
 	var err error
-	args := &copyObjectArgs{}
+	args := &conditionalArgs{
+		IfMatch:     headers.Get(api.AmzCopyIfMatch),
+		IfNoneMatch: headers.Get(api.AmzCopyIfNoneMatch),
+	}
 
 	if args.IfModifiedSince, err = parseHTTPTime(headers.Get(api.AmzCopyIfModifiedSince)); err != nil {
 		return nil, err
@@ -133,5 +132,5 @@ func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
 		return nil, err
 	}
 
-	return args, nil
+	return &copyObjectArgs{Conditional: args}, nil
 }
