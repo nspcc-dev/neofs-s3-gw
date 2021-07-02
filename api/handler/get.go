@@ -16,6 +16,8 @@ import (
 type getObjectArgs struct {
 	IfModifiedSince   *time.Time
 	IfUnmodifiedSince *time.Time
+	IfMatch           string
+	IfNoneMatch       string
 }
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
@@ -90,12 +92,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
-		w.WriteHeader(http.StatusPreconditionFailed)
+	status := checkGetPreconditions(inf, args)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
 		return
 	}
 
@@ -119,9 +118,31 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func checkGetPreconditions(inf *layer.ObjectInfo, args *getObjectArgs) int {
+	if len(args.IfMatch) > 0 && args.IfMatch != inf.HashSum {
+		return http.StatusPreconditionFailed
+	}
+	if len(args.IfNoneMatch) > 0 && args.IfNoneMatch == inf.HashSum {
+		return http.StatusNotModified
+	}
+	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
+		return http.StatusNotModified
+	}
+	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
+		if len(args.IfMatch) == 0 {
+			return http.StatusPreconditionFailed
+		}
+	}
+
+	return http.StatusOK
+}
+
 func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
 	var err error
-	args := &getObjectArgs{}
+	args := &getObjectArgs{
+		IfMatch:     headers.Get(api.IfMatch),
+		IfNoneMatch: headers.Get(api.IfNoneMatch),
+	}
 
 	if args.IfModifiedSince, err = parseHTTPTime(headers.Get(api.IfModifiedSince)); err != nil {
 		return nil, err
