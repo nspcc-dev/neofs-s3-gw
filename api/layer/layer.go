@@ -285,15 +285,7 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		result.NextMarker = result.Objects[len(result.Objects)-1].Name
 	}
 
-	index := 0
-	for _, oi := range result.Objects {
-		if isDir := uniqNames[oi.Name]; isDir {
-			result.Objects = append(result.Objects[:index], result.Objects[index+1:]...)
-			result.Prefixes = append(result.Prefixes, oi.Name)
-		} else {
-			index++
-		}
-	}
+	fillPrefixes(&result, uniqNames)
 	if needDirectoryAsKey {
 		res := []*ObjectInfo{{
 			Name:    p.Prefix,
@@ -304,6 +296,19 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 	}
 
 	return &result, nil
+}
+
+func fillPrefixes(result *ListObjectsInfo, directories map[string]bool) {
+	index := 0
+	for range result.Objects {
+		name := result.Objects[index].Name
+		if isDir := directories[name]; isDir {
+			result.Objects = append(result.Objects[:index], result.Objects[index+1:]...)
+			result.Prefixes = append(result.Prefixes, name)
+		} else {
+			index++
+		}
+	}
 }
 
 // GetObject from storage.
