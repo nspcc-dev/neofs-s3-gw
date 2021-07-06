@@ -82,6 +82,16 @@ type (
 	DeleteBucketParams struct {
 		Name string
 	}
+	// ListObjectVersionsParams stores list objects versions parameters.
+	ListObjectVersionsParams struct {
+		Bucket          string
+		Delimiter       string
+		KeyMarker       string
+		MaxKeys         int
+		Prefix          string
+		VersionIDMarker string
+		Encode          string
+	}
 
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
@@ -105,6 +115,7 @@ type (
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error)
 
 		ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObjectsInfo, error)
+		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
 		DeleteObject(ctx context.Context, bucket, object string) error
 		DeleteObjects(ctx context.Context, bucket string, objects []string) []error
@@ -118,8 +129,11 @@ var (
 	ErrObjectNotExists = errors.New("object not exists")
 )
 
-// ETag (hex encoded md5sum) of empty string.
-const emptyETag = "d41d8cd98f00b204e9800998ecf8427e"
+const (
+	// ETag (hex encoded md5sum) of empty string.
+	emptyETag                  = "d41d8cd98f00b204e9800998ecf8427e"
+	unversionedObjectVersionID = "null"
+)
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
@@ -487,4 +501,74 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	}
 
 	return n.deleteContainer(ctx, bucketInfo.CID)
+}
+
+func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
+	var (
+		res       = ListObjectVersionsInfo{}
+		err       error
+		bkt       *BucketInfo
+		ids       []*object.ID
+		uniqNames = make(map[string]bool)
+	)
+
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return nil, err
+	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID}); err != nil {
+		return nil, err
+	}
+
+	versions := make([]*ObjectVersionInfo, 0, len(ids))
+	// todo: deletemarkers is empty now, we will use it after proper realization of versioning
+	deleted := make([]*DeletedObjectInfo, 0, len(ids))
+	res.DeleteMarker = deleted
+
+	for _, id := range ids {
+		addr := object.NewAddress()
+		addr.SetObjectID(id)
+		addr.SetContainerID(bkt.CID)
+
+		meta, err := n.objectHead(ctx, addr)
+		if err != nil {
+			n.log.Warn("could not fetch object meta", zap.Error(err))
+			continue
+		}
+		if ov := objectVersionInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); ov != nil {
+			if _, ok := uniqNames[ov.Object.Name]; ok {
+				continue
+			}
+			if len(p.KeyMarker) > 0 && ov.Object.Name <= p.KeyMarker {
+				continue
+			}
+			uniqNames[ov.Object.Name] = ov.Object.isDir
+			versions = append(versions, ov)
+		}
+	}
+
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].Object.Name < versions[j].Object.Name
+	})
+
+	if len(versions) > p.MaxKeys {
+		res.IsTruncated = true
+
+		lastVersion := versions[p.MaxKeys-1]
+		res.KeyMarker = lastVersion.Object.Name
+		res.VersionIDMarker = lastVersion.VersionID
+
+		nextVersion := versions[p.MaxKeys]
+		res.NextKeyMarker = nextVersion.Object.Name
+		res.NextVersionIDMarker = nextVersion.VersionID
+
+		versions = versions[:p.MaxKeys]
+	}
+
+	for _, ov := range versions {
+		if isDir := uniqNames[ov.Object.Name]; isDir {
+			res.CommonPrefixes = append(res.CommonPrefixes, &ov.Object.Name)
+		} else {
+			res.Version = append(res.Version, ov)
+		}
+	}
+	return &res, nil
 }

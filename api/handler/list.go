@@ -39,6 +39,19 @@ type ListMultipartUploadsResult struct {
 
 var maxObjectList = 10000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
 
+func (h *handler) registerAndSendError(w http.ResponseWriter, r *http.Request, err error, logText string) {
+	rid := api.GetRequestID(r.Context())
+	h.log.Error(logText,
+		zap.String("request_id", rid),
+		zap.Error(err))
+
+	api.WriteErrorResponse(r.Context(), w, api.Error{
+		Code:           api.GetAPIError(api.ErrBadRequest).Code,
+		Description:    err.Error(),
+		HTTPStatusCode: http.StatusBadRequest,
+	}, r.URL)
+}
+
 // ListBucketsHandler handles bucket listing requests.
 func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -344,4 +357,93 @@ func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Req
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
 	}
+}
+
+func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
+	p, err := parseListObjectVersionsRequest(r)
+	if err != nil {
+		h.registerAndSendError(w, r, err, "failed to parse request ")
+		return
+	}
+
+	info, err := h.obj.ListObjectVersions(r.Context(), p)
+	if err != nil {
+		h.registerAndSendError(w, r, err, "something went wrong")
+		return
+	}
+
+	response := encodeListObjectVersionsToResponse(info, p.Bucket)
+	if err := api.EncodeToResponse(w, response); err != nil {
+		h.registerAndSendError(w, r, err, "something went wrong")
+	}
+}
+
+func parseListObjectVersionsRequest(r *http.Request) (*layer.ListObjectVersionsParams, error) {
+	var (
+		err error
+		res layer.ListObjectVersionsParams
+	)
+
+	if r.URL.Query().Get("max-keys") == "" {
+		res.MaxKeys = maxObjectList
+	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
+		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
+	}
+
+	res.Prefix = r.URL.Query().Get("prefix")
+	res.KeyMarker = r.URL.Query().Get("marker")
+	res.Delimiter = r.URL.Query().Get("delimiter")
+	res.Encode = r.URL.Query().Get("encoding-type")
+	res.VersionIDMarker = r.URL.Query().Get("version-id-marker")
+
+	if info := api.GetReqInfo(r.Context()); info != nil {
+		res.Bucket = info.BucketName
+	}
+
+	return &res, nil
+}
+
+func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, bucketName string) *ListObjectsVersionsResponse {
+	res := ListObjectsVersionsResponse{
+		Name:                bucketName,
+		IsTruncated:         info.IsTruncated,
+		KeyMarker:           info.KeyMarker,
+		NextKeyMarker:       info.NextKeyMarker,
+		NextVersionIDMarker: info.NextVersionIDMarker,
+		VersionIDMarker:     info.VersionIDMarker,
+	}
+
+	for _, prefix := range info.CommonPrefixes {
+		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{Prefix: *prefix})
+	}
+
+	for _, ver := range info.Version {
+		res.Version = append(res.Version, ObjectVersionResponse{
+			IsLatest:     ver.IsLatest,
+			Key:          ver.Object.Name,
+			LastModified: ver.Object.Created.Format(time.RFC3339),
+			Owner: Owner{
+				ID:          ver.Object.Owner.String(),
+				DisplayName: ver.Object.Owner.String(),
+			},
+			Size:      ver.Object.Size,
+			VersionID: ver.VersionID,
+			ETag:      ver.Object.HashSum,
+		})
+	}
+	// this loop is not starting till versioning is not implemented
+	for _, del := range info.DeleteMarker {
+		res.DeleteMarker = append(res.DeleteMarker, DeleteMarkerEntry{
+			IsLatest:     del.IsLatest,
+			Key:          del.Key,
+			LastModified: del.LastModified,
+			Owner: Owner{
+				ID:          del.Owner.String(),
+				DisplayName: del.Owner.String(),
+			},
+			VersionID: del.VersionID,
+		})
+	}
+
+	return &res
 }

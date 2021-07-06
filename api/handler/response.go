@@ -109,6 +109,27 @@ type Object struct {
 	UserMetadata StringMap `xml:"UserMetadata,omitempty"`
 }
 
+// ObjectVersionResponse container for object version in the response of ListBucketObjectVersionsHandler.
+type ObjectVersionResponse struct {
+	ETag         string `xml:"ETag"`
+	IsLatest     bool   `xml:"IsLatest"`
+	Key          string `xml:"Key"`
+	LastModified string `xml:"LastModified"`
+	Owner        Owner  `xml:"Owner"`
+	Size         int64  `xml:"Size"`
+	StorageClass string `xml:"StorageClass,omitempty"` // is empty!!
+	VersionID    string `xml:"VersionId"`
+}
+
+// DeleteMarkerEntry container for deleted object's version in the response of ListBucketObjectVersionsHandler.
+type DeleteMarkerEntry struct {
+	IsLatest     bool   `xml:"IsLatest"`
+	Key          string `xml:"Key"`
+	LastModified string `xml:"LastModified"`
+	Owner        Owner  `xml:"Owner"`
+	VersionID    string `xml:"VersionId"`
+}
+
 // StringMap is a map[string]string.
 type StringMap map[string]string
 
@@ -123,6 +144,21 @@ type CopyObjectResponse struct {
 	XMLName      xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CopyObjectResult" json:"-"`
 	LastModified string   // time string of format "2006-01-02T15:04:05.000Z"
 	ETag         string   // md5sum of the copied object.
+}
+
+// ListObjectsVersionsResponse is a response of ListBucketObjectVersionsHandler.
+type ListObjectsVersionsResponse struct {
+	XMLName             xml.Name                `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListVersionsResult" json:"-"`
+	EncodingType        string                  `xml:"EncodingType,omitempty"`
+	Name                string                  `xml:"Name"`
+	IsTruncated         bool                    `xml:"IsTruncated"`
+	KeyMarker           string                  `xml:"KeyMarker"`
+	NextKeyMarker       string                  `xml:"NextKeyMarker,omitempty"`
+	NextVersionIDMarker string                  `xml:"NextVersionIdMarker,omitempty"`
+	VersionIDMarker     string                  `xml:"VersionIdMarker"`
+	DeleteMarker        []DeleteMarkerEntry     `xml:"DeleteMarker"`
+	Version             []ObjectVersionResponse `xml:"Version"`
+	CommonPrefixes      []CommonPrefix          `xml:"CommonPrefixes"`
 }
 
 // MarshalXML - StringMap marshals into XML.
