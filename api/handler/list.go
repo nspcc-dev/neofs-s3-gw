@@ -289,7 +289,7 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 
 	if r.URL.Query().Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil {
+	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
