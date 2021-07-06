@@ -53,6 +53,34 @@ type (
 		// List of prefixes for this request.
 		Prefixes []string
 	}
+
+	// ObjectVersionInfo stores info about objects versions.
+	ObjectVersionInfo struct {
+		Object    *ObjectInfo
+		IsLatest  bool
+		VersionID string
+	}
+
+	// DeletedObjectInfo stores info about deleted versions of objects.
+	DeletedObjectInfo struct {
+		Owner        *owner.ID
+		Key          string
+		VersionID    string
+		IsLatest     bool
+		LastModified string
+	}
+
+	// ListObjectVersionsInfo stores info and list of objects' versions.
+	ListObjectVersionsInfo struct {
+		CommonPrefixes      []*string
+		IsTruncated         bool
+		KeyMarker           string
+		NextKeyMarker       string
+		NextVersionIDMarker string
+		Version             []*ObjectVersionInfo
+		DeleteMarker        []*DeletedObjectInfo
+		VersionIDMarker     string
+	}
 )
 
 // PathSeparator is a path components separator string.
@@ -121,6 +149,14 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter 
 		Size:        size,
 		HashSum:     meta.PayloadChecksum().String(),
 	}
+}
+
+func objectVersionInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter string) *ObjectVersionInfo {
+	oi := objectInfoFromMeta(bkt, meta, prefix, delimiter)
+	if oi == nil {
+		return nil
+	}
+	return &ObjectVersionInfo{Object: oi, IsLatest: true, VersionID: unversionedObjectVersionID}
 }
 
 func filenameFromObject(o *object.Object) string {
