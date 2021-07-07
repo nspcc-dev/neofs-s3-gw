@@ -2,6 +2,8 @@ package api
 
 // Standard S3 HTTP request/response constants.
 const (
+	MetadataPrefix = "X-Amz-Meta-"
+
 	LastModified       = "Last-Modified"
 	Date               = "Date"
 	ETag               = "ETag"
