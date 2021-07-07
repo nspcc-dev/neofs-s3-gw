@@ -28,12 +28,16 @@ func newTestObject(oid *object.ID, bkt *BucketInfo, name string) *object.Object 
 	created.SetKey(object.AttributeTimestamp)
 	created.SetValue(strconv.FormatInt(defaultTestCreated.Unix(), 10))
 
+	contentType := object.NewAttribute()
+	contentType.SetKey(object.AttributeContentType)
+	contentType.SetValue(defaultTestContentType)
+
 	raw := object.NewRaw()
 	raw.SetID(oid)
 	raw.SetOwnerID(bkt.Owner)
 	raw.SetContainerID(bkt.CID)
 	raw.SetPayload(defaultTestPayload)
-	raw.SetAttributes(filename, created)
+	raw.SetAttributes(filename, created, contentType)
 	raw.SetPayloadSize(uint64(defaultTestPayloadLength))
 
 	return raw.Object()
