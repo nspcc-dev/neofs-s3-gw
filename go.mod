@@ -8,9 +8,9 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/nspcc-dev/neo-go v0.95.3
-	github.com/nspcc-dev/neofs-api-go v1.28.2
+	github.com/nspcc-dev/neofs-api-go v1.28.3
 	github.com/nspcc-dev/neofs-node v1.22.0
-	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210706115313-3904339f2ff8
+	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210707142403-393034fd73bb
 	github.com/prometheus/client_golang v1.9.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
