@@ -124,6 +124,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
+		return
 	}
 
 	h.log.Info("bucket is created",
