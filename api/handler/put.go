@@ -20,6 +20,8 @@ const (
 	basicACLReadOnly = "public-read"
 	basicACLPublic   = "public-read-write"
 	defaultPolicy    = "REP 3"
+
+	publicBasicRule = 0x0FFFFFFF
 )
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +87,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if val, ok := r.Header["X-Amz-Acl"]; ok {
 		p.ACL, err = parseBasicACL(val[0])
 	} else {
-		p.ACL = acl.PrivateBasicRule
+		p.ACL = publicBasicRule
 	}
 
 	if err != nil {
