@@ -127,6 +127,7 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter 
 		index := strings.Index(tail, delimiter)
 		if index >= 0 {
 			isDir = true
+			mimeType = ""
 			filename = prefix + tail[:index+1]
 			userHeaders = nil
 		} else {
