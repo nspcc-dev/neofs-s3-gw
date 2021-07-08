@@ -2,10 +2,13 @@ package layer
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
@@ -122,7 +125,14 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		container.WithAttribute(container.AttributeName, p.Name),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
 
-	cnr.SetSessionToken(ctx.Value(api.GateData).(*accessbox.GateData).SessionToken)
+	var gateData *accessbox.GateData
+	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
+		gateData = data
+	} else {
+		return nil, fmt.Errorf("couldn't get gate data from context")
+	}
+
+	cnr.SetSessionToken(gateData.SessionToken)
 	cnr.SetOwnerID(n.Owner(ctx))
 
 	cid, err := n.pool.PutContainer(ctx, cnr)
@@ -130,12 +140,87 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		return nil, fmt.Errorf("failed to create a bucket: %w", err)
 	}
 
-	err = n.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams())
-	if err != nil {
+	if err = n.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams()); err != nil {
+		return nil, err
+	}
+
+	if err := n.setContainerEACL(ctx, cid, gateData.GateKey); err != nil {
 		return nil, err
 	}
 
 	return cid, nil
+}
+
+func (n *layer) setContainerEACL(ctx context.Context, cid *cid.ID, gateKey *keys.PublicKey) error {
+	if gateKey == nil {
+		return fmt.Errorf("gate key must not be nil")
+	}
+
+	table := formDefaultTable(cid, *(*ecdsa.PublicKey)(gateKey))
+	if err := n.pool.SetEACL(ctx, table, n.SessionOpt(ctx)); err != nil {
+		return err
+	}
+
+	if err := n.waitEACLPresence(ctx, cid, defaultWaitParams()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func formDefaultTable(cid *cid.ID, gateKey ecdsa.PublicKey) *eacl.Table {
+	table := eacl.NewTable()
+	table.SetCID(cid)
+
+	for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
+		record := eacl.NewRecord()
+		record.SetOperation(op)
+		record.SetAction(eacl.ActionAllow)
+		eacl.AddFormedTarget(record, eacl.RoleUser, gateKey)
+		table.AddRecord(record)
+
+		record2 := eacl.NewRecord()
+		record2.SetOperation(op)
+		record2.SetAction(eacl.ActionDeny)
+		eacl.AddFormedTarget(record2, eacl.RoleOthers)
+		table.AddRecord(record2)
+	}
+
+	return table
+}
+
+type waitParams struct {
+	WaitTimeout  time.Duration
+	PollInterval time.Duration
+}
+
+func defaultWaitParams() *waitParams {
+	return &waitParams{
+		WaitTimeout:  60 * time.Second,
+		PollInterval: 3 * time.Second,
+	}
+}
+
+func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, params *waitParams) error {
+	wctx, cancel := context.WithTimeout(ctx, params.WaitTimeout)
+	defer cancel()
+	ticker := time.NewTimer(params.PollInterval)
+	defer ticker.Stop()
+	wdone := wctx.Done()
+	done := ctx.Done()
+	for {
+		select {
+		case <-done:
+			return ctx.Err()
+		case <-wdone:
+			return wctx.Err()
+		case <-ticker.C:
+			if _, err := n.pool.GetEACL(ctx, cid); err == nil {
+				return nil
+			}
+			ticker.Reset(params.PollInterval)
+		}
+	}
 }
 
 func (n *layer) deleteContainer(ctx context.Context, cid *cid.ID) error {
