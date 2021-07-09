@@ -202,7 +202,6 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 		res.Contents = append(res.Contents, Object{
 			Key:          obj.Name,
 			Size:         obj.Size,
-			UserMetadata: obj.Headers,
 			LastModified: obj.Created.Format(time.RFC3339),
 
 			Owner: Owner{
@@ -265,7 +264,6 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 		res.Contents = append(res.Contents, Object{
 			Key:          obj.Name,
 			Size:         obj.Size,
-			UserMetadata: obj.Headers,
 			LastModified: obj.Created.Format(time.RFC3339),
 
 			Owner: Owner{

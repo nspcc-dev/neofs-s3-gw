@@ -104,9 +104,6 @@ type Object struct {
 
 	// The class of storage used to store the object.
 	StorageClass string `xml:"StorageClass,omitempty"`
-
-	// UserMetadata user-defined metadata
-	UserMetadata StringMap `xml:"UserMetadata,omitempty"`
 }
 
 // ObjectVersionResponse container for object version in the response of ListBucketObjectVersionsHandler.

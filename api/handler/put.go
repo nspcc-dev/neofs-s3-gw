@@ -47,11 +47,14 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metadata := parseMetadata(r)
+
 	params := &layer.PutObjectParams{
 		Bucket: bkt,
 		Object: obj,
 		Reader: r.Body,
 		Size:   r.ContentLength,
+		Header: metadata,
 	}
 
 	if info, err = h.obj.PutObject(r.Context(), params); err != nil {
@@ -72,6 +75,17 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func parseMetadata(r *http.Request) map[string]string {
+	res := make(map[string]string)
+	for k, v := range r.Header {
+		if strings.HasPrefix(k, api.MetadataPrefix) {
+			key := strings.TrimPrefix(k, api.MetadataPrefix)
+			res[key] = v[0]
+		}
+	}
+	return res
 }
 
 func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
