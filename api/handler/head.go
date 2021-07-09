@@ -3,14 +3,13 @@ package handler
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const sizeToDetectType = 512
@@ -125,13 +124,8 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err))
 
 		code := http.StatusBadRequest
-		if st, ok := status.FromError(err); ok && st != nil {
-			switch st.Code() { //nolint:exhaustive // we have default value set above
-			case codes.NotFound:
-				code = http.StatusNotFound
-			case codes.PermissionDenied:
-				code = http.StatusForbidden
-			}
+		if errors.Is(err, layer.ErrBucketNotFound) {
+			code = http.StatusNotFound
 		}
 
 		api.WriteResponse(w, code, nil, api.MimeNone)

@@ -20,6 +20,8 @@ const (
 	basicACLReadOnly = "public-read"
 	basicACLPublic   = "public-read-write"
 	defaultPolicy    = "REP 3"
+
+	publicBasicRule = 0x0FFFFFFF
 )
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +101,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if val, ok := r.Header["X-Amz-Acl"]; ok {
 		p.ACL, err = parseBasicACL(val[0])
 	} else {
-		p.ACL = acl.PrivateBasicRule
+		p.ACL = publicBasicRule
 	}
 
 	if err != nil {
@@ -112,6 +114,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
+		return
 	}
 
 	p.Policy, err = policy.Parse(defaultPolicy)
@@ -125,6 +128,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
+		return
 	}
 
 	cid, err := h.obj.CreateBucket(r.Context(), &p)
@@ -138,6 +142,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusInternalServerError,
 		}, r.URL)
+		return
 	}
 
 	h.log.Info("bucket is created",
