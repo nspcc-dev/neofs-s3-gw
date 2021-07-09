@@ -129,6 +129,8 @@ var (
 	ErrObjectNotExists = errors.New("object not exists")
 	// ErrBucketAlreadyExists is returned on attempts to create already existing bucket.
 	ErrBucketAlreadyExists = errors.New("bucket exists")
+	// ErrBucketNotFound is returned on attempts to get not existing bucket.
+	ErrBucketNotFound = errors.New("bucket not found")
 )
 
 const (
@@ -198,7 +200,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 			}
 		}
 
-		return nil, status.Error(codes.NotFound, "bucket not found")
+		return nil, ErrBucketNotFound
 	}
 
 	return n.containerInfo(ctx, containerID)
@@ -495,9 +497,7 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "bucket not found") ||
-			strings.Contains(errMsg, "container not found") {
+		if errors.Is(err, ErrBucketNotFound) {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
