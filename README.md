@@ -477,15 +477,15 @@ See also `GetObject` and other method parameters.
 
 | Method                    | Status                  |
 | ------------------------- | ----------------------- |
-| ListObjectVersions        | Unsupported, aka ListBucketObjectVersions |
+| ListObjectVersions        | Supported (null-versioning), aka ListBucketObjectVersions |
 | RestoreObject             | Unsupported             |
 
 ### Bucket
 
 | Method                    | Status                  |
 | ------------------------- | ----------------------- |
-| CreateBucket              | Unsupported, aka PutBucket |
-| DeleteBucket              | Unsupported             |
+| CreateBucket              | Supported, aka PutBucket |
+| DeleteBucket              | Supported               |
 | GetBucketLocation         | Unsupported             |
 | HeadBucket                | Supported               |
 | ListBuckets               | Supported               |
