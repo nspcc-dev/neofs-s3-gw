@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -58,6 +59,9 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 			zap.String("request_id", rid),
 			zap.Error(err))
 
+		if strings.Contains(err.Error(), "container not found") {
+			return nil, ErrBucketNotFound
+		}
 		return nil, err
 	}
 

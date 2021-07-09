@@ -100,6 +100,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
+		return
 	}
 
 	p.Policy, err = policy.Parse(defaultPolicy)
@@ -113,6 +114,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    err.Error(),
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
+		return
 	}
 
 	cid, err := h.obj.CreateBucket(r.Context(), &p)
