@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"fmt"
@@ -165,7 +166,7 @@ func (n *layer) setContainerEACL(ctx context.Context, cid *cid.ID, gateKey *keys
 		return err
 	}
 
-	if err := n.waitEACLPresence(ctx, cid, defaultWaitParams()); err != nil {
+	if err := n.waitEACLPresence(ctx, cid, table, defaultWaitParams()); err != nil {
 		return err
 	}
 
@@ -205,7 +206,12 @@ func defaultWaitParams() *waitParams {
 	}
 }
 
-func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, params *waitParams) error {
+func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.Table, params *waitParams) error {
+	exp, err := table.Marshal()
+	if err != nil {
+		return fmt.Errorf("couldn't marshal eacl: %w", err)
+	}
+
 	wctx, cancel := context.WithTimeout(ctx, params.WaitTimeout)
 	defer cancel()
 	ticker := time.NewTimer(params.PollInterval)
@@ -219,8 +225,12 @@ func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, params *waitP
 		case <-wdone:
 			return wctx.Err()
 		case <-ticker.C:
-			if _, err := n.pool.GetEACL(ctx, cid); err == nil {
-				return nil
+			signedEacl, err := n.pool.GetEACL(ctx, cid)
+			if err == nil {
+				got, err := signedEacl.EACL().Marshal()
+				if err == nil && bytes.Equal(exp, got) {
+					return nil
+				}
 			}
 			ticker.Reset(params.PollInterval)
 		}
