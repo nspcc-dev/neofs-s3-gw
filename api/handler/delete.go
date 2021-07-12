@@ -8,7 +8,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/status"
 )
 
 // DeleteObjectsRequest - xml carrying the object key names which needs to be deleted.
@@ -121,11 +120,6 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 			if err, ok := e.(*api.DeleteError); ok {
 				code := "BadRequest"
 				desc := err.Error()
-
-				if st, ok := status.FromError(err.Err); ok && st != nil {
-					desc = st.Message()
-					code = st.Code().String()
-				}
 
 				response.Errors = append(response.Errors, DeleteError{
 					Code:    code,

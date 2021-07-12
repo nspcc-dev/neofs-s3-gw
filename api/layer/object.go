@@ -12,8 +12,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type (
@@ -52,7 +50,7 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 	if result, err := n.objectSearch(ctx, p); err != nil {
 		return nil, err
 	} else if ln := len(result); ln == 0 {
-		return nil, status.Error(codes.NotFound, "object not found")
+		return nil, new(api.ObjectNotFound)
 	} else if ln == 1 {
 		return result[0], nil
 	}
@@ -94,12 +92,16 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	} else if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
-	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil && err != ErrObjectNotExists {
-		return nil, err
-	} else if err == ErrObjectExists {
-		return nil, &api.ObjectAlreadyExists{
-			Bucket: p.Bucket,
-			Object: p.Object,
+	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil {
+		var errExist *api.ObjectAlreadyExists
+		if ok := errors.As(err, &errExist); ok {
+			errExist.Bucket = p.Bucket
+			errExist.Object = p.Object
+			return nil, errExist
+		}
+		var errNoExist *api.ObjectNotFound
+		if ok := errors.As(err, &errNoExist); !ok {
+			return nil, err
 		}
 	}
 
