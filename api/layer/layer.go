@@ -3,7 +3,6 @@ package layer
 import (
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -120,13 +119,6 @@ type (
 	}
 )
 
-var (
-	// ErrBucketAlreadyExists is returned on attempts to create already existing bucket.
-	ErrBucketAlreadyExists = errors.New("bucket exists")
-	// ErrBucketNotFound is returned on attempts to get not existing bucket.
-	ErrBucketNotFound = errors.New("bucket not found")
-)
-
 const (
 	unversionedObjectVersionID = "null"
 )
@@ -192,7 +184,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 			}
 		}
 
-		return nil, ErrBucketNotFound
+		return nil, api.GetAPIError(api.ErrNoSuchBucket)
 	}
 
 	return n.containerInfo(ctx, containerID)
@@ -368,13 +360,13 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
-		if errors.Is(err, ErrBucketNotFound) {
+		if api.IsS3Error(err, api.ErrNoSuchBucket) {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
 	}
 
-	return nil, ErrBucketAlreadyExists
+	return nil, api.GetAPIError(api.ErrBucketAlreadyExists)
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {

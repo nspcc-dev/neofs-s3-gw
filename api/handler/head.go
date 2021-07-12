@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -43,10 +42,6 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 			zap.String("object_name", obj),
 			zap.Error(err))
 
-		var genErr *api.ObjectNotFound
-		if ok := errors.As(err, &genErr); ok {
-			err = api.GetAPIError(api.ErrNoSuchKey)
-		}
 		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 		return
 	}
@@ -87,13 +82,7 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 			zap.String("bucket_name", bkt),
 			zap.Error(err))
 
-		code := http.StatusBadRequest
-		if errors.Is(err, layer.ErrBucketNotFound) {
-			code = http.StatusNotFound
-		}
-
-		api.WriteResponse(w, code, nil, api.MimeNone)
-
+		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 		return
 	}
 

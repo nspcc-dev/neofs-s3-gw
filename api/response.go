@@ -38,6 +38,7 @@ type (
 
 	// Error structure represents API error.
 	Error struct {
+		ErrCode        ErrorCode
 		Code           string
 		Description    string
 		HTTPStatusCode int
