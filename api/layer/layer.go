@@ -120,13 +120,6 @@ type (
 	}
 )
 
-var (
-	// ErrBucketAlreadyExists is returned on attempts to create already existing bucket.
-	ErrBucketAlreadyExists = errors.New("bucket exists")
-	// ErrBucketNotFound is returned on attempts to get not existing bucket.
-	ErrBucketNotFound = errors.New("bucket not found")
-)
-
 const (
 	// ETag (hex encoded md5sum) of empty string.
 	emptyETag                  = "d41d8cd98f00b204e9800998ecf8427e"
@@ -194,7 +187,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 			}
 		}
 
-		return nil, ErrBucketNotFound
+		return nil, &api.BucketNotFound{Bucket: name}
 	}
 
 	return n.containerInfo(ctx, containerID)
@@ -491,13 +484,14 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
-		if errors.Is(err, ErrBucketNotFound) {
+		var errNotFound *api.BucketNotFound
+		if ok := errors.As(err, &errNotFound); ok {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
 	}
 
-	return nil, ErrBucketAlreadyExists
+	return nil, &api.BucketAlreadyExists{Bucket: p.Name}
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
