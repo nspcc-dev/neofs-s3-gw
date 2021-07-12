@@ -124,7 +124,8 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err))
 
 		code := http.StatusBadRequest
-		if errors.Is(err, layer.ErrBucketNotFound) {
+		var errNotFound *api.BucketNotFound
+		if ok := errors.As(err, &errNotFound); ok {
 			code = http.StatusNotFound
 		}
 
