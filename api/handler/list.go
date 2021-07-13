@@ -37,7 +37,7 @@ type ListMultipartUploadsResult struct {
 	Xmlns   string   `xml:"xmlns,attr"`
 }
 
-var maxObjectList = 10000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+const maxObjectList = 1000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
 
 func (h *handler) registerAndSendError(w http.ResponseWriter, r *http.Request, err error, logText string) {
 	rid := api.GetRequestID(r.Context())
