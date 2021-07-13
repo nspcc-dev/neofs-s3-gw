@@ -241,7 +241,7 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 		Name:         arg.Bucket,
 		EncodingType: arg.Encode,
 		Prefix:       arg.Prefix,
-		KeyCount:     len(list.Objects),
+		KeyCount:     len(list.Objects) + len(list.Prefixes),
 		MaxKeys:      arg.MaxKeys,
 		Delimiter:    arg.Delimiter,
 		StartAfter:   arg.StartAfter,
