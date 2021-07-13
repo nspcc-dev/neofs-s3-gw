@@ -193,14 +193,14 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 	// fill common prefixes
 	for i := range list.Prefixes {
 		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
-			Prefix: list.Prefixes[i],
+			Prefix: s3PathEncode(list.Prefixes[i], arg.Encode),
 		})
 	}
 
 	// fill contents
 	for _, obj := range list.Objects {
 		res.Contents = append(res.Contents, Object{
-			Key:          obj.Name,
+			Key:          s3PathEncode(obj.Name, arg.Encode),
 			Size:         obj.Size,
 			LastModified: obj.Created.Format(time.RFC3339),
 
@@ -240,11 +240,11 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 	res := &ListObjectsV2Response{
 		Name:         arg.Bucket,
 		EncodingType: arg.Encode,
-		Prefix:       arg.Prefix,
+		Prefix:       s3PathEncode(arg.Prefix, arg.Encode),
 		KeyCount:     len(list.Objects) + len(list.Prefixes),
 		MaxKeys:      arg.MaxKeys,
-		Delimiter:    arg.Delimiter,
-		StartAfter:   arg.StartAfter,
+		Delimiter:    s3PathEncode(arg.Delimiter, arg.Encode),
+		StartAfter:   s3PathEncode(arg.StartAfter, arg.Encode),
 
 		IsTruncated: list.IsTruncated,
 
@@ -255,14 +255,14 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 	// fill common prefixes
 	for i := range list.Prefixes {
 		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
-			Prefix: list.Prefixes[i],
+			Prefix: s3PathEncode(list.Prefixes[i], arg.Encode),
 		})
 	}
 
 	// fill contents
 	for _, obj := range list.Objects {
 		res.Contents = append(res.Contents, Object{
-			Key:          obj.Name,
+			Key:          s3PathEncode(obj.Name, arg.Encode),
 			Size:         obj.Size,
 			LastModified: obj.Created.Format(time.RFC3339),
 
