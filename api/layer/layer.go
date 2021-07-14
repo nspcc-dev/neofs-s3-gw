@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/url"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
@@ -114,7 +113,8 @@ type (
 
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error)
 
-		ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObjectsInfo, error)
+		ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*ListObjectsInfoV1, error)
+		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
 		DeleteObject(ctx context.Context, bucket, object string) error
@@ -134,8 +134,6 @@ var (
 )
 
 const (
-	// ETag (hex encoded md5sum) of empty string.
-	emptyETag                  = "d41d8cd98f00b204e9800998ecf8427e"
 	unversionedObjectVersionID = "null"
 )
 
@@ -210,127 +208,6 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 // id. Timestamp is omitted since it is not saved in neofs container.
 func (n *layer) ListBuckets(ctx context.Context) ([]*BucketInfo, error) {
 	return n.containerList(ctx)
-}
-
-// ListObjects returns objects from the container. It ignores tombstones and
-// storage groups.
-//                          ctx, bucket, prefix, continuationToken, delimiter, maxKeys
-func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObjectsInfo, error) {
-	// todo: make pagination when search response will be gRPC stream,
-	//       pagination must be implemented with cache, because search results
-	//       may be different between search calls
-	var (
-		err       error
-		bkt       *BucketInfo
-		ids       []*object.ID
-		result    ListObjectsInfo
-		uniqNames = make(map[string]bool)
-	)
-
-	if p.MaxKeys == 0 {
-		return &result, nil
-	}
-
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-		return nil, err
-	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID}); err != nil {
-		return nil, err
-	}
-
-	ln := len(ids)
-	// todo: check what happens if there is more than maxKeys objects
-	if ln > p.MaxKeys {
-		ln = p.MaxKeys
-	}
-
-	mostRecentModified := time.Time{}
-	needDirectoryAsKey := p.Version == 2 && len(p.Prefix) > 0 && len(p.Delimiter) > 0 && strings.HasSuffix(p.Prefix, p.Delimiter)
-	result.Objects = make([]*ObjectInfo, 0, ln)
-
-	for _, id := range ids {
-		addr := object.NewAddress()
-		addr.SetObjectID(id)
-		addr.SetContainerID(bkt.CID)
-
-		meta, err := n.objectHead(ctx, addr)
-		if err != nil {
-			n.log.Warn("could not fetch object meta", zap.Error(err))
-			continue
-		}
-
-		// // ignore tombstone objects
-		// _, hdr := meta.LastHeader(object.HeaderType(object.TombstoneHdr))
-		// if hdr != nil {
-		// 	continue
-		// }
-
-		// ignore storage group objects
-		// _, hdr = meta.LastHeader(object.HeaderType(object.StorageGroupHdr))
-		// if hdr != nil {
-		// 	continue
-		// }
-
-		// dirs don't exist in neofs, gateway stores full path to the file
-		// in object header, e.g. `filename`:`/this/is/path/file.txt`
-
-		// prefix argument contains full dir path from the root, e.g. `/this/is/`
-
-		// to emulate dirs we take dirs in path, compare it with prefix
-		// and look for entities after prefix. If entity does not have any
-		// sub-entities, then it is a file, else directory.
-
-		if oi := objectInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); oi != nil {
-			if needDirectoryAsKey && oi.Created.After(mostRecentModified) {
-				mostRecentModified = oi.Created
-			}
-			// use only unique dir names
-			if _, ok := uniqNames[oi.Name]; ok {
-				continue
-			}
-			if len(p.Marker) > 0 && oi.Name <= p.Marker {
-				continue
-			}
-
-			uniqNames[oi.Name] = oi.isDir
-
-			result.Objects = append(result.Objects, oi)
-		}
-	}
-
-	sort.Slice(result.Objects, func(i, j int) bool {
-		return result.Objects[i].Name < result.Objects[j].Name
-	})
-
-	if len(result.Objects) > p.MaxKeys {
-		result.IsTruncated = true
-		result.Objects = result.Objects[:p.MaxKeys]
-		result.NextMarker = result.Objects[len(result.Objects)-1].Name
-	}
-
-	fillPrefixes(&result, uniqNames)
-	if needDirectoryAsKey {
-		res := []*ObjectInfo{{
-			Name:    p.Prefix,
-			Created: mostRecentModified,
-			HashSum: emptyETag,
-		}}
-		result.Objects = append(res, result.Objects...)
-	}
-
-	return &result, nil
-}
-
-func fillPrefixes(result *ListObjectsInfo, directories map[string]bool) {
-	index := 0
-	for range result.Objects {
-		name := result.Objects[index].Name
-		if isDir := directories[name]; isDir {
-			result.Objects = append(result.Objects[:index], result.Objects[index+1:]...)
-			result.Prefixes = append(result.Prefixes, name)
-		} else {
-			index++
-		}
-	}
 }
 
 // GetObject from storage.
