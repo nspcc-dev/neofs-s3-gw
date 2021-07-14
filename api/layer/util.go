@@ -26,32 +26,23 @@ type (
 		Headers     map[string]string
 	}
 
-	// ListObjectsInfo - container for list objects.
+	// ListObjectsInfo contains common fields of data for ListObjectsV1 and ListObjectsV2.
 	ListObjectsInfo struct {
-		// Indicates whether the returned list objects response is truncated. A
-		// value of true indicates that the list was truncated. The list can be truncated
-		// if the number of objects exceeds the limit allowed or specified
-		// by max keys.
+		Prefixes    []string
+		Objects     []*ObjectInfo
 		IsTruncated bool
+	}
 
-		// When response is truncated (the IsTruncated element value in the response
-		// is true), you can use the key name in this field as marker in the subsequent
-		// request to get next set of objects.
-		//
-		// NOTE: This element is returned only if you have delimiter request parameter
-		// specified.
-		ContinuationToken     string
-		NextContinuationToken string
-
-		// When response is truncated (the IsTruncated element value in the response is true),
-		// you can use the key name in this field as marker in the subsequent request to get next set of objects.
+	// ListObjectsInfoV1 holds data which ListObjectsV1 returns.
+	ListObjectsInfoV1 struct {
+		ListObjectsInfo
 		NextMarker string
+	}
 
-		// List of objects info for this request.
-		Objects []*ObjectInfo
-
-		// List of prefixes for this request.
-		Prefixes []string
+	// ListObjectsInfoV2 holds data which ListObjectsV2 returns.
+	ListObjectsInfoV2 struct {
+		ListObjectsInfo
+		NextContinuationToken string
 	}
 
 	// ObjectVersionInfo stores info about objects versions.

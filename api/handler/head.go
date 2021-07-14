@@ -32,9 +32,13 @@ func (h *handler) checkIsFolder(ctx context.Context, bucket, object string) *lay
 	}
 
 	_, dirname := layer.NameFromString(object)
-	params := &layer.ListObjectsParams{Bucket: bucket, Prefix: dirname, Delimiter: layer.PathSeparator}
-
-	if list, err := h.obj.ListObjects(ctx, params); err == nil && len(list.Objects) > 0 {
+	params := &layer.ListObjectsParamsV1{
+		ListObjectsParamsCommon: layer.ListObjectsParamsCommon{
+			Bucket:    bucket,
+			Prefix:    dirname,
+			Delimiter: layer.PathSeparator,
+		}}
+	if list, err := h.obj.ListObjectsV1(ctx, params); err == nil && len(list.Objects) > 0 {
 		return &layer.ObjectInfo{
 			Bucket: bucket,
 			Name:   object,
