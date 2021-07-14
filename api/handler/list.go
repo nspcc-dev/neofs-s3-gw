@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/xml"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -118,6 +119,12 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 		h.log.Error("something went wrong",
 			zap.String("request_id", rid),
 			zap.Error(err))
+
+		var s3Err api.Error
+		if ok := errors.As(err, &s3Err); ok {
+			api.WriteErrorResponse(r.Context(), w, s3Err, r.URL)
+			return nil, nil, err
+		}
 
 		api.WriteErrorResponse(r.Context(), w, api.Error{
 			Code:           api.GetAPIError(api.ErrBadRequest).Code,
@@ -287,7 +294,7 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 
 	if r.URL.Query().Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
+	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys < 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
@@ -384,7 +391,7 @@ func parseListObjectVersionsRequest(r *http.Request) (*layer.ListObjectVersionsP
 
 	if r.URL.Query().Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
+	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys < 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
