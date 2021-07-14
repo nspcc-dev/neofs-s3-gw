@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/xml"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -120,18 +119,7 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 			zap.String("request_id", rid),
 			zap.Error(err))
 
-		var s3Err api.Error
-		if ok := errors.As(err, &s3Err); ok {
-			api.WriteErrorResponse(r.Context(), w, s3Err, r.URL)
-			return nil, nil, err
-		}
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrBadRequest).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
-
+		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 		return nil, nil, err
 	}
 

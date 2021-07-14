@@ -119,7 +119,7 @@ var s3ErrorResponseMap = map[string]string{
 
 // WriteErrorResponse writes error headers.
 func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, reqURL *url.URL) {
-	code := http.StatusBadRequest
+	code := http.StatusInternalServerError
 
 	if e, ok := err.(Error); ok {
 		code = e.HTTPStatusCode
