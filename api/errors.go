@@ -62,6 +62,7 @@ const (
 	ErrNoSuchVersion
 	ErrNotImplemented
 	ErrPreconditionFailed
+	ErrNotModified
 	ErrRequestTimeTooSkewed
 	ErrSignatureDoesNotMatch
 	ErrMethodNotAllowed
@@ -493,6 +494,11 @@ var errorCodes = errorCodeMap{
 		Code:           "PreconditionFailed",
 		Description:    "At least one of the pre-conditions you specified did not hold",
 		HTTPStatusCode: http.StatusPreconditionFailed,
+	},
+	ErrNotModified: {
+		Code:           "NotModified",
+		Description:    "The resource was not changed.",
+		HTTPStatusCode: http.StatusNotModified,
 	},
 	ErrRequestTimeTooSkewed: {
 		Code:           "RequestTimeTooSkewed",

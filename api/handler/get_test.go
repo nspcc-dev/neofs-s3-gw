@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
@@ -58,79 +59,79 @@ func TestPreconditions(t *testing.T) {
 		name     string
 		info     *layer.ObjectInfo
 		args     *conditionalArgs
-		expected int
+		expected error
 	}{
 		{
 			name:     "no conditions",
 			info:     new(layer.ObjectInfo),
 			args:     new(conditionalArgs),
-			expected: http.StatusOK,
+			expected: nil,
 		},
 		{
 			name:     "IfMatch true",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfMatch: etag},
-			expected: http.StatusOK,
+			expected: nil,
 		},
 		{
 			name:     "IfMatch false",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfMatch: etag2},
-			expected: http.StatusPreconditionFailed},
+			expected: api.GetAPIError(api.ErrPreconditionFailed)},
 		{
 			name:     "IfNoneMatch true",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfNoneMatch: etag2},
-			expected: http.StatusOK},
+			expected: nil},
 		{
 			name:     "IfNoneMatch false",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfNoneMatch: etag},
-			expected: http.StatusNotModified},
+			expected: api.GetAPIError(api.ErrNotModified)},
 		{
 			name:     "IfModifiedSince true",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfModifiedSince: &yesterday},
-			expected: http.StatusOK},
+			expected: nil},
 		{
 			name:     "IfModifiedSince false",
 			info:     newInfo(etag, yesterday),
 			args:     &conditionalArgs{IfModifiedSince: &today},
-			expected: http.StatusNotModified},
+			expected: api.GetAPIError(api.ErrNotModified)},
 		{
 			name:     "IfUnmodifiedSince true",
 			info:     newInfo(etag, yesterday),
 			args:     &conditionalArgs{IfUnmodifiedSince: &today},
-			expected: http.StatusOK},
+			expected: nil},
 		{
 			name:     "IfUnmodifiedSince false",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfUnmodifiedSince: &yesterday},
-			expected: http.StatusPreconditionFailed},
+			expected: api.GetAPIError(api.ErrPreconditionFailed)},
 
 		{
 			name:     "IfMatch true, IfUnmodifiedSince false",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfMatch: etag, IfUnmodifiedSince: &yesterday},
-			expected: http.StatusOK,
+			expected: nil,
 		},
 		{
 			name:     "IfMatch false, IfUnmodifiedSince true",
 			info:     newInfo(etag, yesterday),
 			args:     &conditionalArgs{IfMatch: etag2, IfUnmodifiedSince: &today},
-			expected: http.StatusPreconditionFailed,
+			expected: api.GetAPIError(api.ErrPreconditionFailed),
 		},
 		{
 			name:     "IfNoneMatch false, IfModifiedSince true",
 			info:     newInfo(etag, today),
 			args:     &conditionalArgs{IfNoneMatch: etag, IfModifiedSince: &yesterday},
-			expected: http.StatusNotModified,
+			expected: api.GetAPIError(api.ErrNotModified),
 		},
 		{
 			name:     "IfNoneMatch true, IfModifiedSince false",
 			info:     newInfo(etag, yesterday),
 			args:     &conditionalArgs{IfNoneMatch: etag2, IfModifiedSince: &today},
-			expected: http.StatusNotModified,
+			expected: api.GetAPIError(api.ErrNotModified),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
