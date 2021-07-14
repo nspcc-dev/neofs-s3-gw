@@ -34,21 +34,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		rid  = api.GetRequestID(r.Context())
 	)
 
-	if _, err := h.obj.GetBucketInfo(r.Context(), bkt); err != nil {
-		h.log.Error("could not find bucket",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrBadRequest).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
-
-		return
-	}
-
 	metadata := parseMetadata(r)
 
 	params := &layer.PutObjectParams{
