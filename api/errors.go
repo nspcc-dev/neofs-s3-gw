@@ -1633,7 +1633,7 @@ func GetAPIError(code ErrorCode) Error {
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values.
 func getAPIErrorResponse(ctx context.Context, err error, resource, requestID, hostID string) ErrorResponse {
-	code := "BadRequest"
+	code := "InternalError"
 	desc := err.Error()
 
 	info := GetReqInfo(ctx)

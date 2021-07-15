@@ -227,6 +227,10 @@ func (n *layer) ListObjects(ctx context.Context, p *ListObjectsParams) (*ListObj
 		uniqNames = make(map[string]bool)
 	)
 
+	if p.MaxKeys == 0 {
+		return &result, nil
+	}
+
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
 	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID}); err != nil {

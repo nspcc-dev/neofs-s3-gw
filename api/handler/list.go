@@ -37,7 +37,7 @@ type ListMultipartUploadsResult struct {
 	Xmlns   string   `xml:"xmlns,attr"`
 }
 
-var maxObjectList = 10000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+const maxObjectList = 1000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
 
 func (h *handler) registerAndSendError(w http.ResponseWriter, r *http.Request, err error, logText string) {
 	rid := api.GetRequestID(r.Context())
@@ -119,12 +119,7 @@ func (h *handler) listObjects(w http.ResponseWriter, r *http.Request) (*listObje
 			zap.String("request_id", rid),
 			zap.Error(err))
 
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrBadRequest).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
-
+		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 		return nil, nil, err
 	}
 
@@ -193,14 +188,14 @@ func encodeV1(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsRes
 	// fill common prefixes
 	for i := range list.Prefixes {
 		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
-			Prefix: list.Prefixes[i],
+			Prefix: s3PathEncode(list.Prefixes[i], arg.Encode),
 		})
 	}
 
 	// fill contents
 	for _, obj := range list.Objects {
 		res.Contents = append(res.Contents, Object{
-			Key:          obj.Name,
+			Key:          s3PathEncode(obj.Name, arg.Encode),
 			Size:         obj.Size,
 			LastModified: obj.Created.Format(time.RFC3339),
 
@@ -240,11 +235,11 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 	res := &ListObjectsV2Response{
 		Name:         arg.Bucket,
 		EncodingType: arg.Encode,
-		Prefix:       arg.Prefix,
-		KeyCount:     len(list.Objects),
+		Prefix:       s3PathEncode(arg.Prefix, arg.Encode),
+		KeyCount:     len(list.Objects) + len(list.Prefixes),
 		MaxKeys:      arg.MaxKeys,
-		Delimiter:    arg.Delimiter,
-		StartAfter:   arg.StartAfter,
+		Delimiter:    s3PathEncode(arg.Delimiter, arg.Encode),
+		StartAfter:   s3PathEncode(arg.StartAfter, arg.Encode),
 
 		IsTruncated: list.IsTruncated,
 
@@ -255,14 +250,14 @@ func encodeV2(arg *listObjectsArgs, list *layer.ListObjectsInfo) *ListObjectsV2R
 	// fill common prefixes
 	for i := range list.Prefixes {
 		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
-			Prefix: list.Prefixes[i],
+			Prefix: s3PathEncode(list.Prefixes[i], arg.Encode),
 		})
 	}
 
 	// fill contents
 	for _, obj := range list.Objects {
 		res.Contents = append(res.Contents, Object{
-			Key:          obj.Name,
+			Key:          s3PathEncode(obj.Name, arg.Encode),
 			Size:         obj.Size,
 			LastModified: obj.Created.Format(time.RFC3339),
 
@@ -287,7 +282,7 @@ func parseListObjectArgs(r *http.Request) (*listObjectsArgs, error) {
 
 	if r.URL.Query().Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
+	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys < 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
@@ -384,7 +379,7 @@ func parseListObjectVersionsRequest(r *http.Request) (*layer.ListObjectVersionsP
 
 	if r.URL.Query().Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
+	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys < 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
