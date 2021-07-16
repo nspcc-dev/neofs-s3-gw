@@ -292,7 +292,7 @@ $ ./neofs-authmate issue-secret --wallet wallet.json \
 
 Enter password for wallet.json > 
 {
-  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
+  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
   "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
   "owner_private_key": "274fdd6e71fc6a6b8fe77bec500254115d66d6d17347d7db0880d2eb80afc72a"
 }
@@ -300,6 +300,9 @@ Enter password for wallet.json >
 
 Access key ID and secret access key are AWS credentials that you can use with
 any S3 client.
+
+Access key ID consists of Base58 encoded containerID(cid) and objectID(oid) stored on the NeoFS network and containing 
+the secret. Format of access_key_id: `%cid0%oid`, where 0(zero) is a delimiter.
 
 #### Obtainment of a secret access key
 
@@ -312,7 +315,7 @@ and other (for `gate-wallet.json`) interactively:
   ./neofs-authmate obtain-secret --wallet wallet.json \
  --peer 192.168.130.71:8080 \
  --gate-wallet gate-wallet.json \
- --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
+ --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
 
 Enter password for gate-wallet.json >
 {
@@ -336,7 +339,7 @@ $ aws configure
 after you enter this command, the AWS CLI will prompt you for four pieces of information, like in this example
 (replace with your own values):
 ```
-AWS Access Key ID [None]: 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT_AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
+AWS Access Key ID [None]: 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
 AWS Secret Access Key [None]: 438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c
 Default region name [None]: ru 
 Default output format [none]: json 
