@@ -179,7 +179,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
-	accessKeyID := address.ContainerID().String() + "_" + address.ObjectID().String()
+	accessKeyID := address.ContainerID().String() + "0" + address.ObjectID().String()
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
