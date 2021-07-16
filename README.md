@@ -404,8 +404,10 @@ $ aws s3 sync %DIRPATH s3://%BUCKET_NAME
 
 To download the file from a bucket in the NeoFS Network, execute:
 ```
-$ aws s3api get-object --bucket  %BUCKET_NAME --key %OBJECT_KEY
+$ aws s3api get-object --bucket  %BUCKET_NAME --key %OBJECT_KEY %OUTFILE
 ```
+
+where %OUTFILE is a file to store object content.
 
 #### Deletion of a file
 To delete the file:
