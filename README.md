@@ -285,8 +285,8 @@ Example of a command to issue a secret with custom rules for multiple gates:
 $ ./neofs-authmate issue-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
 --bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \
---gate-public-key dd34f6dce9a4ce0990869ec6bd33a40e102a5798881cfe61d03a5659ceee1a64 \
---gate-public-key 20453af9d7f245ff6fdfb1260eaa411ae3be9c519a2a9bf1c98233522cbd0156 \
+--gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
+--gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967 \
 --create-session-token \
 --session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
 
