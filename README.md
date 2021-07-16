@@ -392,6 +392,14 @@ $ aws s3api put-object --bucket %BUCKET_NAME --key %OBJECT_KEY --body  %FILEPATH
 ```
 where %OBJECT_KEY is a filename of an object in NeoFS
 
+##### Upload of a dir
+
+To upload the dir into a bucket in the NeoFS network, run the following command:
+
+```
+$ aws s3 sync %DIRPATH s3://%BUCKET_NAME 
+```
+
 #### Download of a file
 
 To download the file from a bucket in the NeoFS Network, execute:
