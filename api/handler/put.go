@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +26,11 @@ const (
 
 	publicBasicRule = 0x0FFFFFFF
 )
+
+type createBucketParams struct {
+	XMLName            xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CreateBucketConfiguration" json:"-"`
+	LocationConstraint string
+}
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -90,43 +98,41 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.log.Error("could not parse basic ACL",
-			zap.String("request_id", rid),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrBadRequest).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
+		h.writeError(w, r, "could not parse basic ACL", rid, err)
 		return
 	}
 
-	p.Policy, err = policy.Parse(defaultPolicy)
+	createParams, err := parseLocationConstraint(r)
 	if err != nil {
-		h.log.Error("could not parse policy",
-			zap.String("request_id", rid),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrBadRequest).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusBadRequest,
-		}, r.URL)
+		h.writeError(w, r, "could not parse body", rid, err)
 		return
 	}
 
-	cid, err := h.obj.CreateBucket(r.Context(), &p)
+	boxData, err := getBoxData(r.Context())
 	if err != nil {
-		h.log.Error("could not create bucket",
-			zap.String("request_id", rid),
-			zap.Error(err))
+		h.writeError(w, r, "could get boxData", rid, err)
+		return
+	}
 
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
+	if createParams.LocationConstraint != "" {
+		for _, placementPolicy := range boxData.Policies {
+			if placementPolicy.LocationConstraint == createParams.LocationConstraint {
+				p.Policy = placementPolicy.Policy
+				break
+			}
+		}
+	}
+	if p.Policy == nil {
+		p.Policy, err = policy.Parse(defaultPolicy)
+		if err != nil {
+			h.writeError(w, r, "could not parse policy", rid, err)
+			return
+		}
+	}
+
+	cid, err := h.obj.CreateBucket(r.Context(), &p, boxData)
+	if err != nil {
+		h.writeError(w, r, "could not create bucket", rid, err)
 		return
 	}
 
@@ -134,6 +140,18 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		zap.String("container_id", cid.String()))
 
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
+	if r.ContentLength == 0 {
+		return new(createBucketParams), nil
+	}
+
+	params := new(createBucketParams)
+	if err := xml.NewDecoder(r.Body).Decode(params); err != nil {
+		return nil, err
+	}
+	return params, nil
 }
 
 func parseBasicACL(basicACL string) (uint32, error) {
@@ -154,4 +172,23 @@ func parseBasicACL(basicACL string) (uint32, error) {
 
 		return uint32(value), nil
 	}
+}
+
+func (h *handler) writeError(w http.ResponseWriter, r *http.Request, msg, rid string, err error) {
+	h.log.Error(msg, zap.String("request_id", rid), zap.Error(err))
+	api.WriteErrorResponse(r.Context(), w, err, r.URL)
+}
+
+func getBoxData(ctx context.Context) (*accessbox.Box, error) {
+	var boxData *accessbox.Box
+	data, ok := ctx.Value(api.BoxData).(*accessbox.Box)
+	if !ok || data == nil {
+		return nil, fmt.Errorf("couldn't get box data from context")
+	}
+
+	boxData = data
+	if boxData.Gate == nil {
+		boxData.Gate = &accessbox.GateData{}
+	}
+	return boxData, nil
 }

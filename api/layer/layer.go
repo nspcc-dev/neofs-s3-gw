@@ -104,7 +104,7 @@ type (
 
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
-		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
+		CreateBucket(ctx context.Context, p *CreateBucketParams, boxData *accessbox.Box) (*cid.ID, error)
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
@@ -150,8 +150,8 @@ func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		return data.BearerToken.Issuer()
+	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
+		return data.Gate.BearerToken.Issuer()
 	}
 
 	return n.pool.OwnerID()
@@ -159,8 +159,8 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 
 // BearerOpt returns client.WithBearer call option with token from context or with nil token.
 func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		return client.WithBearer(data.BearerToken)
+	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
+		return client.WithBearer(data.Gate.BearerToken)
 	}
 
 	return client.WithBearer(nil)
@@ -168,8 +168,8 @@ func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
 
 // SessionOpt returns client.WithSession call option with token from context or with nil token.
 func (n *layer) SessionOpt(ctx context.Context) client.CallOption {
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		return client.WithSession(data.SessionToken)
+	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
+		return client.WithSession(data.Gate.SessionToken)
 	}
 
 	return client.WithSession(nil)
@@ -498,11 +498,11 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 	return errs
 }
 
-func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams, boxData *accessbox.Box) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
 		if errors.Is(err, ErrBucketNotFound) {
-			return n.createContainer(ctx, p)
+			return n.createContainer(ctx, p, boxData)
 		}
 		return nil, err
 	}

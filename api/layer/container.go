@@ -123,21 +123,14 @@ func (n *layer) containerList(ctx context.Context) ([]*BucketInfo, error) {
 	return list, nil
 }
 
-func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams, boxData *accessbox.Box) (*cid.ID, error) {
 	cnr := container.New(
 		container.WithPolicy(p.Policy),
 		container.WithCustomBasicACL(p.ACL),
 		container.WithAttribute(container.AttributeName, p.Name),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
 
-	var gateData *accessbox.GateData
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		gateData = data
-	} else {
-		return nil, fmt.Errorf("couldn't get gate data from context")
-	}
-
-	cnr.SetSessionToken(gateData.SessionToken)
+	cnr.SetSessionToken(boxData.Gate.SessionToken)
 	cnr.SetOwnerID(n.Owner(ctx))
 
 	cid, err := n.pool.PutContainer(ctx, cnr)
@@ -149,7 +142,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		return nil, err
 	}
 
-	if err := n.setContainerEACL(ctx, cid, gateData.GateKey); err != nil {
+	if err := n.setContainerEACL(ctx, cid, boxData.Gate.GateKey); err != nil {
 		return nil, err
 	}
 

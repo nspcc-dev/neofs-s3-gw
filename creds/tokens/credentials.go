@@ -20,7 +20,7 @@ import (
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
-		GetTokens(context.Context, *object.Address) (*accessbox.GateData, error)
+		GetBox(context.Context, *object.Address) (*accessbox.Box, error)
 		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, ...*keys.PublicKey) (*object.Address, error)
 	}
 
@@ -66,6 +66,15 @@ func (c *cred) GetTokens(ctx context.Context, address *object.Address) (*accessb
 	}
 
 	return box.GetTokens(c.key)
+}
+
+func (c *cred) GetBox(ctx context.Context, address *object.Address) (*accessbox.Box, error) {
+	box, err := c.getAccessBox(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+
+	return box.GetBox(c.key)
 }
 
 func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*accessbox.AccessBox, error) {
