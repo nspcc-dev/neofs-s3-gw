@@ -96,9 +96,8 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := checkPreconditions(inf, args.Conditional)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
+	if err = checkPreconditions(inf, args.Conditional); err != nil {
+		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 		return
 	}
 
@@ -122,23 +121,23 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkPreconditions(inf *layer.ObjectInfo, args *conditionalArgs) int {
+func checkPreconditions(inf *layer.ObjectInfo, args *conditionalArgs) error {
 	if len(args.IfMatch) > 0 && args.IfMatch != inf.HashSum {
-		return http.StatusPreconditionFailed
+		return api.GetAPIError(api.ErrPreconditionFailed)
 	}
 	if len(args.IfNoneMatch) > 0 && args.IfNoneMatch == inf.HashSum {
-		return http.StatusNotModified
+		return api.GetAPIError(api.ErrNotModified)
 	}
 	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
-		return http.StatusNotModified
+		return api.GetAPIError(api.ErrNotModified)
 	}
 	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
 		if len(args.IfMatch) == 0 {
-			return http.StatusPreconditionFailed
+			return api.GetAPIError(api.ErrPreconditionFailed)
 		}
 	}
 
-	return http.StatusOK
+	return nil
 }
 
 func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
