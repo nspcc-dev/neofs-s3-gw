@@ -73,9 +73,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := checkPreconditions(inf, args.Conditional)
-	if status != http.StatusOK {
-		w.WriteHeader(status)
+	if err = checkPreconditions(inf, args.Conditional); err != nil {
+		api.WriteErrorResponse(r.Context(), w, api.GetAPIError(api.ErrPreconditionFailed), r.URL)
 		return
 	}
 
