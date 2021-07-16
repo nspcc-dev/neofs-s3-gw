@@ -74,6 +74,7 @@ type (
 		AccessKeyID     string `json:"access_key_id"`
 		SecretAccessKey string `json:"secret_access_key"`
 		OwnerPrivateKey string `json:"owner_private_key"`
+		ContainerID     string `json:"container_id"`
 	}
 
 	obtainingResult struct {
@@ -185,6 +186,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secrets.AccessKey,
 		OwnerPrivateKey: hex.EncodeToString(secrets.EphemeralKey.Bytes()),
+		ContainerID:     cid.String(),
 	}
 
 	enc := json.NewEncoder(w)
