@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -29,6 +31,35 @@ type (
 		offset  int64
 		length  int64
 		address *object.Address
+	}
+
+	// ListObjectsParamsCommon contains common parameters for ListObjectsV1 and ListObjectsV2.
+	ListObjectsParamsCommon struct {
+		Bucket    string
+		Delimiter string
+		Encode    string
+		MaxKeys   int
+		Prefix    string
+	}
+
+	// ListObjectsParamsV1 contains params for ListObjectsV1.
+	ListObjectsParamsV1 struct {
+		ListObjectsParamsCommon
+		Marker string
+	}
+
+	// ListObjectsParamsV2 contains params for ListObjectsV2.
+	ListObjectsParamsV2 struct {
+		ListObjectsParamsCommon
+		ContinuationToken string
+		StartAfter        string
+	}
+
+	allObjectParams struct {
+		Bucket     string
+		Delimiter  string
+		Prefix     string
+		StartAfter string
 	}
 )
 
@@ -169,4 +200,136 @@ func (n *layer) objectDelete(ctx context.Context, address *object.Address) error
 	dop := new(client.DeleteObjectParams)
 	dop.WithAddress(address)
 	return n.pool.DeleteObject(ctx, dop, n.BearerOpt(ctx))
+}
+
+// ListObjectsV1 returns objects in a bucket for requests of Version 1.
+func (n *layer) ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*ListObjectsInfoV1, error) {
+	var (
+		err    error
+		result ListObjectsInfoV1
+	)
+
+	if p.MaxKeys == 0 {
+		return &result, nil
+	}
+
+	allObjects, err := n.listSortedAllObjects(ctx, allObjectParams{
+		Bucket:     p.Bucket,
+		Prefix:     p.Prefix,
+		Delimiter:  p.Delimiter,
+		StartAfter: p.Marker,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(allObjects) > p.MaxKeys {
+		result.IsTruncated = true
+
+		nextObject := allObjects[p.MaxKeys-1]
+		result.NextMarker = nextObject.Name
+
+		allObjects = allObjects[:p.MaxKeys]
+	}
+
+	for _, ov := range allObjects {
+		if ov.isDir {
+			result.Prefixes = append(result.Prefixes, ov.Name)
+		} else {
+			result.Objects = append(result.Objects, ov)
+		}
+	}
+
+	return &result, nil
+}
+
+// ListObjectsV2 returns objects in a bucket for requests of Version 2.
+func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error) {
+	var (
+		err        error
+		result     ListObjectsInfoV2
+		allObjects []*ObjectInfo
+	)
+
+	if p.MaxKeys == 0 {
+		return &result, nil
+	}
+
+	if p.ContinuationToken != "" {
+		// find cache with continuation token
+	} else {
+		allObjects, err = n.listSortedAllObjects(ctx, allObjectParams{
+			Bucket:     p.Bucket,
+			Prefix:     p.Prefix,
+			Delimiter:  p.Delimiter,
+			StartAfter: p.StartAfter,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(allObjects) > p.MaxKeys {
+		result.IsTruncated = true
+
+		allObjects = allObjects[:p.MaxKeys]
+		// add  creating of cache here
+	}
+
+	for _, ov := range allObjects {
+		if ov.isDir {
+			result.Prefixes = append(result.Prefixes, ov.Name)
+		} else {
+			result.Objects = append(result.Objects, ov)
+		}
+	}
+	return &result, nil
+}
+
+func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]*ObjectInfo, error) {
+	var (
+		err       error
+		bkt       *BucketInfo
+		ids       []*object.ID
+		uniqNames = make(map[string]bool)
+	)
+
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return nil, err
+	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID}); err != nil {
+		return nil, err
+	}
+
+	objects := make([]*ObjectInfo, 0, len(ids))
+
+	for _, id := range ids {
+		addr := object.NewAddress()
+		addr.SetObjectID(id)
+		addr.SetContainerID(bkt.CID)
+
+		meta, err := n.objectHead(ctx, addr)
+		if err != nil {
+			n.log.Warn("could not fetch object meta", zap.Error(err))
+			continue
+		}
+		if oi := objectInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); oi != nil {
+			// use only unique dir names
+			if _, ok := uniqNames[oi.Name]; ok {
+				continue
+			}
+			if len(p.StartAfter) > 0 && oi.Name <= p.StartAfter {
+				continue
+			}
+
+			uniqNames[oi.Name] = oi.isDir
+
+			objects = append(objects, oi)
+		}
+	}
+
+	sort.Slice(objects, func(i, j int) bool {
+		return objects[i].Name < objects[j].Name
+	})
+
+	return objects, nil
 }
