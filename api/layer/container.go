@@ -28,17 +28,6 @@ type (
 		Owner   *owner.ID
 		Created time.Time
 	}
-
-	// ListObjectsParams represents object listing request parameters.
-	ListObjectsParams struct {
-		Bucket    string
-		Prefix    string
-		Token     string
-		Delimiter string
-		MaxKeys   int
-		Marker    string
-		Version   int
-	}
 )
 
 func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, error) {

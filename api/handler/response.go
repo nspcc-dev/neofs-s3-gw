@@ -14,35 +14,36 @@ type ListBucketsResponse struct {
 	} // Buckets are nested
 }
 
-// ListObjectsV2Response - format for list objects response.
+// ListObjectsV1Response -- format for ListObjectsV1 response.
+type ListObjectsV1Response struct {
+	XMLName        xml.Name       `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
+	CommonPrefixes []CommonPrefix `xml:"CommonPrefixes"`
+	Contents       []Object       `xml:"Contents"`
+	Delimiter      string         `xml:"Delimiter,omitempty"`
+	EncodingType   string         `xml:"EncodingType,omitempty"`
+	IsTruncated    bool           `xml:"IsTruncated"`
+	Marker         string         `xml:"Marker"`
+	MaxKeys        int            `xml:"MaxKeys"`
+	Name           string         `xml:"Name"`
+	NextMarker     string         `xml:"NextMarker,omitempty"`
+	Prefix         string         `xml:"Prefix"`
+}
+
+// ListObjectsV2Response -- format for ListObjectsV2 response.
 type ListObjectsV2Response struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
-
-	Name       string
-	Prefix     string
-	StartAfter string `xml:"StartAfter,omitempty"`
-	// When response is truncated (the IsTruncated element value in the response
-	// is true), you can use the key name in this field as marker in the subsequent
-	// request to get next set of objects. Server lists objects in alphabetical
-	// order Note: This element is returned only if you have delimiter request parameter
-	// specified. If response does not include the NextMaker and it is truncated,
-	// you can use the value of the last Key in the response as the marker in the
-	// subsequent request to get the next set of object keys.
-	ContinuationToken     string `xml:"ContinuationToken,omitempty"`
-	NextContinuationToken string `xml:"NextContinuationToken,omitempty"`
-
-	KeyCount  int
-	MaxKeys   int
-	Delimiter string `xml:"Delimiter,omitempty"`
-	// A flag that indicates whether or not ListObjects returned all of the results
-	// that satisfied the search criteria.
-	IsTruncated bool
-
-	Contents       []Object
-	CommonPrefixes []CommonPrefix
-
-	// Encoding type used to encode object keys in the response.
-	EncodingType string `xml:"EncodingType,omitempty"`
+	XMLName               xml.Name       `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
+	CommonPrefixes        []CommonPrefix `xml:"CommonPrefixes"`
+	Contents              []Object       `xml:"Contents"`
+	ContinuationToken     string         `xml:"ContinuationToken,omitempty"`
+	Delimiter             string         `xml:"Delimiter,omitempty"`
+	EncodingType          string         `xml:"EncodingType,omitempty"`
+	IsTruncated           bool           `xml:"IsTruncated"`
+	KeyCount              int            `xml:"KeyCount"`
+	MaxKeys               int            `xml:"MaxKeys"`
+	Name                  string         `xml:"Name"`
+	NextContinuationToken string         `xml:"NextContinuationToken,omitempty"`
+	Prefix                string         `xml:"Prefix"`
+	StartAfter            string         `xml:"StartAfter,omitempty"`
 }
 
 // Bucket container for bucket metadata.
@@ -57,37 +58,7 @@ type Owner struct {
 	DisplayName string
 }
 
-// ListObjectsResponse - format for list objects response.
-type ListObjectsResponse struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
-
-	Name   string
-	Prefix string
-	Marker string
-
-	// When response is truncated (the IsTruncated element value in the response
-	// is true), you can use the key name in this field as marker in the subsequent
-	// request to get next set of objects. Server lists objects in alphabetical
-	// order Note: This element is returned only if you have delimiter request parameter
-	// specified. If response does not include the NextMaker and it is truncated,
-	// you can use the value of the last Key in the response as the marker in the
-	// subsequent request to get the next set of object keys.
-	NextMarker string `xml:"NextMarker,omitempty"`
-
-	MaxKeys   int
-	Delimiter string `xml:"Delimiter,omitempty"`
-	// A flag that indicates whether or not ListObjects returned all of the results
-	// that satisfied the search criteria.
-	IsTruncated bool
-
-	Contents       []Object
-	CommonPrefixes []CommonPrefix
-
-	// Encoding type used to encode object keys in the response.
-	EncodingType string `xml:"EncodingType,omitempty"`
-}
-
-// CommonPrefix container for prefix response in ListObjectsResponse.
+// CommonPrefix container for prefix response in ListObjects's response.
 type CommonPrefix struct {
 	Prefix string
 }
