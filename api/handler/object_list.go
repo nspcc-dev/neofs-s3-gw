@@ -42,28 +42,9 @@ func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *List
 		NextMarker:  list.NextMarker,
 	}
 
-	// fill common prefixes
-	for i := range list.Prefixes {
-		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
-			Prefix: s3PathEncode(list.Prefixes[i], p.Encode),
-		})
-	}
+	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
 
-	// fill contents
-	for _, obj := range list.Objects {
-		res.Contents = append(res.Contents, Object{
-			Key:          s3PathEncode(obj.Name, p.Encode),
-			Size:         obj.Size,
-			LastModified: obj.Created.Format(time.RFC3339),
-
-			Owner: Owner{
-				ID:          obj.Owner.String(),
-				DisplayName: obj.Owner.String(),
-			},
-
-			ETag: obj.HashSum,
-		})
-	}
+	res.Contents = fillContents(list.Objects, p.Encode)
 
 	return res
 }
@@ -104,28 +85,9 @@ func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *List
 		NextContinuationToken: list.NextContinuationToken,
 	}
 
-	// fill common prefixes
-	for i := range list.Prefixes {
-		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{
-			Prefix: s3PathEncode(list.Prefixes[i], p.Encode),
-		})
-	}
+	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
 
-	// fill contents
-	for _, obj := range list.Objects {
-		res.Contents = append(res.Contents, Object{
-			Key:          s3PathEncode(obj.Name, p.Encode),
-			Size:         obj.Size,
-			LastModified: obj.Created.Format(time.RFC3339),
-
-			Owner: Owner{
-				ID:          obj.Owner.String(),
-				DisplayName: obj.Owner.String(),
-			},
-
-			ETag: obj.HashSum,
-		})
-	}
+	res.Contents = fillContents(list.Objects, p.Encode)
 
 	return res
 }
@@ -186,6 +148,35 @@ func parseListObjectArgs(r *http.Request) (*layer.ListObjectsParamsCommon, error
 	res.Prefix = r.URL.Query().Get("prefix")
 
 	return &res, nil
+}
+
+func fillPrefixes(src []string, encode string) []CommonPrefix {
+	var dst []CommonPrefix
+	for _, obj := range src {
+		dst = append(dst, CommonPrefix{
+			Prefix: s3PathEncode(obj, encode),
+		})
+	}
+	return dst
+}
+
+func fillContents(src []*layer.ObjectInfo, encode string) []Object {
+	var dst []Object
+	for _, obj := range src {
+		dst = append(dst, Object{
+			Key:          s3PathEncode(obj.Name, encode),
+			Size:         obj.Size,
+			LastModified: obj.Created.Format(time.RFC3339),
+
+			Owner: Owner{
+				ID:          obj.Owner.String(),
+				DisplayName: obj.Owner.String(),
+			},
+
+			ETag: obj.HashSum,
+		})
+	}
+	return dst
 }
 
 func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
