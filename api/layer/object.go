@@ -14,8 +14,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type (
@@ -83,7 +81,7 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 	if result, err := n.objectSearch(ctx, p); err != nil {
 		return nil, err
 	} else if ln := len(result); ln == 0 {
-		return nil, status.Error(codes.NotFound, "object not found")
+		return nil, &api.ObjectNotFound{Bucket: p.cid.String(), Object: p.val}
 	} else if ln == 1 {
 		return result[0], nil
 	}
