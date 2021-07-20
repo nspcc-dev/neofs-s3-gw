@@ -53,6 +53,7 @@ type (
 		ListObjectsParamsCommon
 		ContinuationToken string
 		StartAfter        string
+		FetchOwner        bool
 	}
 
 	allObjectParams struct {
