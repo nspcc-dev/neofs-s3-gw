@@ -3,13 +3,11 @@ package layer
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
@@ -23,10 +21,16 @@ import (
 type (
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
-		Name    string
-		CID     *cid.ID
-		Owner   *owner.ID
-		Created time.Time
+		Name     string
+		CID      *cid.ID
+		Owner    *owner.ID
+		Created  time.Time
+		BasicACL uint32
+	}
+	// BucketACL extends BucketInfo by eacl.Table.
+	BucketACL struct {
+		Info *BucketInfo
+		EACL *eacl.Table
 	}
 )
 
@@ -56,6 +60,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 	}
 
 	info.Owner = res.OwnerID()
+	info.BasicACL = res.BasicACL()
 
 	for _, attr := range res.Attributes() {
 		switch key, val := attr.Key(), attr.Value(); key {
@@ -131,19 +136,15 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		return nil, err
 	}
 
-	if err := n.setContainerEACL(ctx, cid, p.BoxData.Gate.GateKey); err != nil {
+	if err := n.setContainerEACLTable(ctx, cid, p.EACL); err != nil {
 		return nil, err
 	}
 
 	return cid, nil
 }
 
-func (n *layer) setContainerEACL(ctx context.Context, cid *cid.ID, gateKey *keys.PublicKey) error {
-	if gateKey == nil {
-		return fmt.Errorf("gate key must not be nil")
-	}
-
-	table := formDefaultTable(cid, *(*ecdsa.PublicKey)(gateKey))
+func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table) error {
+	table.SetCID(cid)
 	if err := n.pool.SetEACL(ctx, table, n.SessionOpt(ctx)); err != nil {
 		return err
 	}
@@ -155,25 +156,12 @@ func (n *layer) setContainerEACL(ctx context.Context, cid *cid.ID, gateKey *keys
 	return nil
 }
 
-func formDefaultTable(cid *cid.ID, gateKey ecdsa.PublicKey) *eacl.Table {
-	table := eacl.NewTable()
-	table.SetCID(cid)
-
-	for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-		record := eacl.NewRecord()
-		record.SetOperation(op)
-		record.SetAction(eacl.ActionAllow)
-		eacl.AddFormedTarget(record, eacl.RoleUser, gateKey)
-		table.AddRecord(record)
-
-		record2 := eacl.NewRecord()
-		record2.SetOperation(op)
-		record2.SetAction(eacl.ActionDeny)
-		eacl.AddFormedTarget(record2, eacl.RoleOthers)
-		table.AddRecord(record2)
+func (n *layer) GetContainerEACL(ctx context.Context, cid *cid.ID) (*eacl.Table, error) {
+	signedEacl, err := n.pool.GetEACL(ctx, cid)
+	if err != nil {
+		return nil, err
 	}
-
-	return table
+	return signedEacl.EACL(), nil
 }
 
 type waitParams struct {

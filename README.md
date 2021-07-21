@@ -448,6 +448,14 @@ $ aws s3api delete-object --bucket %BUCKET_NAME --key %FILE_NAME
 Reference:
 * [AWS S3 API Reference](https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf)
 
+### Limitations
+#### ACL
+For now there are some restrictions:
+* [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) 
+  support only one `Principal` (type `AWS`) per `Statement`. To refer all users use `"AWS": "*"`
+* AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
+* Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html)
+
 ### Object
 
 | Method                    | Status                  |
@@ -469,8 +477,8 @@ Reference:
 
 | Method                    | Status                  |
 | ------------------------- | ----------------------- |
-| GetObjectAcl              | Unsupported             |
-| PutObjectAcl              | Unsupported             |
+| GetObjectAcl              | Supported             |
+| PutObjectAcl              | Supported             |
 
 #### Locking
 
@@ -540,8 +548,8 @@ See also `GetObject` and other method parameters.
 
 | Method                    | Status                  |
 | ------------------------- | ----------------------- |
-| GetBucketAcl              | Unsupported             |
-| PutBucketAcl              | Unsupported             |
+| GetBucketAcl              | Supported             |
+| PutBucketAcl              | Supported             |
 
 #### Analytics
 
@@ -630,11 +638,11 @@ See also `GetObject` and other method parameters.
 | DeleteBucketPolicy      | Unsupported             |
 | DeleteBucketReplication | Unsupported             |
 | DeletePublicAccessBlock | Unsupported             |
-| GetBucketPolicy         | Unsupported             |
+| GetBucketPolicy         | Supported             |
 | GetBucketPolicyStatus   | Unsupported             |
 | GetBucketReplication    | Unsupported             |
 | PostPolicyBucket        | Unsupported, non-standard? |
-| PutBucketPolicy         | Unsupported             |
+| PutBucketPolicy         | Supported             |
 | PutBucketReplication    | Unsupported             |
 
 #### Request payment

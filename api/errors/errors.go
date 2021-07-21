@@ -298,6 +298,7 @@ const (
 	ErrEvaluatorInvalidTimestampFormatPatternSymbol
 	ErrEvaluatorBindingDoesNotExist
 	ErrMissingHeaders
+	ErrInvalidArgument
 	ErrInvalidColumnIndex
 
 	ErrAdminConfigNotificationTargetsFailed
@@ -1836,6 +1837,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrMissingHeaders,
 		Code:           "MissingHeaders",
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidArgument: {
+		ErrCode:        ErrInvalidArgument,
+		Code:           "InvalidArgument",
+		Description:    "The specified argument was invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidColumnIndex: {

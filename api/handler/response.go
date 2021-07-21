@@ -52,6 +52,41 @@ type Bucket struct {
 	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
 }
 
+// AccessControlPolicy contains ACL.
+type AccessControlPolicy struct {
+	XMLName           xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ AccessControlPolicy" json:"-"`
+	Owner             Owner
+	AccessControlList []*Grant `xml:"AccessControlList>Grant"`
+	Resource          string   `xml:"-"`
+	IsBucket          bool     `xml:"-"`
+}
+
+// Grant is container for Grantee data.
+type Grant struct {
+	Grantee    *Grantee
+	Permission AWSACL
+}
+
+// Grantee is info about access rights of some actor.
+type Grantee struct {
+	XMLName      xml.Name    `xml:"Grantee"`
+	XMLNS        string      `xml:"xmlns:xsi,attr"`
+	ID           string      `xml:"ID,omitempty"`
+	DisplayName  string      `xml:"DisplayName,omitempty"`
+	EmailAddress string      `xml:"EmailAddress,omitempty"`
+	URI          string      `xml:"URI,omitempty"`
+	Type         GranteeType `xml:"xsi:type,attr"`
+}
+
+// NewGrantee creates new grantee using workaround
+// https://github.com/golang/go/issues/9519#issuecomment-252196382
+func NewGrantee(t GranteeType) *Grantee {
+	return &Grantee{
+		XMLNS: "http://www.w3.org/2001/XMLSchema-instance",
+		Type:  t,
+	}
+}
+
 // Owner - bucket owner/principal.
 type Owner struct {
 	ID          string
