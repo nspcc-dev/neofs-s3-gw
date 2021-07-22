@@ -87,7 +87,6 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
 		p   = layer.CreateBucketParams{}
-		rid = api.GetRequestID(r.Context())
 		req = mux.Vars(r)
 	)
 	p.Name = req["bucket"]
@@ -98,19 +97,19 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.writeError(w, r, "could not parse basic ACL", rid, err)
+		h.registerAndSendError(w, r, err, "could not parse basic ACL")
 		return
 	}
 
 	createParams, err := parseLocationConstraint(r)
 	if err != nil {
-		h.writeError(w, r, "could not parse body", rid, err)
+		h.registerAndSendError(w, r, err, "could not parse body")
 		return
 	}
 
 	boxData, err := getBoxData(r.Context())
 	if err != nil {
-		h.writeError(w, r, "could get boxData", rid, err)
+		h.registerAndSendError(w, r, err, "could not get boxData")
 		return
 	}
 
@@ -125,14 +124,14 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if p.Policy == nil {
 		p.Policy, err = policy.Parse(defaultPolicy)
 		if err != nil {
-			h.writeError(w, r, "could not parse policy", rid, err)
+			h.registerAndSendError(w, r, err, "could not parse policy")
 			return
 		}
 	}
 
 	cid, err := h.obj.CreateBucket(r.Context(), &p, boxData)
 	if err != nil {
-		h.writeError(w, r, "could not create bucket", rid, err)
+		h.registerAndSendError(w, r, err, "could not create bucket")
 		return
 	}
 
@@ -172,11 +171,6 @@ func parseBasicACL(basicACL string) (uint32, error) {
 
 		return uint32(value), nil
 	}
-}
-
-func (h *handler) writeError(w http.ResponseWriter, r *http.Request, msg, rid string, err error) {
-	h.log.Error(msg, zap.String("request_id", rid), zap.Error(err))
-	api.WriteErrorResponse(r.Context(), w, err, r.URL)
 }
 
 func getBoxData(ctx context.Context) (*accessbox.Box, error) {

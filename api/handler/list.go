@@ -45,11 +45,7 @@ func (h *handler) registerAndSendError(w http.ResponseWriter, r *http.Request, e
 		zap.String("request_id", rid),
 		zap.Error(err))
 
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           api.GetAPIError(api.ErrBadRequest).Code,
-		Description:    err.Error(),
-		HTTPStatusCode: http.StatusBadRequest,
-	}, r.URL)
+	api.WriteErrorResponse(r.Context(), w, err, r.URL)
 }
 
 // ListBucketsHandler handles bucket listing requests.
