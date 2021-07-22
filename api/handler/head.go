@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"net/http"
 
@@ -26,33 +25,6 @@ func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
 	}
 }
 
-func (h *handler) checkIsFolder(ctx context.Context, bucket, object string) *layer.ObjectInfo {
-	if ln := len(object); ln > 0 && object[ln-1:] != layer.PathSeparator {
-		return nil
-	}
-
-	_, dirname := layer.NameFromString(object)
-	params := &layer.ListObjectsParamsV1{
-		ListObjectsParamsCommon: layer.ListObjectsParamsCommon{
-			Bucket:    bucket,
-			Prefix:    dirname,
-			Delimiter: layer.PathSeparator,
-		}}
-	if list, err := h.obj.ListObjectsV1(ctx, params); err == nil && len(list.Objects) > 0 {
-		return &layer.ObjectInfo{
-			Bucket: bucket,
-			Name:   object,
-
-			ContentType: "text/directory",
-
-			Owner:   list.Objects[0].Owner,
-			Created: list.Objects[0].Created,
-		}
-	}
-
-	return nil
-}
-
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
@@ -64,26 +36,18 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		rid = api.GetRequestID(r.Context())
 	)
 
-	if inf = h.checkIsFolder(r.Context(), bkt, obj); inf != nil {
-		// do nothing for folders
-
-		// h.log.Debug("found folder",
-		// 	zap.String("request_id", rid),
-		// 	zap.String("bucket_name", bkt),
-		// 	zap.String("object_name", obj))
-	} else if inf, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err != nil {
+	if inf, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err != nil {
 		h.log.Error("could not fetch object info",
 			zap.String("request_id", rid),
 			zap.String("bucket_name", bkt),
 			zap.String("object_name", obj),
 			zap.Error(err))
 
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
-
+		var genErr *api.ObjectNotFound
+		if ok := errors.As(err, &genErr); ok {
+			err = api.GetAPIError(api.ErrNoSuchKey)
+		}
+		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 		return
 	}
 	buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
@@ -101,11 +65,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Stringer("oid", inf.ID()),
 			zap.Error(err))
 
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
+		api.WriteErrorResponse(r.Context(), w, err, r.URL)
 
 		return
 	}
