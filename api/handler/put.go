@@ -107,14 +107,14 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	boxData, err := getBoxData(r.Context())
+	p.BoxData, err = getBoxData(r.Context())
 	if err != nil {
 		h.registerAndSendError(w, r, err, "could not get boxData")
 		return
 	}
 
 	if createParams.LocationConstraint != "" {
-		for _, placementPolicy := range boxData.Policies {
+		for _, placementPolicy := range p.BoxData.Policies {
 			if placementPolicy.LocationConstraint == createParams.LocationConstraint {
 				p.Policy = placementPolicy.Policy
 				break
@@ -129,7 +129,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	cid, err := h.obj.CreateBucket(r.Context(), &p, boxData)
+	cid, err := h.obj.CreateBucket(r.Context(), &p)
 	if err != nil {
 		h.registerAndSendError(w, r, err, "could not create bucket")
 		return

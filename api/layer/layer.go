@@ -74,9 +74,10 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name   string
-		ACL    uint32
-		Policy *netmap.PlacementPolicy
+		Name    string
+		ACL     uint32
+		Policy  *netmap.PlacementPolicy
+		BoxData *accessbox.Box
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
@@ -104,7 +105,7 @@ type (
 
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
-		CreateBucket(ctx context.Context, p *CreateBucketParams, boxData *accessbox.Box) (*cid.ID, error)
+		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
@@ -498,11 +499,11 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 	return errs
 }
 
-func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams, boxData *accessbox.Box) (*cid.ID, error) {
+func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
 		if errors.Is(err, ErrBucketNotFound) {
-			return n.createContainer(ctx, p, boxData)
+			return n.createContainer(ctx, p)
 		}
 		return nil, err
 	}
