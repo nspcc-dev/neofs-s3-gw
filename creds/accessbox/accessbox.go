@@ -11,12 +11,25 @@ import (
 	"io"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
 )
+
+// Box represents friendly AccessBox.
+type Box struct {
+	Gate     *GateData
+	Policies []*ContainerPolicy
+}
+
+// ContainerPolicy represents friendly AccessBox_ContainerPolicy.
+type ContainerPolicy struct {
+	LocationConstraint string
+	Policy             *netmap.PlacementPolicy
+}
 
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
@@ -89,6 +102,42 @@ func (x *AccessBox) GetTokens(owner *keys.PrivateKey) (*GateData, error) {
 	}
 
 	return nil, fmt.Errorf("no gate data for key  %x was found", ownerKey)
+}
+
+// GetPlacementPolicy returns ContainerPolicy from AccessBox.
+func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
+	var result []*ContainerPolicy
+	for _, policy := range x.ContainerPolicy {
+		placementPolicy := netmap.NewPlacementPolicy()
+		if err := placementPolicy.Unmarshal(policy.Policy); err != nil {
+			return nil, err
+		}
+
+		result = append(result, &ContainerPolicy{
+			LocationConstraint: policy.LocationConstraint,
+			Policy:             placementPolicy,
+		})
+	}
+
+	return result, nil
+}
+
+// GetBox parse AccessBox to Box.
+func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
+	tokens, err := x.GetTokens(owner)
+	if err != nil {
+		return nil, err
+	}
+
+	policy, err := x.GetPlacementPolicy()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Box{
+		Gate:     tokens,
+		Policies: policy,
+	}, nil
 }
 
 func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) error {

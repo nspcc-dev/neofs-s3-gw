@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -45,6 +46,7 @@ var (
 	logDebugEnabledFlag    bool
 	sessionTokenFlag       bool
 	lifetimeFlag           uint64
+	containerPolicies      string
 )
 
 const (
@@ -201,6 +203,12 @@ func issueSecret() *cli.Command {
 				Destination: &lifetimeFlag,
 				Value:       defaultLifetime,
 			},
+			&cli.StringFlag{
+				Name:        "container-policy",
+				Usage:       "mapping AWS storage class to NeoFS storage policy as plain json string or path to json file",
+				Required:    false,
+				Destination: &containerPolicies,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
@@ -241,6 +249,11 @@ func issueSecret() *cli.Command {
 				return cli.Exit(fmt.Sprintf("lifetime must be at least 1, current value: %d", lifetimeFlag), 5)
 			}
 
+			policies, err := parsePolicies(containerPolicies)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("couldn't parse container policy: %s", err.Error()), 6)
+			}
+
 			issueSecretOptions := &authmate.IssueSecretOptions{
 				ContainerID:           containerID,
 				ContainerFriendlyName: containerFriendlyName,
@@ -248,6 +261,7 @@ func issueSecret() *cli.Command {
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             getJSONRules(eaclRulesFlag),
 				ContextRules:          getJSONRules(contextRulesFlag),
+				ContainerPolicies:     policies,
 				SessionTkn:            sessionTokenFlag,
 				Lifetime:              lifetimeFlag,
 			}
@@ -259,6 +273,23 @@ func issueSecret() *cli.Command {
 			return nil
 		},
 	}
+}
+
+func parsePolicies(val string) (authmate.ContainerPolicies, error) {
+	if val == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(val)
+	if err != nil {
+		data = []byte(val)
+	}
+
+	var policies authmate.ContainerPolicies
+	if err = json.Unmarshal(data, &policies); err != nil {
+		return nil, err
+	}
+
+	return policies, nil
 }
 
 func getJSONRules(val string) []byte {

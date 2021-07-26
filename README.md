@@ -280,6 +280,18 @@ Rules for session token can be set via param `session-rules` (json-string and fi
 If `session-rules` is set, but `create-session-token` is not, the session
 token will not be created.
 
+Rules for mapping of `LocationConstraint` ([aws spec](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html#API_CreateBucket_RequestBody)) 
+to `PlacementPolicy` ([neofs spec](https://github.com/nspcc-dev/neofs-spec/blob/master/01-arch/02-policy.md)) 
+can be set via param `container-policy` (json-string and file path allowed):
+```
+{
+  "rep-3": "REP 3",
+  "complex": "REP 1 IN X CBF 1 SELECT 1 FROM * AS X",
+  "example-json-policy": "{\"replicas\":[{\"count\":3,\"selector\":\"SelASD0\"}],\"container_backup_factor\":3,\"selectors\":[{\"name\":\"SelASD0\",\"count\":3,\"filter\":\"*\"}],\"filters\":[]}"
+}
+```
+
+
 Example of a command to issue a secret with custom rules for multiple gates:
 ```
 $ ./neofs-authmate issue-secret --wallet wallet.json \
@@ -289,6 +301,7 @@ $ ./neofs-authmate issue-secret --wallet wallet.json \
 --gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967 \
 --create-session-token \
 --session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
+--container-policy '{"rep-3": "REP 3"}'
 
 Enter password for wallet.json > 
 {

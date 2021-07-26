@@ -70,9 +70,10 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name   string
-		ACL    uint32
-		Policy *netmap.PlacementPolicy
+		Name    string
+		ACL     uint32
+		Policy  *netmap.PlacementPolicy
+		BoxData *accessbox.Box
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
@@ -134,8 +135,8 @@ func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		return data.BearerToken.Issuer()
+	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
+		return data.Gate.BearerToken.Issuer()
 	}
 
 	return n.pool.OwnerID()
@@ -143,8 +144,8 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 
 // BearerOpt returns client.WithBearer call option with token from context or with nil token.
 func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		return client.WithBearer(data.BearerToken)
+	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
+		return client.WithBearer(data.Gate.BearerToken)
 	}
 
 	return client.WithBearer(nil)
@@ -152,8 +153,8 @@ func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
 
 // SessionOpt returns client.WithSession call option with token from context or with nil token.
 func (n *layer) SessionOpt(ctx context.Context) client.CallOption {
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		return client.WithSession(data.SessionToken)
+	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
+		return client.WithSession(data.Gate.SessionToken)
 	}
 
 	return client.WithSession(nil)

@@ -44,6 +44,9 @@ func New(log *zap.Logger, conns pool.Pool) *Agent {
 }
 
 type (
+	// ContainerPolicies contains mapping of aws LocationConstraint to neofs PlacementPolicy.
+	ContainerPolicies map[string]string
+
 	// IssueSecretOptions contains options for passing to Agent.IssueSecret method.
 	IssueSecretOptions struct {
 		ContainerID           *cid.ID
@@ -54,6 +57,7 @@ type (
 		ContextRules          []byte
 		SessionTkn            bool
 		Lifetime              uint64
+		ContainerPolicies     ContainerPolicies
 	}
 
 	// ObtainSecretOptions contains options for passing to Agent.ObtainSecret method.
@@ -122,6 +126,45 @@ func (a *Agent) getCurrentEpoch(ctx context.Context) (uint64, error) {
 	}
 }
 
+func checkPolicy(policyString string) (*netmap.PlacementPolicy, error) {
+	result, err := policy.Parse(policyString)
+	if err == nil {
+		return result, nil
+	}
+
+	result = netmap.NewPlacementPolicy()
+	if err = result.UnmarshalJSON([]byte(policyString)); err == nil {
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("can't parse placement policy")
+}
+
+func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPolicy, error) {
+	if policy == nil {
+		return nil, nil
+	}
+
+	var result []*accessbox.AccessBox_ContainerPolicy
+	for locationConstraint, placementPolicy := range policy {
+		parsedPolicy, err := checkPolicy(placementPolicy)
+		if err != nil {
+			return nil, err
+		}
+		marshaled, err := parsedPolicy.Marshal()
+		if err != nil {
+			return nil, fmt.Errorf("can't marshal placement policy: %w", err)
+		}
+
+		result = append(result, &accessbox.AccessBox_ContainerPolicy{
+			LocationConstraint: locationConstraint,
+			Policy:             marshaled,
+		})
+	}
+
+	return result, nil
+}
+
 // IssueSecret creates an auth token, puts it in the NeoFS network and writes to io.Writer a new secret access key.
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
@@ -130,6 +173,11 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		box      *accessbox.AccessBox
 		lifetime lifetimeOptions
 	)
+
+	policies, err := preparePolicy(options.ContainerPolicies)
+	if err != nil {
+		return err
+	}
 
 	lifetime.Iat, err = a.getCurrentEpoch(ctx)
 	if err != nil {
@@ -156,6 +204,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	if err != nil {
 		return err
 	}
+
+	box.ContainerPolicy = policies
 
 	oid, err := ownerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
 	if err != nil {
@@ -203,14 +253,14 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 		return fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
-	tkns, err := bearerCreds.GetTokens(ctx, address)
+	box, err := bearerCreds.GetBox(ctx, address)
 	if err != nil {
 		return fmt.Errorf("failed to get tokens: %w", err)
 	}
 
 	or := &obtainingResult{
-		BearerToken:     tkns.BearerToken,
-		SecretAccessKey: tkns.AccessKey,
+		BearerToken:     box.Gate.BearerToken,
+		SecretAccessKey: box.Gate.AccessKey,
 	}
 
 	enc := json.NewEncoder(w)

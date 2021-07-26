@@ -26,7 +26,7 @@ var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(
 type (
 	// Center is a user authentication interface.
 	Center interface {
-		Authenticate(request *http.Request) (*accessbox.GateData, error)
+		Authenticate(request *http.Request) (*accessbox.Box, error)
 	}
 
 	center struct {
@@ -64,7 +64,7 @@ func New(conns pool.Pool, key *keys.PrivateKey) Center {
 	}
 }
 
-func (c *center) Authenticate(r *http.Request) (*accessbox.GateData, error) {
+func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 	queryValues := r.URL.Query()
 	if queryValues.Get("X-Amz-Algorithm") == "AWS4-HMAC-SHA256" {
 		return nil, errors.New("pre-signed form of request is not supported")
@@ -98,7 +98,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.GateData, error) {
 		return nil, fmt.Errorf("could not parse AccessBox address: %s : %w", accessKeyID, err)
 	}
 
-	tkns, err := c.cli.GetTokens(r.Context(), address)
+	box, err := c.cli.GetBox(r.Context(), address)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.GateData, error) {
 		}
 	}
 
-	awsCreds := credentials.NewStaticCredentials(accessKeyID, tkns.AccessKey, "")
+	awsCreds := credentials.NewStaticCredentials(accessKeyID, box.Gate.AccessKey, "")
 	signer := v4.NewSigner(awsCreds)
 	signer.DisableURIPathEscaping = true
 
@@ -128,5 +128,5 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.GateData, error) {
 		return nil, errors.New("failed to pass authentication procedure")
 	}
 
-	return tkns, nil
+	return box, nil
 }

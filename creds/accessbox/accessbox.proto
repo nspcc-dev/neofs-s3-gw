@@ -12,8 +12,14 @@ message AccessBox {
         bytes gatePublicKey = 2 [json_name = "gatePublicKey"];
     }
 
+    message ContainerPolicy {
+        string locationConstraint = 1;
+        bytes policy = 2;
+    }
+
     bytes ownerPublicKey = 1 [json_name = "ownerPublicKey"];
     repeated Gate gates = 2 [json_name = "gates"];
+    repeated ContainerPolicy containerPolicy = 3 [json_name = "containerPolicy"];
 }
 
 message Tokens {

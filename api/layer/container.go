@@ -15,7 +15,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
@@ -119,14 +118,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		container.WithAttribute(container.AttributeName, p.Name),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
 
-	var gateData *accessbox.GateData
-	if data, ok := ctx.Value(api.GateData).(*accessbox.GateData); ok && data != nil {
-		gateData = data
-	} else {
-		return nil, fmt.Errorf("couldn't get gate data from context")
-	}
-
-	cnr.SetSessionToken(gateData.SessionToken)
+	cnr.SetSessionToken(p.BoxData.Gate.SessionToken)
 	cnr.SetOwnerID(n.Owner(ctx))
 
 	cid, err := n.pool.PutContainer(ctx, cnr)
@@ -138,7 +130,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		return nil, err
 	}
 
-	if err := n.setContainerEACL(ctx, cid, gateData.GateKey); err != nil {
+	if err := n.setContainerEACL(ctx, cid, p.BoxData.Gate.GateKey); err != nil {
 		return nil, err
 	}
 
