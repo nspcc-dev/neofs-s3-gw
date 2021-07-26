@@ -182,9 +182,5 @@ func writeError(w http.ResponseWriter, r *http.Request, log *zap.Logger, msg, ri
 		zap.String("object_name", obj),
 		zap.Error(err))
 
-	api.WriteErrorResponse(r.Context(), w, api.Error{
-		Code:           api.GetAPIError(api.ErrInternalError).Code,
-		Description:    err.Error(),
-		HTTPStatusCode: http.StatusInternalServerError,
-	}, r.URL)
+	api.WriteErrorResponse(r.Context(), w, err, r.URL)
 }
