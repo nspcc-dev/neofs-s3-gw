@@ -44,7 +44,7 @@ func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *List
 
 	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
 
-	res.Contents = fillContents(list.Objects, p.Encode)
+	res.Contents = fillContentsWithOwner(list.Objects, p.Encode)
 
 	return res
 }
@@ -87,7 +87,7 @@ func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *List
 
 	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
 
-	res.Contents = fillContents(list.Objects, p.Encode)
+	res.Contents = fillContents(list.Objects, p.Encode, p.FetchOwner)
 
 	return res
 }
@@ -123,6 +123,7 @@ func parseListObjectsArgsV2(r *http.Request) (*layer.ListObjectsParamsV2, error)
 
 	res.ContinuationToken = r.URL.Query().Get("continuation-token")
 	res.StartAfter = r.URL.Query().Get("start-after")
+	res.FetchOwner, _ = strconv.ParseBool(r.URL.Query().Get("fetch-owner"))
 	return &res, nil
 }
 
@@ -160,21 +161,28 @@ func fillPrefixes(src []string, encode string) []CommonPrefix {
 	return dst
 }
 
-func fillContents(src []*layer.ObjectInfo, encode string) []Object {
+func fillContentsWithOwner(src []*layer.ObjectInfo, encode string) []Object {
+	return fillContents(src, encode, true)
+}
+
+func fillContents(src []*layer.ObjectInfo, encode string, fetchOwner bool) []Object {
 	var dst []Object
 	for _, obj := range src {
-		dst = append(dst, Object{
+		res := Object{
 			Key:          s3PathEncode(obj.Name, encode),
 			Size:         obj.Size,
 			LastModified: obj.Created.Format(time.RFC3339),
+			ETag:         obj.HashSum,
+		}
 
-			Owner: Owner{
+		if fetchOwner {
+			res.Owner = &Owner{
 				ID:          obj.Owner.String(),
 				DisplayName: obj.Owner.String(),
-			},
+			}
+		}
 
-			ETag: obj.HashSum,
-		})
+		dst = append(dst, res)
 	}
 	return dst
 }

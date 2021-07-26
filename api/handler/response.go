@@ -71,7 +71,7 @@ type Object struct {
 	Size         int64
 
 	// Owner of the object.
-	Owner Owner
+	Owner *Owner `xml:"Owner,omitempty"`
 
 	// The class of storage used to store the object.
 	StorageClass string `xml:"StorageClass,omitempty"`
