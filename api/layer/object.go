@@ -81,7 +81,7 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 	if result, err := n.objectSearch(ctx, p); err != nil {
 		return nil, err
 	} else if ln := len(result); ln == 0 {
-		return nil, &api.ObjectNotFound{Bucket: p.cid.String(), Object: p.val}
+		return nil, api.GetAPIError(api.ErrNoSuchKey)
 	} else if ln == 1 {
 		return result[0], nil
 	}
@@ -123,12 +123,16 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	} else if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
-	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil && err != ErrObjectNotExists {
-		return nil, err
-	} else if err == ErrObjectExists {
-		return nil, &api.ObjectAlreadyExists{
-			Bucket: p.Bucket,
-			Object: p.Object,
+	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil {
+		var errExist *api.ObjectAlreadyExists
+		if ok := errors.As(err, &errExist); ok {
+			errExist.Bucket = p.Bucket
+			errExist.Object = p.Object
+			return nil, errExist
+		}
+
+		if !api.IsS3Error(err, api.ErrNoSuchKey) {
+			return nil, err
 		}
 	}
 

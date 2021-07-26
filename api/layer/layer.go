@@ -3,7 +3,6 @@ package layer
 import (
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -19,8 +18,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type (
@@ -122,17 +119,6 @@ type (
 	}
 )
 
-var (
-	// ErrObjectExists is returned on attempts to create already existing object.
-	ErrObjectExists = errors.New("object exists")
-	// ErrObjectNotExists is returned on attempts to work with non-existing object.
-	ErrObjectNotExists = errors.New("object not exists")
-	// ErrBucketAlreadyExists is returned on attempts to create already existing bucket.
-	ErrBucketAlreadyExists = errors.New("bucket exists")
-	// ErrBucketNotFound is returned on attempts to get not existing bucket.
-	ErrBucketNotFound = errors.New("bucket not found")
-)
-
 const (
 	unversionedObjectVersionID = "null"
 )
@@ -198,7 +184,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 			}
 		}
 
-		return nil, ErrBucketNotFound
+		return nil, api.GetAPIError(api.ErrNoSuchBucket)
 	}
 
 	return n.containerInfo(ctx, containerID)
@@ -257,11 +243,7 @@ func (n *layer) checkObject(ctx context.Context, cid *cid.ID, filename string) e
 	var err error
 
 	if _, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err == nil {
-		return ErrObjectExists
-	} else if state, ok := status.FromError(err); !ok || state == nil {
-		return err
-	} else if state.Code() == codes.NotFound {
-		return ErrObjectNotExists
+		return new(api.ObjectAlreadyExists)
 	}
 
 	return err
@@ -378,13 +360,13 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
-		if errors.Is(err, ErrBucketNotFound) {
+		if api.IsS3Error(err, api.ErrNoSuchBucket) {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
 	}
 
-	return nil, ErrBucketAlreadyExists
+	return nil, api.GetAPIError(api.ErrBucketAlreadyExists)
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
