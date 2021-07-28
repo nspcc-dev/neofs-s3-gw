@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"go.uber.org/zap"
 )
 
@@ -107,7 +105,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.BoxData, err = getBoxData(r.Context())
+	p.BoxData, err = layer.GetBoxData(r.Context())
 	if err != nil {
 		h.registerAndSendError(w, r, err, "could not get boxData")
 		return
@@ -171,18 +169,4 @@ func parseBasicACL(basicACL string) (uint32, error) {
 
 		return uint32(value), nil
 	}
-}
-
-func getBoxData(ctx context.Context) (*accessbox.Box, error) {
-	var boxData *accessbox.Box
-	data, ok := ctx.Value(api.BoxData).(*accessbox.Box)
-	if !ok || data == nil {
-		return nil, fmt.Errorf("couldn't get box data from context")
-	}
-
-	boxData = data
-	if boxData.Gate == nil {
-		boxData.Gate = &accessbox.GateData{}
-	}
-	return boxData, nil
 }
