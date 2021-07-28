@@ -13,6 +13,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"go.uber.org/zap"
 )
 
@@ -258,6 +259,8 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 		result     ListObjectsInfoV2
 		allObjects []*ObjectInfo
 		bkt        *BucketInfo
+		cacheKey   string
+		box        *accessbox.Box
 	)
 
 	if p.MaxKeys == 0 {
@@ -268,9 +271,18 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 		return nil, err
 	}
 
+	if box, err = GetBoxData(ctx); err != nil {
+		return nil, err
+	}
+
+	cacheKey = createKey(box.Gate.AccessKey, bkt.CID)
+
 	if p.ContinuationToken != "" {
-		// find cache with continuation token
-	} else {
+		allObjects = n.cache.Get(p.ContinuationToken, cacheKey)
+		allObjects = trimStartAfter(p.StartAfter, allObjects)
+	}
+
+	if allObjects == nil {
 		allObjects, err = n.listSortedAllObjects(ctx, allObjectParams{
 			Bucket:     bkt,
 			Prefix:     p.Prefix,
@@ -280,13 +292,20 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 		if err != nil {
 			return nil, err
 		}
+
+		if p.ContinuationToken != "" {
+			allObjects = trimAfterObjectID(p.ContinuationToken, allObjects)
+		}
 	}
 
 	if len(allObjects) > p.MaxKeys {
 		result.IsTruncated = true
 
+		restObjects := allObjects[p.MaxKeys:]
+		n.cache.Put(cacheKey, restObjects)
+		result.NextContinuationToken = restObjects[0].id.String()
+
 		allObjects = allObjects[:p.MaxKeys]
-		// add  creating of cache here
 	}
 
 	for _, ov := range allObjects {
@@ -342,4 +361,24 @@ func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]
 	})
 
 	return objects, nil
+}
+
+func trimStartAfter(startAfter string, objects []*ObjectInfo) []*ObjectInfo {
+	if objects != nil && len(startAfter) != 0 && objects[0].Name <= startAfter {
+		for i := range objects {
+			if objects[i].Name > startAfter {
+				return objects[i:]
+			}
+		}
+	}
+	return objects
+}
+
+func trimAfterObjectID(id string, objects []*ObjectInfo) []*ObjectInfo {
+	for i, obj := range objects {
+		if obj.ID().String() == id {
+			return objects[i:]
+		}
+	}
+	return objects
 }
