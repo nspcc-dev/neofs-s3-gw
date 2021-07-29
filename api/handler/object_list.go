@@ -2,9 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
@@ -120,7 +122,11 @@ func parseListObjectsArgsV2(r *http.Request) (*layer.ListObjectsParamsV2, error)
 	}
 	res.ListObjectsParamsCommon = *common
 
-	res.ContinuationToken = queryValues.Get("continuation-token")
+	res.ContinuationToken, err = parseContinuationToken(queryValues)
+	if err != nil {
+		return nil, err
+	}
+
 	res.StartAfter = queryValues.Get("start-after")
 	res.FetchOwner, _ = strconv.ParseBool(queryValues.Get("fetch-owner"))
 	return &res, nil
@@ -149,6 +155,16 @@ func parseListObjectArgs(r *http.Request) (*layer.ListObjectsParamsCommon, error
 	res.Prefix = queryValues.Get("prefix")
 
 	return &res, nil
+}
+
+func parseContinuationToken(queryValues url.Values) (string, error) {
+	if val, ok := queryValues["continuation-token"]; ok {
+		if err := object.NewID().Parse(val[0]); err != nil {
+			return "", api.GetAPIError(api.ErrIncorrectContinuationToken)
+		}
+		return val[0], nil
+	}
+	return "", nil
 }
 
 func fillPrefixes(src []string, encode string) []CommonPrefix {
