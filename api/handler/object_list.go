@@ -94,8 +94,9 @@ func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *List
 
 func parseListObjectsArgsV1(r *http.Request) (*layer.ListObjectsParamsV1, error) {
 	var (
-		err error
-		res layer.ListObjectsParamsV1
+		err         error
+		res         layer.ListObjectsParamsV1
+		queryValues = r.URL.Query()
 	)
 
 	common, err := parseListObjectArgs(r)
@@ -104,15 +105,16 @@ func parseListObjectsArgsV1(r *http.Request) (*layer.ListObjectsParamsV1, error)
 	}
 	res.ListObjectsParamsCommon = *common
 
-	res.Marker = r.URL.Query().Get("marker")
+	res.Marker = queryValues.Get("marker")
 
 	return &res, nil
 }
 
 func parseListObjectsArgsV2(r *http.Request) (*layer.ListObjectsParamsV2, error) {
 	var (
-		err error
-		res layer.ListObjectsParamsV2
+		err         error
+		res         layer.ListObjectsParamsV2
+		queryValues = r.URL.Query()
 	)
 
 	common, err := parseListObjectArgs(r)
@@ -121,32 +123,33 @@ func parseListObjectsArgsV2(r *http.Request) (*layer.ListObjectsParamsV2, error)
 	}
 	res.ListObjectsParamsCommon = *common
 
-	res.ContinuationToken = r.URL.Query().Get("continuation-token")
-	res.StartAfter = r.URL.Query().Get("start-after")
-	res.FetchOwner, _ = strconv.ParseBool(r.URL.Query().Get("fetch-owner"))
+	res.ContinuationToken = queryValues.Get("continuation-token")
+	res.StartAfter = queryValues.Get("start-after")
+	res.FetchOwner, _ = strconv.ParseBool(queryValues.Get("fetch-owner"))
 	return &res, nil
 }
 
 func parseListObjectArgs(r *http.Request) (*layer.ListObjectsParamsCommon, error) {
 	var (
-		err error
-		res layer.ListObjectsParamsCommon
+		err         error
+		res         layer.ListObjectsParamsCommon
+		queryValues = r.URL.Query()
 	)
 
 	if info := api.GetReqInfo(r.Context()); info != nil {
 		res.Bucket = info.BucketName
 	}
 
-	res.Delimiter = r.URL.Query().Get("delimiter")
-	res.Encode = r.URL.Query().Get("encoding-type")
+	res.Delimiter = queryValues.Get("delimiter")
+	res.Encode = queryValues.Get("encoding-type")
 
-	if r.URL.Query().Get("max-keys") == "" {
+	if queryValues.Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys < 0 {
+	} else if res.MaxKeys, err = strconv.Atoi(queryValues.Get("max-keys")); err != nil || res.MaxKeys < 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
-	res.Prefix = r.URL.Query().Get("prefix")
+	res.Prefix = queryValues.Get("prefix")
 
 	return &res, nil
 }
@@ -208,21 +211,22 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 
 func parseListObjectVersionsRequest(r *http.Request) (*layer.ListObjectVersionsParams, error) {
 	var (
-		err error
-		res layer.ListObjectVersionsParams
+		err         error
+		res         layer.ListObjectVersionsParams
+		queryValues = r.URL.Query()
 	)
 
-	if r.URL.Query().Get("max-keys") == "" {
+	if queryValues.Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
-	} else if res.MaxKeys, err = strconv.Atoi(r.URL.Query().Get("max-keys")); err != nil || res.MaxKeys <= 0 {
+	} else if res.MaxKeys, err = strconv.Atoi(queryValues.Get("max-keys")); err != nil || res.MaxKeys <= 0 {
 		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
 	}
 
-	res.Prefix = r.URL.Query().Get("prefix")
-	res.KeyMarker = r.URL.Query().Get("marker")
-	res.Delimiter = r.URL.Query().Get("delimiter")
-	res.Encode = r.URL.Query().Get("encoding-type")
-	res.VersionIDMarker = r.URL.Query().Get("version-id-marker")
+	res.Prefix = queryValues.Get("prefix")
+	res.KeyMarker = queryValues.Get("marker")
+	res.Delimiter = queryValues.Get("delimiter")
+	res.Encode = queryValues.Get("encoding-type")
+	res.VersionIDMarker = queryValues.Get("version-id-marker")
 
 	if info := api.GetReqInfo(r.Context()); info != nil {
 		res.Bucket = info.BucketName
