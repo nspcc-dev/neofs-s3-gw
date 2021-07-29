@@ -37,9 +37,8 @@ func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *List
 		Prefix:       p.Prefix,
 		MaxKeys:      p.MaxKeys,
 		Delimiter:    p.Delimiter,
-
-		IsTruncated: list.IsTruncated,
-		NextMarker:  list.NextMarker,
+		IsTruncated:  list.IsTruncated,
+		NextMarker:   list.NextMarker,
 	}
 
 	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
@@ -71,16 +70,14 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 
 func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *ListObjectsV2Response {
 	res := &ListObjectsV2Response{
-		Name:         p.Bucket,
-		EncodingType: p.Encode,
-		Prefix:       s3PathEncode(p.Prefix, p.Encode),
-		KeyCount:     len(list.Objects) + len(list.Prefixes),
-		MaxKeys:      p.MaxKeys,
-		Delimiter:    s3PathEncode(p.Delimiter, p.Encode),
-		StartAfter:   s3PathEncode(p.StartAfter, p.Encode),
-
-		IsTruncated: list.IsTruncated,
-
+		Name:                  p.Bucket,
+		EncodingType:          p.Encode,
+		Prefix:                s3PathEncode(p.Prefix, p.Encode),
+		KeyCount:              len(list.Objects) + len(list.Prefixes),
+		MaxKeys:               p.MaxKeys,
+		Delimiter:             s3PathEncode(p.Delimiter, p.Encode),
+		StartAfter:            s3PathEncode(p.StartAfter, p.Encode),
+		IsTruncated:           list.IsTruncated,
 		ContinuationToken:     p.ContinuationToken,
 		NextContinuationToken: list.NextContinuationToken,
 	}
