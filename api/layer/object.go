@@ -13,6 +13,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"go.uber.org/zap"
 )
 
@@ -55,7 +56,7 @@ type (
 	}
 
 	allObjectParams struct {
-		Bucket     string
+		Bucket     *BucketInfo
 		Delimiter  string
 		Prefix     string
 		StartAfter string
@@ -210,14 +211,19 @@ func (n *layer) ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*Lis
 	var (
 		err    error
 		result ListObjectsInfoV1
+		bkt    *BucketInfo
 	)
 
 	if p.MaxKeys == 0 {
 		return &result, nil
 	}
 
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return nil, err
+	}
+
 	allObjects, err := n.listSortedAllObjects(ctx, allObjectParams{
-		Bucket:     p.Bucket,
+		Bucket:     bkt,
 		Prefix:     p.Prefix,
 		Delimiter:  p.Delimiter,
 		StartAfter: p.Marker,
@@ -252,17 +258,33 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 		err        error
 		result     ListObjectsInfoV2
 		allObjects []*ObjectInfo
+		bkt        *BucketInfo
+		cacheKey   string
+		box        *accessbox.Box
 	)
 
 	if p.MaxKeys == 0 {
 		return &result, nil
 	}
 
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return nil, err
+	}
+
+	if box, err = GetBoxData(ctx); err != nil {
+		return nil, err
+	}
+
+	cacheKey = createKey(box.Gate.AccessKey, bkt.CID)
+
 	if p.ContinuationToken != "" {
-		// find cache with continuation token
-	} else {
+		allObjects = n.cache.Get(p.ContinuationToken, cacheKey)
+		allObjects = trimStartAfter(p.StartAfter, allObjects)
+	}
+
+	if allObjects == nil {
 		allObjects, err = n.listSortedAllObjects(ctx, allObjectParams{
-			Bucket:     p.Bucket,
+			Bucket:     bkt,
 			Prefix:     p.Prefix,
 			Delimiter:  p.Delimiter,
 			StartAfter: p.StartAfter,
@@ -270,13 +292,20 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 		if err != nil {
 			return nil, err
 		}
+
+		if p.ContinuationToken != "" {
+			allObjects = trimAfterObjectID(p.ContinuationToken, allObjects)
+		}
 	}
 
 	if len(allObjects) > p.MaxKeys {
 		result.IsTruncated = true
 
+		restObjects := allObjects[p.MaxKeys:]
+		n.cache.Put(cacheKey, restObjects)
+		result.NextContinuationToken = restObjects[0].id.String()
+
 		allObjects = allObjects[:p.MaxKeys]
-		// add  creating of cache here
 	}
 
 	for _, ov := range allObjects {
@@ -292,14 +321,11 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]*ObjectInfo, error) {
 	var (
 		err       error
-		bkt       *BucketInfo
 		ids       []*object.ID
 		uniqNames = make(map[string]bool)
 	)
 
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-		return nil, err
-	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID}); err != nil {
+	if ids, err = n.objectSearch(ctx, &findParams{cid: p.Bucket.CID}); err != nil {
 		return nil, err
 	}
 
@@ -308,14 +334,14 @@ func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]
 	for _, id := range ids {
 		addr := object.NewAddress()
 		addr.SetObjectID(id)
-		addr.SetContainerID(bkt.CID)
+		addr.SetContainerID(p.Bucket.CID)
 
 		meta, err := n.objectHead(ctx, addr)
 		if err != nil {
 			n.log.Warn("could not fetch object meta", zap.Error(err))
 			continue
 		}
-		if oi := objectInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); oi != nil {
+		if oi := objectInfoFromMeta(p.Bucket, meta, p.Prefix, p.Delimiter); oi != nil {
 			// use only unique dir names
 			if _, ok := uniqNames[oi.Name]; ok {
 				continue
@@ -335,4 +361,24 @@ func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]
 	})
 
 	return objects, nil
+}
+
+func trimStartAfter(startAfter string, objects []*ObjectInfo) []*ObjectInfo {
+	if objects != nil && len(startAfter) != 0 && objects[0].Name <= startAfter {
+		for i := range objects {
+			if objects[i].Name > startAfter {
+				return objects[i:]
+			}
+		}
+	}
+	return objects
+}
+
+func trimAfterObjectID(id string, objects []*ObjectInfo) []*ObjectInfo {
+	for i, obj := range objects {
+		if obj.ID().String() == id {
+			return objects[i:]
+		}
+	}
+	return objects
 }

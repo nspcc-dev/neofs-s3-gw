@@ -1,6 +1,8 @@
 package layer
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -8,6 +10,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 )
 
 type (
@@ -172,3 +176,18 @@ func (o *ObjectInfo) ID() *object.ID { return o.id }
 
 // IsDir allows to check if object is a directory.
 func (o *ObjectInfo) IsDir() bool { return o.isDir }
+
+// GetBoxData  extracts accessbox.Box from context.
+func GetBoxData(ctx context.Context) (*accessbox.Box, error) {
+	var boxData *accessbox.Box
+	data, ok := ctx.Value(api.BoxData).(*accessbox.Box)
+	if !ok || data == nil {
+		return nil, fmt.Errorf("couldn't get box data from context")
+	}
+
+	boxData = data
+	if boxData.Gate == nil {
+		boxData.Gate = &accessbox.GateData{}
+	}
+	return boxData, nil
+}
