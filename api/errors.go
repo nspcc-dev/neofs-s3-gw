@@ -970,7 +970,7 @@ var errorCodes = errorCodeMap{
 	ErrNotSupported: {
 		ErrCode:        ErrNotSupported,
 		Code:           "BadRequest",
-		Description:    "Not supported by NeoFS S3 Gate",
+		Description:    "Not supported by NeoFS S3 Gateway",
 		HTTPStatusCode: http.StatusNotImplemented,
 	},
 	ErrInvalidEncryptionMethod: {
