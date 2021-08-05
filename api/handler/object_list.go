@@ -13,21 +13,21 @@ import (
 
 // ListObjectsV1Handler handles objects listing requests for API version 1.
 func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
-	params, err := parseListObjectsArgsV1(r)
+	reqInfo := api.GetReqInfo(r.Context())
+	params, err := parseListObjectsArgsV1(reqInfo)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "failed to parse arguments")
+		h.logAndSendError(w, "failed to parse arguments", reqInfo, err)
 		return
 	}
 
 	list, err := h.obj.ListObjectsV1(r.Context(), params)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "something went wrong")
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
 	}
 
-	err = api.EncodeToResponse(w, encodeV1(params, list))
-	if err != nil {
-		h.registerAndSendError(w, r, err, "something went wrong")
+	if err = api.EncodeToResponse(w, encodeV1(params, list)); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
@@ -52,21 +52,21 @@ func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *List
 
 // ListObjectsV2Handler handles objects listing requests for API version 2.
 func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
-	params, err := parseListObjectsArgsV2(r)
+	reqInfo := api.GetReqInfo(r.Context())
+	params, err := parseListObjectsArgsV2(reqInfo)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "failed to parse arguments")
+		h.logAndSendError(w, "failed to parse arguments", reqInfo, err)
 		return
 	}
 
 	list, err := h.obj.ListObjectsV2(r.Context(), params)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "something went wrong")
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
 	}
 
-	err = api.EncodeToResponse(w, encodeV2(params, list))
-	if err != nil {
-		h.registerAndSendError(w, r, err, "something went wrong")
+	if err = api.EncodeToResponse(w, encodeV2(params, list)); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
@@ -91,14 +91,13 @@ func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *List
 	return res
 }
 
-func parseListObjectsArgsV1(r *http.Request) (*layer.ListObjectsParamsV1, error) {
+func parseListObjectsArgsV1(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV1, error) {
 	var (
-		err         error
 		res         layer.ListObjectsParamsV1
-		queryValues = r.URL.Query()
+		queryValues = reqInfo.URL.Query()
 	)
 
-	common, err := parseListObjectArgs(r)
+	common, err := parseListObjectArgs(reqInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -109,14 +108,13 @@ func parseListObjectsArgsV1(r *http.Request) (*layer.ListObjectsParamsV1, error)
 	return &res, nil
 }
 
-func parseListObjectsArgsV2(r *http.Request) (*layer.ListObjectsParamsV2, error) {
+func parseListObjectsArgsV2(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV2, error) {
 	var (
-		err         error
 		res         layer.ListObjectsParamsV2
-		queryValues = r.URL.Query()
+		queryValues = reqInfo.URL.Query()
 	)
 
-	common, err := parseListObjectArgs(r)
+	common, err := parseListObjectArgs(reqInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -132,17 +130,14 @@ func parseListObjectsArgsV2(r *http.Request) (*layer.ListObjectsParamsV2, error)
 	return &res, nil
 }
 
-func parseListObjectArgs(r *http.Request) (*layer.ListObjectsParamsCommon, error) {
+func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, error) {
 	var (
 		err         error
 		res         layer.ListObjectsParamsCommon
-		queryValues = r.URL.Query()
+		queryValues = reqInfo.URL.Query()
 	)
 
-	if info := api.GetReqInfo(r.Context()); info != nil {
-		res.Bucket = info.BucketName
-	}
-
+	res.Bucket = reqInfo.BucketName
 	res.Delimiter = queryValues.Get("delimiter")
 	res.Encode = queryValues.Get("encoding-type")
 
@@ -204,29 +199,30 @@ func fillContents(src []*layer.ObjectInfo, encode string, fetchOwner bool) []Obj
 }
 
 func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
-	p, err := parseListObjectVersionsRequest(r)
+	reqInfo := api.GetReqInfo(r.Context())
+	p, err := parseListObjectVersionsRequest(reqInfo)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "failed to parse request ")
+		h.logAndSendError(w, "failed to parse request", reqInfo, err)
 		return
 	}
 
 	info, err := h.obj.ListObjectVersions(r.Context(), p)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "something went wrong")
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
 	}
 
 	response := encodeListObjectVersionsToResponse(info, p.Bucket)
-	if err := api.EncodeToResponse(w, response); err != nil {
-		h.registerAndSendError(w, r, err, "something went wrong")
+	if err = api.EncodeToResponse(w, response); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
-func parseListObjectVersionsRequest(r *http.Request) (*layer.ListObjectVersionsParams, error) {
+func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVersionsParams, error) {
 	var (
 		err         error
 		res         layer.ListObjectVersionsParams
-		queryValues = r.URL.Query()
+		queryValues = reqInfo.URL.Query()
 	)
 
 	if queryValues.Get("max-keys") == "" {
@@ -240,10 +236,7 @@ func parseListObjectVersionsRequest(r *http.Request) (*layer.ListObjectVersionsP
 	res.Delimiter = queryValues.Get("delimiter")
 	res.Encode = queryValues.Get("encoding-type")
 	res.VersionIDMarker = queryValues.Get("version-id-marker")
-
-	if info := api.GetReqInfo(r.Context()); info != nil {
-		res.Bucket = info.BucketName
-	}
+	res.Bucket = reqInfo.BucketName
 
 	return &res, nil
 }

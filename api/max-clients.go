@@ -49,9 +49,7 @@ func (m *maxClients) Handle(f http.HandlerFunc) http.HandlerFunc {
 			f.ServeHTTP(w, r)
 		case <-deadline.C:
 			// Send a http timeout message
-			WriteErrorResponse(r.Context(), w,
-				errorCodes.ToAPIErr(ErrOperationMaxedOut),
-				r.URL)
+			WriteErrorResponse(w, GetReqInfo(r.Context()), errorCodes.ToAPIErr(ErrOperationMaxedOut))
 			return
 		case <-r.Context().Done():
 			return

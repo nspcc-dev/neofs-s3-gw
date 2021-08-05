@@ -7,10 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"go.uber.org/zap"
 )
 
 type conditionalArgs struct {
@@ -79,30 +77,27 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		inf    *layer.ObjectInfo
 		params *layer.RangeParams
 
-		req = mux.Vars(r)
-		bkt = req["bucket"]
-		obj = req["object"]
-		rid = api.GetRequestID(r.Context())
+		reqInfo = api.GetReqInfo(r.Context())
 	)
 
 	args, err := parseGetObjectArgs(r.Header)
 	if err != nil {
-		writeError(w, r, h.log, "could not parse request params", rid, bkt, obj, err)
+		h.logAndSendError(w, "could not parse request params", reqInfo, err)
 		return
 	}
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err != nil {
-		writeError(w, r, h.log, "could not find object", rid, bkt, obj, err)
+	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
 
 	if err = checkPreconditions(inf, args.Conditional); err != nil {
-		api.WriteErrorResponse(r.Context(), w, err, r.URL)
+		h.logAndSendError(w, "precondition failed", reqInfo, err)
 		return
 	}
 
 	if params, err = fetchRangeHeader(r.Header, uint64(inf.Size)); err != nil {
-		writeError(w, r, h.log, "could not parse range header", rid, bkt, obj, err)
+		h.logAndSendError(w, "could not parse range header", reqInfo, err)
 		return
 	}
 	writeHeaders(w.Header(), inf)
@@ -117,7 +112,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Range:  params,
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
-		writeError(w, r, h.log, "could not get object", rid, bkt, obj, err)
+		h.logAndSendError(w, "could not get object", reqInfo, err)
 	}
 }
 
@@ -173,14 +168,4 @@ func writeRangeHeaders(w http.ResponseWriter, params *layer.RangeParams, size in
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", params.Start, params.End, size))
 	w.WriteHeader(http.StatusPartialContent)
-}
-
-func writeError(w http.ResponseWriter, r *http.Request, log *zap.Logger, msg, rid, bkt, obj string, err error) {
-	log.Error(msg,
-		zap.String("request_id", rid),
-		zap.String("bucket_name", bkt),
-		zap.String("object_name", obj),
-		zap.Error(err))
-
-	api.WriteErrorResponse(r.Context(), w, err, r.URL)
 }

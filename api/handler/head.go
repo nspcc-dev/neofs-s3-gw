@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -29,20 +28,11 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		err error
 		inf *layer.ObjectInfo
 
-		req = mux.Vars(r)
-		bkt = req["bucket"]
-		obj = req["object"]
-		rid = api.GetRequestID(r.Context())
+		reqInfo = api.GetReqInfo(r.Context())
 	)
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), bkt, obj); err != nil {
-		h.log.Error("could not fetch object info",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.String("object_name", obj),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, err, r.URL)
+	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
 	buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
@@ -53,15 +43,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Range:  getRangeToDetectContentType(inf.Size),
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
-		h.log.Error("could not get object",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.String("object_name", obj),
-			zap.Stringer("oid", inf.ID()),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, err, r.URL)
-
+		h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", inf.ID()))
 		return
 	}
 	inf.ContentType = http.DetectContentType(buffer.Bytes())
@@ -70,19 +52,10 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		req = mux.Vars(r)
-		bkt = req["bucket"]
-		rid = api.GetRequestID(r.Context())
-	)
+	reqInfo := api.GetReqInfo(r.Context())
 
-	if _, err := h.obj.GetBucketInfo(r.Context(), bkt); err != nil {
-		h.log.Error("could not fetch object info",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, err, r.URL)
+	if _, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
 

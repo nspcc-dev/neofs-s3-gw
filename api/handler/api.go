@@ -21,8 +21,6 @@ type (
 	}
 )
 
-const notSupported = "Not supported by NeoFS S3 Gate: "
-
 var _ api.Handler = (*handler)(nil)
 
 // New creates new api.Handler using given logger and client.
