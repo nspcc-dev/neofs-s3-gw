@@ -2,11 +2,9 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -119,7 +117,7 @@ var s3ErrorResponseMap = map[string]string{
 }
 
 // WriteErrorResponse writes error headers.
-func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, reqURL *url.URL) {
+func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
 	code := http.StatusInternalServerError
 
 	if e, ok := err.(Error); ok {
@@ -136,8 +134,7 @@ func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, r
 	}
 
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
-		w.Header().Get(hdrAmzRequestID), deploymentID.String())
+	errorResponse := getAPIErrorResponse(reqInfo, err)
 	encodedErrorResponse := EncodeResponse(errorResponse)
 	WriteResponse(w, code, encodedErrorResponse, MimeXML)
 }
@@ -145,11 +142,11 @@ func WriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error, r
 // If none of the http routes match respond with appropriate errors.
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
-	WriteErrorResponse(r.Context(), w, Error{
+	WriteErrorResponse(w, GetReqInfo(r.Context()), Error{
 		Code:           "XMinioUnknownAPIRequest",
 		Description:    desc,
 		HTTPStatusCode: http.StatusBadRequest,
-	}, r.URL)
+	})
 }
 
 // Write http common headers.

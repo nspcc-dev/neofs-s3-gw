@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -42,18 +41,13 @@ type DeleteObjectsResponse struct {
 }
 
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		req = mux.Vars(r)
-		bkt = req["bucket"]
-		obj = req["object"]
-		rid = api.GetRequestID(r.Context())
-	)
+	reqInfo := api.GetReqInfo(r.Context())
 
-	if err := h.obj.DeleteObject(r.Context(), bkt, obj); err != nil {
+	if err := h.obj.DeleteObject(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
 		h.log.Error("could not delete object",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.String("object_name", obj),
+			zap.String("request_id", reqInfo.RequestID),
+			zap.String("bucket_name", reqInfo.BucketName),
+			zap.String("object_name", reqInfo.ObjectName),
 			zap.Error(err))
 
 		// Ignore delete errors:
@@ -70,30 +64,26 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 // DeleteMultipleObjectsHandler handles multiple delete requests.
 func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		req = mux.Vars(r)
-		bkt = req["bucket"]
-		rid = api.GetRequestID(r.Context())
-	)
+	reqInfo := api.GetReqInfo(r.Context())
 
 	// Content-Md5 is requied should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header[api.ContentMD5]; !ok {
-		api.WriteErrorResponse(r.Context(), w, api.GetAPIError(api.ErrMissingContentMD5), r.URL)
+		h.logAndSendError(w, "missing Content-MD5", reqInfo, api.GetAPIError(api.ErrMissingContentMD5))
 		return
 	}
 
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
-		api.WriteErrorResponse(r.Context(), w, api.GetAPIError(api.ErrMissingContentLength), r.URL)
+		h.logAndSendError(w, "missing Content-Length", reqInfo, api.GetAPIError(api.ErrMissingContentLength))
 		return
 	}
 
 	// Unmarshal list of keys to be deleted.
 	requested := &DeleteObjectsRequest{}
 	if err := xml.NewDecoder(r.Body).Decode(requested); err != nil {
-		api.WriteErrorResponse(r.Context(), w, err, r.URL)
+		h.logAndSendError(w, "couldn't decode body", reqInfo, err)
 		return
 	}
 
@@ -109,12 +99,12 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		DeletedObjects: make([]ObjectIdentifier, 0, len(toRemove)),
 	}
 
-	if errs := h.obj.DeleteObjects(r.Context(), bkt, toRemove); errs != nil && !requested.Quiet {
-		h.log.Error("could not delete objects",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.Strings("object_name", toRemove),
-			zap.Errors("errors", errs))
+	if errs := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, toRemove); errs != nil && !requested.Quiet {
+		additional := []zap.Field{
+			zap.Strings("objects_name", toRemove),
+			zap.Errors("errors", errs),
+		}
+		h.logAndSendError(w, "could not delete objects", reqInfo, nil, additional...)
 
 		for _, e := range errs {
 			if err, ok := e.(*api.DeleteError); ok {
@@ -137,40 +127,14 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := api.EncodeToResponse(w, response); err != nil {
-		h.log.Error("could not write response",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.Strings("object_name", toRemove),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
-
+		h.logAndSendError(w, "could not write response", reqInfo, err, zap.Strings("objects_name", toRemove))
 		return
 	}
 }
 
 func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		rid = api.GetRequestID(r.Context())
-		p   = layer.DeleteBucketParams{}
-		req = mux.Vars(r)
-	)
-	p.Name = req["bucket"]
-	err := h.obj.DeleteBucket(r.Context(), &p)
-	if err != nil {
-		h.log.Error("couldn't delete bucket",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", p.Name),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
+	reqInfo := api.GetReqInfo(r.Context())
+	if err := h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{Name: reqInfo.BucketName}); err != nil {
+		h.logAndSendError(w, "couldn't delete bucket", reqInfo, err)
 	}
 }

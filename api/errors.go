@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 )
@@ -118,6 +117,7 @@ const (
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
 	// Add new error codes here.
+	ErrNotSupported
 
 	// SSE-S3 related API errors.
 	ErrInvalidEncryptionMethod
@@ -966,6 +966,12 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidArgument",
 		Description:    "Unknown tag directive.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNotSupported: {
+		ErrCode:        ErrNotSupported,
+		Code:           "BadRequest",
+		Description:    "Not supported by NeoFS S3 Gate",
+		HTTPStatusCode: http.StatusNotImplemented,
 	},
 	ErrInvalidEncryptionMethod: {
 		ErrCode:        ErrInvalidEncryptionMethod,
@@ -1898,14 +1904,9 @@ func GetAPIError(code ErrorCode) Error {
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values.
-func getAPIErrorResponse(ctx context.Context, err error, resource, requestID, hostID string) ErrorResponse {
+func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
 	code := "InternalError"
 	desc := err.Error()
-
-	info := GetReqInfo(ctx)
-	if info == nil {
-		info = &ReqInfo{}
-	}
 
 	if e, ok := err.(Error); ok {
 		code = e.Code
@@ -1917,9 +1918,9 @@ func getAPIErrorResponse(ctx context.Context, err error, resource, requestID, ho
 		Message:    desc,
 		BucketName: info.BucketName,
 		Key:        info.ObjectName,
-		Resource:   resource,
-		RequestID:  requestID,
-		HostID:     hostID,
+		Resource:   info.URL.Path,
+		RequestID:  info.RequestID,
+		HostID:     info.DeploymentID,
 	}
 }
 

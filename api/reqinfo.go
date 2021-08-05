@@ -30,6 +30,7 @@ type (
 		API          string   // API name - GetObject PutObject NewMultipartUpload etc.
 		BucketName   string   // Bucket name
 		ObjectName   string   // Object name
+		URL          *url.URL // Request url
 		tags         []KeyVal // Any additional info not accommodated by above fields
 	}
 
@@ -136,6 +137,7 @@ func NewReqInfo(w http.ResponseWriter, r *http.Request, req ObjectRequest) *ReqI
 		RemoteHost:   GetSourceIP(r),
 		RequestID:    GetRequestID(w),
 		DeploymentID: deploymentID.String(),
+		URL:          r.URL,
 	}
 }
 
@@ -194,9 +196,9 @@ func SetReqInfo(ctx context.Context, req *ReqInfo) context.Context {
 // GetReqInfo returns ReqInfo if set.
 func GetReqInfo(ctx context.Context) *ReqInfo {
 	if ctx == nil {
-		return nil
+		return &ReqInfo{}
 	} else if r, ok := ctx.Value(ctxRequestInfo).(*ReqInfo); ok {
 		return r
 	}
-	return nil
+	return &ReqInfo{}
 }

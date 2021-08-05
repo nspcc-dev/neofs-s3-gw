@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -32,37 +31,23 @@ type createBucketParams struct {
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err  error
-		info *layer.ObjectInfo
-		req  = mux.Vars(r)
-		bkt  = req["bucket"]
-		obj  = req["object"]
-		rid  = api.GetRequestID(r.Context())
+		err     error
+		info    *layer.ObjectInfo
+		reqInfo = api.GetReqInfo(r.Context())
 	)
 
 	metadata := parseMetadata(r)
 
 	params := &layer.PutObjectParams{
-		Bucket: bkt,
-		Object: obj,
+		Bucket: reqInfo.BucketName,
+		Object: reqInfo.ObjectName,
 		Reader: r.Body,
 		Size:   r.ContentLength,
 		Header: metadata,
 	}
 
 	if info, err = h.obj.PutObject(r.Context(), params); err != nil {
-		h.log.Error("could not upload object",
-			zap.String("request_id", rid),
-			zap.String("bucket_name", bkt),
-			zap.String("object_name", obj),
-			zap.Error(err))
-
-		api.WriteErrorResponse(r.Context(), w, api.Error{
-			Code:           api.GetAPIError(api.ErrInternalError).Code,
-			Description:    err.Error(),
-			HTTPStatusCode: http.StatusInternalServerError,
-		}, r.URL)
-
+		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
 	}
 
@@ -83,11 +68,11 @@ func parseMetadata(r *http.Request) map[string]string {
 
 func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err error
-		p   = layer.CreateBucketParams{}
-		req = mux.Vars(r)
+		err     error
+		reqInfo = api.GetReqInfo(r.Context())
+		p       = layer.CreateBucketParams{Name: reqInfo.BucketName}
 	)
-	p.Name = req["bucket"]
+
 	if val, ok := r.Header["X-Amz-Acl"]; ok {
 		p.ACL, err = parseBasicACL(val[0])
 	} else {
@@ -95,19 +80,19 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.registerAndSendError(w, r, err, "could not parse basic ACL")
+		h.logAndSendError(w, "could not parse basic ACL", reqInfo, err)
 		return
 	}
 
 	createParams, err := parseLocationConstraint(r)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "could not parse body")
+		h.logAndSendError(w, "could not parse body", reqInfo, err)
 		return
 	}
 
 	p.BoxData, err = layer.GetBoxData(r.Context())
 	if err != nil {
-		h.registerAndSendError(w, r, err, "could not get boxData")
+		h.logAndSendError(w, "could not get boxData", reqInfo, err)
 		return
 	}
 
@@ -122,14 +107,14 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if p.Policy == nil {
 		p.Policy, err = policy.Parse(defaultPolicy)
 		if err != nil {
-			h.registerAndSendError(w, r, err, "could not parse policy")
+			h.logAndSendError(w, "could not parse policy", reqInfo, err)
 			return
 		}
 	}
 
 	cid, err := h.obj.CreateBucket(r.Context(), &p)
 	if err != nil {
-		h.registerAndSendError(w, r, err, "could not create bucket")
+		h.logAndSendError(w, "could not create bucket", reqInfo, err)
 		return
 	}
 
