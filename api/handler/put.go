@@ -59,7 +59,7 @@ func parseMetadata(r *http.Request) map[string]string {
 	res := make(map[string]string)
 	for k, v := range r.Header {
 		if strings.HasPrefix(k, api.MetadataPrefix) {
-			key := strings.TrimPrefix(k, api.MetadataPrefix)
+			key := strings.ToLower(strings.TrimPrefix(k, api.MetadataPrefix))
 			res[key] = v[0]
 		}
 	}
