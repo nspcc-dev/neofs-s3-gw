@@ -17,8 +17,9 @@ func TestFetchRangeHeader(t *testing.T) {
 		fullSize uint64
 		err      bool
 	}{
-		{header: "bytes=0-256", expected: &layer.RangeParams{Start: 0, End: 256}, err: false},
-		{header: "bytes=0-0", expected: &layer.RangeParams{Start: 0, End: 0}, err: false},
+		{header: "bytes=0-256", expected: &layer.RangeParams{Start: 0, End: 256}, fullSize: 257, err: false},
+		{header: "bytes=0-0", expected: &layer.RangeParams{Start: 0, End: 0}, fullSize: 1, err: false},
+		{header: "bytes=0-256", expected: &layer.RangeParams{Start: 0, End: 255}, fullSize: 256, err: false},
 		{header: "bytes=0-", expected: &layer.RangeParams{Start: 0, End: 99}, fullSize: 100, err: false},
 		{header: "bytes=-10", expected: &layer.RangeParams{Start: 90, End: 99}, fullSize: 100, err: false},
 		{header: "", err: false},
@@ -28,6 +29,8 @@ func TestFetchRangeHeader(t *testing.T) {
 		{header: "bytes=0-string", err: true},
 		{header: "bytes:0-256", err: true},
 		{header: "bytes:-", err: true},
+		{header: "bytes=0-0", fullSize: 0, err: true},
+		{header: "bytes=10-20", fullSize: 5, err: true},
 	} {
 		h := make(http.Header)
 		h.Add("Range", tc.header)
