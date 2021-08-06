@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/xml"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -73,6 +74,11 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		p       = layer.CreateBucketParams{Name: reqInfo.BucketName}
 	)
 
+	if err = checkBucketName(reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "invalid bucket name", reqInfo, err)
+		return
+	}
+
 	if val, ok := r.Header["X-Amz-Acl"]; ok {
 		p.ACL, err = parseBasicACL(val[0])
 	} else {
@@ -122,6 +128,40 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		zap.String("container_id", cid.String()))
 
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func checkBucketName(bucketName string) error {
+	if len(bucketName) < 3 || len(bucketName) > 63 {
+		return api.GetAPIError(api.ErrInvalidBucketName)
+	}
+
+	if strings.HasPrefix(bucketName, "xn--") || strings.HasSuffix(bucketName, "-s3alias") {
+		return api.GetAPIError(api.ErrInvalidBucketName)
+	}
+	if net.ParseIP(bucketName) != nil {
+		return api.GetAPIError(api.ErrInvalidBucketName)
+	}
+
+	labels := strings.Split(bucketName, ".")
+	for _, label := range labels {
+		if len(label) == 0 {
+			return api.GetAPIError(api.ErrInvalidBucketName)
+		}
+		for i, r := range label {
+			if !isAlphaNum(r) && r != '-' {
+				return api.GetAPIError(api.ErrInvalidBucketName)
+			}
+			if (i == 0 || i == len(label)-1) && r == '-' {
+				return api.GetAPIError(api.ErrInvalidBucketName)
+			}
+		}
+	}
+
+	return nil
+}
+
+func isAlphaNum(char int32) bool {
+	return 'a' <= char && char <= 'z' || '0' <= char && char <= '9'
 }
 
 func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
