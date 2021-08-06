@@ -12,8 +12,11 @@ import (
 )
 
 type copyObjectArgs struct {
-	Conditional *conditionalArgs
+	Conditional       *conditionalArgs
+	MetadataDirective string
 }
+
+const replaceMetadataDirective = "REPLACE"
 
 // path2BucketObject returns bucket and object.
 func path2BucketObject(path string) (bucket, prefix string) {
@@ -27,8 +30,9 @@ func path2BucketObject(path string) (bucket, prefix string) {
 
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err error
-		inf *layer.ObjectInfo
+		err      error
+		inf      *layer.ObjectInfo
+		metadata map[string]string
 
 		reqInfo = api.GetReqInfo(r.Context())
 	)
@@ -59,6 +63,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if args.MetadataDirective == replaceMetadataDirective {
+		metadata = parseMetadata(r)
+	} else if srcBucket == reqInfo.BucketName && srcObject == reqInfo.ObjectName {
+		h.logAndSendError(w, "could not copy to itself", reqInfo, api.GetAPIError(api.ErrInvalidRequest))
+		return
+	}
+
 	if inf, err = h.obj.GetObjectInfo(r.Context(), srcBucket, srcObject); err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
@@ -69,20 +80,30 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if metadata == nil {
+		if len(inf.ContentType) > 0 {
+			inf.Headers[api.ContentType] = inf.ContentType
+		}
+		metadata = inf.Headers
+	} else if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
+		metadata[api.ContentType] = contentType
+	}
+
 	params := &layer.CopyObjectParams{
 		SrcBucket: srcBucket,
 		DstBucket: reqInfo.BucketName,
 		SrcObject: srcObject,
 		DstObject: reqInfo.ObjectName,
 		SrcSize:   inf.Size,
-		Header:    inf.Headers,
+		Header:    metadata,
 	}
 
+	additional := []zap.Field{zap.String("src_bucket_name", srcBucket), zap.String("src_object_name", srcObject)}
 	if inf, err = h.obj.CopyObject(r.Context(), params); err != nil {
-		writeErrorCopy(w, reqInfo, h.log, "could not copy object", srcBucket, srcObject, err)
+		h.logAndSendError(w, "couldn't copy object", reqInfo, err, additional...)
 		return
 	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: inf.Created.Format(time.RFC3339), ETag: inf.HashSum}); err != nil {
-		writeErrorCopy(w, reqInfo, h.log, "something went wrong", srcBucket, srcObject, err)
+		h.logAndSendError(w, "something went wrong", reqInfo, err, additional...)
 		return
 	}
 
@@ -90,18 +111,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		zap.String("bucket", inf.Bucket),
 		zap.String("object", inf.Name),
 		zap.Stringer("object_id", inf.ID()))
-}
-
-func writeErrorCopy(w http.ResponseWriter, reqInfo *api.ReqInfo, log *zap.Logger, msg, srcBucket, srcObject string, err error) {
-	log.Error(msg,
-		zap.String("request_id", reqInfo.RequestID),
-		zap.String("dst_bucket_name", reqInfo.BucketName),
-		zap.String("dst_object_name", reqInfo.ObjectName),
-		zap.String("src_bucket_name", srcBucket),
-		zap.String("src_object_name", srcObject),
-		zap.Error(err))
-
-	api.WriteErrorResponse(w, reqInfo, err)
 }
 
 func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
@@ -118,5 +127,8 @@ func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
 		return nil, err
 	}
 
-	return &copyObjectArgs{Conditional: args}, nil
+	copyArgs := &copyObjectArgs{Conditional: args}
+	copyArgs.MetadataDirective = headers.Get(api.AmzMetadataDirective)
+
+	return copyArgs, nil
 }

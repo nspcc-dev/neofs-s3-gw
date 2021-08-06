@@ -38,6 +38,9 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	metadata := parseMetadata(r)
+	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
+		metadata[api.ContentType] = contentType
+	}
 
 	params := &layer.PutObjectParams{
 		Bucket: reqInfo.BucketName,
