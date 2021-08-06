@@ -28,6 +28,9 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	if len(rangeHeader) == 0 {
 		return nil, nil
 	}
+	if fullSize == 0 {
+		return nil, api.GetAPIError(api.ErrInvalidRange)
+	}
 	if !strings.HasPrefix(rangeHeader, prefix) {
 		return nil, fmt.Errorf("unknown unit in range header")
 	}
@@ -50,10 +53,13 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	} else {
 		start, err0 = strconv.ParseUint(arr[0], base, bitSize)
 		end, err1 = strconv.ParseUint(arr[1], base, bitSize)
+		if end > fullSize-1 {
+			end = fullSize - 1
+		}
 	}
 
-	if err0 != nil || err1 != nil || start > end {
-		return nil, fmt.Errorf("invalid Range header")
+	if err0 != nil || err1 != nil || start > end || start > fullSize {
+		return nil, api.GetAPIError(api.ErrInvalidRange)
 	}
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
@@ -165,7 +171,8 @@ func parseHTTPTime(data string) (*time.Time, error) {
 }
 
 func writeRangeHeaders(w http.ResponseWriter, params *layer.RangeParams, size int64) {
-	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", params.Start, params.End, size))
+	w.Header().Set(api.AcceptRanges, "bytes")
+	w.Header().Set(api.ContentRange, fmt.Sprintf("bytes %d-%d/%d", params.Start, params.End, size))
+	w.Header().Set(api.ContentLength, strconv.FormatUint(params.End-params.Start+1, 10))
 	w.WriteHeader(http.StatusPartialContent)
 }
