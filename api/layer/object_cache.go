@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -8,72 +9,84 @@ import (
 )
 
 /*
-	This is an implementation of a cache for ListObjectsV2 which we return to users by ContinuationToken.
+	This is an implementation of a cache for ListObjectsV2/V1 which we can return to users when we receive a ListObjects
+	request.
 
-	The cache is a map which has a key: (access_key from AccessBox) + container_id and a value: list of objects with
-	creation time. After putting a record we start a timer (via time.AfterFunc) that removes the record after
-	defaultCacheLifetime value.
+	The cache is a map which has a key: cacheOptions struct and a value: list of objects. After putting a record we
+	start a timer (via time.AfterFunc) that removes the record after defaultCacheLifetime value.
 
-	ContinuationToken in our gateway is an objectID in NeoFS.
-
-	We don't keep ContinuationToken in this structure because we assume that users who received the token can reconnect
-	to other gateways and they should be able to get a list of objects.
-	When we receive the token from the user we just try to find the cache and then we return the list of objects which
-	starts from this token (i.e. objectID).
+	When we get a request from the user we just try to find the suitable and non-expired cache and then we return
+	the list of objects. Otherwise we send the request to NeoFS.
 */
 
-// ObjectsListV2Cache provides interface for cache of ListObjectsV2 in a layer struct.
+// ObjectsListCache provides interface for cache of ListObjectsV2 in a layer struct.
 type (
-	ObjectsListV2Cache interface {
-		Get(token string, key string) []*ObjectInfo
-		Put(key string, objects []*ObjectInfo)
+	ObjectsListCache interface {
+		Get(key cacheOptions) []*ObjectInfo
+		Put(key cacheOptions, objects []*ObjectInfo)
 	}
 )
 
-var (
-	defaultCacheLifetime = time.Second * 60
-)
+const defaultCacheLifetime = time.Second * 60
 
 type (
 	listObjectsCache struct {
-		caches map[string]cache
-		mtx    sync.RWMutex
+		cacheLifetime time.Duration
+		caches        map[cacheOptions]cache
+		mtx           sync.RWMutex
 	}
 	cache struct {
 		list []*ObjectInfo
 	}
+	cacheOptions struct {
+		key       string
+		delimiter string
+		prefix    string
+	}
 )
 
-func newListObjectsCache() *listObjectsCache {
+func newListObjectsCache(lifetime time.Duration) *listObjectsCache {
 	return &listObjectsCache{
-		caches: make(map[string]cache),
+		caches:        make(map[cacheOptions]cache),
+		cacheLifetime: lifetime,
 	}
 }
 
-func (l *listObjectsCache) Get(token, key string) []*ObjectInfo {
+func (l *listObjectsCache) Get(key cacheOptions) []*ObjectInfo {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	if val, ok := l.caches[key]; ok {
-		return trimAfterObjectID(token, val.list)
+		return val.list
 	}
-
 	return nil
 }
 
-func (l *listObjectsCache) Put(key string, objects []*ObjectInfo) {
+func (l *listObjectsCache) Put(key cacheOptions, objects []*ObjectInfo) {
+	if len(objects) == 0 {
+		return
+	}
 	var c cache
-
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	c.list = objects
 	l.caches[key] = c
-	time.AfterFunc(defaultCacheLifetime, func() {
+	time.AfterFunc(l.cacheLifetime, func() {
 		l.mtx.Lock()
 		delete(l.caches, key)
 		l.mtx.Unlock()
 	})
 }
 
-func createKey(accessKey string, cid *cid.ID) string {
-	return accessKey + cid.String()
+func createKey(ctx context.Context, cid *cid.ID, prefix, delimiter string) (cacheOptions, error) {
+	box, err := GetBoxData(ctx)
+	if err != nil {
+		return cacheOptions{}, err
+	}
+	p := cacheOptions{
+		key:       box.Gate.AccessKey + cid.String(),
+		delimiter: delimiter,
+		prefix:    prefix,
+	}
+
+	return p, nil
 }

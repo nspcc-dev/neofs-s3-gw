@@ -13,7 +13,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"go.uber.org/zap"
 )
 
@@ -56,10 +55,9 @@ type (
 	}
 
 	allObjectParams struct {
-		Bucket     *BucketInfo
-		Delimiter  string
-		Prefix     string
-		StartAfter string
+		Bucket    *BucketInfo
+		Delimiter string
+		Prefix    string
 	}
 )
 
@@ -209,45 +207,34 @@ func (n *layer) objectDelete(ctx context.Context, address *object.Address) error
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.
 func (n *layer) ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*ListObjectsInfoV1, error) {
 	var (
-		err    error
-		result ListObjectsInfoV1
-		bkt    *BucketInfo
+		err        error
+		result     ListObjectsInfoV1
+		allObjects []*ObjectInfo
 	)
 
 	if p.MaxKeys == 0 {
 		return &result, nil
 	}
 
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+	if allObjects, err = n.listAllObjects(ctx, p.ListObjectsParamsCommon); err != nil {
 		return nil, err
 	}
 
-	allObjects, err := n.listSortedAllObjects(ctx, allObjectParams{
-		Bucket:     bkt,
-		Prefix:     p.Prefix,
-		Delimiter:  p.Delimiter,
-		StartAfter: p.Marker,
-	})
-	if err != nil {
-		return nil, err
+	if len(allObjects) == 0 {
+		return &result, nil
+	}
+
+	if p.Marker != "" {
+		allObjects = trimAfterObjectName(p.Marker, allObjects)
 	}
 
 	if len(allObjects) > p.MaxKeys {
 		result.IsTruncated = true
-
-		nextObject := allObjects[p.MaxKeys-1]
-		result.NextMarker = nextObject.Name
-
 		allObjects = allObjects[:p.MaxKeys]
+		result.NextMarker = allObjects[len(allObjects)-1].Name
 	}
 
-	for _, ov := range allObjects {
-		if ov.isDir {
-			result.Prefixes = append(result.Prefixes, ov.Name)
-		} else {
-			result.Objects = append(result.Objects, ov)
-		}
-	}
+	result.Prefixes, result.Objects = triageObjects(allObjects)
 
 	return &result, nil
 }
@@ -258,67 +245,40 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 		err        error
 		result     ListObjectsInfoV2
 		allObjects []*ObjectInfo
-		bkt        *BucketInfo
-		cacheKey   string
-		box        *accessbox.Box
 	)
 
 	if p.MaxKeys == 0 {
 		return &result, nil
 	}
 
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+	if allObjects, err = n.listAllObjects(ctx, p.ListObjectsParamsCommon); err != nil {
 		return nil, err
 	}
 
-	if box, err = GetBoxData(ctx); err != nil {
-		return nil, err
+	if len(allObjects) == 0 {
+		return &result, nil
 	}
-
-	cacheKey = createKey(box.Gate.AccessKey, bkt.CID)
 
 	if p.ContinuationToken != "" {
-		allObjects = n.cache.Get(p.ContinuationToken, cacheKey)
-		allObjects = trimStartAfter(p.StartAfter, allObjects)
+		allObjects = trimAfterObjectID(p.ContinuationToken, allObjects)
 	}
 
-	if allObjects == nil {
-		allObjects, err = n.listSortedAllObjects(ctx, allObjectParams{
-			Bucket:     bkt,
-			Prefix:     p.Prefix,
-			Delimiter:  p.Delimiter,
-			StartAfter: p.StartAfter,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if p.ContinuationToken != "" {
-			allObjects = trimAfterObjectID(p.ContinuationToken, allObjects)
-		}
+	if p.StartAfter != "" {
+		allObjects = trimAfterObjectName(p.StartAfter, allObjects)
 	}
 
 	if len(allObjects) > p.MaxKeys {
 		result.IsTruncated = true
-
-		restObjects := allObjects[p.MaxKeys:]
-		n.cache.Put(cacheKey, restObjects)
-		result.NextContinuationToken = restObjects[0].id.String()
-
 		allObjects = allObjects[:p.MaxKeys]
+		result.NextContinuationToken = allObjects[len(allObjects)-1].id.String()
 	}
 
-	for _, ov := range allObjects {
-		if ov.isDir {
-			result.Prefixes = append(result.Prefixes, ov.Name)
-		} else {
-			result.Objects = append(result.Objects, ov)
-		}
-	}
+	result.Prefixes, result.Objects = triageObjects(allObjects)
+
 	return &result, nil
 }
 
-func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]*ObjectInfo, error) {
+func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParams) ([]*ObjectInfo, error) {
 	var (
 		err       error
 		ids       []*object.ID
@@ -346,9 +306,6 @@ func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]
 			if _, ok := uniqNames[oi.Name]; ok {
 				continue
 			}
-			if len(p.StartAfter) > 0 && oi.Name <= p.StartAfter {
-				continue
-			}
 
 			uniqNames[oi.Name] = oi.isDir
 
@@ -363,22 +320,75 @@ func (n *layer) listSortedAllObjects(ctx context.Context, p allObjectParams) ([]
 	return objects, nil
 }
 
-func trimStartAfter(startAfter string, objects []*ObjectInfo) []*ObjectInfo {
-	if objects != nil && len(startAfter) != 0 && objects[0].Name <= startAfter {
-		for i := range objects {
-			if objects[i].Name > startAfter {
-				return objects[i:]
-			}
-		}
+func trimAfterObjectName(startAfter string, objects []*ObjectInfo) []*ObjectInfo {
+	if len(objects) != 0 && objects[len(objects)-1].Name <= startAfter {
+		return nil
 	}
-	return objects
-}
-
-func trimAfterObjectID(id string, objects []*ObjectInfo) []*ObjectInfo {
-	for i, obj := range objects {
-		if obj.ID().String() == id {
+	for i := range objects {
+		if objects[i].Name > startAfter {
 			return objects[i:]
 		}
 	}
-	return objects
+
+	return nil
+}
+
+func trimAfterObjectID(id string, objects []*ObjectInfo) []*ObjectInfo {
+	if len(objects) != 0 && objects[len(objects)-1].id.String() == id {
+		return []*ObjectInfo{}
+	}
+	for i, obj := range objects {
+		if obj.ID().String() == id {
+			return objects[i+1:]
+		}
+	}
+
+	return nil
+}
+
+func triageObjects(allObjects []*ObjectInfo) (prefixes []string, objects []*ObjectInfo) {
+	for _, ov := range allObjects {
+		if ov.isDir {
+			prefixes = append(prefixes, ov.Name)
+		} else {
+			objects = append(objects, ov)
+		}
+	}
+
+	return
+}
+
+func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) ([]*ObjectInfo, error) {
+	var (
+		err        error
+		bkt        *BucketInfo
+		cacheKey   cacheOptions
+		allObjects []*ObjectInfo
+	)
+
+	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+		return nil, err
+	}
+
+	if cacheKey, err = createKey(ctx, bkt.CID, p.Prefix, p.Delimiter); err != nil {
+		return nil, err
+	}
+
+	allObjects = n.cache.Get(cacheKey)
+
+	if allObjects == nil {
+		allObjects, err = n.listSortedObjectsFromNeoFS(ctx, allObjectParams{
+			Bucket:    bkt,
+			Prefix:    p.Prefix,
+			Delimiter: p.Delimiter,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// putting to cache a copy of allObjects because allObjects can be modified further
+		n.cache.Put(cacheKey, append([]*ObjectInfo(nil), allObjects...))
+	}
+
+	return allObjects, nil
 }

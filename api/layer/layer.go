@@ -24,7 +24,7 @@ type (
 	layer struct {
 		pool  pool.Pool
 		log   *zap.Logger
-		cache ObjectsListV2Cache
+		cache ObjectsListCache
 	}
 
 	// Params stores basic API parameters.
@@ -131,7 +131,7 @@ func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 	return &layer{
 		pool:  conns,
 		log:   log,
-		cache: newListObjectsCache(),
+		cache: newListObjectsCache(defaultCacheLifetime),
 	}
 }
 
