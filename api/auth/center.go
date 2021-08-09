@@ -22,7 +22,7 @@ import (
 )
 
 // authorizationFieldRegexp -- is regexp for credentials with Base58 encoded cid and oid and '0' (zero) as delimiter.
-var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id_cid>[^/]+)0(?P<access_key_id_oid>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
+var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
 
 type (
 	// Center is a user authentication interface.
@@ -42,6 +42,20 @@ type (
 	}
 
 	prs int
+
+	authHeader struct {
+		AccessKeyID  string
+		Service      string
+		Region       string
+		SignatureV4  string
+		SignedFields []string
+		Date         string
+	}
+)
+
+const (
+	accessKeyPartsNum  = 2
+	authHeaderPartsNum = 6
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -65,6 +79,37 @@ func New(conns pool.Pool, key *keys.PrivateKey) Center {
 	}
 }
 
+func (c *center) parseAuthHeader(header string) (*authHeader, error) {
+	submatches := c.reg.getSubmatches(header)
+	if len(submatches) != authHeaderPartsNum {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
+	}
+
+	accessKey := strings.Split(submatches["access_key_id"], "0")
+	if len(accessKey) != accessKeyPartsNum {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
+	}
+
+	signedFields := strings.Split(submatches["signed_header_fields"], ";")
+
+	return &authHeader{
+		AccessKeyID:  submatches["access_key_id"],
+		Service:      submatches["service"],
+		Region:       submatches["region"],
+		SignatureV4:  submatches["v4_signature"],
+		SignedFields: signedFields,
+		Date:         submatches["date"],
+	}, nil
+}
+
+func (a *authHeader) getAddress() (*object.Address, error) {
+	address := object.NewAddress()
+	if err := address.Parse(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
+	}
+	return address, nil
+}
+
 func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 	queryValues := r.URL.Query()
 	if queryValues.Get("X-Amz-Algorithm") == "AWS4-HMAC-SHA256" {
@@ -76,14 +121,9 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, ErrNoAuthorizationHeader
 	}
 
-	sms1 := c.reg.getSubmatches(authHeaderField[0])
-	if len(sms1) != 7 {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
-	}
-
-	signedHeaderFieldsNames := strings.Split(sms1["signed_header_fields"], ";")
-	if len(signedHeaderFieldsNames) == 0 {
-		return nil, errors.New("wrong format of signed headers part")
+	authHeader, err := c.parseAuthHeader(authHeaderField[0])
+	if err != nil {
+		return nil, err
 	}
 
 	signatureDateTime, err := time.Parse("20060102T150405Z", r.Header.Get("X-Amz-Date"))
@@ -91,12 +131,9 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
-	accessKeyID := fmt.Sprintf("%s0%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
-	accessKeyAddress := fmt.Sprintf("%s/%s", sms1["access_key_id_cid"], sms1["access_key_id_oid"])
-
-	address := object.NewAddress()
-	if err = address.Parse(accessKeyAddress); err != nil {
-		return nil, fmt.Errorf("could not parse AccessBox address: %s : %w", accessKeyID, err)
+	address, err := authHeader.getAddress()
+	if err != nil {
+		return nil, err
 	}
 
 	box, err := c.cli.GetBox(r.Context(), address)
@@ -104,30 +141,43 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, err
 	}
 
+	clonedRequest := cloneRequest(r, authHeader)
+	if err = c.checkSign(authHeader, box, clonedRequest, signatureDateTime); err != nil {
+		return nil, err
+	}
+
+	return box, nil
+}
+
+func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 	otherRequest := r.Clone(context.TODO())
 	otherRequest.Header = make(http.Header)
 
 	for key, val := range r.Header {
-		for _, name := range signedHeaderFieldsNames {
+		for _, name := range authHeader.SignedFields {
 			if strings.EqualFold(key, name) {
 				otherRequest.Header[key] = val
 			}
 		}
 	}
 
-	awsCreds := credentials.NewStaticCredentials(accessKeyID, box.Gate.AccessKey, "")
+	return otherRequest
+}
+
+func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
+	awsCreds := credentials.NewStaticCredentials(authHeader.AccessKeyID, box.Gate.AccessKey, "")
 	signer := v4.NewSigner(awsCreds)
 	signer.DisableURIPathEscaping = true
 
 	// body not required
-	if _, err := signer.Sign(otherRequest, nil, sms1["service"], sms1["region"], signatureDateTime); err != nil {
-		return nil, fmt.Errorf("failed to sign temporary HTTP request: %w", err)
+	if _, err := signer.Sign(request, nil, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
+		return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
 	}
 
-	sms2 := c.reg.getSubmatches(otherRequest.Header.Get("Authorization"))
-	if sms1["v4_signature"] != sms2["v4_signature"] {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
+	sms2 := c.reg.getSubmatches(request.Header.Get("Authorization"))
+	if authHeader.SignatureV4 != sms2["v4_signature"] {
+		return apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
 	}
 
-	return box, nil
+	return nil
 }

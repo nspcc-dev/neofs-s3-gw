@@ -7,9 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-
 	"github.com/google/uuid"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 )
 
