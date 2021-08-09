@@ -164,6 +164,13 @@ type ListObjectsVersionsResponse struct {
 	CommonPrefixes      []CommonPrefix          `xml:"CommonPrefixes"`
 }
 
+// VersioningConfiguration contains VersioningConfiguration XML representation.
+type VersioningConfiguration struct {
+	XMLName   xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ VersioningConfiguration"`
+	Status    string   `xml:"Status"`
+	MfaDelete string   `xml:"MfaDelete,omitempty"`
+}
+
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	tokens := []xml.Token{start}
