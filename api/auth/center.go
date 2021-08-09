@@ -14,6 +14,7 @@ import (
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
@@ -77,7 +78,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 
 	sms1 := c.reg.getSubmatches(authHeaderField[0])
 	if len(sms1) != 7 {
-		return nil, errors.New("bad Authorization header field")
+		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
 	}
 
 	signedHeaderFieldsNames := strings.Split(sms1["signed_header_fields"], ";")
@@ -125,7 +126,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 
 	sms2 := c.reg.getSubmatches(otherRequest.Header.Get("Authorization"))
 	if sms1["v4_signature"] != sms2["v4_signature"] {
-		return nil, errors.New("failed to pass authentication procedure")
+		return nil, apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
 	}
 
 	return box, nil

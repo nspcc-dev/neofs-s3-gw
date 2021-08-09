@@ -8,6 +8,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
@@ -144,7 +145,7 @@ func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, 
 	if queryValues.Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
 	} else if res.MaxKeys, err = strconv.Atoi(queryValues.Get("max-keys")); err != nil || res.MaxKeys < 0 {
-		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
+		return nil, errors.GetAPIError(errors.ErrInvalidMaxKeys)
 	}
 
 	res.Prefix = queryValues.Get("prefix")
@@ -155,7 +156,7 @@ func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, 
 func parseContinuationToken(queryValues url.Values) (string, error) {
 	if val, ok := queryValues["continuation-token"]; ok {
 		if err := object.NewID().Parse(val[0]); err != nil {
-			return "", api.GetAPIError(api.ErrIncorrectContinuationToken)
+			return "", errors.GetAPIError(errors.ErrIncorrectContinuationToken)
 		}
 		return val[0], nil
 	}
@@ -228,7 +229,7 @@ func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVers
 	if queryValues.Get("max-keys") == "" {
 		res.MaxKeys = maxObjectList
 	} else if res.MaxKeys, err = strconv.Atoi(queryValues.Get("max-keys")); err != nil || res.MaxKeys <= 0 {
-		return nil, api.GetAPIError(api.ErrInvalidMaxKeys)
+		return nil, errors.GetAPIError(errors.ErrInvalidMaxKeys)
 	}
 
 	res.Prefix = queryValues.Get("prefix")

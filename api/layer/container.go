@@ -15,6 +15,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
 )
@@ -49,7 +50,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*BucketInfo, er
 			zap.Error(err))
 
 		if strings.Contains(err.Error(), "container not found") {
-			return nil, api.GetAPIError(api.ErrNoSuchBucket)
+			return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 		}
 		return nil, err
 	}
