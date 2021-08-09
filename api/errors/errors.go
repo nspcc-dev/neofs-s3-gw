@@ -1,4 +1,4 @@
-package api
+package errors
 
 import (
 	"fmt"
@@ -10,6 +10,14 @@ type (
 	ErrorCode int
 
 	errorCodeMap map[ErrorCode]Error
+
+	// Error structure represents API error.
+	Error struct {
+		ErrCode        ErrorCode
+		Code           string
+		Description    string
+		HTTPStatusCode int
+	}
 )
 
 const maxEConfigJSONSize = 262272
@@ -1875,7 +1883,7 @@ func IsS3Error(err error, code ErrorCode) bool {
 	return ok && e.ErrCode == code
 }
 
-func (e errorCodeMap) ToAPIErrWithErr(errCode ErrorCode, err error) Error {
+func (e errorCodeMap) toAPIErrWithErr(errCode ErrorCode, err error) Error {
 	apiErr, ok := e[errCode]
 	if !ok {
 		apiErr = e[ErrInternalError]
@@ -1886,8 +1894,8 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode ErrorCode, err error) Error {
 	return apiErr
 }
 
-func (e errorCodeMap) ToAPIErr(errCode ErrorCode) Error {
-	return e.ToAPIErrWithErr(errCode, nil)
+func (e errorCodeMap) toAPIErr(errCode ErrorCode) Error {
+	return e.toAPIErrWithErr(errCode, nil)
 }
 
 func (e Error) Error() string {
@@ -1899,29 +1907,7 @@ func GetAPIError(code ErrorCode) Error {
 	if apiErr, ok := errorCodes[code]; ok {
 		return apiErr
 	}
-	return errorCodes.ToAPIErr(ErrInternalError)
-}
-
-// getErrorResponse gets in standard error and resource value and
-// provides a encodable populated response values.
-func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
-	code := "InternalError"
-	desc := err.Error()
-
-	if e, ok := err.(Error); ok {
-		code = e.Code
-		desc = e.Description
-	}
-
-	return ErrorResponse{
-		Code:       code,
-		Message:    desc,
-		BucketName: info.BucketName,
-		Key:        info.ObjectName,
-		Resource:   info.URL.Path,
-		RequestID:  info.RequestID,
-		HostID:     info.DeploymentID,
-	}
+	return errorCodes.toAPIErr(ErrInternalError)
 }
 
 // GenericError - generic object layer error.

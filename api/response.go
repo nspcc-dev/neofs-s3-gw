@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 )
@@ -32,14 +34,6 @@ type (
 
 		// Underlying HTTP status code for the returned error.
 		StatusCode int `xml:"-" json:"-"`
-	}
-
-	// Error structure represents API error.
-	Error struct {
-		ErrCode        ErrorCode
-		Code           string
-		Description    string
-		HTTPStatusCode int
 	}
 )
 
@@ -120,7 +114,7 @@ var s3ErrorResponseMap = map[string]string{
 func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
 	code := http.StatusInternalServerError
 
-	if e, ok := err.(Error); ok {
+	if e, ok := err.(errors.Error); ok {
 		code = e.HTTPStatusCode
 
 		switch e.Code {
@@ -142,7 +136,7 @@ func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
 // If none of the http routes match respond with appropriate errors.
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
-	WriteErrorResponse(w, GetReqInfo(r.Context()), Error{
+	WriteErrorResponse(w, GetReqInfo(r.Context()), errors.Error{
 		Code:           "XMinioUnknownAPIRequest",
 		Description:    desc,
 		HTTPStatusCode: http.StatusBadRequest,
@@ -229,4 +223,26 @@ func (e ErrorResponse) Error() string {
 		return msg
 	}
 	return e.Message
+}
+
+// getErrorResponse gets in standard error and resource value and
+// provides a encodable populated response values.
+func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
+	code := "InternalError"
+	desc := err.Error()
+
+	if e, ok := err.(errors.Error); ok {
+		code = e.Code
+		desc = e.Description
+	}
+
+	return ErrorResponse{
+		Code:       code,
+		Message:    desc,
+		BucketName: info.BucketName,
+		Key:        info.ObjectName,
+		Resource:   info.URL.Path,
+		RequestID:  info.RequestID,
+		HostID:     info.DeploymentID,
+	}
 }

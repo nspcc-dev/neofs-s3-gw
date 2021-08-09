@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
@@ -187,7 +188,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 			}
 		}
 
-		return nil, api.GetAPIError(api.ErrNoSuchBucket)
+		return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 	}
 
 	return n.containerInfo(ctx, containerID)
@@ -246,7 +247,7 @@ func (n *layer) checkObject(ctx context.Context, cid *cid.ID, filename string) e
 	var err error
 
 	if _, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err == nil {
-		return new(api.ObjectAlreadyExists)
+		return new(errors.ObjectAlreadyExists)
 	}
 
 	return err
@@ -320,12 +321,12 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, bucket); err != nil {
-		return &api.DeleteError{
+		return &errors.DeleteError{
 			Err:    err,
 			Object: filename,
 		}
 	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
-		return &api.DeleteError{
+		return &errors.DeleteError{
 			Err:    err,
 			Object: filename,
 		}
@@ -337,7 +338,7 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error
 		addr.SetContainerID(bkt.CID)
 
 		if err = n.objectDelete(ctx, addr); err != nil {
-			return &api.DeleteError{
+			return &errors.DeleteError{
 				Err:    err,
 				Object: filename,
 			}
@@ -363,13 +364,13 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []stri
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	_, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
-		if api.IsS3Error(err, api.ErrNoSuchBucket) {
+		if errors.IsS3Error(err, errors.ErrNoSuchBucket) {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
 	}
 
-	return nil, api.GetAPIError(api.ErrBucketAlreadyExists)
+	return nil, errors.GetAPIError(errors.ErrBucketAlreadyExists)
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
@@ -69,14 +70,14 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	// Content-Md5 is requied should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header[api.ContentMD5]; !ok {
-		h.logAndSendError(w, "missing Content-MD5", reqInfo, api.GetAPIError(api.ErrMissingContentMD5))
+		h.logAndSendError(w, "missing Content-MD5", reqInfo, errors.GetAPIError(errors.ErrMissingContentMD5))
 		return
 	}
 
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
-		h.logAndSendError(w, "missing Content-Length", reqInfo, api.GetAPIError(api.ErrMissingContentLength))
+		h.logAndSendError(w, "missing Content-Length", reqInfo, errors.GetAPIError(errors.ErrMissingContentLength))
 		return
 	}
 
@@ -107,7 +108,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		h.logAndSendError(w, "could not delete objects", reqInfo, nil, additional...)
 
 		for _, e := range errs {
-			if err, ok := e.(*api.DeleteError); ok {
+			if err, ok := e.(*errors.DeleteError); ok {
 				code := "BadRequest"
 				desc := err.Error()
 

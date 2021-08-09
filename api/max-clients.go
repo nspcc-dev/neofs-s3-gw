@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"time"
+
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 )
 
 type (
@@ -49,7 +51,7 @@ func (m *maxClients) Handle(f http.HandlerFunc) http.HandlerFunc {
 			f.ServeHTTP(w, r)
 		case <-deadline.C:
 			// Send a http timeout message
-			WriteErrorResponse(w, GetReqInfo(r.Context()), errorCodes.ToAPIErr(ErrOperationMaxedOut))
+			WriteErrorResponse(w, GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrOperationTimedOut))
 			return
 		case <-r.Context().Done():
 			return

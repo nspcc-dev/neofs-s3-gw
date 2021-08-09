@@ -12,7 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-s3-gw/api"
+	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
 )
 
@@ -81,7 +81,7 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 	if result, err := n.objectSearch(ctx, p); err != nil {
 		return nil, err
 	} else if ln := len(result); ln == 0 {
-		return nil, api.GetAPIError(api.ErrNoSuchKey)
+		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	} else if ln == 1 {
 		return result[0], nil
 	}
@@ -124,14 +124,14 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	} else if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
 		return nil, err
 	} else if err = n.checkObject(ctx, bkt.CID, p.Object); err != nil {
-		var errExist *api.ObjectAlreadyExists
+		var errExist *apiErrors.ObjectAlreadyExists
 		if ok := errors.As(err, &errExist); ok {
 			errExist.Bucket = p.Bucket
 			errExist.Object = p.Object
 			return nil, errExist
 		}
 
-		if !api.IsS3Error(err, api.ErrNoSuchKey) {
+		if !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 			return nil, err
 		}
 	}

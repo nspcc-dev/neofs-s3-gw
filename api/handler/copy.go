@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
@@ -48,7 +49,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		// its non "null" value, we should error out since we do not support
 		// any versions other than "null".
 		if vid := u.Query().Get("versionId"); vid != "" && vid != "null" {
-			h.logAndSendError(w, "no such version", reqInfo, api.GetAPIError(api.ErrNoSuchVersion))
+			h.logAndSendError(w, "no such version", reqInfo, errors.GetAPIError(errors.ErrNoSuchVersion))
 			return
 		}
 
@@ -66,7 +67,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if args.MetadataDirective == replaceMetadataDirective {
 		metadata = parseMetadata(r)
 	} else if srcBucket == reqInfo.BucketName && srcObject == reqInfo.ObjectName {
-		h.logAndSendError(w, "could not copy to itself", reqInfo, api.GetAPIError(api.ErrInvalidRequest))
+		h.logAndSendError(w, "could not copy to itself", reqInfo, errors.GetAPIError(errors.ErrInvalidRequest))
 		return
 	}
 
@@ -76,7 +77,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = checkPreconditions(inf, args.Conditional); err != nil {
-		h.logAndSendError(w, "precondition failed", reqInfo, api.GetAPIError(api.ErrPreconditionFailed))
+		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed))
 		return
 	}
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
@@ -29,7 +30,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 		return nil, nil
 	}
 	if fullSize == 0 {
-		return nil, api.GetAPIError(api.ErrInvalidRange)
+		return nil, errors.GetAPIError(errors.ErrInvalidRange)
 	}
 	if !strings.HasPrefix(rangeHeader, prefix) {
 		return nil, fmt.Errorf("unknown unit in range header")
@@ -59,7 +60,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	}
 
 	if err0 != nil || err1 != nil || start > end || start > fullSize {
-		return nil, api.GetAPIError(api.ErrInvalidRange)
+		return nil, errors.GetAPIError(errors.ErrInvalidRange)
 	}
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
@@ -124,17 +125,17 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 func checkPreconditions(inf *layer.ObjectInfo, args *conditionalArgs) error {
 	if len(args.IfMatch) > 0 && args.IfMatch != inf.HashSum {
-		return api.GetAPIError(api.ErrPreconditionFailed)
+		return errors.GetAPIError(errors.ErrPreconditionFailed)
 	}
 	if len(args.IfNoneMatch) > 0 && args.IfNoneMatch == inf.HashSum {
-		return api.GetAPIError(api.ErrNotModified)
+		return errors.GetAPIError(errors.ErrNotModified)
 	}
 	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
-		return api.GetAPIError(api.ErrNotModified)
+		return errors.GetAPIError(errors.ErrNotModified)
 	}
 	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
 		if len(args.IfMatch) == 0 {
-			return api.GetAPIError(api.ErrPreconditionFailed)
+			return errors.GetAPIError(errors.ErrPreconditionFailed)
 		}
 	}
 

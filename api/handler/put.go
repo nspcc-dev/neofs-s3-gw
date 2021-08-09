@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -135,27 +137,27 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 func checkBucketName(bucketName string) error {
 	if len(bucketName) < 3 || len(bucketName) > 63 {
-		return api.GetAPIError(api.ErrInvalidBucketName)
+		return errors.GetAPIError(errors.ErrInvalidBucketName)
 	}
 
 	if strings.HasPrefix(bucketName, "xn--") || strings.HasSuffix(bucketName, "-s3alias") {
-		return api.GetAPIError(api.ErrInvalidBucketName)
+		return errors.GetAPIError(errors.ErrInvalidBucketName)
 	}
 	if net.ParseIP(bucketName) != nil {
-		return api.GetAPIError(api.ErrInvalidBucketName)
+		return errors.GetAPIError(errors.ErrInvalidBucketName)
 	}
 
 	labels := strings.Split(bucketName, ".")
 	for _, label := range labels {
 		if len(label) == 0 {
-			return api.GetAPIError(api.ErrInvalidBucketName)
+			return errors.GetAPIError(errors.ErrInvalidBucketName)
 		}
 		for i, r := range label {
 			if !isAlphaNum(r) && r != '-' {
-				return api.GetAPIError(api.ErrInvalidBucketName)
+				return errors.GetAPIError(errors.ErrInvalidBucketName)
 			}
 			if (i == 0 || i == len(label)-1) && r == '-' {
-				return api.GetAPIError(api.ErrInvalidBucketName)
+				return errors.GetAPIError(errors.ErrInvalidBucketName)
 			}
 		}
 	}
