@@ -49,12 +49,21 @@ type (
 
 	// GetObjectParams stores object get request parameters.
 	GetObjectParams struct {
-		Range  *RangeParams
-		Bucket string
-		Object string
-		Offset int64
-		Length int64
-		Writer io.Writer
+		Range      *RangeParams
+		ObjectInfo *ObjectInfo
+		//Bucket    string
+		//Object    string
+		Offset    int64
+		Length    int64
+		Writer    io.Writer
+		VersionID string
+	}
+
+	// HeadObjectParams stores object head request parameters.
+	HeadObjectParams struct {
+		Bucket    string
+		Object    string
+		VersionID string
 	}
 
 	// RangeParams stores range header request parameters.
@@ -85,9 +94,8 @@ type (
 
 	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
-		SrcBucket string
+		SrcObject *ObjectInfo
 		DstBucket string
-		SrcObject string
 		DstObject string
 		SrcSize   int64
 		Header    map[string]string
@@ -140,7 +148,7 @@ type (
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
-		GetObjectInfo(ctx context.Context, bucketName, objectName string) (*ObjectInfo, error)
+		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error)
 
@@ -265,21 +273,17 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*BucketInfo, error) {
 
 // GetObject from storage.
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
-	var (
-		err error
-		oid *object.ID
-		bkt *BucketInfo
-	)
+	var err error
 
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-		return fmt.Errorf("couldn't find bucket: %s : %w", p.Bucket, err)
-	} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
-		return fmt.Errorf("search of the object failed: cid: %s, val: %s : %w", bkt.CID, p.Object, err)
-	}
+	//if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
+	//	return fmt.Errorf("couldn't find bucket: %s : %w", p.Bucket, err)
+	//} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
+	//	return fmt.Errorf("search of the object failed: cid: %s, val: %s : %w", bkt.CID, p.Object, err)
+	//}
 
 	addr := object.NewAddress()
-	addr.SetObjectID(oid)
-	addr.SetContainerID(bkt.CID)
+	addr.SetObjectID(p.ObjectInfo.ID())
+	addr.SetContainerID(p.ObjectInfo.CID())
 
 	params := &getParams{
 		Writer:  p.Writer,
@@ -301,7 +305,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 
 	if err != nil {
 		n.objCache.Delete(addr)
-		return fmt.Errorf("couldn't get object, cid: %s : %w", bkt.CID, err)
+		return fmt.Errorf("couldn't get object, cid: %s : %w", p.ObjectInfo.CID(), err)
 	}
 
 	return nil
@@ -318,14 +322,18 @@ func (n *layer) checkObject(ctx context.Context, cid *cid.ID, filename string) e
 }
 
 // GetObjectInfo returns meta information about the object.
-func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) (*ObjectInfo, error) {
-	bkt, err := n.GetBucketInfo(ctx, bucketName)
+func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error) {
+	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		n.log.Error("could not fetch bucket info", zap.Error(err))
 		return nil, err
 	}
 
-	return n.headLastVersion(ctx, bkt, filename)
+	if len(p.VersionID) == 0 {
+		return n.headLastVersion(ctx, bkt, p.Object)
+	}
+
+	return n.headVersion(ctx, bkt, p.Object, p.VersionID)
 }
 
 func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*ObjectInfo, error) {
@@ -344,7 +352,7 @@ func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*Ob
 	for get/head requests */
 	meta := n.objCache.Get(addr)
 	if meta == nil {
-		meta, err = n.objectHead(ctx, addr)
+		meta, err = n.objectHead(ctx, bkt.CID, oid)
 		if err != nil {
 			n.log.Error("could not fetch object head", zap.Error(err))
 			return nil, err
@@ -353,6 +361,7 @@ func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*Ob
 			n.log.Error("couldn't cache an object", zap.Error(err))
 		}
 	}
+
 	return objectInfoFromMeta(bkt, meta, "", ""), nil
 }
 
@@ -367,9 +376,8 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 
 	go func() {
 		err := n.GetObject(ctx, &GetObjectParams{
-			Bucket: p.SrcBucket,
-			Object: p.SrcObject,
-			Writer: pw,
+			ObjectInfo: p.SrcObject,
+			Writer:     pw,
 		})
 
 		if err = pw.CloseWithError(err); err != nil {
@@ -477,11 +485,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	res.DeleteMarker = deleted
 
 	for _, id := range ids {
-		addr := object.NewAddress()
-		addr.SetObjectID(id)
-		addr.SetContainerID(bkt.CID)
-
-		meta, err := n.objectHead(ctx, addr)
+		meta, err := n.objectHead(ctx, bkt.CID, id)
 		if err != nil {
 			n.log.Warn("could not fetch object meta", zap.Error(err))
 			continue
@@ -571,10 +575,7 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 		return nil, err
 	}
 
-	addr := object.NewAddress()
-	addr.SetObjectID(oid)
-	addr.SetContainerID(bucketInfo.CID)
-	meta, err := n.objectHead(ctx, addr)
+	meta, err := n.objectHead(ctx, bucketInfo.CID, oid)
 	if err != nil {
 		return nil, err
 	}
@@ -611,10 +612,6 @@ func (n *layer) getBucketSettings(ctx context.Context, bktInfo *BucketInfo) (*Bu
 
 func objectInfoToBucketSettings(info *ObjectInfo) *BucketSettings {
 	res := &BucketSettings{}
-
-	if info == nil {
-		return res
-	}
 
 	enabled, ok := info.Headers["S3-Settings-Versioning-enabled"]
 	if ok {

@@ -36,16 +36,22 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get("versionId"),
+	}
+
+	if inf, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
 	buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
 	getParams := &layer.GetObjectParams{
-		Bucket: inf.Bucket,
-		Object: inf.Name,
-		Writer: buffer,
-		Range:  getRangeToDetectContentType(inf.Size),
+		ObjectInfo: inf,
+		Writer:     buffer,
+		Range:      getRangeToDetectContentType(inf.Size),
+		VersionID:  reqInfo.URL.Query().Get("versionId"),
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", inf.ID()))

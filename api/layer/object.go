@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
@@ -96,7 +97,10 @@ func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, er
 }
 
 // objectHead returns all object's headers.
-func (n *layer) objectHead(ctx context.Context, address *object.Address) (*object.Object, error) {
+func (n *layer) objectHead(ctx context.Context, cid *cid.ID, oid *object.ID) (*object.Object, error) {
+	address := object.NewAddress()
+	address.SetContainerID(cid)
+	address.SetObjectID(oid)
 	ops := new(client.ObjectHeaderParams).WithAddress(address).WithAllFields()
 	return n.pool.GetObjectHeader(ctx, ops, n.BearerOpt(ctx))
 }
@@ -213,10 +217,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	}
 
-	addr := object.NewAddress()
-	addr.SetObjectID(oid)
-	addr.SetContainerID(bkt.CID)
-	meta, err := n.objectHead(ctx, addr)
+	meta, err := n.objectHead(ctx, bkt.CID, oid)
 	if err != nil {
 		return nil, err
 	}
@@ -265,10 +266,7 @@ func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName
 
 	infos := make([]*object.Object, 0, len(ids))
 	for _, id := range ids {
-		addr := object.NewAddress()
-		addr.SetContainerID(bkt.CID)
-		addr.SetObjectID(id)
-		meta, err := n.objectHead(ctx, addr)
+		meta, err := n.objectHead(ctx, bkt.CID, id)
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", id),
@@ -284,23 +282,31 @@ func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName
 	})
 
 	return objectInfoFromMeta(bkt, infos[len(infos)-1], "", ""), nil
-	//versionsToDeleteStr, ok := lastVersionInfo.Headers[versionsAddAttr]
-	//versionsDeletedStr := lastVersionInfo.Headers[versionsDelAttr]
-	//idsToDeleteArr := []*object.ID{lastVersionInfo.ID()}
-	//if ok {
-	//	// for versioning mode only
-	//	idsToDelete := strings.Split(versionsToDeleteStr, ",")
-	//	for _, idStr := range idsToDelete {
-	//		oid := object.NewID()
-	//		if err = oid.Parse(idStr); err != nil {
-	//			n.log.Warn("couldn't parse object id versions list",
-	//				zap.String("versions id", versionsToDeleteStr),
-	//				zap.Error(err))
-	//			break
-	//		}
-	//		idsToDeleteArr = append(idsToDeleteArr, oid)
-	//	}
-	//}
+}
+
+func (n *layer) headVersion(ctx context.Context, bkt *BucketInfo, objectName, versionID string) (*ObjectInfo, error) {
+	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, val: objectName})
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, api.GetAPIError(api.ErrNoSuchVersion)
+	}
+
+	for _, id := range ids {
+		if id.String() == versionID {
+			meta, err := n.objectHead(ctx, bkt.CID, id)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					return nil, api.GetAPIError(api.ErrNoSuchVersion)
+				}
+				return nil, err
+			}
+			return objectInfoFromMeta(bkt, meta, "", ""), nil
+		}
+	}
+
+	return nil, api.GetAPIError(api.ErrNoSuchVersion)
 }
 
 // objectDelete puts tombstone object into neofs.
@@ -399,11 +405,7 @@ func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParam
 	objects := make([]*ObjectInfo, 0, len(ids))
 
 	for _, id := range ids {
-		addr := object.NewAddress()
-		addr.SetObjectID(id)
-		addr.SetContainerID(p.Bucket.CID)
-
-		meta, err := n.objectHead(ctx, addr)
+		meta, err := n.objectHead(ctx, p.Bucket.CID, id)
 		if err != nil {
 			n.log.Warn("could not fetch object meta", zap.Error(err))
 			continue

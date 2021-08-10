@@ -63,6 +63,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not parse request params", reqInfo, err)
 		return
 	}
+	p := &layer.HeadObjectParams{
+		Bucket:    srcBucket,
+		Object:    srcObject,
+		VersionID: reqInfo.URL.Query().Get("versionId"),
+	}
 
 	if args.MetadataDirective == replaceMetadataDirective {
 		metadata = parseMetadata(r)
@@ -80,7 +85,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), srcBucket, srcObject); err != nil {
+	if inf, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
@@ -100,9 +105,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := &layer.CopyObjectParams{
-		SrcBucket: srcBucket,
+		SrcObject: inf,
 		DstBucket: reqInfo.BucketName,
-		SrcObject: srcObject,
 		DstObject: reqInfo.ObjectName,
 		SrcSize:   inf.Size,
 		Header:    metadata,

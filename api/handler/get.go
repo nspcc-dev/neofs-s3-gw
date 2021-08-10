@@ -72,6 +72,7 @@ func writeHeaders(h http.Header, info *layer.ObjectInfo) {
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
+	h.Set(api.AmzVersionId, info.ID().String())
 
 	for key, val := range info.Headers {
 		h[api.MetadataPrefix+key] = []string{val}
@@ -98,7 +99,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get("versionId"),
+	}
+
+	if inf, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
@@ -118,10 +125,10 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	getParams := &layer.GetObjectParams{
-		Bucket: inf.Bucket,
-		Object: inf.Name,
-		Writer: w,
-		Range:  params,
+		ObjectInfo: inf,
+		Writer:     w,
+		Range:      params,
+		VersionID:  p.VersionID,
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)

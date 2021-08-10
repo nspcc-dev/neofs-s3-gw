@@ -39,6 +39,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 			zap.String("method", reqInfo.API),
 			zap.String("object_name", reqInfo.ObjectName),
 			zap.Error(err))
+		return
 	}
 
 	if err = api.EncodeToResponse(w, formVersioningConfiguration(settings)); err != nil {

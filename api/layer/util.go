@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
+
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -21,6 +23,7 @@ type (
 		isDir bool
 
 		Bucket      string
+		bucketID    *cid.ID
 		Name        string
 		Size        int64
 		ContentType string
@@ -137,6 +140,7 @@ func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter 
 		isDir: isDir,
 
 		Bucket:      bkt.Name,
+		bucketID:    bkt.CID,
 		Name:        filename,
 		Created:     creation,
 		ContentType: mimeType,
@@ -173,6 +177,9 @@ func NameFromString(name string) (string, string) {
 
 // ID returns object ID from ObjectInfo.
 func (o *ObjectInfo) ID() *object.ID { return o.id }
+
+// CID returns bucket ID from ObjectInfo.
+func (o *ObjectInfo) CID() *cid.ID { return o.bucketID }
 
 // IsDir allows to check if object is a directory.
 func (o *ObjectInfo) IsDir() bool { return o.isDir }
