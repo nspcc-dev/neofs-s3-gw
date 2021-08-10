@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
@@ -26,7 +27,7 @@ type (
 		pool         pool.Pool
 		log          *zap.Logger
 		listObjCache ObjectsListCache
-
+		objCache     cache.ObjectsCache
 	}
 
 	// Params stores basic API parameters.
@@ -134,6 +135,7 @@ func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 		pool:         conns,
 		log:          log,
 		listObjCache: newListObjectsCache(defaultObjectsListCacheLifetime),
+		objCache:     cache.New(cache.DefaultObjectsCacheSize, cache.DefaultObjectsCacheLifetime),
 	}
 }
 
@@ -238,6 +240,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	}
 
 	if err != nil {
+		n.objCache.Delete(addr)
 		return fmt.Errorf("couldn't get object, cid: %s : %w", bkt.CID, err)
 	}
 
@@ -275,11 +278,20 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 	addr.SetObjectID(oid)
 	addr.SetContainerID(bkt.CID)
 
-	if meta, err = n.objectHead(ctx, addr); err != nil {
-		n.log.Error("could not fetch object head", zap.Error(err))
-		return nil, err
+	/* todo: now we get an address via request to NeoFS and try to find the object with the address in cache
+	 but it will be resolved after implementation of local cache with nicenames and address of objects
+	for get/head requests */
+	meta = n.objCache.Get(addr)
+	if meta == nil {
+		meta, err = n.objectHead(ctx, addr)
+		if err != nil {
+			n.log.Error("could not fetch object head", zap.Error(err))
+			return nil, err
+		}
+		if err = n.objCache.Put(addr, *meta); err != nil {
+			n.log.Error("couldn't cache an object", zap.Error(err))
+		}
 	}
-
 	return objectInfoFromMeta(bkt, meta, "", ""), nil
 }
 

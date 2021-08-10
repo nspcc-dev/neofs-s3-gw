@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/alecthomas/participle v0.7.1 // indirect
 	github.com/aws/aws-sdk-go v1.37.9
+	github.com/bluele/gcache v0.0.2
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/nspcc-dev/neo-go v0.95.3
