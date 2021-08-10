@@ -13,7 +13,7 @@ import (
 	request.
 
 	The cache is a map which has a key: cacheOptions struct and a value: list of objects. After putting a record we
-	start a timer (via time.AfterFunc) that removes the record after defaultCacheLifetime value.
+	start a timer (via time.AfterFunc) that removes the record after defaultObjectsListCacheLifetime value.
 
 	When we get a request from the user we just try to find the suitable and non-expired cache and then we return
 	the list of objects. Otherwise we send the request to NeoFS.
@@ -27,15 +27,15 @@ type (
 	}
 )
 
-const defaultCacheLifetime = time.Second * 60
+const defaultObjectsListCacheLifetime = time.Second * 60
 
 type (
 	listObjectsCache struct {
 		cacheLifetime time.Duration
-		caches        map[cacheOptions]cache
+		caches        map[cacheOptions]cacheEntry
 		mtx           sync.RWMutex
 	}
-	cache struct {
+	cacheEntry struct {
 		list []*ObjectInfo
 	}
 	cacheOptions struct {
@@ -47,7 +47,7 @@ type (
 
 func newListObjectsCache(lifetime time.Duration) *listObjectsCache {
 	return &listObjectsCache{
-		caches:        make(map[cacheOptions]cache),
+		caches:        make(map[cacheOptions]cacheEntry),
 		cacheLifetime: lifetime,
 	}
 }
@@ -65,7 +65,7 @@ func (l *listObjectsCache) Put(key cacheOptions, objects []*ObjectInfo) {
 	if len(objects) == 0 {
 		return
 	}
-	var c cache
+	var c cacheEntry
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	c.list = objects

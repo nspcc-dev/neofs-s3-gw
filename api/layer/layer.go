@@ -23,9 +23,10 @@ import (
 
 type (
 	layer struct {
-		pool  pool.Pool
-		log   *zap.Logger
-		cache ObjectsListCache
+		pool         pool.Pool
+		log          *zap.Logger
+		listObjCache ObjectsListCache
+
 	}
 
 	// Params stores basic API parameters.
@@ -130,9 +131,9 @@ const (
 // and establishes gRPC connection with node.
 func NewLayer(log *zap.Logger, conns pool.Pool) Client {
 	return &layer{
-		pool:  conns,
-		log:   log,
-		cache: newListObjectsCache(defaultCacheLifetime),
+		pool:         conns,
+		log:          log,
+		listObjCache: newListObjectsCache(defaultObjectsListCacheLifetime),
 	}
 }
 
