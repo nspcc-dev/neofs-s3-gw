@@ -62,6 +62,11 @@ type (
 	}
 )
 
+const (
+	versionsDelAttr = "S3-Versions-del"
+	versionsAddAttr = "S3-Versions-add"
+)
+
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, error) {
 	var opts object.SearchFilters
@@ -131,6 +136,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	}
 
+	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
 	lastVersionInfo, err := n.headLastVersion(ctx, bkt, p.Object)
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		return nil, err
@@ -139,17 +145,35 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	attributes := make([]*object.Attribute, 0, len(p.Header)+1)
 	var idsToDeleteArr []*object.ID
 	if lastVersionInfo != nil {
-		versionsDeletedStr := lastVersionInfo.Headers["S3-Versions-del"]
-		if len(versionsDeletedStr) != 0 {
-			versionsDeletedStr += ","
-		}
-		versionsDeletedStr += lastVersionInfo.ID().String()
-		deletedVersions := object.NewAttribute()
-		deletedVersions.SetKey("S3-Versions-del")
-		deletedVersions.SetValue(versionsDeletedStr)
+		if versioningEnabled {
+			versionsAddedStr := lastVersionInfo.Headers[versionsAddAttr]
+			if len(versionsAddedStr) != 0 {
+				versionsAddedStr += ","
+			}
+			versionsAddedStr += lastVersionInfo.ID().String()
+			addedVersions := object.NewAttribute()
+			addedVersions.SetKey(versionsAddAttr)
+			addedVersions.SetValue(versionsAddedStr)
+			attributes = append(attributes, addedVersions)
+			if delVersions := lastVersionInfo.Headers[versionsDelAttr]; len(delVersions) > 0 {
+				deletedVersions := object.NewAttribute()
+				deletedVersions.SetKey(versionsDelAttr)
+				deletedVersions.SetValue(delVersions)
+				attributes = append(attributes, deletedVersions)
+			}
+		} else {
+			versionsDeletedStr := lastVersionInfo.Headers[versionsDelAttr]
+			if len(versionsDeletedStr) != 0 {
+				versionsDeletedStr += ","
+			}
+			versionsDeletedStr += lastVersionInfo.ID().String()
+			deletedVersions := object.NewAttribute()
+			deletedVersions.SetKey(versionsDelAttr)
+			deletedVersions.SetValue(versionsDeletedStr)
 
-		attributes = append(attributes, deletedVersions)
-		idsToDeleteArr = append(idsToDeleteArr, lastVersionInfo.ID())
+			attributes = append(attributes, deletedVersions)
+			idsToDeleteArr = append(idsToDeleteArr, lastVersionInfo.ID())
+		}
 	}
 
 	unix := strconv.FormatInt(time.Now().UTC().Unix(), 10)
@@ -260,8 +284,8 @@ func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName
 	})
 
 	return objectInfoFromMeta(bkt, infos[len(infos)-1], "", ""), nil
-	//versionsToDeleteStr, ok := lastVersionInfo.Headers["S3-Versions-add"]
-	//versionsDeletedStr := lastVersionInfo.Headers["S3-Versions-del"]
+	//versionsToDeleteStr, ok := lastVersionInfo.Headers[versionsAddAttr]
+	//versionsDeletedStr := lastVersionInfo.Headers[versionsDelAttr]
 	//idsToDeleteArr := []*object.ID{lastVersionInfo.ID()}
 	//if ok {
 	//	// for versioning mode only
@@ -474,4 +498,14 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 	}
 
 	return allObjects, nil
+}
+
+func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *BucketInfo) bool {
+	settings, err := n.getBucketSettings(ctx, bktInfo)
+	if err != nil {
+		n.log.Warn("couldn't get versioning settings object", zap.Error(err))
+		return false
+	}
+
+	return settings.VersioningEnabled
 }

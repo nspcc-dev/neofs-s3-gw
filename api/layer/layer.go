@@ -74,7 +74,12 @@ type (
 
 	// PutVersioningParams stores object copy request parameters.
 	PutVersioningParams struct {
-		Bucket            string
+		Bucket   string
+		Settings *BucketSettings
+	}
+
+	// BucketSettings stores settings such as versioning.
+	BucketSettings struct {
 		VersioningEnabled bool
 	}
 
@@ -125,7 +130,7 @@ type (
 		NeoFS
 
 		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error)
-		GetBucketVersioning(ctx context.Context, name string) (*ObjectInfo, error)
+		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
 
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
@@ -551,7 +556,7 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 
 	settingsVersioningEnabled := object.NewAttribute()
 	settingsVersioningEnabled.SetKey("S3-Settings-Versioning-enabled")
-	settingsVersioningEnabled.SetValue(strconv.FormatBool(p.VersioningEnabled))
+	settingsVersioningEnabled.SetValue(strconv.FormatBool(p.Settings.VersioningEnabled))
 
 	attributes = append(attributes, filename, createdAt, versioningIgnore, settingsVersioningEnabled)
 
@@ -586,10 +591,36 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 	return objectInfoFromMeta(bucketInfo, meta, "", ""), nil
 }
 
-func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*ObjectInfo, error) {
+func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*BucketSettings, error) {
 	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
 	if err != nil {
 		return nil, err
 	}
-	return n.getSettingsObjectInfo(ctx, bktInfo)
+
+	return n.getBucketSettings(ctx, bktInfo)
+}
+
+func (n *layer) getBucketSettings(ctx context.Context, bktInfo *BucketInfo) (*BucketSettings, error) {
+	objInfo, err := n.getSettingsObjectInfo(ctx, bktInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return objectInfoToBucketSettings(objInfo), nil
+}
+
+func objectInfoToBucketSettings(info *ObjectInfo) *BucketSettings {
+	res := &BucketSettings{}
+
+	if info == nil {
+		return res
+	}
+
+	enabled, ok := info.Headers["S3-Settings-Versioning-enabled"]
+	if ok {
+		if parsed, err := strconv.ParseBool(enabled); err == nil {
+			res.VersioningEnabled = parsed
+		}
+	}
+	return res
 }
