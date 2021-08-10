@@ -183,6 +183,10 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 		return nil, err
 	}
 
+	if err = n.objCache.Put(addr, *meta); err != nil {
+		n.log.Error("couldn't cache an object", zap.Error(err))
+	}
+
 	return &ObjectInfo{
 		id: oid,
 
@@ -201,6 +205,7 @@ func (n *layer) objectPut(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 func (n *layer) objectDelete(ctx context.Context, address *object.Address) error {
 	dop := new(client.DeleteObjectParams)
 	dop.WithAddress(address)
+	n.objCache.Delete(address)
 	return n.pool.DeleteObject(ctx, dop, n.BearerOpt(ctx))
 }
 
