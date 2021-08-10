@@ -72,7 +72,7 @@ func writeHeaders(h http.Header, info *layer.ObjectInfo) {
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
-	h.Set(api.AmzVersionId, info.ID().String())
+	h.Set(api.AmzVersionID, info.ID().String())
 
 	for key, val := range info.Headers {
 		h[api.MetadataPrefix+key] = []string{val}

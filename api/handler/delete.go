@@ -8,6 +8,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // DeleteObjectsRequest - xml carrying the object key names which needs to be deleted.
@@ -21,6 +22,7 @@ type DeleteObjectsRequest struct {
 // ObjectIdentifier carries key name for the object to delete.
 type ObjectIdentifier struct {
 	ObjectName string `xml:"Key"`
+	VersionID  string `xml:"VersionId,omitempty"`
 }
 
 // DeleteError structure.
@@ -43,18 +45,22 @@ type DeleteObjectsResponse struct {
 
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+	versionedObject := []*layer.VersionedObject{{
+		Name:      reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get("versionId"),
+	}}
 
 	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
-	if err := h.obj.DeleteObject(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+	if errs := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, versionedObject); len(errs) != 0 && errs[0] != nil {
 		h.log.Error("could not delete object",
 			zap.String("request_id", reqInfo.RequestID),
 			zap.String("bucket_name", reqInfo.BucketName),
 			zap.String("object_name", reqInfo.ObjectName),
-			zap.Error(err))
+			zap.Error(errs[0]))
 
 		// Ignore delete errors:
 
@@ -94,10 +100,14 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	removed := make(map[string]struct{})
-	toRemove := make([]string, 0, len(requested.Objects))
+	toRemove := make([]*layer.VersionedObject, 0, len(requested.Objects))
 	for _, obj := range requested.Objects {
-		removed[obj.ObjectName] = struct{}{}
-		toRemove = append(toRemove, obj.ObjectName)
+		versionedObj := &layer.VersionedObject{
+			Name:      obj.ObjectName,
+			VersionID: obj.VersionID,
+		}
+		toRemove = append(toRemove, versionedObj)
+		removed[versionedObj.String()] = struct{}{}
 	}
 
 	response := &DeleteObjectsResponse{
@@ -110,9 +120,16 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	marshaler := zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+		for _, obj := range toRemove {
+			encoder.AppendString(obj.String())
+		}
+		return nil
+	})
+
 	if errs := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, toRemove); errs != nil && !requested.Quiet {
 		additional := []zap.Field{
-			zap.Strings("objects_name", toRemove),
+			zap.Array("objects", marshaler),
 			zap.Errors("errors", errs),
 		}
 		h.logAndSendError(w, "could not delete objects", reqInfo, nil, additional...)
@@ -138,7 +155,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := api.EncodeToResponse(w, response); err != nil {
-		h.logAndSendError(w, "could not write response", reqInfo, err, zap.Strings("objects_name", toRemove))
+		h.logAndSendError(w, "could not write response", reqInfo, err, zap.Array("objects", marshaler))
 		return
 	}
 }

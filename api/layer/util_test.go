@@ -48,6 +48,7 @@ func newTestInfo(oid *object.ID, bkt *BucketInfo, name string, isDir bool) *Obje
 		id:          oid,
 		Name:        name,
 		Bucket:      bkt.Name,
+		bucketID:    bkt.CID,
 		Size:        defaultTestPayloadLength,
 		ContentType: defaultTestContentType,
 		Created:     time.Unix(defaultTestCreated.Unix(), 0),

@@ -66,6 +66,7 @@ const (
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
+	ErrInvalidVersion
 	ErrNotImplemented
 	ErrPreconditionFailed
 	ErrNotModified
@@ -528,6 +529,12 @@ var errorCodes = errorCodeMap{
 		Code:           "NoSuchVersion",
 		Description:    "Indicates that the version ID specified in the request does not match an existing version.",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrInvalidVersion: {
+		ErrCode:        ErrInvalidVersion,
+		Code:           "InvalidArgument",
+		Description:    "Invalid version id specified",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNotImplemented: {
 		ErrCode:        ErrNotImplemented,

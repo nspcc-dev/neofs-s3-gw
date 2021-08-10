@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
@@ -128,6 +130,12 @@ type (
 		Encode          string
 	}
 
+	// VersionedObject stores object name and version.
+	VersionedObject struct {
+		Name      string
+		VersionID string
+	}
+
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
 		Get(ctx context.Context, address *object.Address) (*object.Object, error)
@@ -158,8 +166,7 @@ type (
 		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
-		DeleteObject(ctx context.Context, bucket, object string) error
-		DeleteObjects(ctx context.Context, bucket string, objects []string) []error
+		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error
 	}
 )
 
@@ -167,6 +174,10 @@ const (
 	unversionedObjectVersionID = "null"
 	bktVersionSettingsObject   = ".s3-versioning-settings"
 )
+
+func (t *VersionedObject) String() string {
+	return t.Name + ":" + t.VersionID
+}
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
@@ -330,16 +341,21 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*Object
 	}
 
 	if len(p.VersionID) == 0 {
-		return n.headLastVersion(ctx, bkt, p.Object)
+		objInfo, err := n.headLastVersion(ctx, bkt, p.Object)
+		if err == nil {
+			if deleteMark, err2 := strconv.ParseBool(objInfo.Headers[versionsDeleteMarkAttr]); err2 == nil && deleteMark {
+				return nil, api.GetAPIError(api.ErrNoSuchKey)
+			}
+		}
+		return objInfo, err
 	}
 
-	return n.headVersion(ctx, bkt, p.Object, p.VersionID)
+	return n.headVersion(ctx, bkt, p.VersionID)
 }
 
 func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*ObjectInfo, error) {
 	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, val: bktVersionSettingsObject})
 	if err != nil {
-		n.log.Error("could not find object id", zap.Error(err))
 		return nil, err
 	}
 
@@ -367,7 +383,12 @@ func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*Ob
 
 // PutObject into storage.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error) {
-	return n.objectPut(ctx, p)
+	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	return n.objectPut(ctx, bkt, p)
 }
 
 // CopyObject from one bucket into another bucket.
@@ -395,35 +416,96 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 }
 
 // DeleteObject removes all objects with passed nice name.
-func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error {
+func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *VersionedObject) error {
 	var (
 		err error
 		ids []*object.ID
-		bkt *BucketInfo
 	)
 
-	if bkt, err = n.GetBucketInfo(ctx, bucket); err != nil {
-		return &errors.DeleteError{
-			Err:    err,
-			Object: filename,
+	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
+	if !versioningEnabled && obj.VersionID != "null" && obj.VersionID != "" {
+		return errors.GetAPIError(errors.ErrInvalidVersion)
+	}
+
+	if versioningEnabled {
+		if len(obj.VersionID) != 0 {
+			id := object.NewID()
+			if err := id.Parse(obj.VersionID); err != nil {
+				return &errors.DeleteError{Err: api.GetAPIError(api.ErrInvalidVersion), Object: obj.String()}
+			}
+			ids = []*object.ID{id}
+
+			lastObject, err := n.headLastVersion(ctx, bkt, obj.Name)
+			if err != nil {
+				return &api.DeleteError{Err: err, Object: obj.String()}
+			}
+			if !strings.Contains(lastObject.Headers[versionsAddAttr], obj.VersionID) ||
+				strings.Contains(lastObject.Headers[versionsDelAttr], obj.VersionID) {
+				return &api.DeleteError{Err: api.GetAPIError(api.ErrInvalidVersion), Object: obj.String()}
+			}
+
+			if lastObject.ID().String() == obj.VersionID {
+				if added := lastObject.Headers[versionsAddAttr]; len(added) > 0 {
+					addedVersions := strings.Split(added, ",")
+					sourceCopyVersion, err := n.headVersion(ctx, bkt, addedVersions[len(addedVersions)-1])
+					if err != nil {
+						return &api.DeleteError{Err: err, Object: obj.String()}
+					}
+					p := &CopyObjectParams{
+						SrcObject: sourceCopyVersion,
+						DstBucket: bkt.Name,
+						DstObject: obj.Name,
+						SrcSize:   sourceCopyVersion.Size,
+						Header:    map[string]string{versionsDelAttr: obj.VersionID},
+					}
+					if _, err := n.CopyObject(ctx, p); err != nil {
+						return err
+					}
+				} else {
+					p := &PutObjectParams{
+						Object: obj.Name,
+						Reader: bytes.NewReader(nil),
+						Header: map[string]string{
+							versionsDelAttr:        obj.VersionID,
+							versionsDeleteMarkAttr: strconv.FormatBool(true),
+						},
+					}
+					if _, err := n.objectPut(ctx, bkt, p); err != nil {
+						return &api.DeleteError{Err: err, Object: obj.String()}
+					}
+				}
+			} else {
+				p := &CopyObjectParams{
+					SrcObject: lastObject,
+					DstBucket: bkt.Name,
+					DstObject: obj.Name,
+					SrcSize:   lastObject.Size,
+					Header:    map[string]string{versionsDelAttr: obj.VersionID},
+				}
+				if _, err := n.CopyObject(ctx, p); err != nil {
+					return err
+				}
+			}
+		} else {
+			p := &PutObjectParams{
+				Object: obj.Name,
+				Reader: bytes.NewReader(nil),
+				Header: map[string]string{versionsDeleteMarkAttr: strconv.FormatBool(true)},
+			}
+			if _, err := n.objectPut(ctx, bkt, p); err != nil {
+				return &errors.DeleteError{Err: err, Object: obj.String()}
+			}
 		}
-	} else if ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: filename}); err != nil {
-		return &errors.DeleteError{
-			Err:    err,
-			Object: filename,
+	} else {
+		ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: obj.Name})
+		if err != nil {
+			return &errors.DeleteError{Err: err, Object: obj.String()}
 		}
 	}
 
 	for _, id := range ids {
-		addr := object.NewAddress()
-		addr.SetObjectID(id)
-		addr.SetContainerID(bkt.CID)
-
-		if err = n.objectDelete(ctx, addr); err != nil {
-			return &errors.DeleteError{
-				Err:    err,
-				Object: filename,
-			}
+		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
+			return &errors.DeleteError{Err: err, Object: obj.String()}
 		}
 	}
 
@@ -431,11 +513,16 @@ func (n *layer) DeleteObject(ctx context.Context, bucket, filename string) error
 }
 
 // DeleteObjects from the storage.
-func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []string) []error {
+func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error {
 	var errs = make([]error, 0, len(objects))
 
+	bkt, err := n.GetBucketInfo(ctx, bucket)
+	if err != nil {
+		return append(errs, err)
+	}
+
 	for i := range objects {
-		if err := n.DeleteObject(ctx, bucket, objects[i]); err != nil {
+		if err := n.deleteObject(ctx, bkt, objects[i]); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -459,6 +546,14 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	bucketInfo, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
 		return err
+	}
+
+	ids, err := n.objectSearch(ctx, &findParams{cid: bucketInfo.CID})
+	if err != nil {
+		return err
+	}
+	if len(ids) != 0 {
+		return api.GetAPIError(api.ErrBucketNotEmpty)
 	}
 
 	return n.deleteContainer(ctx, bucketInfo.CID)
@@ -581,10 +676,7 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 	}
 
 	if objectInfo != nil {
-		addr := object.NewAddress()
-		addr.SetObjectID(objectInfo.ID())
-		addr.SetContainerID(bucketInfo.CID)
-		if err = n.objectDelete(ctx, addr); err != nil {
+		if err = n.objectDelete(ctx, bucketInfo.CID, objectInfo.ID()); err != nil {
 			return nil, err
 		}
 	}

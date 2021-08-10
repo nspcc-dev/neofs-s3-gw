@@ -4,7 +4,7 @@ package api
 const (
 	MetadataPrefix       = "X-Amz-Meta-"
 	AmzMetadataDirective = "X-Amz-Metadata-Directive"
-	AmzVersionId   = "X-Amz-Version-Id"
+	AmzVersionID   = "X-Amz-Version-Id"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"
