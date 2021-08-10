@@ -374,7 +374,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 		return nil, err
 	}
 
-	allObjects = n.cache.Get(cacheKey)
+	allObjects = n.listObjCache.Get(cacheKey)
 
 	if allObjects == nil {
 		allObjects, err = n.listSortedObjectsFromNeoFS(ctx, allObjectParams{
@@ -387,7 +387,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 		}
 
 		// putting to cache a copy of allObjects because allObjects can be modified further
-		n.cache.Put(cacheKey, append([]*ObjectInfo(nil), allObjects...))
+		n.listObjCache.Put(cacheKey, append([]*ObjectInfo(nil), allObjects...))
 	}
 
 	return allObjects, nil
