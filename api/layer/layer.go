@@ -320,11 +320,11 @@ func (n *layer) GetObjectInfo(ctx context.Context, bucketName, filename string) 
 		return nil, err
 	}
 
-	return n.getObjectInfo(ctx, bkt, filename)
+	return n.headLastVersion(ctx, bkt, filename)
 }
 
-func (n *layer) getObjectInfo(ctx context.Context, bkt *BucketInfo, objectName string) (*ObjectInfo, error) {
-	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, val: objectName})
+func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*ObjectInfo, error) {
+	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, val: bktVersionSettingsObject})
 	if err != nil {
 		n.log.Error("could not find object id", zap.Error(err))
 		return nil, err
@@ -527,12 +527,11 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 		return nil, err
 	}
 
-	objectInfo, err := n.getObjectInfo(ctx, bucketInfo, bktVersionSettingsObject)
+	objectInfo, err := n.getSettingsObjectInfo(ctx, bucketInfo)
 	if err != nil {
 		n.log.Warn("couldn't get bucket version settings object, new one will be created",
 			zap.String("bucket_name", bucketInfo.Name),
 			zap.Stringer("cid", bucketInfo.CID),
-			zap.String("object_name", bktVersionSettingsObject),
 			zap.Error(err))
 	}
 
@@ -588,5 +587,9 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 }
 
 func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*ObjectInfo, error) {
-	return n.GetObjectInfo(ctx, bucketName, bktVersionSettingsObject)
+	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
+	if err != nil {
+		return nil, err
+	}
+	return n.getSettingsObjectInfo(ctx, bktInfo)
 }
