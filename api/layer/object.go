@@ -252,7 +252,7 @@ func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName
 	}
 
 	if len(ids) == 0 {
-		return nil, api.GetAPIError(api.ErrNoSuchKey)
+		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
 	infos := make([]*object.Object, 0, len(ids))
@@ -284,7 +284,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *BucketInfo, versionID stri
 	meta, err := n.objectHead(ctx, bkt.CID, oid)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return nil, api.GetAPIError(api.ErrNoSuchVersion)
+			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
 		}
 		return nil, err
 	}

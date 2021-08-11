@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
@@ -14,7 +15,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 	configuration := new(VersioningConfiguration)
 	if err := xml.NewDecoder(r.Body).Decode(configuration); err != nil {
-		h.logAndSendError(w, "couldn't decode versioning configuration", reqInfo, api.GetAPIError(api.ErrIllegalVersioningConfigurationException))
+		h.logAndSendError(w, "couldn't decode versioning configuration", reqInfo, errors.GetAPIError(errors.ErrIllegalVersioningConfigurationException))
 		return
 	}
 

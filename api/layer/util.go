@@ -54,9 +54,10 @@ type (
 
 	// ObjectVersionInfo stores info about objects versions.
 	ObjectVersionInfo struct {
-		Object    *ObjectInfo
-		IsLatest  bool
-		VersionID string
+		Object        *ObjectInfo
+		IsLatest      bool
+		VersionID     string
+		CreationEpoch uint64
 	}
 
 	// DeletedObjectInfo stores info about deleted versions of objects.
@@ -156,7 +157,7 @@ func objectVersionInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, del
 	if oi == nil {
 		return nil
 	}
-	return &ObjectVersionInfo{Object: oi, IsLatest: true, VersionID: unversionedObjectVersionID}
+	return &ObjectVersionInfo{Object: oi, VersionID: meta.ID().String(), CreationEpoch: meta.CreationEpoch()}
 }
 
 func filenameFromObject(o *object.Object) string {

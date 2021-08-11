@@ -322,15 +322,15 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	return nil
 }
 
-func (n *layer) checkObject(ctx context.Context, cid *cid.ID, filename string) error {
-	var err error
-
-	if _, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err == nil {
-		return new(errors.ObjectAlreadyExists)
-	}
-
-	return err
-}
+//func (n *layer) checkObject(ctx context.Context, cid *cid.ID, filename string) error {
+//	var err error
+//
+//	if _, err = n.objectFindID(ctx, &findParams{cid: cid, val: filename}); err == nil {
+//		return new(errors.ObjectAlreadyExists)
+//	}
+//
+//	return err
+//}
 
 // GetObjectInfo returns meta information about the object.
 func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error) {
@@ -344,7 +344,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*Object
 		objInfo, err := n.headLastVersion(ctx, bkt, p.Object)
 		if err == nil {
 			if deleteMark, err2 := strconv.ParseBool(objInfo.Headers[versionsDeleteMarkAttr]); err2 == nil && deleteMark {
-				return nil, api.GetAPIError(api.ErrNoSuchKey)
+				return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 			}
 		}
 		return objInfo, err
@@ -423,7 +423,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *Versione
 	)
 
 	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
-	if !versioningEnabled && obj.VersionID != "null" && obj.VersionID != "" {
+	if !versioningEnabled && obj.VersionID != unversionedObjectVersionID && obj.VersionID != "" {
 		return errors.GetAPIError(errors.ErrInvalidVersion)
 	}
 
@@ -431,17 +431,17 @@ func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *Versione
 		if len(obj.VersionID) != 0 {
 			id := object.NewID()
 			if err := id.Parse(obj.VersionID); err != nil {
-				return &errors.DeleteError{Err: api.GetAPIError(api.ErrInvalidVersion), Object: obj.String()}
+				return &errors.DeleteError{Err: errors.GetAPIError(errors.ErrInvalidVersion), Object: obj.String()}
 			}
 			ids = []*object.ID{id}
 
 			lastObject, err := n.headLastVersion(ctx, bkt, obj.Name)
 			if err != nil {
-				return &api.DeleteError{Err: err, Object: obj.String()}
+				return &errors.DeleteError{Err: err, Object: obj.String()}
 			}
 			if !strings.Contains(lastObject.Headers[versionsAddAttr], obj.VersionID) ||
 				strings.Contains(lastObject.Headers[versionsDelAttr], obj.VersionID) {
-				return &api.DeleteError{Err: api.GetAPIError(api.ErrInvalidVersion), Object: obj.String()}
+				return &errors.DeleteError{Err: errors.GetAPIError(errors.ErrInvalidVersion), Object: obj.String()}
 			}
 
 			if lastObject.ID().String() == obj.VersionID {
@@ -449,7 +449,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *Versione
 					addedVersions := strings.Split(added, ",")
 					sourceCopyVersion, err := n.headVersion(ctx, bkt, addedVersions[len(addedVersions)-1])
 					if err != nil {
-						return &api.DeleteError{Err: err, Object: obj.String()}
+						return &errors.DeleteError{Err: err, Object: obj.String()}
 					}
 					p := &CopyObjectParams{
 						SrcObject: sourceCopyVersion,
@@ -471,7 +471,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *Versione
 						},
 					}
 					if _, err := n.objectPut(ctx, bkt, p); err != nil {
-						return &api.DeleteError{Err: err, Object: obj.String()}
+						return &errors.DeleteError{Err: err, Object: obj.String()}
 					}
 				}
 			} else {
@@ -553,7 +553,7 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return err
 	}
 	if len(ids) != 0 {
-		return api.GetAPIError(api.ErrBucketNotEmpty)
+		return errors.GetAPIError(errors.ErrBucketNotEmpty)
 	}
 
 	return n.deleteContainer(ctx, bucketInfo.CID)
@@ -561,11 +561,11 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
 	var (
-		res       = ListObjectVersionsInfo{}
-		err       error
-		bkt       *BucketInfo
-		ids       []*object.ID
-		uniqNames = make(map[string]bool)
+		res    = ListObjectVersionsInfo{}
+		err    error
+		bkt    *BucketInfo
+		ids    []*object.ID
+		latest = make(map[string]*ObjectVersionInfo)
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
@@ -575,9 +575,9 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	}
 
 	versions := make([]*ObjectVersionInfo, 0, len(ids))
-	// todo: deletemarkers is empty now, we will use it after proper realization of versioning
 	deleted := make([]*DeletedObjectInfo, 0, len(ids))
-	res.DeleteMarker = deleted
+
+	deletedVersions := []string{}
 
 	for _, id := range ids {
 		meta, err := n.objectHead(ctx, bkt.CID, id)
@@ -586,43 +586,112 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 			continue
 		}
 		if ov := objectVersionInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); ov != nil {
-			if _, ok := uniqNames[ov.Object.Name]; ok {
+			if ov.Object.Name <= p.KeyMarker {
 				continue
 			}
-			if len(p.KeyMarker) > 0 && ov.Object.Name <= p.KeyMarker {
-				continue
+			if currentLatest, ok := latest[ov.Object.Name]; ok {
+				if less(currentLatest, ov) {
+					latest[ov.Object.Name] = ov
+				}
+			} else {
+				latest[ov.Object.Name] = ov
 			}
-			uniqNames[ov.Object.Name] = ov.Object.isDir
-			versions = append(versions, ov)
+
+			if del := ov.Object.Headers[versionsDelAttr]; len(del) != 0 {
+				deletedVersions = append(deletedVersions, strings.Split(del, ",")...)
+			}
+
+			if parsed, err := strconv.ParseBool(ov.Object.Headers[versionsDeleteMarkAttr]); err == nil && parsed {
+				deleted = append(deleted, &DeletedObjectInfo{
+					Owner:        ov.Object.Owner,
+					Key:          ov.Object.Name,
+					VersionID:    ov.VersionID,
+					LastModified: ov.Object.Created.Format(time.RFC3339),
+				})
+			} else {
+				versions = append(versions, ov)
+			}
 		}
 	}
 
 	sort.Slice(versions, func(i, j int) bool {
+		if contains(deletedVersions, versions[i].VersionID) {
+			return true
+		}
+		if contains(deletedVersions, versions[j].VersionID) {
+			return false
+		}
+		if versions[i].Object.Name == versions[j].Object.Name {
+			if versions[i].CreationEpoch == versions[j].CreationEpoch {
+				return versions[i].VersionID < versions[j].VersionID
+			}
+			return versions[i].CreationEpoch < versions[j].CreationEpoch
+		}
 		return versions[i].Object.Name < versions[j].Object.Name
 	})
 
-	if len(versions) > p.MaxKeys {
-		res.IsTruncated = true
-
-		lastVersion := versions[p.MaxKeys-1]
-		res.KeyMarker = lastVersion.Object.Name
-		res.VersionIDMarker = lastVersion.VersionID
-
-		nextVersion := versions[p.MaxKeys]
-		res.NextKeyMarker = nextVersion.Object.Name
-		res.NextVersionIDMarker = nextVersion.VersionID
-
-		versions = versions[:p.MaxKeys]
-	}
-
-	for _, ov := range versions {
-		if isDir := uniqNames[ov.Object.Name]; isDir {
-			res.CommonPrefixes = append(res.CommonPrefixes, &ov.Object.Name)
-		} else {
-			res.Version = append(res.Version, ov)
+	for i, objVersion := range versions {
+		if i == len(versions)-1 || objVersion.Object.Name != versions[i+1].Object.Name {
+			objVersion.IsLatest = true
 		}
 	}
+
+	for i, objVersion := range versions {
+		if !contains(deletedVersions, objVersion.VersionID) {
+			versions = versions[i:]
+			break
+		}
+	}
+
+	for i, objVersion := range deleted {
+		if !contains(deletedVersions, objVersion.VersionID) {
+			deleted = deleted[i:]
+			break
+		}
+	}
+
+	//if len(versions) > p.MaxKeys {
+	//	res.IsTruncated = true
+	//
+	//	lastVersion := versions[p.MaxKeys-1]
+	//	res.KeyMarker = lastVersion.Object.Name
+	//	res.VersionIDMarker = lastVersion.VersionID
+	//
+	//	nextVersion := versions[p.MaxKeys]
+	//	res.NextKeyMarker = nextVersion.Object.Name
+	//	res.NextVersionIDMarker = nextVersion.VersionID
+	//
+	//	versions = versions[:p.MaxKeys]
+	//}
+	//
+	//for _, ov := range versions {
+	//	if isDir := uniqNames[ov.Object.Name]; isDir {
+	//		res.CommonPrefixes = append(res.CommonPrefixes, &ov.Object.Name)
+	//	} else {
+	//		res.Version = append(res.Version, ov)
+	//	}
+	//}
+
+	res.Version = versions
+	res.DeleteMarker = deleted
+
 	return &res, nil
+}
+
+func less(ov1, ov2 *ObjectVersionInfo) bool {
+	if ov1.CreationEpoch == ov2.CreationEpoch {
+		return ov1.VersionID < ov2.VersionID
+	}
+	return ov1.CreationEpoch < ov2.CreationEpoch
+}
+
+func contains(list []string, elem string) bool {
+	for _, item := range list {
+		if elem == item {
+			return true
+		}
+	}
+	return false
 }
 
 func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error) {
