@@ -276,7 +276,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 				DisplayName: ver.Object.Owner.String(),
 			},
 			Size:      ver.Object.Size,
-			VersionID: ver.VersionID,
+			VersionID: ver.Object.Version(),
 			ETag:      ver.Object.HashSum,
 		})
 	}
@@ -284,13 +284,13 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 	for _, del := range info.DeleteMarker {
 		res.DeleteMarker = append(res.DeleteMarker, DeleteMarkerEntry{
 			IsLatest:     del.IsLatest,
-			Key:          del.Key,
-			LastModified: del.LastModified,
+			Key:          del.Object.Name,
+			LastModified: del.Object.Created.Format(time.RFC3339),
 			Owner: Owner{
-				ID:          del.Owner.String(),
-				DisplayName: del.Owner.String(),
+				ID:          del.Object.Owner.String(),
+				DisplayName: del.Object.Owner.String(),
 			},
-			VersionID: del.VersionID,
+			VersionID: del.Object.Version(),
 		})
 	}
 

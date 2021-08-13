@@ -3,7 +3,6 @@ package layer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/url"
 	"sort"
@@ -14,14 +13,16 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
 )
 
 type (
 	findParams struct {
-		val string
-		cid *cid.ID
+		attr string
+		val  string
+		cid  *cid.ID
 	}
 
 	getParams struct {
@@ -78,7 +79,11 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	if filename, err := url.QueryUnescape(p.val); err != nil {
 		return nil, err
 	} else if filename != "" {
-		opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
+		if p.attr == "" {
+			opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
+		} else {
+			opts.AddFilter(p.attr, filename, object.MatchStringEqual)
+		}
 	}
 	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts), n.BearerOpt(ctx))
 }
@@ -123,60 +128,59 @@ func (n *layer) objectRange(ctx context.Context, p *getParams) ([]byte, error) {
 
 // objectPut into NeoFS, took payload from io.Reader.
 func (n *layer) objectPut(ctx context.Context, bkt *BucketInfo, p *PutObjectParams) (*ObjectInfo, error) {
-	var (
-		err error
-		obj string
-		own = n.Owner(ctx)
-	)
-
-	if p.Object == bktVersionSettingsObject {
-		return nil, fmt.Errorf("trying put bucket settings object")
-	}
-
-	if obj, err = url.QueryUnescape(p.Object); err != nil {
+	own := n.Owner(ctx)
+	obj, err := url.QueryUnescape(p.Object)
+	if err != nil {
 		return nil, err
 	}
 
 	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
-	lastVersionInfo, err := n.headLastVersion(ctx, bkt, p.Object)
+	versions, err := n.headVersions(ctx, bkt, obj)
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		return nil, err
 	}
+	idsToDeleteArr := updateCRDT2PSetHeaders(p, versions, versioningEnabled)
 
-	attributes := make([]*object.Attribute, 0, len(p.Header)+1)
-	var idsToDeleteArr []*object.ID
-	if lastVersionInfo != nil {
-		if versioningEnabled {
-			versionsAddedStr := lastVersionInfo.Headers[versionsAddAttr]
-			if len(versionsAddedStr) != 0 {
-				versionsAddedStr += ","
-			}
-			versionsAddedStr += lastVersionInfo.ID().String()
-			p.Header[versionsAddAttr] = versionsAddedStr
+	rawObject := formRawObject(p, bkt.CID, own, obj)
+	r := newDetector(p.Reader)
 
-			deleted := p.Header[versionsDelAttr]
-			if delVersions := lastVersionInfo.Headers[versionsDelAttr]; len(delVersions) != 0 {
-				if len(deleted) == 0 {
-					deleted = delVersions
-				} else {
-					deleted = delVersions + "," + deleted
-				}
-			}
-			if len(deleted) != 0 {
-				p.Header[versionsDelAttr] = deleted
-			}
-		} else {
-			versionsDeletedStr := lastVersionInfo.Headers[versionsDelAttr]
-			if len(versionsDeletedStr) != 0 {
-				versionsDeletedStr += ","
-			}
-			versionsDeletedStr += lastVersionInfo.ID().String()
-			p.Header[versionsDelAttr] = versionsDeletedStr
+	ops := new(client.PutObjectParams).WithObject(rawObject.Object()).WithPayloadReader(r)
+	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
+	if err != nil {
+		return nil, err
+	}
 
-			idsToDeleteArr = append(idsToDeleteArr, lastVersionInfo.ID())
+	meta, err := n.objectHead(ctx, bkt.CID, oid)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range idsToDeleteArr {
+		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
+			n.log.Warn("couldn't delete object",
+				zap.Stringer("version id", id),
+				zap.Error(err))
 		}
 	}
 
+	return &ObjectInfo{
+		id:       oid,
+		bucketID: bkt.CID,
+
+		Owner:         own,
+		Bucket:        p.Bucket,
+		Name:          p.Object,
+		Size:          p.Size,
+		Created:       time.Now(),
+		CreationEpoch: meta.CreationEpoch(),
+		Headers:       p.Header,
+		ContentType:   r.contentType,
+		HashSum:       meta.PayloadChecksum().String(),
+	}, nil
+}
+
+func formRawObject(p *PutObjectParams, bktID *cid.ID, own *owner.ID, obj string) *object.RawObject {
+	attributes := make([]*object.Attribute, 0, len(p.Header)+2)
 	filename := object.NewAttribute()
 	filename.SetKey(object.AttributeFileName)
 	filename.SetValue(obj)
@@ -197,55 +201,68 @@ func (n *layer) objectPut(ctx context.Context, bkt *BucketInfo, p *PutObjectPara
 
 	raw := object.NewRaw()
 	raw.SetOwnerID(own)
-	raw.SetContainerID(bkt.CID)
+	raw.SetContainerID(bktID)
 	raw.SetAttributes(attributes...)
 
-	r := newDetector(p.Reader)
+	return raw
+}
 
-	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(r)
-	oid, err := n.pool.PutObject(
-		ctx,
-		ops,
-		n.BearerOpt(ctx),
-	)
-	if err != nil {
-		return nil, err
+func updateCRDT2PSetHeaders(p *PutObjectParams, versions *objectVersions, versioningEnabled bool) []*object.ID {
+	var idsToDeleteArr []*object.ID
+	if versions == nil {
+		return idsToDeleteArr
 	}
 
-	meta, err := n.objectHead(ctx, bkt.CID, oid)
-	if err != nil {
-		return nil, err
-	}
+	if versioningEnabled {
+		if len(versions.addList) != 0 {
+			p.Header[versionsAddAttr] = versions.getAddHeader()
+		}
 
-	if err = n.objCache.Put(addr, *meta); err != nil {
-		n.log.Error("couldn't cache an object", zap.Error(err))
-	}
+		deleted := versions.getDelHeader()
+		// p.Header[versionsDelAttr] can be not empty when deleting specific version
+		if delAttr := p.Header[versionsDelAttr]; len(delAttr) != 0 {
+			if len(deleted) != 0 {
+				p.Header[versionsDelAttr] = deleted + "," + delAttr
+			} else {
+				p.Header[versionsDelAttr] = delAttr
+			}
+		} else if len(deleted) != 0 {
+			p.Header[versionsDelAttr] = deleted
+		}
+	} else {
+		versionsDeletedStr := versions.getDelHeader()
+		if len(versionsDeletedStr) != 0 {
+			versionsDeletedStr += ","
+		}
 
-	objInfo := &ObjectInfo{
-		id: oid,
+		lastVersion := versions.getLast()
+		p.Header[versionsDelAttr] = versionsDeletedStr + lastVersion.Version()
+		idsToDeleteArr = append(idsToDeleteArr, lastVersion.ID())
 
-		Owner:       own,
-		Bucket:      p.Bucket,
-		Name:        p.Object,
-		Size:        p.Size,
-		Created:     time.Now(),
-		Headers:     p.Header,
-		ContentType: r.contentType,
-		HashSum:     meta.PayloadChecksum().String(),
-	}
-
-	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
-			n.log.Warn("couldn't delete object",
-				zap.Stringer("version id", id),
-				zap.Error(err))
+		for _, version := range versions.objects {
+			if contains(versions.delList, version.Version()) {
+				idsToDeleteArr = append(idsToDeleteArr, version.ID())
+			}
 		}
 	}
 
-	return objInfo, nil
+	return idsToDeleteArr
 }
 
-func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName string) (*ObjectInfo, error) {
+func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *BucketInfo, objectName string) (*ObjectInfo, error) {
+	versions, err := n.headVersions(ctx, bkt, objectName)
+	if err != nil {
+		return nil, err
+	}
+
+	lastVersion := versions.getLast()
+	if lastVersion == nil {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
+	}
+	return lastVersion, nil
+}
+
+func (n *layer) headVersions(ctx context.Context, bkt *BucketInfo, objectName string) (*objectVersions, error) {
 	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, val: objectName})
 	if err != nil {
 		return nil, err
@@ -255,7 +272,7 @@ func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName
 		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
-	infos := make([]*object.Object, 0, len(ids))
+	versions := &objectVersions{}
 	for _, id := range ids {
 		meta, err := n.objectHead(ctx, bkt.CID, id)
 		if err != nil {
@@ -265,14 +282,15 @@ func (n *layer) headLastVersion(ctx context.Context, bkt *BucketInfo, objectName
 				zap.Error(err))
 			continue
 		}
-		infos = append(infos, meta)
+		if oi := objectInfoFromMeta(bkt, meta, "", ""); oi != nil {
+			if isSystem(oi) {
+				continue
+			}
+			versions.appendVersion(oi)
+		}
 	}
 
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].CreationEpoch() < infos[j].CreationEpoch() || (infos[i].CreationEpoch() == infos[j].CreationEpoch() && infos[i].ID().String() < infos[j].ID().String())
-	})
-
-	return objectInfoFromMeta(bkt, infos[len(infos)-1], "", ""), nil
+	return versions, nil
 }
 
 func (n *layer) headVersion(ctx context.Context, bkt *BucketInfo, versionID string) (*ObjectInfo, error) {
@@ -378,17 +396,12 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 }
 
 func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParams) ([]*ObjectInfo, error) {
-	var (
-		err       error
-		ids       []*object.ID
-		uniqNames = make(map[string]bool)
-	)
-
-	if ids, err = n.objectSearch(ctx, &findParams{cid: p.Bucket.CID}); err != nil {
+	ids, err := n.objectSearch(ctx, &findParams{cid: p.Bucket.CID})
+	if err != nil {
 		return nil, err
 	}
 
-	objects := make([]*ObjectInfo, 0, len(ids))
+	versions := make(map[string]*objectVersions, len(ids)/2)
 
 	for _, id := range ids {
 		meta, err := n.objectHead(ctx, p.Bucket.CID, id)
@@ -397,14 +410,26 @@ func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParam
 			continue
 		}
 		if oi := objectInfoFromMeta(p.Bucket, meta, p.Prefix, p.Delimiter); oi != nil {
-			// use only unique dir names
-			if _, ok := uniqNames[oi.Name]; ok {
+			if isSystem(oi) {
 				continue
 			}
 
-			uniqNames[oi.Name] = oi.isDir
+			if objVersions, ok := versions[oi.Name]; ok {
+				objVersions.appendVersion(oi)
+				versions[oi.Name] = objVersions
+			} else {
+				objVersion := &objectVersions{}
+				objVersion.appendVersion(oi)
+				versions[oi.Name] = objVersion
+			}
+		}
+	}
 
-			objects = append(objects, oi)
+	objects := make([]*ObjectInfo, 0, len(versions))
+	for _, v := range versions {
+		lastVersion := v.getLast()
+		if lastVersion != nil {
+			objects = append(objects, lastVersion)
 		}
 	}
 
@@ -413,6 +438,29 @@ func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParam
 	})
 
 	return objects, nil
+}
+
+func getExistedVersions(versions *objectVersions) []string {
+	var res []string
+	for _, add := range versions.addList {
+		if !contains(versions.delList, add) {
+			res = append(res, add)
+		}
+	}
+	return res
+}
+
+func splitVersions(header string) []string {
+	if len(header) == 0 {
+		return nil
+	}
+
+	return strings.Split(header, ",")
+}
+
+func isSystem(obj *ObjectInfo) bool {
+	return len(obj.Headers[objectSystemAttributeName]) > 0 ||
+		len(obj.Headers[attrVersionsIgnore]) > 0
 }
 
 func trimAfterObjectName(startAfter string, objects []*ObjectInfo) []*ObjectInfo {
