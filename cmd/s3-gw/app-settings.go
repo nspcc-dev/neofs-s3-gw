@@ -54,6 +54,11 @@ const ( // Settings.
 	cfgRequestTimeout = "request_timeout"
 	cfgRebalanceTimer = "rebalance_timer"
 
+	// Caching.
+	cfgObjectsCacheLifetime     = "cache.lifetime"
+	cfgCacheSize                = "cache.size"
+	cfgListObjectsCacheLifetime = "cache.list_objects_lifetime"
+
 	// MaxClients.
 	cfgMaxClientsCount    = "max_clients_count"
 	cfgMaxClientsDeadline = "max_clients_deadline"

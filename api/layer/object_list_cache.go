@@ -13,7 +13,7 @@ import (
 	request.
 
 	The cache is a map which has a key: cacheOptions struct and a value: list of objects. After putting a record we
-	start a timer (via time.AfterFunc) that removes the record after defaultObjectsListCacheLifetime value.
+	start a timer (via time.AfterFunc) that removes the record after DefaultObjectsListCacheLifetime value.
 
 	When we get a request from the user we just try to find the suitable and non-expired cache and then we return
 	the list of objects. Otherwise we send the request to NeoFS.
@@ -27,7 +27,8 @@ type (
 	}
 )
 
-const defaultObjectsListCacheLifetime = time.Second * 60
+// DefaultObjectsListCacheLifetime is a default lifetime of entries in cache of ListObjects.
+const DefaultObjectsListCacheLifetime = time.Second * 60
 
 type (
 	listObjectsCache struct {

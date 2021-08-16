@@ -15,9 +15,9 @@ type ObjectsCache interface {
 }
 
 const (
-	// DefaultObjectsCacheLifetime is a default lifetime of objects in cache.
+	// DefaultObjectsCacheLifetime is a default lifetime of entries in objects' cache.
 	DefaultObjectsCacheLifetime = time.Minute * 5
-	// DefaultObjectsCacheSize is a default maximum number of objects in cache.
+	// DefaultObjectsCacheSize is a default maximum number of entries in objects' in cache.
 	DefaultObjectsCacheSize = 1e6
 )
 
