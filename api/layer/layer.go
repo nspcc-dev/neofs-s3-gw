@@ -30,6 +30,13 @@ type (
 		objCache     cache.ObjectsCache
 	}
 
+	// CacheConfig contains params for caches.
+	CacheConfig struct {
+		Lifetime            time.Duration
+		Size                int
+		ListObjectsLifetime time.Duration
+	}
+
 	// Params stores basic API parameters.
 	Params struct {
 		Pool    pool.Pool
@@ -130,12 +137,12 @@ const (
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, conns pool.Pool) Client {
+func NewLayer(log *zap.Logger, conns pool.Pool, config *CacheConfig) Client {
 	return &layer{
 		pool:         conns,
 		log:          log,
-		listObjCache: newListObjectsCache(defaultObjectsListCacheLifetime),
-		objCache:     cache.New(cache.DefaultObjectsCacheSize, cache.DefaultObjectsCacheLifetime),
+		listObjCache: newListObjectsCache(config.ListObjectsLifetime),
+		objCache:     cache.New(config.Size, config.Lifetime),
 	}
 }
 

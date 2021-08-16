@@ -144,6 +144,17 @@ If parameter doesn't support environment variable (e.g. `--listen_address 0.0.0.
 listen_address: 0.0.0.0:8084
 ```
 
+#### Cache parameters 
+
+Parameters for caches in s3-gw can be specified in .yaml config file. E.g.:
+```
+cache:
+  lifetime: 300s
+  size: 150
+  list_objects_lifetime: 1m
+```
+If invalid values are set, the gateway will use default values instead.
+
 ## NeoFS AuthMate
 
 Authmate is a tool to create gateway AWS credentials. AWS users
