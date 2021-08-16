@@ -64,12 +64,6 @@ type (
 	}
 )
 
-const (
-	versionsDelAttr        = "S3-Versions-del"
-	versionsAddAttr        = "S3-Versions-add"
-	versionsDeleteMarkAttr = "S3-Versions-delete-mark"
-)
-
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, error) {
 	var opts object.SearchFilters
@@ -272,7 +266,7 @@ func (n *layer) headVersions(ctx context.Context, bkt *BucketInfo, objectName st
 		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
-	versions := &objectVersions{}
+	versions := newObjectVersions(objectName)
 	for _, id := range ids {
 		meta, err := n.objectHead(ctx, bkt.CID, id)
 		if err != nil {
@@ -418,7 +412,7 @@ func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParam
 				objVersions.appendVersion(oi)
 				versions[oi.Name] = objVersions
 			} else {
-				objVersion := &objectVersions{}
+				objVersion := newObjectVersions(oi.Name)
 				objVersion.appendVersion(oi)
 				versions[oi.Name] = objVersion
 			}
