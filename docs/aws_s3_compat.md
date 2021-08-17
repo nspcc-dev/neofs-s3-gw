@@ -69,7 +69,7 @@ Should be supported soon.
 |    | Method              | Comments |
 |----|---------------------|----------|
 | 🔴 | DeleteObjectTagging |          |
-| 🔴 | GetObjectTagging    |          |
+| 🟢 | GetObjectTagging    |          |
 | 🟢 | PutObjectTagging    |          |
 
 ## Versioning

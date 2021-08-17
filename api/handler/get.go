@@ -65,7 +65,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
 
-func writeHeaders(h http.Header, info *layer.ObjectInfo) {
+func writeHeaders(h http.Header, info *layer.ObjectInfo, tagSetLength int) {
 	if len(info.ContentType) > 0 {
 		h.Set(api.ContentType, info.ContentType)
 	}
@@ -73,6 +73,7 @@ func writeHeaders(h http.Header, info *layer.ObjectInfo) {
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
 	h.Set(api.AmzVersionID, info.ID().String())
+	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
 	for key, val := range info.Headers {
 		h[api.MetadataPrefix+key] = []string{val}
@@ -119,7 +120,14 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not parse range header", reqInfo, err)
 		return
 	}
-	writeHeaders(w.Header(), info)
+
+	tagSet, err := h.obj.GetObjectTagging(r.Context(), info)
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
+		return
+	}
+
+	writeHeaders(w.Header(), info, len(tagSet))
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
 	}

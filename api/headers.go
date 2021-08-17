@@ -5,6 +5,7 @@ const (
 	MetadataPrefix       = "X-Amz-Meta-"
 	AmzMetadataDirective = "X-Amz-Metadata-Directive"
 	AmzVersionID         = "X-Amz-Version-Id"
+	AmzTaggingCount      = "X-Amz-Tagging-Count"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"

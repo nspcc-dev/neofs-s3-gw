@@ -60,6 +60,38 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get("versionId"),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	tagSet, err := h.obj.GetObjectTagging(r.Context(), objInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
+		return
+	}
+
+	tagging := &Tagging{}
+	for k, v := range tagSet {
+		tagging.TagSet = append(tagging.TagSet, Tag{Key: k, Value: v})
+	}
+
+	w.Header().Set(api.AmzVersionID, objInfo.Version())
+	if err = api.EncodeToResponse(w, tagging); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
+	}
+}
+
 func checkTagSet(tagSet []Tag) error {
 	if len(tagSet) > 10 {
 		return errors.GetAPIError(errors.ErrInvalidTag)

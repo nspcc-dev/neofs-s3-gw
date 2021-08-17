@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
@@ -46,6 +47,11 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
+	tagSet, err := h.obj.GetObjectTagging(r.Context(), inf)
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
+		return
+	}
 
 	if len(info.ContentType) == 0 {
 		buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
@@ -62,7 +68,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		info.ContentType = http.DetectContentType(buffer.Bytes())
 	}
 
-	writeHeaders(w.Header(), info)
+	writeHeaders(w.Header(), info, len(tagSet))
 	w.WriteHeader(http.StatusOK)
 }
 
