@@ -67,7 +67,10 @@ const (
 	ErrNoSuchUpload
 	ErrNoSuchVersion
 	ErrInvalidVersion
-	ErrInvalidTag
+	ErrInvalidArgument
+	ErrInvalidTagKey
+	ErrInvalidTagValue
+	ErrInvalidTagsSizeExceed
 	ErrNotImplemented
 	ErrPreconditionFailed
 	ErrNotModified
@@ -300,7 +303,6 @@ const (
 	ErrEvaluatorInvalidTimestampFormatPatternSymbol
 	ErrEvaluatorBindingDoesNotExist
 	ErrMissingHeaders
-	ErrInvalidArgument
 	ErrInvalidColumnIndex
 
 	ErrAdminConfigNotificationTargetsFailed
@@ -537,10 +539,28 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid version id specified",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrInvalidTag: {
-		ErrCode:        ErrInvalidTag,
+	ErrInvalidArgument: {
+		ErrCode:        ErrInvalidArgument,
+		Code:           "InvalidArgument",
+		Description:    "The specified argument was invalid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTagKey: {
+		ErrCode:        ErrInvalidTagKey,
 		Code:           "InvalidTag",
-		Description:    "You have passed bad tag input - duplicate keys, key/values are too long, system tags were sent.",
+		Description:    "The TagValue you have provided is invalid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTagValue: {
+		ErrCode:        ErrInvalidTagValue,
+		Code:           "InvalidTag",
+		Description:    "The TagKey you have provided is invalid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTagsSizeExceed: {
+		ErrCode:        ErrInvalidTagsSizeExceed,
+		Code:           "BadRequest",
+		Description:    "Object tags cannot be greater than 10",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNotImplemented: {
@@ -1851,12 +1871,6 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrMissingHeaders,
 		Code:           "MissingHeaders",
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrInvalidArgument: {
-		ErrCode:        ErrInvalidArgument,
-		Code:           "InvalidArgument",
-		Description:    "The specified argument was invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidColumnIndex: {

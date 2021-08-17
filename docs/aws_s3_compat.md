@@ -209,9 +209,9 @@ See also `GetObject` and other method parameters.
 
 |    | Method              | Comments |
 |----|---------------------|----------|
-| 🔴 | DeleteBucketTagging |          |
-| 🔴 | GetBucketTagging    |          |
-| 🔴 | PutBucketTagging    |          |
+| 🟢 | DeleteBucketTagging |          |
+| 🟢 | GetBucketTagging    |          |
+| 🟢 | PutBucketTagging    |          |
 
 ## Tiering
 
