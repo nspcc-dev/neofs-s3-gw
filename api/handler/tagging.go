@@ -106,6 +106,28 @@ func checkTagSet(tagSet []Tag) error {
 	return nil
 }
 
+func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get("versionId"),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	if err = h.obj.DeleteObjectTagging(r.Context(), objInfo); err != nil {
+		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func checkTag(tag Tag) error {
 	if len(tag.Key) < 1 || len(tag.Key) > keyTagMaxLength {
 		return errors.GetAPIError(errors.ErrInvalidTag)

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
@@ -174,6 +175,7 @@ type (
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
 		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error
+		DeleteObjectTagging(ctx context.Context, p *ObjectInfo) error
 	}
 )
 
@@ -374,7 +376,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 
 // GetObjectTagging from storage.
 func (n *layer) GetObjectTagging(ctx context.Context, oi *ObjectInfo) (map[string]string, error) {
-	bktInfo := &BucketInfo{
+	bktInfo := &cache.BucketInfo{
 		Name:  oi.Bucket,
 		CID:   oi.CID(),
 		Owner: oi.Owner,
@@ -411,6 +413,19 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 	}
 
 	return nil
+}
+
+// DeleteObjectTagging from storage.
+func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectInfo) error {
+	oid, err := n.objectFindID(ctx, &findParams{cid: p.CID(), attr: objectSystemAttributeName, val: p.TagsObject()})
+	if err != nil {
+		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
+			return nil
+		}
+		return err
+	}
+
+	return n.objectDelete(ctx, p.CID(), oid)
 }
 
 func (n *layer) putSystemObject(ctx context.Context, bktInfo *cache.BucketInfo, objName string, metadata map[string]string, prefix string) (*object.ID, error) {
@@ -465,7 +480,7 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *cache.BucketInfo, 
 	return oid, nil
 }
 
-func (n *layer) getSystemObject(ctx context.Context, bkt *BucketInfo, objName string) (*ObjectInfo, error) {
+func (n *layer) getSystemObject(ctx context.Context, bkt *cache.BucketInfo, objName string) (*ObjectInfo, error) {
 	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: objName})
 	if err != nil {
 		return nil, err
@@ -544,6 +559,9 @@ func (n *layer) deleteObject(ctx context.Context, bkt *cache.BucketInfo, obj *Ve
 
 	for _, id := range ids {
 		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
+			return err
+		}
+		if err = n.DeleteObjectTagging(ctx, &ObjectInfo{id: id, bucketID: bkt.CID, Name: obj.Name}); err != nil {
 			return err
 		}
 	}
