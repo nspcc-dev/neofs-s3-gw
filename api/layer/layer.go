@@ -162,6 +162,7 @@ type (
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error)
+		GetObjectTagging(ctx context.Context, p *ObjectInfo) (map[string]string, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error)
 		PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
@@ -371,6 +372,32 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	return n.objectPut(ctx, bkt, p)
 }
 
+// GetObjectTagging from storage.
+func (n *layer) GetObjectTagging(ctx context.Context, oi *ObjectInfo) (map[string]string, error) {
+	bktInfo := &BucketInfo{
+		Name:  oi.Bucket,
+		CID:   oi.CID(),
+		Owner: oi.Owner,
+	}
+
+	objInfo, err := n.getSystemObject(ctx, bktInfo, oi.TagsObject())
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		return nil, err
+	}
+
+	var tagSet map[string]string
+	if objInfo != nil {
+		tagSet = make(map[string]string, len(objInfo.Headers))
+		for k, v := range objInfo.Headers {
+			if strings.HasPrefix(k, tagPrefix) {
+				tagSet[strings.TrimPrefix(k, tagPrefix)] = v
+			}
+		}
+	}
+
+	return tagSet, nil
+}
+
 // PutObjectTagging into storage.
 func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error {
 	bktInfo := &cache.BucketInfo{
@@ -436,6 +463,20 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *cache.BucketInfo, 
 	}
 
 	return oid, nil
+}
+
+func (n *layer) getSystemObject(ctx context.Context, bkt *BucketInfo, objName string) (*ObjectInfo, error) {
+	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: objName})
+	if err != nil {
+		return nil, err
+	}
+
+	meta, err := n.objectHead(ctx, bkt.CID, oid)
+	if err != nil {
+		return nil, err
+	}
+
+	return objectInfoFromMeta(bkt, meta, "", ""), nil
 }
 
 // CopyObject from one bucket into another bucket.
