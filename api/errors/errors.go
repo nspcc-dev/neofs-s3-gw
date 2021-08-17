@@ -67,6 +67,7 @@ const (
 	ErrNoSuchUpload
 	ErrNoSuchVersion
 	ErrInvalidVersion
+	ErrInvalidTag
 	ErrNotImplemented
 	ErrPreconditionFailed
 	ErrNotModified
@@ -534,6 +535,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrInvalidVersion,
 		Code:           "InvalidArgument",
 		Description:    "Invalid version id specified",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTag: {
+		ErrCode:        ErrInvalidTag,
+		Code:           "InvalidTag",
+		Description:    "You have passed bad tag input - duplicate keys, key/values are too long, system tags were sent.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNotImplemented: {

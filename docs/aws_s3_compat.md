@@ -70,7 +70,7 @@ Should be supported soon.
 |----|---------------------|----------|
 | 🔴 | DeleteObjectTagging |          |
 | 🔴 | GetObjectTagging    |          |
-| 🔴 | PutObjectTagging    |          |
+| 🟢 | PutObjectTagging    |          |
 
 ## Versioning
 
