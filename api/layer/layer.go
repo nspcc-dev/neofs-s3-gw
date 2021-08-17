@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
@@ -134,6 +135,12 @@ type (
 		VersionID string
 	}
 
+	// PutTaggingParams stores tag set params.
+	PutTaggingParams struct {
+		ObjectInfo *ObjectInfo
+		TagSet     map[string]string
+	}
+
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
 		Get(ctx context.Context, address *object.Address) (*object.Object, error)
@@ -157,6 +164,7 @@ type (
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error)
+		PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error)
 
@@ -167,6 +175,8 @@ type (
 		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error
 	}
 )
+
+const tagPrefix = "S3-Tag-"
 
 func (t *VersionedObject) String() string {
 	return t.Name + ":" + t.VersionID
@@ -359,6 +369,73 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 	}
 
 	return n.objectPut(ctx, bkt, p)
+}
+
+// PutObjectTagging into storage.
+func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error {
+	bktInfo := &cache.BucketInfo{
+		Name:  p.ObjectInfo.Bucket,
+		CID:   p.ObjectInfo.CID(),
+		Owner: p.ObjectInfo.Owner,
+	}
+
+	if _, err := n.putSystemObject(ctx, bktInfo, p.ObjectInfo.TagsObject(), p.TagSet, tagPrefix); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *layer) putSystemObject(ctx context.Context, bktInfo *cache.BucketInfo, objName string, metadata map[string]string, prefix string) (*object.ID, error) {
+	oldOID, err := n.objectFindID(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: objName})
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		return nil, err
+	}
+
+	attributes := make([]*object.Attribute, 0, 3)
+
+	filename := object.NewAttribute()
+	filename.SetKey(objectSystemAttributeName)
+	filename.SetValue(objName)
+
+	createdAt := object.NewAttribute()
+	createdAt.SetKey(object.AttributeTimestamp)
+	createdAt.SetValue(strconv.FormatInt(time.Now().UTC().Unix(), 10))
+
+	versioningIgnore := object.NewAttribute()
+	versioningIgnore.SetKey(attrVersionsIgnore)
+	versioningIgnore.SetValue(strconv.FormatBool(true))
+
+	attributes = append(attributes, filename, createdAt, versioningIgnore)
+
+	for k, v := range metadata {
+		attr := object.NewAttribute()
+		attr.SetKey(prefix + k)
+		attr.SetValue(v)
+		attributes = append(attributes, attr)
+	}
+
+	raw := object.NewRaw()
+	raw.SetOwnerID(bktInfo.Owner)
+	raw.SetContainerID(bktInfo.CID)
+	raw.SetAttributes(attributes...)
+
+	ops := new(client.PutObjectParams).WithObject(raw.Object())
+	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = n.objectHead(ctx, bktInfo.CID, oid); err != nil {
+		return nil, err
+	}
+	if oldOID != nil {
+		if err = n.objectDelete(ctx, bktInfo.CID, oldOID); err != nil {
+			return nil, err
+		}
+	}
+
+	return oid, nil
 }
 
 // CopyObject from one bucket into another bucket.

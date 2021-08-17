@@ -175,6 +175,9 @@ func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 // Address returns object address.
 func (o *ObjectInfo) Address() *object.Address { return newAddress(o.bucketID, o.id) }
 
+// TagsObject returns name of system object for tags.
+func (o *ObjectInfo) TagsObject() string { return ".tagset." + o.Name + "." + o.Version() }
+
 // CID returns bucket ID from ObjectInfo.
 func (o *ObjectInfo) CID() *cid.ID { return o.bucketID }
 

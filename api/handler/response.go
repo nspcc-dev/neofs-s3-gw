@@ -171,6 +171,18 @@ type VersioningConfiguration struct {
 	MfaDelete string   `xml:"MfaDelete,omitempty"`
 }
 
+// Tagging contains tag set.
+type Tagging struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Tagging"`
+	TagSet  []Tag    `xml:"TagSet>Tag"`
+}
+
+// Tag is AWS key-value tag.
+type Tag struct {
+	Key   string
+	Value string
+}
+
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	tokens := []xml.Token{start}

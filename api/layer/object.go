@@ -179,6 +179,15 @@ func (n *layer) objectPut(ctx context.Context, bkt *cache.BucketInfo, p *PutObje
 				zap.Stringer("version id", id),
 				zap.Error(err))
 		}
+		if !versioningEnabled {
+			if objVersion := versions.getVersion(id); objVersion != nil {
+				if err = n.DeleteObjectTagging(ctx, objVersion); err != nil {
+					n.log.Warn("couldn't delete object tagging",
+						zap.Stringer("version id", id),
+						zap.Error(err))
+				}
+			}
+		}
 	}
 
 	return &ObjectInfo{
