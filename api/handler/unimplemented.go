@@ -83,15 +83,7 @@ func (h *handler) GetBucketReplicationHandler(w http.ResponseWriter, r *http.Req
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
 
-func (h *handler) GetBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
 func (h *handler) DeleteBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
-func (h *handler) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
 

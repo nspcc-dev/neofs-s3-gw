@@ -164,9 +164,11 @@ type (
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error)
 		GetObjectTagging(ctx context.Context, p *ObjectInfo) (map[string]string, error)
+		GetBucketTagging(ctx context.Context, bucket string) (map[string]string, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error)
 		PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
+		PutBucketTagging(ctx context.Context, bucket string, tagSet map[string]string) error
 
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error)
 
@@ -176,10 +178,14 @@ type (
 
 		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error
 		DeleteObjectTagging(ctx context.Context, p *ObjectInfo) error
+		DeleteBucketTagging(ctx context.Context, bucket string) error
 	}
 )
 
-const tagPrefix = "S3-Tag-"
+const (
+	tagPrefix    = "S3-Tag-"
+	tagEmptyMark = "\\"
+)
 
 func (t *VersionedObject) String() string {
 	return t.Name + ":" + t.VersionID
@@ -387,17 +393,38 @@ func (n *layer) GetObjectTagging(ctx context.Context, oi *ObjectInfo) (map[strin
 		return nil, err
 	}
 
+	return formTagSet(objInfo), nil
+}
+
+// GetBucketTagging from storage.
+func (n *layer) GetBucketTagging(ctx context.Context, bucketName string) (map[string]string, error) {
+	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
+	if err != nil {
+		return nil, err
+	}
+
+	objInfo, err := n.getSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		return nil, err
+	}
+
+	return formTagSet(objInfo), nil
+}
+
+func formTagSet(objInfo *ObjectInfo) map[string]string {
 	var tagSet map[string]string
 	if objInfo != nil {
 		tagSet = make(map[string]string, len(objInfo.Headers))
 		for k, v := range objInfo.Headers {
 			if strings.HasPrefix(k, tagPrefix) {
+				if v == tagEmptyMark {
+					v = ""
+				}
 				tagSet[strings.TrimPrefix(k, tagPrefix)] = v
 			}
 		}
 	}
-
-	return tagSet, nil
+	return tagSet
 }
 
 // PutObjectTagging into storage.
@@ -415,9 +442,27 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 	return nil
 }
 
+// PutBucketTagging into storage.
+func (n *layer) PutBucketTagging(ctx context.Context, bucketName string, tagSet map[string]string) error {
+	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
+	if err != nil {
+		return err
+	}
+
+	if _, err = n.putSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName), tagSet, tagPrefix); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DeleteObjectTagging from storage.
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectInfo) error {
-	oid, err := n.objectFindID(ctx, &findParams{cid: p.CID(), attr: objectSystemAttributeName, val: p.TagsObject()})
+	return n.deleteSystemObject(ctx, p.CID(), p.TagsObject())
+}
+
+func (n *layer) deleteSystemObject(ctx context.Context, bktCID *cid.ID, name string) error {
+	oid, err := n.objectFindID(ctx, &findParams{cid: bktCID, attr: objectSystemAttributeName, val: name})
 	if err != nil {
 		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
 			return nil
@@ -425,7 +470,17 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectInfo) error {
 		return err
 	}
 
-	return n.objectDelete(ctx, p.CID(), oid)
+	return n.objectDelete(ctx, bktCID, oid)
+}
+
+// DeleteBucketTagging from storage.
+func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) error {
+	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
+	if err != nil {
+		return err
+	}
+
+	return n.deleteSystemObject(ctx, bktInfo.CID, formBucketTagObjectName(bucketName))
 }
 
 func (n *layer) putSystemObject(ctx context.Context, bktInfo *cache.BucketInfo, objName string, metadata map[string]string, prefix string) (*object.ID, error) {
@@ -453,6 +508,9 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *cache.BucketInfo, 
 	for k, v := range metadata {
 		attr := object.NewAttribute()
 		attr.SetKey(prefix + k)
+		if prefix == tagPrefix && v == "" {
+			v = tagEmptyMark
+		}
 		attr.SetValue(v)
 		attributes = append(attributes, attr)
 	}

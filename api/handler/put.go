@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
@@ -31,6 +32,11 @@ type createBucketParams struct {
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var newEaclTable *eacl.Table
 	reqInfo := api.GetReqInfo(r.Context())
+	tagSet, err := parseTaggingHeader(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "could not parse tagging header", reqInfo, err)
+		return
+	}
 
 	if containsACLHeaders(r) {
 		objectACL, err := parseACLHeaders(r)
@@ -102,6 +108,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if tagSet != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), &layer.PutTaggingParams{ObjectInfo: info, TagSet: tagSet}); err != nil {
+			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
+			return
+		}
+	}
+
 	if newEaclTable != nil {
 		p := &layer.PutBucketACLParams{
 			Name: reqInfo.BucketName,
@@ -127,6 +140,28 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 func containsACLHeaders(r *http.Request) bool {
 	return r.Header.Get(api.AmzACL) != "" || r.Header.Get(api.AmzGrantRead) != "" ||
 		r.Header.Get(api.AmzGrantFullControl) != "" || r.Header.Get(api.AmzGrantWrite) != ""
+}
+
+func parseTaggingHeader(header http.Header) (map[string]string, error) {
+	var tagSet map[string]string
+	if tagging := header.Get(api.AmzTagging); len(tagging) > 0 {
+		queries, err := url.ParseQuery(tagging)
+		if err != nil {
+			return nil, errors.GetAPIError(errors.ErrInvalidArgument)
+		}
+		if len(queries) > maxTags {
+			return nil, errors.GetAPIError(errors.ErrInvalidTagsSizeExceed)
+		}
+		tagSet = make(map[string]string, len(queries))
+		for k, v := range queries {
+			tag := Tag{Key: k, Value: v[0]}
+			if err = checkTag(tag); err != nil {
+				return nil, err
+			}
+			tagSet[tag.Key] = tag.Value
+		}
+	}
+	return tagSet, nil
 }
 
 func parseMetadata(r *http.Request) map[string]string {

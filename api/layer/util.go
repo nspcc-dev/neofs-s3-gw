@@ -198,3 +198,7 @@ func GetBoxData(ctx context.Context) (*accessbox.Box, error) {
 	}
 	return boxData, nil
 }
+
+func formBucketTagObjectName(name string) string {
+	return ".tagset." + name
+}

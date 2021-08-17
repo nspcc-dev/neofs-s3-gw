@@ -6,6 +6,7 @@ const (
 	AmzMetadataDirective = "X-Amz-Metadata-Directive"
 	AmzVersionID         = "X-Amz-Version-Id"
 	AmzTaggingCount      = "X-Amz-Tagging-Count"
+	AmzTagging           = "X-Amz-Tagging"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"

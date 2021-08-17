@@ -23,7 +23,6 @@ func TestTagsValidity(t *testing.T) {
 	}{
 		{tag: Tag{}, valid: false},
 		{tag: Tag{Key: "", Value: "1"}, valid: false},
-		{tag: Tag{Key: "2", Value: ""}, valid: false},
 		{tag: Tag{Key: "aws:key", Value: "val"}, valid: false},
 		{tag: Tag{Key: "key~", Value: "val"}, valid: false},
 		{tag: Tag{Key: "key\\", Value: "val"}, valid: false},
