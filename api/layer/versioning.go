@@ -112,6 +112,15 @@ func (v *objectVersions) getDelHeader() string {
 	return strings.Join(v.delList, ",")
 }
 
+func (v *objectVersions) getVersion(oid *object.ID) *ObjectInfo {
+	for _, version := range v.objects {
+		if version.ID() == oid {
+			return version
+		}
+	}
+	return nil
+}
+
 func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error) {
 	bucketInfo, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {

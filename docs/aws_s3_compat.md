@@ -68,7 +68,7 @@ Should be supported soon.
 
 |    | Method              | Comments |
 |----|---------------------|----------|
-| 🔴 | DeleteObjectTagging |          |
+| 🟢 | DeleteObjectTagging |          |
 | 🟢 | GetObjectTagging    |          |
 | 🟢 | PutObjectTagging    |          |
 

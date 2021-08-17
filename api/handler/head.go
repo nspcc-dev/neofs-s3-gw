@@ -47,7 +47,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
-	tagSet, err := h.obj.GetObjectTagging(r.Context(), inf)
+	tagSet, err := h.obj.GetObjectTagging(r.Context(), info)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
 		return
