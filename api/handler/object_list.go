@@ -263,7 +263,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 	}
 
 	for _, prefix := range info.CommonPrefixes {
-		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{Prefix: *prefix})
+		res.CommonPrefixes = append(res.CommonPrefixes, CommonPrefix{Prefix: prefix})
 	}
 
 	for _, ver := range info.Version {

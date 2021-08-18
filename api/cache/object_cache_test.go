@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+
 	objecttest "github.com/nspcc-dev/neofs-api-go/pkg/object/test"
 	"github.com/stretchr/testify/require"
 )
@@ -14,23 +16,23 @@ const (
 )
 
 func TestCache(t *testing.T) {
-	var (
-		address = objecttest.Address()
-		object  = objecttest.Object()
-	)
+	obj := objecttest.Object()
+	address := object.NewAddress()
+	address.SetContainerID(obj.ContainerID())
+	address.SetObjectID(obj.ID())
 
 	t.Run("check get", func(t *testing.T) {
 		cache := New(cachesize, lifetime)
-		err := cache.Put(address, *object)
+		err := cache.Put(*obj)
 		require.NoError(t, err)
 
 		actual := cache.Get(address)
-		require.Equal(t, object, actual)
+		require.Equal(t, obj, actual)
 	})
 
 	t.Run("check delete", func(t *testing.T) {
 		cache := New(cachesize, lifetime)
-		err := cache.Put(address, *object)
+		err := cache.Put(*obj)
 		require.NoError(t, err)
 
 		cache.Delete(address)

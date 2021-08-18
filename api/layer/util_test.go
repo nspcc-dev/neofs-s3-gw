@@ -9,6 +9,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +20,7 @@ var (
 	defaultTestContentType   = http.DetectContentType(defaultTestPayload)
 )
 
-func newTestObject(oid *object.ID, bkt *BucketInfo, name string) *object.Object {
+func newTestObject(oid *object.ID, bkt *cache.BucketInfo, name string) *object.Object {
 	filename := object.NewAttribute()
 	filename.SetKey(object.AttributeFileName)
 	filename.SetValue(name)
@@ -43,7 +44,7 @@ func newTestObject(oid *object.ID, bkt *BucketInfo, name string) *object.Object 
 	return raw.Object()
 }
 
-func newTestInfo(oid *object.ID, bkt *BucketInfo, name string, isDir bool) *ObjectInfo {
+func newTestInfo(oid *object.ID, bkt *cache.BucketInfo, name string, isDir bool) *ObjectInfo {
 	info := &ObjectInfo{
 		id:          oid,
 		Name:        name,
@@ -71,7 +72,7 @@ func Test_objectInfoFromMeta(t *testing.T) {
 	oid := object.NewID()
 	containerID := cid.New()
 
-	bkt := &BucketInfo{
+	bkt := &cache.BucketInfo{
 		Name:    "test-container",
 		CID:     containerID,
 		Owner:   uid,

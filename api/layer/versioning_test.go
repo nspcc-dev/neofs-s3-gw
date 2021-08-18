@@ -20,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
@@ -61,10 +62,7 @@ func (t *testPool) PutObject(ctx context.Context, params *client.PutObjectParams
 		raw.SetPayload(all)
 	}
 
-	addr := object.NewAddress()
-	addr.SetObjectID(raw.ID())
-	addr.SetContainerID(raw.ContainerID())
-
+	addr := newAddress(raw.ContainerID(), raw.ID())
 	t.objects[addr.String()] = raw.Object()
 	return raw.ID(), nil
 }
@@ -329,8 +327,12 @@ func prepareContext(t *testing.T) *testContext {
 	require.NoError(t, err)
 
 	return &testContext{
-		ctx:      ctx,
-		layer:    NewLayer(l, tp),
+		ctx: ctx,
+		layer: NewLayer(l, tp, &CacheConfig{
+			Size:                cache.DefaultObjectsCacheSize,
+			Lifetime:            cache.DefaultObjectsCacheLifetime,
+			ListObjectsLifetime: DefaultObjectsListCacheLifetime},
+		),
 		bkt:      bktName,
 		bktID:    bktID,
 		obj:      "obj1",

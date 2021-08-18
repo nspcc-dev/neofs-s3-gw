@@ -30,6 +30,11 @@ type (
 // DefaultObjectsListCacheLifetime is a default lifetime of entries in cache of ListObjects.
 const DefaultObjectsListCacheLifetime = time.Second * 60
 
+const (
+	listObjectsMethod  = "listObjects"
+	listVersionsMethod = "listVersions"
+)
+
 type (
 	listObjectsCache struct {
 		cacheLifetime time.Duration
@@ -78,7 +83,7 @@ func (l *listObjectsCache) Put(key cacheOptions, objects []*ObjectInfo) {
 	})
 }
 
-func createKey(ctx context.Context, cid *cid.ID, prefix, delimiter string) (cacheOptions, error) {
+func createKey(ctx context.Context, cid *cid.ID, method, prefix, delimiter string) (cacheOptions, error) {
 	box, err := GetBoxData(ctx)
 	if err != nil {
 		return cacheOptions{}, err

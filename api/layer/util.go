@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 )
 
@@ -60,7 +61,7 @@ type (
 
 	// ListObjectVersionsInfo stores info and list of objects' versions.
 	ListObjectVersionsInfo struct {
-		CommonPrefixes      []*string
+		CommonPrefixes      []string
 		IsTruncated         bool
 		KeyMarker           string
 		NextKeyMarker       string
@@ -84,7 +85,11 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	return result
 }
 
-func objectInfoFromMeta(bkt *BucketInfo, meta *object.Object, prefix, delimiter string) *ObjectInfo {
+func objInfoFromMeta(bkt *cache.BucketInfo, meta *object.Object) *ObjectInfo {
+	return objectInfoFromMeta(bkt, meta, "", "")
+}
+
+func objectInfoFromMeta(bkt *cache.BucketInfo, meta *object.Object, prefix, delimiter string) *ObjectInfo {
 	var (
 		isDir    bool
 		size     int64
@@ -163,6 +168,12 @@ func (o *ObjectInfo) ID() *object.ID { return o.id }
 
 // Version returns object version from ObjectInfo.
 func (o *ObjectInfo) Version() string { return o.id.String() }
+
+// NiceName returns object name for cache.
+func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
+
+// Address returns object address.
+func (o *ObjectInfo) Address() *object.Address { return newAddress(o.bucketID, o.id) }
 
 // CID returns bucket ID from ObjectInfo.
 func (o *ObjectInfo) CID() *cid.ID { return o.bucketID }

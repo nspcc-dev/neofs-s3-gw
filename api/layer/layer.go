@@ -28,10 +28,13 @@ import (
 
 type (
 	layer struct {
-		pool         pool.Pool
-		log          *zap.Logger
-		listObjCache ObjectsListCache
-		objCache     cache.ObjectsCache
+		pool        pool.Pool
+		log         *zap.Logger
+		listsCache  ObjectsListCache
+		objCache    cache.ObjectsCache
+		headCache   cache.HeadObjectsCache
+		bucketCache cache.BucketCache
+		systemCache cache.SystemCache
 	}
 
 	// CacheConfig contains params for caches.
@@ -156,8 +159,8 @@ type (
 		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error)
 		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
 
-		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
-		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
+		ListBuckets(ctx context.Context) ([]*cache.BucketInfo, error)
+		GetBucketInfo(ctx context.Context, name string) (*cache.BucketInfo, error)
 		GetBucketACL(ctx context.Context, name string) (*BucketACL, error)
 		PutBucketACL(ctx context.Context, p *PutBucketACLParams) error
 		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
@@ -228,24 +231,20 @@ func (v *objectVersions) getLast() *ObjectInfo {
 	return nil
 }
 
-func (v *objectVersions) getFiltered() []*ObjectVersionInfo {
+func (v *objectVersions) getFiltered() []*ObjectInfo {
 	if len(v.objects) == 0 {
 		return nil
 	}
 
 	v.sort()
 	existedVersions := getExistedVersions(v)
-	res := make([]*ObjectVersionInfo, 0, len(v.objects))
+	res := make([]*ObjectInfo, 0, len(v.objects))
 
 	for _, version := range v.objects {
 		delMark := version.Headers[versionsDeleteMarkAttr]
 		if contains(existedVersions, version.Version()) && (delMark == delMarkFullObject || delMark == "") {
-			res = append(res, &ObjectVersionInfo{Object: version})
+			res = append(res, version)
 		}
-	}
-
-	if len(res) > 0 {
-		res[len(res)-1].IsLatest = true
 	}
 
 	return res
@@ -279,10 +278,14 @@ func (t *VersionedObject) String() string {
 // and establishes gRPC connection with node.
 func NewLayer(log *zap.Logger, conns pool.Pool, config *CacheConfig) Client {
 	return &layer{
-		pool:         conns,
-		log:          log,
-		listObjCache: newListObjectsCache(config.ListObjectsLifetime),
-		objCache:     cache.New(config.Size, config.Lifetime),
+		pool:       conns,
+		log:        log,
+		listsCache: newListObjectsCache(config.ListObjectsLifetime),
+		objCache:   cache.New(config.Size, config.Lifetime),
+		//todo reconsider cache params
+		headCache:   cache.NewHeadObject(1000, time.Minute),
+		bucketCache: cache.NewBucketCache(150, time.Minute),
+		systemCache: cache.NewSystemCache(1000, 5*time.Minute),
 	}
 }
 
@@ -320,10 +323,14 @@ func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Objec
 }
 
 // GetBucketInfo returns bucket info by name.
-func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error) {
+func (n *layer) GetBucketInfo(ctx context.Context, name string) (*cache.BucketInfo, error) {
 	name, err := url.QueryUnescape(name)
 	if err != nil {
 		return nil, err
+	}
+
+	if bktInfo := n.bucketCache.Get(name); bktInfo != nil {
+		return bktInfo, nil
 	}
 
 	containerID := new(cid.ID)
@@ -374,7 +381,7 @@ func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) err
 
 // ListBuckets returns all user containers. Name of the bucket is a container
 // id. Timestamp is omitted since it is not saved in neofs container.
-func (n *layer) ListBuckets(ctx context.Context) ([]*BucketInfo, error) {
+func (n *layer) ListBuckets(ctx context.Context) ([]*cache.BucketInfo, error) {
 	return n.containerList(ctx)
 }
 
@@ -382,21 +389,12 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*BucketInfo, error) {
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var err error
 
-	//if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-	//	return fmt.Errorf("couldn't find bucket: %s : %w", p.Bucket, err)
-	//} else if oid, err = n.objectFindID(ctx, &findParams{cid: bkt.CID, val: p.Object}); err != nil {
-	//	return fmt.Errorf("search of the object failed: cid: %s, val: %s : %w", bkt.CID, p.Object, err)
-	//}
-
-	addr := object.NewAddress()
-	addr.SetObjectID(p.ObjectInfo.ID())
-	addr.SetContainerID(p.ObjectInfo.CID())
-
 	params := &getParams{
-		Writer:  p.Writer,
-		address: addr,
-		offset:  p.Offset,
-		length:  p.Length,
+		Writer: p.Writer,
+		cid:    p.ObjectInfo.CID(),
+		oid:    p.ObjectInfo.ID(),
+		offset: p.Offset,
+		length: p.Length,
 	}
 
 	if p.Range != nil {
@@ -411,7 +409,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	}
 
 	if err != nil {
-		n.objCache.Delete(addr)
+		n.objCache.Delete(p.ObjectInfo.Address())
 		return fmt.Errorf("couldn't get object, cid: %s : %w", p.ObjectInfo.CID(), err)
 	}
 
@@ -433,32 +431,26 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*Object
 	return n.headVersion(ctx, bkt, p.VersionID)
 }
 
-func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *BucketInfo) (*ObjectInfo, error) {
+func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *cache.BucketInfo) (*ObjectInfo, error) {
+	if meta := n.systemCache.Get(bktVersionSettingsObject); meta != nil {
+		return objInfoFromMeta(bkt, meta), nil
+	}
+
 	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: bktVersionSettingsObject})
 	if err != nil {
 		return nil, err
 	}
 
-	addr := object.NewAddress()
-	addr.SetObjectID(oid)
-	addr.SetContainerID(bkt.CID)
-
-	/* todo: now we get an address via request to NeoFS and try to find the object with the address in cache
-	 but it will be resolved after implementation of local cache with nicenames and address of objects
-	for get/head requests */
-	meta := n.objCache.Get(addr)
-	if meta == nil {
-		meta, err = n.objectHead(ctx, bkt.CID, oid)
-		if err != nil {
-			n.log.Error("could not fetch object head", zap.Error(err))
-			return nil, err
-		}
-		if err = n.objCache.Put(addr, *meta); err != nil {
-			n.log.Error("couldn't cache an object", zap.Error(err))
-		}
+	meta, err := n.objectHead(ctx, bkt.CID, oid)
+	if err != nil {
+		n.log.Error("could not fetch object head", zap.Error(err))
+		return nil, err
+	}
+	if err = n.systemCache.Put(bktVersionSettingsObject, meta); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	return objectInfoFromMeta(bkt, meta, "", ""), nil
+	return objInfoFromMeta(bkt, meta), nil
 }
 
 // PutObject into storage.
@@ -496,7 +488,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 }
 
 // DeleteObject removes all objects with passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *VersionedObject) error {
+func (n *layer) deleteObject(ctx context.Context, bkt *cache.BucketInfo, obj *VersionedObject) error {
 	var (
 		err error
 		ids []*object.ID
@@ -543,7 +535,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *BucketInfo, obj *Versione
 	return nil
 }
 
-func (n *layer) checkVersionsExists(ctx context.Context, bkt *BucketInfo, obj *VersionedObject) (*object.ID, error) {
+func (n *layer) checkVersionsExists(ctx context.Context, bkt *cache.BucketInfo, obj *VersionedObject) (*object.ID, error) {
 	id := object.NewID()
 	if err := id.Parse(obj.VersionID); err != nil {
 		return nil, &errors.DeleteError{Err: errors.GetAPIError(errors.ErrInvalidVersion), Object: obj.String()}
@@ -608,60 +600,70 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 }
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
-	res := ListObjectVersionsInfo{}
-	versions := make(map[string]*objectVersions)
+	var versions map[string]*objectVersions
+	res := &ListObjectVersionsInfo{}
 
 	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		return nil, err
 	}
-	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID})
+
+	cacheKey, err := createKey(ctx, bkt.CID, listVersionsMethod, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, id)
+	allObjects := n.listsCache.Get(cacheKey)
+	if allObjects == nil {
+		versions, err = n.getAllObjectsVersions(ctx, bkt, p.Prefix, p.Delimiter)
 		if err != nil {
-			n.log.Warn("could not fetch object meta", zap.Error(err))
-			continue
+			return nil, err
 		}
-		if oi := objectInfoFromMeta(bkt, meta, p.Prefix, p.Delimiter); oi != nil {
-			if oi.Name <= p.KeyMarker {
-				continue
-			}
-			if isSystem(oi) {
-				continue
-			}
 
-			if objVersions, ok := versions[oi.Name]; ok {
-				objVersions.appendVersion(oi)
-				versions[oi.Name] = objVersions
-			} else {
-				objVersion := newObjectVersions(oi.Name)
-				objVersion.appendVersion(oi)
-				versions[oi.Name] = objVersion
-			}
+		sortedNames := make([]string, 0, len(versions))
+		for k := range versions {
+			sortedNames = append(sortedNames, k)
 		}
+		sort.Strings(sortedNames)
+
+		allObjects = make([]*ObjectInfo, 0, p.MaxKeys)
+		for _, name := range sortedNames {
+			allObjects = append(allObjects, versions[name].getFiltered()...)
+		}
+
+		// putting to cache a copy of allObjects because allObjects can be modified further
+		n.listsCache.Put(cacheKey, append([]*ObjectInfo(nil), allObjects...))
 	}
 
-	sortedNames := make([]string, 0, len(versions))
-	for k := range versions {
-		sortedNames = append(sortedNames, k)
-	}
-	sort.Strings(sortedNames)
-
-	objects := make([]*ObjectVersionInfo, 0, p.MaxKeys)
-	for _, name := range sortedNames {
-		objects = append(objects, versions[name].getFiltered()...)
-		if len(objects) > p.MaxKeys {
-			objects = objects[:p.MaxKeys]
+	for i, obj := range allObjects {
+		if obj.Name >= p.KeyMarker && obj.Version() >= p.VersionIDMarker {
+			allObjects = allObjects[i:]
 			break
 		}
 	}
 
+	res.CommonPrefixes, allObjects = triageObjects(allObjects)
+
+	if len(allObjects) > p.MaxKeys {
+		res.IsTruncated = true
+		res.NextKeyMarker = allObjects[p.MaxKeys].Name
+		res.NextVersionIDMarker = allObjects[p.MaxKeys].Version()
+
+		allObjects = allObjects[:p.MaxKeys]
+		res.KeyMarker = allObjects[p.MaxKeys-1].Name
+		res.VersionIDMarker = allObjects[p.MaxKeys-1].Version()
+	}
+
+	objects := make([]*ObjectVersionInfo, len(allObjects))
+	for i, obj := range allObjects {
+		objects[i] = &ObjectVersionInfo{Object: obj}
+		if i == len(allObjects)-1 || allObjects[i+1].Name != obj.Name {
+			objects[i].IsLatest = true
+		}
+	}
+
 	res.Version, res.DeleteMarker = triageVersions(objects)
-	return &res, nil
+	return res, nil
 }
 
 func sortVersions(versions []*ObjectInfo) {
@@ -773,7 +775,7 @@ func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*Bu
 	return n.getBucketSettings(ctx, bktInfo)
 }
 
-func (n *layer) getBucketSettings(ctx context.Context, bktInfo *BucketInfo) (*BucketSettings, error) {
+func (n *layer) getBucketSettings(ctx context.Context, bktInfo *cache.BucketInfo) (*BucketSettings, error) {
 	objInfo, err := n.getSettingsObjectInfo(ctx, bktInfo)
 	if err != nil {
 		return nil, err
