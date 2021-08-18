@@ -1,0 +1,101 @@
+# Configuration
+
+In general, everything available as CLI parameter can also be specified via
+environment variables, so they're not specifically mentioned in most cases
+(see `--help` also). If you prefer a config file you can use it in yaml format.
+
+## Nodes and weights
+
+You can specify multiple `-p` options to add more NeoFS nodes, this will make
+gateway spread requests equally among them (using weight 1 for every node):
+
+```
+$ neofs-s3-gw -p 192.168.130.72:8080 -p 192.168.130.71:8080
+```
+If you want some specific load distribution proportions, use weights, but they
+can only be specified via environment variables:
+
+```
+$ HTTP_GW_PEERS_0_ADDRESS=192.168.130.72:8080 HTTP_GW_PEERS_0_WEIGHT=9 \
+  HTTP_GW_PEERS_1_ADDRESS=192.168.130.71:8080 HTTP_GW_PEERS_1_WEIGHT=1 neofs-s3-gw
+```
+This command will make gateway use 192.168.130.72 for 90% of requests and
+192.168.130.71 for remaining 10%.
+
+## Key
+
+Wallet (`--wallet`) is mandatory parameter. It is a path to wallet file. You can provide password to decrypt wallet
+via `S3_GW_WALLET_PASSPHRASE` variable or you will be asked to enter the password interactively. 
+You also can specify account address to use from wallet using `--address` parameter.
+
+## Binding and TLS
+
+Gateway binds to `0.0.0.0:8080` by default and you can change that with
+`--listen_address` option.
+
+It can also provide TLS interface for its users, just specify paths to key and
+certificate files via `--tls.key_file` and `--tls.cert_file` parameters. Note
+that using these options makes gateway TLS-only, if you need to serve both TLS
+and plain text you either have to run two gateway instances or use some
+external redirecting solution.
+
+Example to bind to `192.168.130.130:443` and serve TLS there (keys and nodes
+omitted):
+
+```
+$ neofs-s3-gw --listen_address 192.168.130.130:443 \
+  --tls.key_file=key.pem --tls.cert_file=cert.pem
+```
+
+## Monitoring and metrics
+
+Pprof and Prometheus are integrated into the gateway, but not enabled by
+default. To enable them use `--pprof` and `--metrics` flags or
+`HTTP_GW_PPROF`/`HTTP_GW_METRICS` environment variables.
+
+## Yaml file
+Configuration file is optional and can be used instead of environment variables/other parameters. 
+It can be specified with `--config` parameter:
+```
+$ neofs-s3-gw --config your-config.yaml
+```
+
+Configuration file example:
+```
+listen_address: 0.0.0.0:8084
+
+wallet:
+  passphrase: 123456
+
+logger:
+  level: debug
+
+peers:
+  0:
+    address: s01.neofs.devenv:8080
+    weight: 1
+```
+
+To know nesting level of variable you need to cut off the prefix `S3_GW` from variable and split the rest parts by `_`.
+For example variable `S3_GW_PEERS_0_WEIGHT=1` will be transformed to:
+```
+peers:
+  0:
+    weight: 1
+```
+
+If parameter doesn't support environment variable (e.g. `--listen_address 0.0.0.0:8084`) form it is used as is:
+```
+listen_address: 0.0.0.0:8084
+```
+
+### Cache parameters
+
+Parameters for caches in s3-gw can be specified in .yaml config file. E.g.:
+```
+cache:
+  lifetime: 300s
+  size: 150
+  list_objects_lifetime: 1m
+```
+If invalid values are set, the gateway will use default values instead.
