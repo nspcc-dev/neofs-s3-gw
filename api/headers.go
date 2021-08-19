@@ -34,4 +34,9 @@ const (
 	AmzCopyIfUnmodifiedSince = "X-Amz-Copy-Source-If-Unmodified-Since"
 	AmzCopyIfMatch           = "X-Amz-Copy-Source-If-Match"
 	AmzCopyIfNoneMatch       = "X-Amz-Copy-Source-If-None-Match"
+	AmzACL                   = "X-Amz-Acl"
+	AmzGrantFullControl      = "X-Amz-Grant-Full-Control"
+	AmzGrantRead             = "X-Amz-Grant-Read"
+	AmzGrantWrite            = "X-Amz-Grant-Write"
+	AmzExpectedBucketOwner   = "X-Amz-Expected-Bucket-Owner"
 )

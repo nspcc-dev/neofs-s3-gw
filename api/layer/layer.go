@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
@@ -84,7 +85,13 @@ type (
 		Name    string
 		ACL     uint32
 		Policy  *netmap.PlacementPolicy
+		EACL    *eacl.Table
 		BoxData *accessbox.Box
+	}
+	// PutBucketACLParams stores put bucket acl request parameters.
+	PutBucketACLParams struct {
+		Name string
+		EACL *eacl.Table
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
@@ -112,6 +119,8 @@ type (
 
 		ListBuckets(ctx context.Context) ([]*BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*BucketInfo, error)
+		GetBucketACL(ctx context.Context, name string) (*BucketACL, error)
+		PutBucketACL(ctx context.Context, p *PutBucketACLParams) error
 		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
@@ -202,6 +211,34 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*BucketInfo, er
 	}
 
 	return n.containerInfo(ctx, containerID)
+}
+
+// GetBucketACL returns bucket acl info by name.
+func (n *layer) GetBucketACL(ctx context.Context, name string) (*BucketACL, error) {
+	inf, err := n.GetBucketInfo(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	eacl, err := n.GetContainerEACL(ctx, inf.CID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BucketACL{
+		Info: inf,
+		EACL: eacl,
+	}, nil
+}
+
+// PutBucketACL put bucket acl by name.
+func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) error {
+	inf, err := n.GetBucketInfo(ctx, param.Name)
+	if err != nil {
+		return err
+	}
+
+	return n.setContainerEACLTable(ctx, inf.CID, param.EACL)
 }
 
 // ListBuckets returns all user containers. Name of the bucket is a container

@@ -2,27 +2,24 @@ package handler
 
 import (
 	"encoding/xml"
-	"fmt"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-
-	"github.com/nspcc-dev/neofs-api-go/pkg/acl"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
 // keywords of predefined basic ACL values.
 const (
-	basicACLPrivate  = "private"
-	basicACLReadOnly = "public-read"
-	basicACLPublic   = "public-read-write"
-	defaultPolicy    = "REP 3"
+	basicACLPrivate   = "private"
+	basicACLReadOnly  = "public-read"
+	basicACLPublic    = "public-read-write"
+	cannedACLAuthRead = "authenticated-read"
+	defaultPolicy     = "REP 3"
 
 	publicBasicRule = 0x0FFFFFFF
 )
@@ -38,6 +35,50 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		info    *layer.ObjectInfo
 		reqInfo = api.GetReqInfo(r.Context())
 	)
+
+	objectACL, err := parseACLHeaders(r)
+	if err != nil {
+		h.logAndSendError(w, "could not parse object acl", reqInfo, err)
+		return
+	}
+	objectACL.Resource = reqInfo.BucketName + "/" + reqInfo.ObjectName
+
+	bktPolicy, err := aclToPolicy(objectACL)
+	if err != nil {
+		h.logAndSendError(w, "could not translate object acl to bucket policy", reqInfo, err)
+		return
+	}
+
+	astChild, err := policyToAst(bktPolicy)
+	if err != nil {
+		h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
+		return
+	}
+
+	bacl, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		return
+	}
+
+	if err = checkOwner(bacl.Info, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
+	parentAst := tableToAst(bacl.EACL, reqInfo.BucketName)
+	for _, resource := range parentAst.Resources {
+		if resource.Name == bacl.Info.CID.String() {
+			resource.Name = reqInfo.BucketName
+		}
+	}
+
+	resAst, updated := mergeAst(parentAst, astChild)
+	table, err := astToTable(resAst, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not translate ast to table", reqInfo, err)
+		return
+	}
 
 	metadata := parseMetadata(r)
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
@@ -57,6 +98,18 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if updated {
+		p := &layer.PutBucketACLParams{
+			Name: reqInfo.BucketName,
+			EACL: table,
+		}
+
+		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
+			return
+		}
+	}
+
 	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
 }
@@ -74,24 +127,25 @@ func parseMetadata(r *http.Request) map[string]string {
 
 func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err     error
 		reqInfo = api.GetReqInfo(r.Context())
-		p       = layer.CreateBucketParams{Name: reqInfo.BucketName}
+		p       = layer.CreateBucketParams{Name: reqInfo.BucketName, ACL: publicBasicRule}
 	)
 
-	if err = checkBucketName(reqInfo.BucketName); err != nil {
+	if err := checkBucketName(reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "invalid bucket name", reqInfo, err)
 		return
 	}
 
-	if val, ok := r.Header["X-Amz-Acl"]; ok {
-		p.ACL, err = parseBasicACL(val[0])
-	} else {
-		p.ACL = publicBasicRule
-	}
-
+	bktACL, err := parseACLHeaders(r)
 	if err != nil {
-		h.logAndSendError(w, "could not parse basic ACL", reqInfo, err)
+		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
+		return
+	}
+	bktACL.IsBucket = true
+
+	p.EACL, err = bucketACLToTable(bktACL)
+	if err != nil {
+		h.logAndSendError(w, "could translate bucket acl to eacl", reqInfo, err)
 		return
 	}
 
@@ -179,24 +233,4 @@ func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
 		return nil, err
 	}
 	return params, nil
-}
-
-func parseBasicACL(basicACL string) (uint32, error) {
-	switch basicACL {
-	case basicACLPublic:
-		return acl.PublicBasicRule, nil
-	case basicACLPrivate:
-		return acl.PrivateBasicRule, nil
-	case basicACLReadOnly:
-		return acl.ReadOnlyBasicRule, nil
-	default:
-		basicACL = strings.Trim(strings.ToLower(basicACL), "0x")
-
-		value, err := strconv.ParseUint(basicACL, 16, 32)
-		if err != nil {
-			return 0, fmt.Errorf("can't parse basic ACL: %s", basicACL)
-		}
-
-		return uint32(value), nil
-	}
 }
