@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -30,53 +31,57 @@ type createBucketParams struct {
 }
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		err     error
-		info    *layer.ObjectInfo
-		reqInfo = api.GetReqInfo(r.Context())
-	)
+	var newEaclTable *eacl.Table
+	reqInfo := api.GetReqInfo(r.Context())
 
-	objectACL, err := parseACLHeaders(r)
-	if err != nil {
-		h.logAndSendError(w, "could not parse object acl", reqInfo, err)
-		return
+	if containsACLHeaders(r) {
+		objectACL, err := parseACLHeaders(r)
+		if err != nil {
+			h.logAndSendError(w, "could not parse object acl", reqInfo, err)
+			return
+		}
+		objectACL.Resource = reqInfo.BucketName + "/" + reqInfo.ObjectName
+
+		bktPolicy, err := aclToPolicy(objectACL)
+		if err != nil {
+			h.logAndSendError(w, "could not translate object acl to bucket policy", reqInfo, err)
+			return
+		}
+
+		astChild, err := policyToAst(bktPolicy)
+		if err != nil {
+			h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
+			return
+		}
+
+		bacl, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+			return
+		}
+
+		parentAst := tableToAst(bacl.EACL, reqInfo.BucketName)
+		for _, resource := range parentAst.Resources {
+			if resource.Name == bacl.Info.CID.String() {
+				resource.Name = reqInfo.BucketName
+			}
+		}
+
+		if resAst, updated := mergeAst(parentAst, astChild); updated {
+			if newEaclTable, err = astToTable(resAst, reqInfo.BucketName); err != nil {
+				h.logAndSendError(w, "could not translate ast to table", reqInfo, err)
+				return
+			}
+		}
 	}
-	objectACL.Resource = reqInfo.BucketName + "/" + reqInfo.ObjectName
 
-	bktPolicy, err := aclToPolicy(objectACL)
-	if err != nil {
-		h.logAndSendError(w, "could not translate object acl to bucket policy", reqInfo, err)
-		return
-	}
-
-	astChild, err := policyToAst(bktPolicy)
-	if err != nil {
-		h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
-		return
-	}
-
-	bacl, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
 		return
 	}
-
-	if err = checkOwner(bacl.Info, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
 		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
-		return
-	}
-
-	parentAst := tableToAst(bacl.EACL, reqInfo.BucketName)
-	for _, resource := range parentAst.Resources {
-		if resource.Name == bacl.Info.CID.String() {
-			resource.Name = reqInfo.BucketName
-		}
-	}
-
-	resAst, updated := mergeAst(parentAst, astChild)
-	table, err := astToTable(resAst, reqInfo.BucketName)
-	if err != nil {
-		h.logAndSendError(w, "could not translate ast to table", reqInfo, err)
 		return
 	}
 
@@ -93,15 +98,16 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Header: metadata,
 	}
 
-	if info, err = h.obj.PutObject(r.Context(), params); err != nil {
+	info, err := h.obj.PutObject(r.Context(), params)
+	if err != nil {
 		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
 	}
 
-	if updated {
+	if newEaclTable != nil {
 		p := &layer.PutBucketACLParams{
 			Name: reqInfo.BucketName,
-			EACL: table,
+			EACL: newEaclTable,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
@@ -112,6 +118,11 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func containsACLHeaders(r *http.Request) bool {
+	return r.Header.Get(api.AmzACL) != "" || r.Header.Get(api.AmzGrantRead) != "" ||
+		r.Header.Get(api.AmzGrantFullControl) != "" || r.Header.Get(api.AmzGrantWrite) != ""
 }
 
 func parseMetadata(r *http.Request) map[string]string {
