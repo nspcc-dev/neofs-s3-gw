@@ -85,10 +85,16 @@ NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 ## Issuance of a secret
 
 To issue a secret means to create a Bearer and  (optionally) Session tokens and
-put them as an object into container on the NeoFS network. The tokens are
-encrypted by a set of gateway keys, so you need to pass them as well.
+put them as an object into a container on the NeoFS network.
 
-If a parameter `container-id`  is not set, a new container will be created.
+By default, the tool creates the container with a name `auth-container` and ACL 
+0x3c8c8cce (all operations are forbidden for `OTHERS` and `BEARER` user groups, 
+except for `GET`). 
+
+Also, you can put the tokens into existing container via `--container-id` 
+parameter, but this way is **not recommended**.
+
+The tokens are encrypted by a set of gateway keys, so you need to pass them as well.
 
 Creation of the bearer token is mandatory, and creation of the session token is
 optional. If you want to add the session token you need to add a parameter
