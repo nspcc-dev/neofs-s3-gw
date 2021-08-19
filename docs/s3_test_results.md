@@ -359,21 +359,21 @@ Compatibility: 0/19/22
 
 ## Tagging
 
-Compatibility: 0/8/11
+Compatibility: 9/8/11
 
 |    | Test                                                       | s3-gw | aws s3 |
 |----|------------------------------------------------------------|-------|--------|
 | 1  | s3tests_boto3.functional.test_s3.test_set_bucket_tagging   | FAIL  | FAIL   |
-| 2  | s3tests_boto3.functional.test_s3.test_get_obj_tagging      | ERROR | ok     |
-| 3  | s3tests_boto3.functional.test_s3.test_get_obj_head_tagging | ERROR | ok     |
-| 4  | s3tests_boto3.functional.test_s3.test_put_max_tags         | ERROR | ok     |
+| 2  | s3tests_boto3.functional.test_s3.test_get_obj_tagging      | ok    | ok     |
+| 3  | s3tests_boto3.functional.test_s3.test_get_obj_head_tagging | ok    | ok     |
+| 4  | s3tests_boto3.functional.test_s3.test_put_max_tags         | ok    | ok     |
 | 5  | s3tests_boto3.functional.test_s3.test_put_excess_tags      | FAIL  | FAIL   |
-| 6  | s3tests_boto3.functional.test_s3.test_put_max_kvsize_tags  | ERROR | ok     |
-| 7  | s3tests_boto3.functional.test_s3.test_put_excess_key_tags  | FAIL  | ok     |
-| 8  | s3tests_boto3.functional.test_s3.test_put_excess_val_tags  | FAIL  | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_put_modify_tags      | ERROR | FAIL   |
-| 10 | s3tests_boto3.functional.test_s3.test_put_delete_tags      | ERROR | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_put_obj_with_tags    | ERROR | ok     |
+| 6  | s3tests_boto3.functional.test_s3.test_put_max_kvsize_tags  | ok    | ok     |
+| 7  | s3tests_boto3.functional.test_s3.test_put_excess_key_tags  | ok    | ok     |
+| 8  | s3tests_boto3.functional.test_s3.test_put_excess_val_tags  | ok    | ok     |
+| 9  | s3tests_boto3.functional.test_s3.test_put_modify_tags      | ok    | FAIL   |
+| 10 | s3tests_boto3.functional.test_s3.test_put_delete_tags      | ok    | ok     |
+| 11 | s3tests_boto3.functional.test_s3.test_put_obj_with_tags    | ok    | ok     |
 
 ## Versioning
 

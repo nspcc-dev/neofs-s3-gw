@@ -71,7 +71,7 @@ func (b *BucketInfo) SettingsObjectName() string {
 	return bktVersionSettingsObject
 }
 
-// SettingsObjectKey is key to use in SystemCache.
-func (b *BucketInfo) SettingsObjectKey() string {
-	return b.Name + bktVersionSettingsObject
+// SystemObjectKey is key to use in SystemCache.
+func (b *BucketInfo) SystemObjectKey(obj string) string {
+	return b.Name + obj
 }

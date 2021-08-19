@@ -5,13 +5,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"go.uber.org/zap"
 )
 
 type objectVersions struct {
@@ -120,68 +117,22 @@ func (v *objectVersions) getVersion(oid *object.ID) *ObjectInfo {
 	}
 	return nil
 }
-
 func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error) {
-	bucketInfo, err := n.GetBucketInfo(ctx, p.Bucket)
+	bktInfo, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		return nil, err
 	}
 
-	objectInfo, err := n.getSettingsObjectInfo(ctx, bucketInfo)
-	if err != nil {
-		n.log.Warn("couldn't get bucket version settings object, new one will be created",
-			zap.String("bucket_name", bucketInfo.Name),
-			zap.Stringer("cid", bucketInfo.CID),
-			zap.Error(err))
+	metadata := map[string]string{
+		attrSettingsVersioningEnabled: strconv.FormatBool(p.Settings.VersioningEnabled),
 	}
 
-	attributes := make([]*object.Attribute, 0, 3)
-
-	filename := object.NewAttribute()
-	filename.SetKey(objectSystemAttributeName)
-	filename.SetValue(bucketInfo.SettingsObjectName())
-
-	createdAt := object.NewAttribute()
-	createdAt.SetKey(object.AttributeTimestamp)
-	createdAt.SetValue(strconv.FormatInt(time.Now().UTC().Unix(), 10))
-
-	versioningIgnore := object.NewAttribute()
-	versioningIgnore.SetKey(attrVersionsIgnore)
-	versioningIgnore.SetValue(strconv.FormatBool(true))
-
-	settingsVersioningEnabled := object.NewAttribute()
-	settingsVersioningEnabled.SetKey(attrSettingsVersioningEnabled)
-	settingsVersioningEnabled.SetValue(strconv.FormatBool(p.Settings.VersioningEnabled))
-
-	attributes = append(attributes, filename, createdAt, versioningIgnore, settingsVersioningEnabled)
-
-	raw := object.NewRaw()
-	raw.SetOwnerID(bucketInfo.Owner)
-	raw.SetContainerID(bucketInfo.CID)
-	raw.SetAttributes(attributes...)
-
-	ops := new(client.PutObjectParams).WithObject(raw.Object())
-	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
+	meta, err := n.putSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName(), metadata, "")
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, bucketInfo.CID, oid)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = n.systemCache.Put(bucketInfo.SettingsObjectKey(), meta); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
-
-	if objectInfo != nil {
-		if err = n.objectDelete(ctx, bucketInfo.CID, objectInfo.ID()); err != nil {
-			return nil, err
-		}
-	}
-
-	return objectInfoFromMeta(bucketInfo, meta, "", ""), nil
+	return objInfoFromMeta(bktInfo, meta), nil
 }
 
 func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*BucketSettings, error) {
@@ -296,7 +247,7 @@ func contains(list []string, elem string) bool {
 }
 
 func (n *layer) getBucketSettings(ctx context.Context, bktInfo *cache.BucketInfo) (*BucketSettings, error) {
-	objInfo, err := n.getSettingsObjectInfo(ctx, bktInfo)
+	objInfo, err := n.getSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
 		return nil, err
 	}

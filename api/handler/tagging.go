@@ -30,6 +30,11 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	p := &layer.HeadObjectParams{
 		Bucket:    reqInfo.BucketName,
 		Object:    reqInfo.ObjectName,
@@ -55,6 +60,11 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 
 func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
 
 	p := &layer.HeadObjectParams{
 		Bucket:    reqInfo.BucketName,
@@ -89,6 +99,11 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		VersionID: reqInfo.URL.Query().Get("versionId"),
 	}
 
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
@@ -111,6 +126,11 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	if err := h.obj.PutBucketTagging(r.Context(), reqInfo.BucketName, tagSet); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 	}
@@ -118,6 +138,11 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 
 func (h *handler) GetBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
 
 	tagSet, err := h.obj.GetBucketTagging(r.Context(), reqInfo.BucketName)
 	if err != nil {
@@ -132,6 +157,10 @@ func (h *handler) GetBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 
 func (h *handler) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
 	if err := h.obj.DeleteBucketTagging(r.Context(), reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 	}
