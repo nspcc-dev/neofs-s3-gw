@@ -217,6 +217,16 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	info, err := h.obj.ListObjectVersions(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)

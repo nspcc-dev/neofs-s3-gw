@@ -45,6 +45,7 @@ type (
 		list []*ObjectInfo
 	}
 	cacheOptions struct {
+		method    string
 		key       string
 		delimiter string
 		prefix    string
@@ -89,6 +90,7 @@ func createKey(ctx context.Context, cid *cid.ID, method, prefix, delimiter strin
 		return cacheOptions{}, err
 	}
 	p := cacheOptions{
+		method:    method,
 		key:       box.Gate.AccessKey + cid.String(),
 		delimiter: delimiter,
 		prefix:    prefix,

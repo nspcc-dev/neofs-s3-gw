@@ -117,29 +117,42 @@ func (n *layer) containerList(ctx context.Context) ([]*cache.BucketInfo, error) 
 }
 
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+	var err error
+	bktInfo := &cache.BucketInfo{
+		Name:     p.Name,
+		Owner:    n.Owner(ctx),
+		Created:  time.Now(),
+		BasicACL: p.ACL,
+	}
 	cnr := container.New(
 		container.WithPolicy(p.Policy),
 		container.WithCustomBasicACL(p.ACL),
 		container.WithAttribute(container.AttributeName, p.Name),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)))
 
 	cnr.SetSessionToken(p.BoxData.Gate.SessionToken)
-	cnr.SetOwnerID(n.Owner(ctx))
+	cnr.SetOwnerID(bktInfo.Owner)
 
-	cid, err := n.pool.PutContainer(ctx, cnr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a bucket: %w", err)
-	}
-
-	if err = n.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams()); err != nil {
+	if bktInfo.CID, err = n.pool.PutContainer(ctx, cnr); err != nil {
 		return nil, err
 	}
 
-	if err := n.setContainerEACLTable(ctx, cid, p.EACL); err != nil {
+	if err = n.pool.WaitForContainerPresence(ctx, bktInfo.CID, pool.DefaultPollingParams()); err != nil {
 		return nil, err
 	}
 
-	return cid, nil
+	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL); err != nil {
+		return nil, err
+	}
+
+	if err = n.bucketCache.Put(bktInfo); err != nil {
+		n.log.Warn("couldn't put bucket info into cache",
+			zap.String("bucket name", bktInfo.Name),
+			zap.Stringer("bucket cid", bktInfo.CID),
+			zap.Error(err))
+	}
+
+	return bktInfo.CID, nil
 }
 
 func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table) error {

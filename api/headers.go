@@ -44,3 +44,8 @@ const (
 
 	ContainerID = "X-Container-Id"
 )
+
+// S3 request query params.
+const (
+	QueryVersionID = "versionId"
+)

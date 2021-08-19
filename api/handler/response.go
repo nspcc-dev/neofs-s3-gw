@@ -167,7 +167,7 @@ type ListObjectsVersionsResponse struct {
 // VersioningConfiguration contains VersioningConfiguration XML representation.
 type VersioningConfiguration struct {
 	XMLName   xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ VersioningConfiguration"`
-	Status    string   `xml:"Status"`
+	Status    string   `xml:"Status,omitempty"`
 	MfaDelete string   `xml:"MfaDelete,omitempty"`
 }
 

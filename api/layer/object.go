@@ -144,7 +144,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *cache.BucketInfo, p *PutObje
 
 	r := p.Reader
 	if len(p.Header[api.ContentType]) == 0 {
-		d := newDetector(p.Reader)
+		d := newDetector(r)
 		if contentType, err := d.Detect(); err == nil {
 			p.Header[api.ContentType] = contentType
 		}
@@ -271,7 +271,7 @@ func updateCRDT2PSetHeaders(p *PutObjectParams, versions *objectVersions, versio
 }
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *cache.BucketInfo, objectName string) (*ObjectInfo, error) {
-	if address := n.headCache.Get(bkt.Name + "/" + objectName); address != nil {
+	if address := n.namesCache.Get(bkt.Name + "/" + objectName); address != nil {
 		if headInfo := n.objCache.Get(address); headInfo != nil {
 			return objInfoFromMeta(bkt, headInfo), nil
 		}
@@ -287,7 +287,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *cache.Buck
 		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
-	if err = n.headCache.Put(lastVersion.NiceName(), lastVersion.Address()); err != nil {
+	if err = n.namesCache.Put(lastVersion.NiceName(), lastVersion.Address()); err != nil {
 		n.log.Warn("couldn't put obj address to head cache",
 			zap.String("obj nice name", lastVersion.NiceName()),
 			zap.Error(err))
@@ -487,14 +487,12 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *cache.BucketInfo
 				continue
 			}
 
-			if objVersions, ok := versions[oi.Name]; ok {
-				objVersions.appendVersion(oi)
-				versions[oi.Name] = objVersions
-			} else {
-				objVersion := newObjectVersions(oi.Name)
-				objVersion.appendVersion(oi)
-				versions[oi.Name] = objVersion
+			objVersions, ok := versions[oi.Name]
+			if !ok {
+				objVersions = newObjectVersions(oi.Name)
 			}
+			objVersions.appendVersion(oi)
+			versions[oi.Name] = objVersions
 		}
 	}
 

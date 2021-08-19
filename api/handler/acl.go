@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
@@ -239,7 +240,13 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	if _, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
 	}
@@ -273,7 +280,7 @@ func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func checkOwner(info *layer.BucketInfo, owner string) error {
+func checkOwner(info *cache.BucketInfo, owner string) error {
 	if owner == "" {
 		return nil
 	}

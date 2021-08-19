@@ -3,35 +3,36 @@ package cache
 import (
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-
 	"github.com/bluele/gcache"
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 )
 
 type (
 	// SystemCache provides interface for lru cache for objects.
+	// This cache contains "system" objects (bucket versioning settings, tagging object etc.).
+	// Key is bucketName+systemFileName.
 	SystemCache interface {
 		Get(key string) *object.Object
 		Put(key string, obj *object.Object) error
 		Delete(key string) bool
 	}
 
-	// systemCache contains cache with objects and lifetime of cache entries.
-	systemCache struct {
+	// SysCache contains cache with objects and lifetime of cache entries.
+	SysCache struct {
 		cache    gcache.Cache
 		lifetime time.Duration
 	}
 )
 
 // NewSystemCache creates an object of SystemCache.
-func NewSystemCache(cacheSize int, lifetime time.Duration) SystemCache {
+func NewSystemCache(cacheSize int, lifetime time.Duration) *SysCache {
 	gc := gcache.New(cacheSize).LRU().Build()
 
-	return &systemCache{cache: gc, lifetime: lifetime}
+	return &SysCache{cache: gc, lifetime: lifetime}
 }
 
 // Get returns cached object.
-func (o *systemCache) Get(key string) *object.Object {
+func (o *SysCache) Get(key string) *object.Object {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
@@ -46,11 +47,11 @@ func (o *systemCache) Get(key string) *object.Object {
 }
 
 // Put puts an object to cache.
-func (o *systemCache) Put(key string, obj *object.Object) error {
+func (o *SysCache) Put(key string, obj *object.Object) error {
 	return o.cache.SetWithExpire(key, obj, o.lifetime)
 }
 
 // Delete deletes an object from cache.
-func (o *systemCache) Delete(key string) bool {
+func (o *SysCache) Delete(key string) bool {
 	return o.cache.Remove(key)
 }

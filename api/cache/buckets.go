@@ -18,10 +18,11 @@ type (
 
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
-		Name    string
-		CID     *cid.ID
-		Owner   *owner.ID
-		Created time.Time
+		Name     string
+		CID      *cid.ID
+		Owner    *owner.ID
+		Created  time.Time
+		BasicACL uint32
 	}
 
 	// GetBucketCache contains cache with objects and lifetime of cache entries.
@@ -61,4 +62,16 @@ func (o *GetBucketCache) Put(bkt *BucketInfo) error {
 // Delete deletes an object from cache.
 func (o *GetBucketCache) Delete(key string) bool {
 	return o.cache.Remove(key)
+}
+
+const bktVersionSettingsObject = ".s3-versioning-settings"
+
+// SettingsObjectName is system name for bucket settings file.
+func (b *BucketInfo) SettingsObjectName() string {
+	return bktVersionSettingsObject
+}
+
+// SettingsObjectKey is key to use in SystemCache.
+func (b *BucketInfo) SettingsObjectKey() string {
+	return b.Name + bktVersionSettingsObject
 }

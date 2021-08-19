@@ -27,9 +27,10 @@ type ObjectIdentifier struct {
 
 // DeleteError structure.
 type DeleteError struct {
-	Code    string
-	Message string
-	Key     string
+	Code      string
+	Message   string
+	Key       string
+	VersionID string `xml:"versionId,omitempty"`
 }
 
 // DeleteObjectsResponse container for multiple object deletes.
@@ -47,7 +48,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 	versionedObject := []*layer.VersionedObject{{
 		Name:      reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get("versionId"),
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}}
 
 	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
@@ -99,7 +100,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	removed := make(map[string]struct{})
+	removed := make(map[string]*layer.VersionedObject)
 	toRemove := make([]*layer.VersionedObject, 0, len(requested.Objects))
 	for _, obj := range requested.Objects {
 		versionedObj := &layer.VersionedObject{
@@ -107,7 +108,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 			VersionID: obj.VersionID,
 		}
 		toRemove = append(toRemove, versionedObj)
-		removed[versionedObj.String()] = struct{}{}
+		removed[versionedObj.String()] = versionedObj
 	}
 
 	response := &DeleteObjectsResponse{
@@ -135,23 +136,26 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		h.logAndSendError(w, "could not delete objects", reqInfo, nil, additional...)
 
 		for _, e := range errs {
-			if err, ok := e.(*errors.DeleteError); ok {
+			if err, ok := e.(*errors.ObjectError); ok {
 				code := "BadRequest"
-				desc := err.Error()
+				if s3err, ok := err.Err.(errors.Error); ok {
+					code = s3err.Code
+				}
 
 				response.Errors = append(response.Errors, DeleteError{
-					Code:    code,
-					Message: desc,
-					Key:     err.Object,
+					Code:      code,
+					Message:   err.Error(),
+					Key:       err.Object,
+					VersionID: err.Version,
 				})
 
-				delete(removed, err.Object)
+				delete(removed, err.ObjectVersion())
 			}
 		}
 	}
 
-	for key := range removed {
-		response.DeletedObjects = append(response.DeletedObjects, ObjectIdentifier{ObjectName: key})
+	for _, val := range removed {
+		response.DeletedObjects = append(response.DeletedObjects, ObjectIdentifier{ObjectName: val.Name, VersionID: val.VersionID})
 	}
 
 	if err := api.EncodeToResponse(w, response); err != nil {
