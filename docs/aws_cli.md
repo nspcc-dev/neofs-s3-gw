@@ -4,7 +4,7 @@
 
 ### Credentials
 
-To configure basic settings that the AWS CLI uses to interact with the Gateway, do the following steps:
+To configure basic settings that the AWS CLI uses to interact with the Gateway, follow steps below:
 
 1. issue a secret with neofs-authmate tool (see [NeoFS Authmate] (#neofs-authmate))
 2. execute the command
@@ -22,13 +22,13 @@ Default output format [none]: json
 
 ## Basic usage
 
-> **_NOTE:_** To specify IP and port of the gate, append `--endpoint-url https://%IP:%PORT` to your commands.
+> **_NOTE:_** To specify the IP and the port of the gate, append `--endpoint-url https://%IP:%PORT` to your commands.
 
 ### Bucket
 
 #### Obtainment of a list of buckets 
 
-To view the list of the buckets in the NeoFS node, to which the gateway is connected, enter the command:
+To view the list of the buckets in the NeoFS node, to which the gateway is connected, enter the following command:
 ```
 $ aws s3 ls 
 ```
@@ -37,7 +37,7 @@ $ aws s3 ls
 
 At this moment, the gateway supports only canned ACL and doesn't support the setting of location constraints.
 
-To create a bucket, run the command:
+To create a bucket, run the following command:
 ```
 $ aws s3api create-bucket --bucket %BUCKET_NAME --acl %ACL
 ```
@@ -62,15 +62,15 @@ $ aws s3api list-objects --bucket %BUCKET_NAME
 
 #### Upload of a file
 
-To upload the file into a bucket in the NeoFS network, run the following command:
+To upload a file into a bucket in the NeoFS network, run the following command:
 ```
 $ aws s3api put-object --bucket %BUCKET_NAME --key %OBJECT_KEY --body  %FILEPATH
 ```
-where %OBJECT_KEY is a filename of an object in NeoFS
+where %OBJECT_KEY is the filename of an object in NeoFS
 
 #### Upload of a dir
 
-To upload the dir into a bucket in the NeoFS network, run the following command:
+To upload a dir into a bucket in the NeoFS network, run the following command:
 
 ```
 $ aws s3 sync %DIRPATH s3://%BUCKET_NAME 
@@ -78,15 +78,15 @@ $ aws s3 sync %DIRPATH s3://%BUCKET_NAME
 
 #### Download of a file
 
-To download the file from a bucket in the NeoFS Network, execute:
+To download a file from a bucket in the NeoFS Network, execute:
 ```
 $ aws s3api get-object --bucket  %BUCKET_NAME --key %OBJECT_KEY %OUTFILE
 ```
 
-where %OUTFILE is a file to store object content.
+where %OUTFILE is the file to store object content.
 
 #### Deletion of a file
-To delete the file:
+To delete a file:
 ```
 $ aws s3api delete-object --bucket %BUCKET_NAME --key %FILE_NAME
 ```
