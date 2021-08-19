@@ -1,240 +1,238 @@
-## S3 API support
+# S3 API support
 
 Reference:
 * [AWS S3 API Reference](https://docs.aws.amazon.com/AmazonS3/latest/API/s3-api.pdf)
 
-### Limitations
-#### ACL
-For now there are some restrictions:
-* [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) 
-  support only one `Principal` (type `AWS`) per `Statement`. To refer all users use `"AWS": "*"`
+|    | Legend                                    |
+|----|-------------------------------------------|
+| 🟢 | Supported                                 |
+| 🟡 | Partially supported                       |
+| 🔴 | Not supported yet, but will be in future  |
+| 🔵 | Not applicable or will never be supported |
+
+## Object
+
+|    | Method                 | Comments                                |
+|----|------------------------|-----------------------------------------|
+| 🟢 | CopyObject             | Done on gateway side                    |
+| 🟢 | DeleteObject           |                                         |
+| 🟢 | DeleteObjects          | aka DeleteMultipleObjects               |
+| 🟢 | GetObject              |                                         |
+| 🔵 | GetObjectTorrent       | We don't plan implementing BT gateway   |
+| 🟢 | HeadObject             |                                         |
+| 🔴 | ListObjectParts        |                                         |
+| 🟢 | ListObjects            |                                         |
+| 🟢 | ListObjectsV2          |                                         |
+| 🟢 | PutObject              | Content-MD5 header deprecated           |
+| 🔴 | SelectObjectContent    | Need to have some Lambda to execute SQL |
+| 🔴 | WriteGetObjectResponse | Waiting for Lambda to be developed      |
+
+## ACL
+
+For now there are some limitations:
+* [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) support only one `Principal` (type `AWS`) per `Statement`. To refer all users use `"AWS": "*"`
 * AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
 * Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html)
 
-### Object
+|    | Method       | Comments        |
+|----|--------------|-----------------|
+| 🟡 | GetObjectAcl | See Limitations |
+| 🟡 | PutObjectAcl | See Limitations |
 
-| Method                    | Status                                          |
-| ------------------------- | -----------------------                         |
-| CopyObject                | Supported                                       |
-| DeleteObject              | Supported                                       |
-| DeleteObjects             | Supported, aka DeleteMultipleObjects            |
-| GetObject                 | Supported                                       |
-| GetObjectTorrent          | Unsupported, won't be                           |
-| HeadObject                | Supported                                       |
-| ListObjectParts           | Unsupported                                     |
-| ListObjects               | Supported                                       |
-| ListObjectsV2             | Supported                                       |
-| PutObject                 | Supported (Content-MD5 option is not supported) |
-| SelectObjectContent       | Unsupported                                     |
-| WriteGetObjectResponse    | Unsupported                                     |
+## Locking
 
-#### ACL
+|    | Method                     | Comments                  |
+|----|----------------------------|---------------------------|
+| 🔴 | GetObjectLegalHold         |                           |
+| 🔴 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
+| 🔴 | GetObjectRetention         |                           |
+| 🔴 | PutObjectLegalHold         |                           |
+| 🔴 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
+| 🔴 | PutObjectRetention         |                           |
 
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| GetObjectAcl              | Supported               |
-| PutObjectAcl              | Supported               |
+## Multipart
 
-#### Locking
+Should be supported soon.
 
-| Method                     | Status                                     |
-| -------------------------  | -----------------------                    |
-| GetObjectLegalHold         | Unsupported                                |
-| GetObjectLockConfiguration | Unsupported, aka GetBucketObjectLockConfig |
-| GetObjectRetention         | Unsupported                                |
-| PutObjectLegalHold         | Unsupported                                |
-| PutObjectLockConfiguration | Unsupported, aka PutBucketObjectLockConfig |
-| PutObjectRetention         | Unsupported                                |
+|    | Method                  | Comments                                       |
+|----|-------------------------|------------------------------------------------|
+| 🔴 | AbortMultipartUpload    |                                                |
+| 🔴 | CompleteMultipartUpload |                                                |
+| 🔴 | CreateMultipartUpload   | InitiateMultipartUpload and NewMultipartUpload |
+| 🔴 | ListMultipartUploads    |                                                |
+| 🔴 | ListParts               |                                                |
+| 🔴 | UploadPart              | PutObjectPart                                  |
+| 🔴 | UploadPartCopy          | CopyObjectPart                                 |
 
-#### Multipart
+## Tagging
 
-Should be supported eventually.
+|    | Method              | Comments |
+|----|---------------------|----------|
+| 🔴 | DeleteObjectTagging |          |
+| 🔴 | GetObjectTagging    |          |
+| 🔴 | PutObjectTagging    |          |
 
-| Method                    | Status                                                          |
-| ------------------------- | -----------------------                                         |
-| AbortMultipartUpload      | Unsupported                                                     |
-| CompleteMultipartUpload   | Unsupported                                                     |
-| CreateMultipartUpload     | Unsupported, aka InitiateMultipartUpload and NewMultipartUpload |
-| ListMultipartUploads      | Unsupported                                                     |
-| ListParts                 | Unsupported                                                     |
-| UploadPart                | Unsupported, aka PutObjectPart                                  |
-| UploadPartCopy            | Unsupported, aka CopyObjectPart                                 |
-
-#### Tagging
-
-Also passed in `PutObject` parameters. We can support adding via `PutObject`
-and getting via `GetBucketTagging`, but deleting and putting can't be
-supported normally.
-
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| DeleteObjectTagging       | Unsupported             |
-| GetObjectTagging          | Unsupported             |
-| PutObjectTagging          | Unsupported             |
-
-#### Versioning
+## Versioning
 
 See also `GetObject` and other method parameters.
 
-| Method                    | Status                                                    |
-| ------------------------- | -----------------------                                   |
-| ListObjectVersions        | Supported (null-versioning), aka ListBucketObjectVersions |
-| RestoreObject             | Unsupported                                               |
+|    | Method             | Comments                 |
+|----|--------------------|--------------------------|
+| 🟢 | ListObjectVersions | ListBucketObjectVersions |
+| 🔴 | RestoreObject      |                          |
 
-### Bucket
+## Bucket
 
-| Method                    | Status                   |
-| ------------------------- | -----------------------  |
-| CreateBucket              | Supported, aka PutBucket |
-| DeleteBucket              | Supported                |
-| GetBucketLocation         | Unsupported              |
-| HeadBucket                | Supported                |
-| ListBuckets               | Supported                |
-| PutPublicAccessBlock      | Unsupported              |
+|    | Method               | Comments  |
+|----|----------------------|-----------|
+| 🟢 | CreateBucket         | PutBucket |
+| 🟢 | DeleteBucket         |           |
+| 🔴 | GetBucketLocation    |           |
+| 🟢 | HeadBucket           |           |
+| 🟢 | ListBuckets          |           |
+| 🔴 | PutPublicAccessBlock |           |
 
-#### Acceleration
+## Acceleration
 
-| Method                             | Status                               |
-| ---------------------------------- | -----------------------              |
-| GetBucketAccelerateConfiguration   | Unsupported, aka GetBucketAccelerate |
-| PutBucketAccelerateConfiguration   | Unsupported                          |
+|    | Method                           | Comments            |
+|----|----------------------------------|---------------------|
+| 🔵 | GetBucketAccelerateConfiguration | GetBucketAccelerate |
+| 🔵 | PutBucketAccelerateConfiguration |                     |
 
-#### ACL
+## ACL
 
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| GetBucketAcl              | Supported               |
-| PutBucketAcl              | Supported               |
+|    | Method       | Comments  |
+|----|--------------|-----------|
+| 🟢 | GetBucketAcl | Supported |
+| 🟢 | PutBucketAcl | Supported |
 
-#### Analytics
+## Analytics
 
-| Method                             | Status                  |
-| ---------------------------------- | ----------------------- |
-| DeleteBucketAnalyticsConfiguration | Unsupported             |
-| GetBucketAnalyticsConfiguration    | Unsupported             |
-| ListBucketAnalyticsConfigurations  | Unsupported             |
-| PutBucketAnalyticsConfiguration    | Unsupported             |
+|    | Method                             | Comments |
+|----|------------------------------------|----------|
+| 🔴 | DeleteBucketAnalyticsConfiguration |          |
+| 🔴 | GetBucketAnalyticsConfiguration    |          |
+| 🔴 | ListBucketAnalyticsConfigurations  |          |
+| 🔴 | PutBucketAnalyticsConfiguration    |          |
 
+## CORS
 
-#### CORS
+|    | Method           | Comments |
+|----|------------------|----------|
+| 🔴 | DeleteBucketCors |          |
+| 🔴 | GetBucketCors    |          |
+| 🔴 | PutBucketCors    |          |
 
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| DeleteBucketCors          | Unsupported             |
-| GetBucketCors             | Unsupported             |
-| PutBucketCors             | Unsupported             |
+## Encryption
 
+|    | Method                 | Comments |
+|----|------------------------|----------|
+| 🔴 | DeleteBucketEncryption |          |
+| 🔴 | GetBucketEncryption    |          |
+| 🔴 | PutBucketEncryption    |          |
 
-#### Encryption
+## Inventory
 
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| DeleteBucketEncryption    | Unsupported             |
-| GetBucketEncryption       | Unsupported             |
-| PutBucketEncryption       | Unsupported             |
+|    | Method                             | Comments |
+|----|------------------------------------|----------|
+| 🔴 | DeleteBucketInventoryConfiguration |          |
+| 🔴 | GetBucketInventoryConfiguration    |          |
+| 🔴 | ListBucketInventoryConfigurations  |          |
+| 🔴 | PutBucketInventoryConfiguration    |          |
+     
+## Lifecycle
 
-#### Inventory
+|    | Method                          | Comments |
+|----|---------------------------------|----------|
+| 🔴 | DeleteBucketLifecycle           |          |
+| 🔴 | GetBucketLifecycle              |          |
+| 🔴 | GetBucketLifecycleConfiguration |          |
+| 🔴 | PutBucketLifecycle              |          |
+| 🔴 | PutBucketLifecycleConfiguration |          |
 
-| Method                             | Status                  |
-| ---------------------------------- | ----------------------- |
-| DeleteBucketInventoryConfiguration | Unsupported             |
-| GetBucketInventoryConfiguration    | Unsupported             |
-| ListBucketInventoryConfigurations  | Unsupported             |
-| PutBucketInventoryConfiguration    | Unsupported             |
+## Logging
 
-#### Lifecycle
+|    | Method           | Comments |
+|----|------------------|----------|
+| 🔴 | GetBucketLogging |          |
+| 🔴 | PutBucketLogging |          |
 
-| Method                          | Status                  |
-| ------------------------------- | ----------------------- |
-| DeleteBucketLifecycle           | Unsupported             |
-| GetBucketLifecycle              | Unsupported             |
-| GetBucketLifecycleConfiguration | Unsupported             |
-| PutBucketLifecycle              | Unsupported             |
-| PutBucketLifecycleConfiguration | Unsupported             |
+## Metrics
 
-#### Logging
+|    | Method                           | Comments |
+|----|----------------------------------|----------|
+| 🔴 | DeleteBucketMetricsConfiguration |          |
+| 🔴 | GetBucketMetricsConfiguration    |          |
+| 🔴 | ListBucketMetricsConfigurations  |          |
+| 🔴 | PutBucketMetricsConfiguration    |          |
 
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| GetBucketLogging          | Unsupported             |
-| PutBucketLogging          | Unsupported             |
+## Notifications
 
-#### Metrics
+|    | Method                             | Comments      |
+|----|------------------------------------|---------------|
+| 🔴 | GetBucketNotification              |               |
+| 🔴 | GetBucketNotificationConfiguration |               |
+| 🔴 | ListenBucketNotification           | non-standard? |
+| 🔴 | PutBucketNotification              |               |
+| 🔴 | PutBucketNotificationConfiguration |               |
 
-| Method                           | Status                  |
-| -------------------------------- | ----------------------- |
-| DeleteBucketMetricsConfiguration | Unsupported             |
-| GetBucketMetricsConfiguration    | Unsupported             |
-| ListBucketMetricsConfigurations  | Unsupported             |
-| PutBucketMetricsConfiguration    | Unsupported             |
+## Ownership controls
 
-#### Notifications
+|    | Method                        | Comments |
+|----|-------------------------------|----------|
+| 🔴 | DeleteBucketOwnershipControls |          |
+| 🔴 | GetBucketOwnershipControls    |          |
+| 🔴 | PutBucketOwnershipControls    |          |
 
-| Method                             | Status                     |
-| ---------------------------------- | -----------------------    |
-| GetBucketNotification              | Unsupported                |
-| GetBucketNotificationConfiguration | Unsupported                |
-| ListenBucketNotification           | Unsupported, non-standard? |
-| PutBucketNotification              | Unsupported                |
-| PutBucketNotificationConfiguration | Unsupported                |
+## Policy and replication
 
-#### Ownership controls
+|    | Method                  | Comments      |
+|----|-------------------------|---------------|
+| 🔴 | DeleteBucketPolicy      |               |
+| 🔴 | DeleteBucketReplication |               |
+| 🔴 | DeletePublicAccessBlock |               |
+| 🟢 | GetBucketPolicy         |               |
+| 🔴 | GetBucketPolicyStatus   |               |
+| 🔴 | GetBucketReplication    |               |
+| 🔴 | PostPolicyBucket        | non-standard? |
+| 🟢 | PutBucketPolicy         |               |
+| 🔴 | PutBucketReplication    |               |
 
-| Method                        | Status                  |
-| ----------------------------- | ----------------------- |
-| DeleteBucketOwnershipControls | Unsupported             |
-| GetBucketOwnershipControls    | Unsupported             |
-| PutBucketOwnershipControls    | Unsupported             |
+## Request payment
 
-#### Policy and replication
+|    | Method                  | Comments |
+|----|-------------------------|----------|
+| 🔵 | GetBucketRequestPayment |          |
+| 🔵 | PutBucketRequestPayment |          |
 
-| Method                  | Status                     |
-| ----------------------- | -----------------------    |
-| DeleteBucketPolicy      | Unsupported                |
-| DeleteBucketReplication | Unsupported                |
-| DeletePublicAccessBlock | Unsupported                |
-| GetBucketPolicy         | Supported                  |
-| GetBucketPolicyStatus   | Unsupported                |
-| GetBucketReplication    | Unsupported                |
-| PostPolicyBucket        | Unsupported, non-standard? |
-| PutBucketPolicy         | Supported                  |
-| PutBucketReplication    | Unsupported                |
+## Tagging
 
-#### Request payment
+|    | Method              | Comments |
+|----|---------------------|----------|
+| 🔴 | DeleteBucketTagging |          |
+| 🔴 | GetBucketTagging    |          |
+| 🔴 | PutBucketTagging    |          |
 
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| GetBucketRequestPayment   | Unsupported             |
-| PutBucketRequestPayment   | Unsupported             |
+## Tiering
 
-#### Tagging
+|    | Method                                      | Comments |
+|----|---------------------------------------------|----------|
+| 🔴 | DeleteBucketIntelligentTieringConfiguration |          |
+| 🔴 | GetBucketIntelligentTieringConfiguration    |          |
+| 🔴 | ListBucketIntelligentTieringConfigurations  |          |
+| 🟢 | PutBucketIntelligentTieringConfiguration    |          |
 
-| Method                  | Status                  |
-| ----------------------- | ----------------------- |
-| DeleteBucketTagging     | Unsupported             |
-| GetBucketTagging        | Unsupported             |
-| PutBucketTagging        | Unsupported             |
+## Versioning
 
-#### Tiering
+|    | Method              | Comments |
+|----|---------------------|----------|
+| 🔴 | GetBucketVersioning |          |
+| 🔴 | PutBucketVersioning |          |
 
-| Method                                         | Status                  |
-| ---------------------------------------------- | ----------------------- |
-| DeleteBucketIntelligentTieringConfiguration    | Unsupported             |
-| GetBucketIntelligentTieringConfiguration       | Unsupported             |
-| ListBucketIntelligentTieringConfigurations     | Unsupported             |
-| PutBucketIntelligentTieringConfiguration       | Unsupported             |
+## Website
 
-#### Versioning
-
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| GetBucketVersioning       | Unsupported             |
-| PutBucketVersioning       | Unsupported             |
-
-#### Website
-
-| Method                    | Status                  |
-| ------------------------- | ----------------------- |
-| DeleteBucketWebsite       | Unsupported             |
-| GetBucketWebsite          | Unsupported             |
-| PutBucketWebsite          | Unsupported             |
+|    | Method              | Comments |
+|----|---------------------|----------|
+| 🔴 | DeleteBucketWebsite |          |
+| 🔴 | GetBucketWebsite    |          |
+| 🔴 | PutBucketWebsite    |          |
