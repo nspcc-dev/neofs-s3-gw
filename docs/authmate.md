@@ -4,22 +4,22 @@ Authmate is a tool to create gateway AWS credentials. AWS users
 are authenticated with access key IDs and secrets, while NeoFS users are
 authenticated with key pairs. To complicate things further we have S3 gateway
 that usually acts on behalf of some user, but user doesn't necessarily want to
-give his keys to the gateway.
+give their keys to the gateway.
 
-To solve this we use NeoFS bearer tokens that are signed by the owner (NeoFS
+To solve this, we use NeoFS bearer tokens that are signed by the owner (NeoFS
 "user") and that can implement any kind of policy for NeoFS requests allowed
-using this token. But tokens can't be used directly as AWS credentials, thus
-they're stored on NeoFS as regular objects and access key ID is just an
+using this token. However, tokens can't be used as AWS credentials directly, thus
+they're stored on NeoFS as regular objects, and access key ID is just an
 address of this object while secret is generated randomly.
 
 Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
-gateway keys. So in order for gateway to be able to successfully extract bearer
-token the object needs to be stored in a container available for the gateway
-to read and it needs to be encrypted with this gateway's key (among others
+gateway keys. So in order for a gateway to be able to successfully extract bearer
+token, the object needs to be stored in a container available for the gateway
+to read, and it needs to be encrypted with this gateway's key (among others
 potentially).
 
 ## Variables
-Authmate support the following variables to decrypt wallets provided by `--wallet` and `--gate-wallet`
+Authmate supports the following variables to decrypt wallets provided by `--wallet` and `--gate-wallet`
 parameters respectevely:
 * `AUTHMATE_WALLET_PASSPHRASE`
 * `AUTHMATE_WALLET_GATE_PASSPHRASE`
@@ -84,20 +84,20 @@ NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 
 ## Issuance of a secret
 
-To issue a secret means to create a Bearer and  (optionally) Session tokens and
+To issue a secret means to create a Bearer and (optionally) Session tokens and
 put them as an object into a container on the NeoFS network.
 
-By default, the tool creates the container with a name `auth-container` and ACL 
+By default, the tool creates a container with a name `auth-container` and ACL 
 0x3c8c8cce (all operations are forbidden for `OTHERS` and `BEARER` user groups, 
 except for `GET`). 
 
-Also, you can put the tokens into existing container via `--container-id` 
+Also, you can put the tokens into an existing container via `--container-id` 
 parameter, but this way is **not recommended**.
 
 The tokens are encrypted by a set of gateway keys, so you need to pass them as well.
 
-Creation of the bearer token is mandatory, and creation of the session token is
-optional. If you want to add the session token you need to add a parameter
+Creation of the bearer token is mandatory, while creation of the session token is
+optional. If you want to add the session token, you need to add a parameter
 `create-session-token`.
 
 Rules for bearer token can be set via param `bearer-rules` (json-string and file path allowed), if it is not set,
@@ -128,7 +128,7 @@ it will be auto-generated with values:
 }
 ```
 
-Rules for session token can be set via param `session-rules` (json-string and file path allowed), default value is:
+Rules for a session token can be set via param `session-rules` (json-string and file path allowed), the default value is:
 ```
 {
     "verb": "PUT",
@@ -137,8 +137,8 @@ Rules for session token can be set via param `session-rules` (json-string and fi
 }
 ```
 
-If `session-rules` is set, but `create-session-token` is not, the session
-token will not be created.
+If `session-rules` are set, but `create-session-token` is not, no session
+token will be created.
 
 Rules for mapping of `LocationConstraint` ([aws spec](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html#API_CreateBucket_RequestBody)) 
 to `PlacementPolicy` ([neofs spec](https://github.com/nspcc-dev/neofs-spec/blob/master/01-arch/02-policy.md)) 
@@ -179,9 +179,9 @@ the secret. Format of access_key_id: `%cid0%oid`, where 0(zero) is a delimiter.
 
 ## Obtainment of a secret access key
 
-You can get a secret access key associated with access key ID by obtaining a
-secret stored on the NeoFS network. Here example of providing one password (for `wallet.json`) via env variable 
-and other (for `gate-wallet.json`) interactively:
+You can get a secret access key associated with an access key ID by obtaining a
+secret stored on the NeoFS network. Here is an example of providing one password (for `wallet.json`) via env variable 
+and the other (for `gate-wallet.json`) interactively:
 
 ```
  $ AUTHMATE_WALLET_PASSPHRASE=some-pwd \
