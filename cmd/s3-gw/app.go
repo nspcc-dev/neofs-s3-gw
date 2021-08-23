@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -117,7 +118,9 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	// prepare auth center
 	ctr = auth.New(conns, key)
 
-	if caller, err = handler.New(l, obj); err != nil {
+	handlerOptions := getHandlerOptions(v, l)
+
+	if caller, err = handler.New(l, obj, handlerOptions); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
 	}
 
@@ -251,4 +254,23 @@ func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CacheConfig {
 		}
 	}
 	return &cacheCfg
+}
+
+func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
+	var (
+		cfg       handler.Config
+		err       error
+		policyStr = handler.DefaultPolicy
+	)
+
+	if v.IsSet(cfgDefaultPolicy) {
+		policyStr = v.GetString(cfgDefaultPolicy)
+	}
+
+	if cfg.DefaultPolicy, err = policy.Parse(policyStr); err != nil {
+		l.Fatal("couldn't parse container default policy",
+			zap.Error(err))
+	}
+
+	return &cfg
 }
