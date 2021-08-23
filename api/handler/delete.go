@@ -44,6 +44,11 @@ type DeleteObjectsResponse struct {
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	if err := h.obj.DeleteObject(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
 		h.log.Error("could not delete object",
 			zap.String("request_id", reqInfo.RequestID),
@@ -100,6 +105,11 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		DeletedObjects: make([]ObjectIdentifier, 0, len(toRemove)),
 	}
 
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	if errs := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, toRemove); errs != nil && !requested.Quiet {
 		additional := []zap.Field{
 			zap.Strings("objects_name", toRemove),
@@ -135,6 +145,10 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 
 func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
 	if err := h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{Name: reqInfo.BucketName}); err != nil {
 		h.logAndSendError(w, "couldn't delete bucket", reqInfo, err)
 	}

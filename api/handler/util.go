@@ -18,3 +18,23 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 	h.log.Error(logText, fields...)
 	api.WriteErrorResponse(w, reqInfo, err)
 }
+
+func (h *handler) checkBucketOwner(r *http.Request, bucket string, header ...string) error {
+	var expected string
+	if len(header) == 0 {
+		expected = r.Header.Get(api.AmzExpectedBucketOwner)
+	} else {
+		expected = header[0]
+	}
+
+	if len(expected) == 0 {
+		return nil
+	}
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), bucket)
+	if err != nil {
+		return err
+	}
+
+	return checkOwner(bktInfo, expected)
+}

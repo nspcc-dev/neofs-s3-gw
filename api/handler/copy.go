@@ -71,6 +71,15 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err = h.checkBucketOwner(r, srcBucket, r.Header.Get(api.AmzSourceExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "source expected owner doesn't match", reqInfo, err)
+		return
+	}
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	if inf, err = h.obj.GetObjectInfo(r.Context(), srcBucket, srcObject); err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
