@@ -89,6 +89,20 @@ If a parameter doesn't support environment variable (e.g. `--listen_address 0.0.
 listen_address: 0.0.0.0:8084
 ```
 
+### Default policy of placing containers in NeoFS
+
+If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway 
+will put the container with default policy. It can be specified via environment variable, e.g.: 
+```
+S3_GW_DEFAULT_POLICY=REP 1 CBF 1 SELECT 1 FROM *
+```
+or via `.yaml` config file, e.g.:
+```
+default_policy: REP 1
+```
+
+If the value is not set at all it will be set as `REP 3`.
+
 ### Cache parameters
 
 Parameters for caches in s3-gw can be specified in a .yaml config file. E.g.:
