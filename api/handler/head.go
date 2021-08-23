@@ -54,10 +54,12 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	if _, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName); err != nil {
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
 
+	w.Header().Set(api.ContainerID, bktInfo.CID.String())
 	api.WriteResponse(w, http.StatusOK, nil, api.MimeNone)
 }
