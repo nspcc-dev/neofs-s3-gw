@@ -16,8 +16,8 @@ If you want some specific load distribution proportions, use weights, but keep i
 can only be specified via environment variables:
 
 ```
-$ HTTP_GW_PEERS_0_ADDRESS=192.168.130.72:8080 HTTP_GW_PEERS_0_WEIGHT=9 \
-  HTTP_GW_PEERS_1_ADDRESS=192.168.130.71:8080 HTTP_GW_PEERS_1_WEIGHT=1 neofs-s3-gw
+$ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 S3_GW_PEERS_0_WEIGHT=9 \
+  S3_GW_PEERS_1_ADDRESS=192.168.130.71:8080 S3_GW_PEERS_1_WEIGHT=1 neofs-s3-gw
 ```
 This command will make gateway use 192.168.130.72 for 90% of the requests and
 192.168.130.71 for the remaining 10%.
@@ -51,7 +51,7 @@ $ neofs-s3-gw --listen_address 192.168.130.130:443 \
 
 Pprof and Prometheus are integrated into the gateway, but not enabled by
 default. To enable them, use `--pprof` and `--metrics` flags or
-`HTTP_GW_PPROF`/`HTTP_GW_METRICS` environment variables.
+`S3_GW_PPROF`/`S3_GW_METRICS` environment variables.
 
 ## Yaml file
 Configuration file is optional and can be used instead of environment variables/other parameters. 
