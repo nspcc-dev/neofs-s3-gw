@@ -13,12 +13,6 @@ type (
 		log *zap.Logger
 		obj layer.Client
 	}
-
-	// Params holds logger and client.
-	Params struct {
-		Log *zap.Logger
-		Obj layer.Client
-	}
 )
 
 var _ api.Handler = (*handler)(nil)
