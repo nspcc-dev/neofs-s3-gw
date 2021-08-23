@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
-	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -20,7 +19,6 @@ const (
 	basicACLReadOnly  = "public-read"
 	basicACLPublic    = "public-read-write"
 	cannedACLAuthRead = "authenticated-read"
-	defaultPolicy     = "REP 3"
 
 	publicBasicRule = 0x0FFFFFFF
 )
@@ -181,11 +179,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if p.Policy == nil {
-		p.Policy, err = policy.Parse(defaultPolicy)
-		if err != nil {
-			h.logAndSendError(w, "could not parse policy", reqInfo, err)
-			return
-		}
+		p.Policy = h.cfg.DefaultPolicy
 	}
 
 	cid, err := h.obj.CreateBucket(r.Context(), &p)
