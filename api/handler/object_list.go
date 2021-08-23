@@ -21,6 +21,11 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	list, err := h.obj.ListObjectsV1(r.Context(), params)
 	if err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
@@ -57,6 +62,11 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	params, err := parseListObjectsArgsV2(reqInfo)
 	if err != nil {
 		h.logAndSendError(w, "failed to parse arguments", reqInfo, err)
+		return
+	}
+
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 

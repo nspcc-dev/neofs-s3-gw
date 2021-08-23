@@ -93,6 +93,11 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return

@@ -31,6 +31,11 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		reqInfo = api.GetReqInfo(r.Context())
 	)
 
+	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
 	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
@@ -56,7 +61,11 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
-		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
