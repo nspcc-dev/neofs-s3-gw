@@ -59,4 +59,5 @@ $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
 - [NeoFS AuthMate](./docs/authmate.md)
 - [AWS CLI basic usage](./docs/aws_cli.md)
 - [AWS S3 API compatibility](./docs/aws_s3_compat.md)
+- [AWS S3 Compatibility test results](./docs/s3_test_results.md)
 
