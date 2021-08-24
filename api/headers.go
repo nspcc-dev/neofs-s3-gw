@@ -39,4 +39,6 @@ const (
 	AmzGrantRead             = "X-Amz-Grant-Read"
 	AmzGrantWrite            = "X-Amz-Grant-Write"
 	AmzExpectedBucketOwner   = "X-Amz-Expected-Bucket-Owner"
+
+	ContainerID = "X-Container-Id"
 )
