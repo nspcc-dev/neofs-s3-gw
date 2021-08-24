@@ -1,0 +1,29 @@
+---
+
+version: "2.4"
+services:
+  aio:
+    image: nspcc/aio-test:0.1.0
+    domainname: neofs
+    hostname: aio
+    container_name: aio
+    restart: always
+    network_mode: host
+    environment:
+      - ACC=/config/morph_chain.gz
+    volumes:
+      - ./sn/wallet.key:/config/wallet-node.key
+      - ./sn/config.yaml:/config/config-node.yaml
+#      - data:/data
+      - ./ir/wallet.key:/config/wallet-ir.key
+      - ./ir/config.yaml:/config/config-ir.yaml
+      - ./vendor/locode_db:/config/locode.db
+      - ./vendor/morph_chain.gz:/config/morph_chain.gz
+      - ./morph/protocol.privnet.yml:/config/protocol.privnet.yml
+      - ./morph/node-wallet.json:/config/node-wallet.json
+#      - chain:/chain
+    stop_signal: SIGKILL
+
+volumes:
+  data:
+  chain:

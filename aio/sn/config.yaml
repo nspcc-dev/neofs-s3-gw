@@ -1,0 +1,75 @@
+morph:
+  rpc_endpoint:
+    - http://localhost:30333
+  notification_endpoint:
+    - ws://localhost:30333/ws
+  dial_timeout: 20s
+
+contracts:
+  balance: d8f5cadd51d34602c751ef673496e7e5b615f223
+  netmap: a28b8ead5840f2d04240869089157ac31eee5c65
+  container: c241ae468ad95af029408e1845226d7771c7c60f
+  reputation: d623716b2faaa57f18d7d0d983d8d6bf9fe0469e
+
+control:
+  grpc:
+    endpoint: localhost:16513
+
+node:
+  key: /config/wallet-node.key
+  addresses:
+    - grpc://localhost:8080
+  attribute_0: UN-LOCODE:DE FKS
+  attribute_1: Price:10
+  attribute_2: Deployed:Private
+
+grpc:
+  num: 1
+  0:
+    endpoint: 127.0.0.1:8080
+    tls:
+      enables: false
+
+logger:
+  level: debug
+
+metrics:
+  enabled: false
+  address: localhost:6664
+
+profiler:
+  enabled: false
+  address: localhost:6663
+
+storage:
+  shard_num: 1
+  shard:
+    0:
+      use_write_cache: False
+      metabase:
+        path: /data/metabase.db
+        perm: 0770
+      blobstor:
+        path: /data/blob
+        perm: 0660
+        blobovnicza:
+          opened_cache_size: 32
+          shallow_depth: 1
+          shallow_width: 1
+      gc:
+        remover_batch_size: 100
+        remover_sleep_interval: 5m
+
+object:
+  put:
+    pool_size: 100
+  get:
+    pool_size: 100
+  head:
+    pool_size: 100
+  search:
+    pool_size: 100
+  range:
+    pool_size: 100
+  rangehash:
+    pool_size: 100

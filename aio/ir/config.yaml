@@ -1,0 +1,77 @@
+wallet:
+  path: /config/node-wallet.json
+  address: Nhfg3TbpwogLvDGVvAvqyThbsHgoSUKwtn
+  password: 'one'
+
+without_main_notary: true
+without_mainnet: true
+
+morph:
+  endpoint:
+    client: http://localhost:30333
+    notification: ws://localhost:30333/ws
+  validators: 02b3622bf4017bdfe317c58aed5f4c753f206b7db896046fa7d774bbc4bf7f8dc2
+
+contracts:
+  audit: d1ad9e1de93f6261955406c968a967844cb6cdda
+  balance: d8f5cadd51d34602c751ef673496e7e5b615f223
+  container: c241ae468ad95af029408e1845226d7771c7c60f
+  neofs: 6c9f9cee7436a093ded74a10a5fbeb0c58e58ea8
+  netmap: a28b8ead5840f2d04240869089157ac31eee5c65
+  reputation: d6a191c09702927be1ff60f954f113bc5e96a9ec
+  processing: 910ed3167561cf959f7c0eaa7b81819d5c4810a4
+  proxy: d623716b2faaa57f18d7d0d983d8d6bf9fe0469e
+  neofsid: 4e1c310379deb28b4ddd346e92e621bf3550b71f
+  alphabet:
+    amount: 1
+    az: eaa9888df8e9d608b24c2cbc61e461648486188f
+
+timers:
+  emit:  300
+  stop_estimation:
+    mul: 1
+    div: 4
+  collect_basic_income:
+    mul: 1
+    div: 2
+  distribute_basic_income:
+    mul: 3
+    div: 4
+
+emit:
+  storage:
+    amount: 400000000
+
+audit:
+  pdp:
+    max_sleep_interval: 100ms
+
+netmap_cleaner:
+  enabled: true
+  threshold: 3
+
+locode:
+  db:
+    path: /config/locode.db
+
+workers:
+  netmap: 100
+  balance: 100
+  neofs: 100
+  container: 100
+  alphabet: 100
+
+logger:
+  level: debug
+
+pprof:
+  enabled: false
+  address: localhost:6661
+
+metrics:
+  enabled: false
+  address: localhost:6662
+
+control:
+  grpc:
+    endpoint: localhost:16512
