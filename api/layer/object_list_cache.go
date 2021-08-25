@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -84,14 +83,10 @@ func (l *listObjectsCache) Put(key cacheOptions, objects []*ObjectInfo) {
 	})
 }
 
-func createKey(ctx context.Context, cid *cid.ID, method, prefix, delimiter string) (cacheOptions, error) {
-	box, err := GetBoxData(ctx)
-	if err != nil {
-		return cacheOptions{}, err
-	}
+func createKey(cid *cid.ID, method, prefix, delimiter string) (cacheOptions, error) {
 	p := cacheOptions{
 		method:    method,
-		key:       box.Gate.AccessKey + cid.String(),
+		key:       cid.String(),
 		delimiter: delimiter,
 		prefix:    prefix,
 	}

@@ -193,7 +193,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 		return nil, err
 	}
 
-	cacheKey, err := createKey(ctx, bkt.CID, listVersionsMethod, p.Prefix, p.Delimiter)
+	cacheKey, err := createKey(bkt.CID, listVersionsMethod, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
 	}
