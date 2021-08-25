@@ -572,7 +572,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 		return nil, err
 	}
 
-	if cacheKey, err = createKey(ctx, bkt.CID, listObjectsMethod, p.Prefix, p.Delimiter); err != nil {
+	if cacheKey, err = createKey(bkt.CID, listObjectsMethod, p.Prefix, p.Delimiter); err != nil {
 		return nil, err
 	}
 
