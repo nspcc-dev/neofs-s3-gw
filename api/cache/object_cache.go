@@ -10,7 +10,7 @@ import (
 // ObjectsCache provides interface for lru cache for objects.
 type ObjectsCache interface {
 	Get(address *object.Address) *object.Object
-	Put(address *object.Address, obj object.Object) error
+	Put(obj object.Object) error
 	Delete(address *object.Address) bool
 }
 
@@ -52,8 +52,8 @@ func (o *ObjectHeadersCache) Get(address *object.Address) *object.Object {
 }
 
 // Put puts an object to cache.
-func (o *ObjectHeadersCache) Put(address *object.Address, obj object.Object) error {
-	return o.cache.SetWithExpire(address.String(), obj, o.lifetime)
+func (o *ObjectHeadersCache) Put(obj object.Object) error {
+	return o.cache.SetWithExpire(obj.ContainerID().String()+"/"+obj.ID().String(), obj, o.lifetime)
 }
 
 // Delete deletes an object from cache.

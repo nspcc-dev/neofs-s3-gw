@@ -4,6 +4,7 @@ package api
 const (
 	MetadataPrefix       = "X-Amz-Meta-"
 	AmzMetadataDirective = "X-Amz-Metadata-Directive"
+	AmzVersionID         = "X-Amz-Version-Id"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"
@@ -42,4 +43,9 @@ const (
 	AmzSourceExpectedBucketOwner = "X-Amz-Source-Expected-Bucket-Owner"
 
 	ContainerID = "X-Container-Id"
+)
+
+// S3 request query params.
+const (
+	QueryVersionID = "versionId"
 )

@@ -226,8 +226,8 @@ See also `GetObject` and other method parameters.
 
 |    | Method              | Comments |
 |----|---------------------|----------|
-| 🔴 | GetBucketVersioning |          |
-| 🔴 | PutBucketVersioning |          |
+| 🟢 | GetBucketVersioning |          |
+| 🟢 | PutBucketVersioning |          |
 
 ## Website
 

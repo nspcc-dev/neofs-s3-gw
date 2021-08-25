@@ -72,6 +72,7 @@ func writeHeaders(h http.Header, info *layer.ObjectInfo) {
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
+	h.Set(api.AmzVersionID, info.ID().String())
 
 	for key, val := range info.Headers {
 		h[api.MetadataPrefix+key] = []string{val}
@@ -81,7 +82,7 @@ func writeHeaders(h http.Header, info *layer.ObjectInfo) {
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error
-		inf    *layer.ObjectInfo
+		info   *layer.ObjectInfo
 		params *layer.RangeParams
 
 		reqInfo = api.GetReqInfo(r.Context())
@@ -98,47 +99,53 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
 
-	if err = checkPreconditions(inf, args.Conditional); err != nil {
+	if err = checkPreconditions(info, args.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
 		return
 	}
 
-	if params, err = fetchRangeHeader(r.Header, uint64(inf.Size)); err != nil {
+	if params, err = fetchRangeHeader(r.Header, uint64(info.Size)); err != nil {
 		h.logAndSendError(w, "could not parse range header", reqInfo, err)
 		return
 	}
-	writeHeaders(w.Header(), inf)
+	writeHeaders(w.Header(), info)
 	if params != nil {
-		writeRangeHeaders(w, params, inf.Size)
+		writeRangeHeaders(w, params, info.Size)
 	}
 
 	getParams := &layer.GetObjectParams{
-		Bucket: inf.Bucket,
-		Object: inf.Name,
-		Writer: w,
-		Range:  params,
+		ObjectInfo: info,
+		Writer:     w,
+		Range:      params,
+		VersionID:  p.VersionID,
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)
 	}
 }
 
-func checkPreconditions(inf *layer.ObjectInfo, args *conditionalArgs) error {
-	if len(args.IfMatch) > 0 && args.IfMatch != inf.HashSum {
+func checkPreconditions(info *layer.ObjectInfo, args *conditionalArgs) error {
+	if len(args.IfMatch) > 0 && args.IfMatch != info.HashSum {
 		return errors.GetAPIError(errors.ErrPreconditionFailed)
 	}
-	if len(args.IfNoneMatch) > 0 && args.IfNoneMatch == inf.HashSum {
+	if len(args.IfNoneMatch) > 0 && args.IfNoneMatch == info.HashSum {
 		return errors.GetAPIError(errors.ErrNotModified)
 	}
-	if args.IfModifiedSince != nil && inf.Created.Before(*args.IfModifiedSince) {
+	if args.IfModifiedSince != nil && info.Created.Before(*args.IfModifiedSince) {
 		return errors.GetAPIError(errors.ErrNotModified)
 	}
-	if args.IfUnmodifiedSince != nil && inf.Created.After(*args.IfUnmodifiedSince) {
+	if args.IfUnmodifiedSince != nil && info.Created.After(*args.IfUnmodifiedSince) {
 		if len(args.IfMatch) == 0 {
 			return errors.GetAPIError(errors.ErrPreconditionFailed)
 		}

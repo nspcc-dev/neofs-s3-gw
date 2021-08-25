@@ -23,10 +23,6 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotSupported))
 }
 
-func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotSupported))
-}
-
 func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotSupported))
 }

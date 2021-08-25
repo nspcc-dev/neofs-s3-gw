@@ -114,6 +114,12 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if versioning, err := h.obj.GetBucketVersioning(r.Context(), reqInfo.BucketName); err != nil {
+		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
+	} else if versioning.VersioningEnabled {
+		w.Header().Set(api.AmzVersionID, info.Version())
+	}
+
 	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
 }

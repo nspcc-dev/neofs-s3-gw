@@ -9,13 +9,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 )
 
-// VersioningConfiguration contains VersioningConfiguration XML representation.
-type VersioningConfiguration struct {
-	XMLName xml.Name `xml:"VersioningConfiguration"`
-	Text    string   `xml:",chardata"`
-	Xmlns   string   `xml:"xmlns,attr"`
-}
-
 // ListMultipartUploadsResult contains ListMultipartUploadsResult XML representation.
 type ListMultipartUploadsResult struct {
 	XMLName xml.Name `xml:"ListMultipartUploadsResult"`
@@ -58,20 +51,6 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = api.EncodeToResponse(w, res); err != nil {
-		h.logAndSendError(w, "something went wrong", reqInfo, err)
-	}
-}
-
-// GetBucketVersioningHandler implements bucket versioning getter handler.
-func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		reqInfo = api.GetReqInfo(r.Context())
-		res     = new(VersioningConfiguration)
-	)
-
-	res.Xmlns = "http://s3.amazonaws.com/doc/2006-03-01/"
-
-	if err := api.EncodeToResponse(w, res); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }

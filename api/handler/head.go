@@ -25,8 +25,8 @@ func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
 
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err error
-		inf *layer.ObjectInfo
+		err  error
+		info *layer.ObjectInfo
 
 		reqInfo = api.GetReqInfo(r.Context())
 	)
@@ -36,23 +36,33 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if inf, err = h.obj.GetObjectInfo(r.Context(), reqInfo.BucketName, reqInfo.ObjectName); err != nil {
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
-	buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
-	getParams := &layer.GetObjectParams{
-		Bucket: inf.Bucket,
-		Object: inf.Name,
-		Writer: buffer,
-		Range:  getRangeToDetectContentType(inf.Size),
+
+	if len(info.ContentType) == 0 {
+		buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
+		getParams := &layer.GetObjectParams{
+			ObjectInfo: info,
+			Writer:     buffer,
+			Range:      getRangeToDetectContentType(info.Size),
+			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+		}
+		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+			h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", info.ID()))
+			return
+		}
+		info.ContentType = http.DetectContentType(buffer.Bytes())
 	}
-	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
-		h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", inf.ID()))
-		return
-	}
-	inf.ContentType = http.DetectContentType(buffer.Bytes())
-	writeHeaders(w.Header(), inf)
+
+	writeHeaders(w.Header(), info)
 	w.WriteHeader(http.StatusOK)
 }
 

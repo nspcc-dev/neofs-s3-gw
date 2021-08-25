@@ -66,6 +66,7 @@ const (
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
+	ErrInvalidVersion
 	ErrNotImplemented
 	ErrPreconditionFailed
 	ErrNotModified
@@ -528,6 +529,12 @@ var errorCodes = errorCodeMap{
 		Code:           "NoSuchVersion",
 		Description:    "Indicates that the version ID specified in the request does not match an existing version.",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrInvalidVersion: {
+		ErrCode:        ErrInvalidVersion,
+		Code:           "InvalidArgument",
+		Description:    "Invalid version id specified",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNotImplemented: {
 		ErrCode:        ErrNotImplemented,
@@ -1917,26 +1924,18 @@ func GetAPIError(code ErrorCode) Error {
 	return errorCodes.toAPIErr(ErrInternalError)
 }
 
-// GenericError - generic object layer error.
-type GenericError struct {
-	Bucket string
-	Object string
+// ObjectError - error that linked to specific object.
+type ObjectError struct {
+	Err     error
+	Object  string
+	Version string
 }
 
-// ObjectAlreadyExists object already exists.
-// This type should be removed when s3-gw will support versioning.
-type ObjectAlreadyExists GenericError
-
-func (e ObjectAlreadyExists) Error() string {
-	return "Object: " + e.Bucket + "#" + e.Object + " already exists"
+func (e ObjectError) Error() string {
+	return fmt.Sprintf("%s (%s:%s)", e.Err, e.Object, e.Version)
 }
 
-// DeleteError - returns when cant remove object.
-type DeleteError struct {
-	Err    error
-	Object string
-}
-
-func (e DeleteError) Error() string {
-	return fmt.Sprintf("%s (%s)", e.Err, e.Object)
+// ObjectVersion get "object:version" string.
+func (e ObjectError) ObjectVersion() string {
+	return e.Object + ":" + e.Version
 }
