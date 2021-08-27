@@ -21,10 +21,10 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
-	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/policy"
+	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"go.uber.org/zap"
 )
 

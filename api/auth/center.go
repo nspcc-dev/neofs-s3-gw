@@ -17,7 +17,7 @@ import (
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"go.uber.org/zap"
 )
 

@@ -3,25 +3,22 @@ module github.com/nspcc-dev/neofs-s3-gw
 go 1.16
 
 require (
-	github.com/alecthomas/participle v0.7.1 // indirect
 	github.com/aws/aws-sdk-go v1.37.9
 	github.com/bluele/gcache v0.0.2
+	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
-	github.com/nspcc-dev/neo-go v0.95.3
-	github.com/nspcc-dev/neofs-api-go v1.28.3
-	github.com/nspcc-dev/neofs-node v1.22.0
-	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210707142403-393034fd73bb
-	github.com/prometheus/client_golang v1.9.0
+	github.com/nspcc-dev/neo-go v0.97.2
+	github.com/nspcc-dev/neofs-api-go v1.29.0
+	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210728122117-c55ae2c13f78
+	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
-	go.uber.org/atomic v1.7.0 // indirect
-	go.uber.org/zap v1.16.0
-	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
-	golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073 // indirect
-	golang.org/x/text v0.3.5 // indirect
+	go.uber.org/zap v1.18.1
+	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
 	google.golang.org/grpc v1.36.1
-	google.golang.org/protobuf v1.25.0
+	google.golang.org/protobuf v1.26.0-rc.1
 )

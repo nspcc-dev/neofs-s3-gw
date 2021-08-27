@@ -8,14 +8,14 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neofs-node/pkg/policy"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
-	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/policy"
+	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )

@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/nspcc-dev/neofs-sdk-go/pkg/logger"
+	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
