@@ -16,7 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
-	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
