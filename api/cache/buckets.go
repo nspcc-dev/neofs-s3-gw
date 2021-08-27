@@ -4,25 +4,15 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
-	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 )
 
 type (
 	// BucketCache provides interface for lru cache for objects.
 	BucketCache interface {
-		Get(key string) *BucketInfo
-		Put(bkt *BucketInfo) error
+		Get(key string) *api.BucketInfo
+		Put(bkt *api.BucketInfo) error
 		Delete(key string) bool
-	}
-
-	// BucketInfo stores basic bucket data.
-	BucketInfo struct {
-		Name     string
-		CID      *cid.ID
-		Owner    *owner.ID
-		Created  time.Time
-		BasicACL uint32
 	}
 
 	// GetBucketCache contains cache with objects and lifetime of cache entries.
@@ -40,13 +30,13 @@ func NewBucketCache(cacheSize int, lifetime time.Duration) *GetBucketCache {
 }
 
 // Get returns cached object.
-func (o *GetBucketCache) Get(key string) *BucketInfo {
+func (o *GetBucketCache) Get(key string) *api.BucketInfo {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.(*BucketInfo)
+	result, ok := entry.(*api.BucketInfo)
 	if !ok {
 		return nil
 	}
@@ -55,23 +45,11 @@ func (o *GetBucketCache) Get(key string) *BucketInfo {
 }
 
 // Put puts an object to cache.
-func (o *GetBucketCache) Put(bkt *BucketInfo) error {
+func (o *GetBucketCache) Put(bkt *api.BucketInfo) error {
 	return o.cache.SetWithExpire(bkt.Name, bkt, o.lifetime)
 }
 
 // Delete deletes an object from cache.
 func (o *GetBucketCache) Delete(key string) bool {
 	return o.cache.Remove(key)
-}
-
-const bktVersionSettingsObject = ".s3-versioning-settings"
-
-// SettingsObjectName is system name for bucket settings file.
-func (b *BucketInfo) SettingsObjectName() string {
-	return bktVersionSettingsObject
-}
-
-// SystemObjectKey is key to use in SystemCache.
-func (b *BucketInfo) SystemObjectKey(obj string) string {
-	return b.Name + obj
 }

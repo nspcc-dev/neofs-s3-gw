@@ -207,7 +207,7 @@ func (t *testPool) WaitForContainerPresence(ctx context.Context, id *cid.ID, par
 	return nil
 }
 
-func (tc *testContext) putObject(content []byte) *ObjectInfo {
+func (tc *testContext) putObject(content []byte) *api.ObjectInfo {
 	objInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
 		Bucket: tc.bkt,
 		Object: tc.obj,
@@ -220,7 +220,7 @@ func (tc *testContext) putObject(content []byte) *ObjectInfo {
 	return objInfo
 }
 
-func (tc *testContext) getObject(objectName, versionID string, needError bool) (*ObjectInfo, []byte) {
+func (tc *testContext) getObject(objectName, versionID string, needError bool) (*api.ObjectInfo, []byte) {
 	objInfo, err := tc.layer.GetObjectInfo(tc.ctx, &HeadObjectParams{
 		Bucket:    tc.bkt,
 		Object:    objectName,
@@ -252,7 +252,7 @@ func (tc *testContext) deleteObject(objectName, versionID string) {
 	}
 }
 
-func (tc *testContext) listObjectsV1() []*ObjectInfo {
+func (tc *testContext) listObjectsV1() []*api.ObjectInfo {
 	res, err := tc.layer.ListObjectsV1(tc.ctx, &ListObjectsParamsV1{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
 			Bucket:  tc.bkt,
@@ -263,7 +263,7 @@ func (tc *testContext) listObjectsV1() []*ObjectInfo {
 	return res.Objects
 }
 
-func (tc *testContext) listObjectsV2() []*ObjectInfo {
+func (tc *testContext) listObjectsV2() []*api.ObjectInfo {
 	res, err := tc.layer.ListObjectsV2(tc.ctx, &ListObjectsParamsV2{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
 			Bucket:  tc.bkt,
@@ -357,12 +357,12 @@ func TestSimpleVersioning(t *testing.T) {
 
 	objv2, buffer2 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, obj1Content2, buffer2)
-	require.Contains(t, objv2.Headers[versionsAddAttr], obj1v1.ID().String())
+	require.Contains(t, objv2.Headers[versionsAddAttr], obj1v1.ID.String())
 
-	_, buffer1 := tc.getObject(tc.obj, obj1v1.ID().String(), false)
+	_, buffer1 := tc.getObject(tc.obj, obj1v1.ID.String(), false)
 	require.Equal(t, obj1Content1, buffer1)
 
-	tc.checkListObjects(obj1v2.ID())
+	tc.checkListObjects(obj1v2.ID)
 }
 
 func TestSimpleNoVersioning(t *testing.T) {
@@ -376,10 +376,10 @@ func TestSimpleNoVersioning(t *testing.T) {
 
 	objv2, buffer2 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, obj1Content2, buffer2)
-	require.Contains(t, objv2.Headers[versionsDelAttr], obj1v1.ID().String())
+	require.Contains(t, objv2.Headers[versionsDelAttr], obj1v1.ID.String())
 
-	tc.getObject(tc.obj, obj1v1.ID().String(), true)
-	tc.checkListObjects(obj1v2.ID())
+	tc.getObject(tc.obj, obj1v1.ID.String(), true)
+	tc.checkListObjects(obj1v2.ID)
 }
 
 func TestVersioningDeleteObject(t *testing.T) {
@@ -454,7 +454,7 @@ func TestGetLastVersion(t *testing.T) {
 
 	for _, tc := range []struct {
 		versions *objectVersions
-		expected *ObjectInfo
+		expected *api.ObjectInfo
 	}{
 		{
 			versions: &objectVersions{},
@@ -462,21 +462,21 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj2, obj1},
+				objects: []*api.ObjectInfo{obj2, obj1},
 				addList: []string{obj1.Version(), obj2.Version()},
 			},
 			expected: obj2,
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj2, obj1, obj3},
+				objects: []*api.ObjectInfo{obj2, obj1, obj3},
 				addList: []string{obj1.Version(), obj2.Version(), obj3.Version()},
 			},
 			expected: nil,
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj2, obj1, obj4},
+				objects: []*api.ObjectInfo{obj2, obj1, obj4},
 				addList: []string{obj1.Version(), obj2.Version(), obj4.Version()},
 				delList: []string{obj2.Version()},
 			},
@@ -484,7 +484,7 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj1, obj5},
+				objects: []*api.ObjectInfo{obj1, obj5},
 				addList: []string{obj1.Version(), obj5.Version()},
 				delList: []string{obj1.Version()},
 			},
@@ -492,13 +492,13 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj5},
+				objects: []*api.ObjectInfo{obj5},
 			},
 			expected: nil,
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj1, obj2, obj3, obj6},
+				objects: []*api.ObjectInfo{obj1, obj2, obj3, obj6},
 				addList: []string{obj1.Version(), obj2.Version(), obj3.Version(), obj6.Version()},
 				delList: []string{obj3.Version()},
 			},
@@ -506,7 +506,7 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*ObjectInfo{obj1, obj1V2},
+				objects: []*api.ObjectInfo{obj1, obj1V2},
 				addList: []string{obj1.Version(), obj1V2.Version()},
 			},
 			// creation epochs are equal
@@ -527,38 +527,38 @@ func TestAppendVersions(t *testing.T) {
 
 	for _, tc := range []struct {
 		versions         *objectVersions
-		objectToAdd      *ObjectInfo
+		objectToAdd      *api.ObjectInfo
 		expectedVersions *objectVersions
 	}{
 		{
 			versions:    &objectVersions{},
 			objectToAdd: obj1,
 			expectedVersions: &objectVersions{
-				objects: []*ObjectInfo{obj1},
+				objects: []*api.ObjectInfo{obj1},
 				addList: []string{obj1.Version()},
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*ObjectInfo{obj1}},
+			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1}},
 			objectToAdd: obj2,
 			expectedVersions: &objectVersions{
-				objects: []*ObjectInfo{obj1, obj2},
+				objects: []*api.ObjectInfo{obj1, obj2},
 				addList: []string{obj1.Version(), obj2.Version()},
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*ObjectInfo{obj1, obj2}},
+			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1, obj2}},
 			objectToAdd: obj3,
 			expectedVersions: &objectVersions{
-				objects: []*ObjectInfo{obj1, obj2, obj3},
+				objects: []*api.ObjectInfo{obj1, obj2, obj3},
 				addList: []string{obj1.Version(), obj2.Version(), obj3.Version()},
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*ObjectInfo{obj1, obj2}},
+			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1, obj2}},
 			objectToAdd: obj4,
 			expectedVersions: &objectVersions{
-				objects: []*ObjectInfo{obj1, obj2, obj4},
+				objects: []*api.ObjectInfo{obj1, obj2, obj4},
 				addList: []string{obj1.Version(), obj2.Version(), obj4.Version()},
 				delList: []string{obj2.Version()},
 			},
@@ -569,7 +569,7 @@ func TestAppendVersions(t *testing.T) {
 	}
 }
 
-func joinVers(objs ...*ObjectInfo) string {
+func joinVers(objs ...*api.ObjectInfo) string {
 	if len(objs) == 0 {
 		return ""
 	}
@@ -590,7 +590,7 @@ func getOID(id byte) *object.ID {
 	return oid
 }
 
-func getTestObjectInfo(epoch uint64, oid *object.ID, addAttr, delAttr, delMarkAttr string) *ObjectInfo {
+func getTestObjectInfo(epoch uint64, oid *object.ID, addAttr, delAttr, delMarkAttr string) *api.ObjectInfo {
 	headers := make(map[string]string)
 	if addAttr != "" {
 		headers[versionsAddAttr] = addAttr
@@ -602,8 +602,8 @@ func getTestObjectInfo(epoch uint64, oid *object.ID, addAttr, delAttr, delMarkAt
 		headers[versionsDeleteMarkAttr] = delMarkAttr
 	}
 
-	return &ObjectInfo{
-		id:            oid,
+	return &api.ObjectInfo{
+		ID:            oid,
 		CreationEpoch: epoch,
 		Headers:       headers,
 	}

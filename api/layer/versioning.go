@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 )
 
 type objectVersions struct {
 	name     string
-	objects  []*ObjectInfo
+	objects  []*api.ObjectInfo
 	addList  []string
 	delList  []string
 	isSorted bool
@@ -34,7 +34,7 @@ func newObjectVersions(name string) *objectVersions {
 	return &objectVersions{name: name}
 }
 
-func (v *objectVersions) appendVersion(oi *ObjectInfo) {
+func (v *objectVersions) appendVersion(oi *api.ObjectInfo) {
 	addVers := append(splitVersions(oi.Headers[versionsAddAttr]), oi.Version())
 	delVers := splitVersions(oi.Headers[versionsDelAttr])
 	v.objects = append(v.objects, oi)
@@ -60,7 +60,7 @@ func (v *objectVersions) sort() {
 	}
 }
 
-func (v *objectVersions) getLast() *ObjectInfo {
+func (v *objectVersions) getLast() *api.ObjectInfo {
 	if len(v.objects) == 0 {
 		return nil
 	}
@@ -82,14 +82,14 @@ func (v *objectVersions) getLast() *ObjectInfo {
 	return nil
 }
 
-func (v *objectVersions) getFiltered() []*ObjectInfo {
+func (v *objectVersions) getFiltered() []*api.ObjectInfo {
 	if len(v.objects) == 0 {
 		return nil
 	}
 
 	v.sort()
 	existedVersions := getExistedVersions(v)
-	res := make([]*ObjectInfo, 0, len(v.objects))
+	res := make([]*api.ObjectInfo, 0, len(v.objects))
 
 	for _, version := range v.objects {
 		delMark := version.Headers[versionsDeleteMarkAttr]
@@ -109,15 +109,15 @@ func (v *objectVersions) getDelHeader() string {
 	return strings.Join(v.delList, ",")
 }
 
-func (v *objectVersions) getVersion(oid *object.ID) *ObjectInfo {
+func (v *objectVersions) getVersion(oid *object.ID) *api.ObjectInfo {
 	for _, version := range v.objects {
-		if version.ID() == oid {
+		if version.ID == oid {
 			return version
 		}
 	}
 	return nil
 }
-func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error) {
+func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*api.ObjectInfo, error) {
 	bktInfo, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		return nil, err
@@ -171,13 +171,13 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 		}
 		sort.Strings(sortedNames)
 
-		allObjects = make([]*ObjectInfo, 0, p.MaxKeys)
+		allObjects = make([]*api.ObjectInfo, 0, p.MaxKeys)
 		for _, name := range sortedNames {
 			allObjects = append(allObjects, versions[name].getFiltered()...)
 		}
 
 		// putting to cache a copy of allObjects because allObjects can be modified further
-		n.listsCache.Put(cacheKey, append([]*ObjectInfo(nil), allObjects...))
+		n.listsCache.Put(cacheKey, append([]*api.ObjectInfo(nil), allObjects...))
 	}
 
 	for i, obj := range allObjects {
@@ -230,7 +230,7 @@ func triageVersions(objVersions []*ObjectVersionInfo) ([]*ObjectVersionInfo, []*
 	return resVersion, resDelMarkVersions
 }
 
-func less(ov1, ov2 *ObjectInfo) bool {
+func less(ov1, ov2 *api.ObjectInfo) bool {
 	if ov1.CreationEpoch == ov2.CreationEpoch {
 		return ov1.Version() < ov2.Version()
 	}
@@ -246,7 +246,7 @@ func contains(list []string, elem string) bool {
 	return false
 }
 
-func (n *layer) getBucketSettings(ctx context.Context, bktInfo *cache.BucketInfo) (*BucketSettings, error) {
+func (n *layer) getBucketSettings(ctx context.Context, bktInfo *api.BucketInfo) (*BucketSettings, error) {
 	objInfo, err := n.getSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func (n *layer) getBucketSettings(ctx context.Context, bktInfo *cache.BucketInfo
 	return objectInfoToBucketSettings(objInfo), nil
 }
 
-func objectInfoToBucketSettings(info *ObjectInfo) *BucketSettings {
+func objectInfoToBucketSettings(info *api.ObjectInfo) *BucketSettings {
 	res := &BucketSettings{}
 
 	enabled, ok := info.Headers[attrSettingsVersioningEnabled]
@@ -267,7 +267,7 @@ func objectInfoToBucketSettings(info *ObjectInfo) *BucketSettings {
 	return res
 }
 
-func (n *layer) checkVersionsExist(ctx context.Context, bkt *cache.BucketInfo, obj *VersionedObject) (*object.ID, error) {
+func (n *layer) checkVersionsExist(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) (*object.ID, error) {
 	id := object.NewID()
 	if err := id.Parse(obj.VersionID); err != nil {
 		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
