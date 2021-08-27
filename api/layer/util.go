@@ -8,36 +8,16 @@ import (
 	"strings"
 	"time"
 
-	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 )
 
 type (
-	// ObjectInfo holds S3 object data.
-	ObjectInfo struct {
-		id       *object.ID
-		bucketID *cid.ID
-		isDir    bool
-
-		Bucket        string
-		Name          string
-		Size          int64
-		ContentType   string
-		Created       time.Time
-		CreationEpoch uint64
-		HashSum       string
-		Owner         *owner.ID
-		Headers       map[string]string
-	}
-
 	// ListObjectsInfo contains common fields of data for ListObjectsV1 and ListObjectsV2.
 	ListObjectsInfo struct {
 		Prefixes    []string
-		Objects     []*ObjectInfo
+		Objects     []*api.ObjectInfo
 		IsTruncated bool
 	}
 
@@ -55,7 +35,7 @@ type (
 
 	// ObjectVersionInfo stores info about objects versions.
 	ObjectVersionInfo struct {
-		Object   *ObjectInfo
+		Object   *api.ObjectInfo
 		IsLatest bool
 	}
 
@@ -85,11 +65,11 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	return result
 }
 
-func objInfoFromMeta(bkt *cache.BucketInfo, meta *object.Object) *ObjectInfo {
+func objInfoFromMeta(bkt *api.BucketInfo, meta *object.Object) *api.ObjectInfo {
 	return objectInfoFromMeta(bkt, meta, "", "")
 }
 
-func objectInfoFromMeta(bkt *cache.BucketInfo, meta *object.Object, prefix, delimiter string) *ObjectInfo {
+func objectInfoFromMeta(bkt *api.BucketInfo, meta *object.Object, prefix, delimiter string) *api.ObjectInfo {
 	var (
 		isDir    bool
 		size     int64
@@ -130,10 +110,10 @@ func objectInfoFromMeta(bkt *cache.BucketInfo, meta *object.Object, prefix, deli
 		size = int64(meta.PayloadSize())
 	}
 
-	return &ObjectInfo{
-		id:       meta.ID(),
-		bucketID: bkt.CID,
-		isDir:    isDir,
+	return &api.ObjectInfo{
+		ID:    meta.ID(),
+		CID:   bkt.CID,
+		IsDir: isDir,
 
 		Bucket:        bkt.Name,
 		Name:          filename,
@@ -162,24 +142,6 @@ func NameFromString(name string) (string, string) {
 	ind := strings.LastIndex(name, PathSeparator)
 	return name[ind+1:], name[:ind+1]
 }
-
-// ID returns object ID from ObjectInfo.
-func (o *ObjectInfo) ID() *object.ID { return o.id }
-
-// Version returns object version from ObjectInfo.
-func (o *ObjectInfo) Version() string { return o.id.String() }
-
-// NiceName returns object name for cache.
-func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
-
-// Address returns object address.
-func (o *ObjectInfo) Address() *object.Address { return newAddress(o.bucketID, o.id) }
-
-// CID returns bucket ID from ObjectInfo.
-func (o *ObjectInfo) CID() *cid.ID { return o.bucketID }
-
-// IsDir allows to check if object is a directory.
-func (o *ObjectInfo) IsDir() bool { return o.isDir }
 
 // GetBoxData  extracts accessbox.Box from context.
 func GetBoxData(ctx context.Context) (*accessbox.Box, error) {

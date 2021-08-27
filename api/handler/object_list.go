@@ -183,11 +183,11 @@ func fillPrefixes(src []string, encode string) []CommonPrefix {
 	return dst
 }
 
-func fillContentsWithOwner(src []*layer.ObjectInfo, encode string) []Object {
+func fillContentsWithOwner(src []*api.ObjectInfo, encode string) []Object {
 	return fillContents(src, encode, true)
 }
 
-func fillContents(src []*layer.ObjectInfo, encode string, fetchOwner bool) []Object {
+func fillContents(src []*api.ObjectInfo, encode string, fetchOwner bool) []Object {
 	var dst []Object
 	for _, obj := range src {
 		res := Object{

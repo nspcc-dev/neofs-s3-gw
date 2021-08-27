@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/container"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-sdk-go/pkg/pool"
 	"go.uber.org/zap"
@@ -21,19 +20,19 @@ import (
 type (
 	// BucketACL extends BucketInfo by eacl.Table.
 	BucketACL struct {
-		Info *cache.BucketInfo
+		Info *api.BucketInfo
 		EACL *eacl.Table
 	}
 )
 
-func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*cache.BucketInfo, error) {
+func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*api.BucketInfo, error) {
 	var (
 		err       error
 		res       *container.Container
 		rid       = api.GetRequestID(ctx)
 		bearerOpt = n.BearerOpt(ctx)
 
-		info = &cache.BucketInfo{
+		info = &api.BucketInfo{
 			CID:  cid,
 			Name: cid.String(),
 		}
@@ -84,7 +83,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*cache.BucketIn
 	return info, nil
 }
 
-func (n *layer) containerList(ctx context.Context) ([]*cache.BucketInfo, error) {
+func (n *layer) containerList(ctx context.Context) ([]*api.BucketInfo, error) {
 	var (
 		err       error
 		own       = n.Owner(ctx)
@@ -100,7 +99,7 @@ func (n *layer) containerList(ctx context.Context) ([]*cache.BucketInfo, error) 
 		return nil, err
 	}
 
-	list := make([]*cache.BucketInfo, 0, len(res))
+	list := make([]*api.BucketInfo, 0, len(res))
 	for _, cid := range res {
 		info, err := n.containerInfo(ctx, cid)
 		if err != nil {
@@ -118,7 +117,7 @@ func (n *layer) containerList(ctx context.Context) ([]*cache.BucketInfo, error) 
 
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	var err error
-	bktInfo := &cache.BucketInfo{
+	bktInfo := &api.BucketInfo{
 		Name:     p.Name,
 		Owner:    n.Owner(ctx),
 		Created:  time.Now(),

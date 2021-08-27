@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
@@ -45,8 +46,8 @@ func TestFetchRangeHeader(t *testing.T) {
 	}
 }
 
-func newInfo(etag string, created time.Time) *layer.ObjectInfo {
-	return &layer.ObjectInfo{
+func newInfo(etag string, created time.Time) *api.ObjectInfo {
+	return &api.ObjectInfo{
 		HashSum: etag,
 		Created: created,
 	}
@@ -60,13 +61,13 @@ func TestPreconditions(t *testing.T) {
 
 	for _, tc := range []struct {
 		name     string
-		info     *layer.ObjectInfo
+		info     *api.ObjectInfo
 		args     *conditionalArgs
 		expected error
 	}{
 		{
 			name:     "no conditions",
-			info:     new(layer.ObjectInfo),
+			info:     new(api.ObjectInfo),
 			args:     new(conditionalArgs),
 			expected: nil,
 		},

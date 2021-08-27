@@ -52,7 +52,7 @@ type (
 	// GetObjectParams stores object get request parameters.
 	GetObjectParams struct {
 		Range      *RangeParams
-		ObjectInfo *ObjectInfo
+		ObjectInfo *api.ObjectInfo
 		Offset     int64
 		Length     int64
 		Writer     io.Writer
@@ -94,7 +94,7 @@ type (
 
 	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
-		SrcObject *ObjectInfo
+		SrcObject *api.ObjectInfo
 		DstBucket string
 		DstObject string
 		SrcSize   int64
@@ -143,22 +143,22 @@ type (
 	Client interface {
 		NeoFS
 
-		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*ObjectInfo, error)
+		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*api.ObjectInfo, error)
 		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
 
-		ListBuckets(ctx context.Context) ([]*cache.BucketInfo, error)
-		GetBucketInfo(ctx context.Context, name string) (*cache.BucketInfo, error)
+		ListBuckets(ctx context.Context) ([]*api.BucketInfo, error)
+		GetBucketInfo(ctx context.Context, name string) (*api.BucketInfo, error)
 		GetBucketACL(ctx context.Context, name string) (*BucketACL, error)
 		PutBucketACL(ctx context.Context, p *PutBucketACLParams) error
 		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
-		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error)
+		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*api.ObjectInfo, error)
 
-		PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error)
+		PutObject(ctx context.Context, p *PutObjectParams) (*api.ObjectInfo, error)
 
-		CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error)
+		CopyObject(ctx context.Context, p *CopyObjectParams) (*api.ObjectInfo, error)
 
 		ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*ListObjectsInfoV1, error)
 		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
@@ -221,7 +221,7 @@ func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Objec
 }
 
 // GetBucketInfo returns bucket info by name.
-func (n *layer) GetBucketInfo(ctx context.Context, name string) (*cache.BucketInfo, error) {
+func (n *layer) GetBucketInfo(ctx context.Context, name string) (*api.BucketInfo, error) {
 	name, err := url.QueryUnescape(name)
 	if err != nil {
 		return nil, err
@@ -279,7 +279,7 @@ func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) err
 
 // ListBuckets returns all user containers. Name of the bucket is a container
 // id. Timestamp is omitted since it is not saved in neofs container.
-func (n *layer) ListBuckets(ctx context.Context) ([]*cache.BucketInfo, error) {
+func (n *layer) ListBuckets(ctx context.Context) ([]*api.BucketInfo, error) {
 	return n.containerList(ctx)
 }
 
@@ -289,8 +289,8 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 
 	params := &getParams{
 		Writer: p.Writer,
-		cid:    p.ObjectInfo.CID(),
-		oid:    p.ObjectInfo.ID(),
+		cid:    p.ObjectInfo.CID,
+		oid:    p.ObjectInfo.ID,
 		offset: p.Offset,
 		length: p.Length,
 	}
@@ -308,14 +308,14 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 
 	if err != nil {
 		n.objCache.Delete(p.ObjectInfo.Address())
-		return fmt.Errorf("couldn't get object, cid: %s : %w", p.ObjectInfo.CID(), err)
+		return fmt.Errorf("couldn't get object, cid: %s : %w", p.ObjectInfo.CID, err)
 	}
 
 	return nil
 }
 
 // GetObjectInfo returns meta information about the object.
-func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*ObjectInfo, error) {
+func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*api.ObjectInfo, error) {
 	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		n.log.Error("could not fetch bucket info", zap.Error(err))
@@ -329,7 +329,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*Object
 	return n.headVersion(ctx, bkt, p.VersionID)
 }
 
-func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *cache.BucketInfo) (*ObjectInfo, error) {
+func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *api.BucketInfo) (*api.ObjectInfo, error) {
 	if meta := n.systemCache.Get(bkt.SettingsObjectKey()); meta != nil {
 		return objInfoFromMeta(bkt, meta), nil
 	}
@@ -352,7 +352,7 @@ func (n *layer) getSettingsObjectInfo(ctx context.Context, bkt *cache.BucketInfo
 }
 
 // PutObject into storage.
-func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo, error) {
+func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*api.ObjectInfo, error) {
 	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		return nil, err
@@ -362,7 +362,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*ObjectInfo,
 }
 
 // CopyObject from one bucket into another bucket.
-func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInfo, error) {
+func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*api.ObjectInfo, error) {
 	pr, pw := io.Pipe()
 
 	go func() {
@@ -386,7 +386,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*ObjectInf
 }
 
 // DeleteObject removes all objects with passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *cache.BucketInfo, obj *VersionedObject) error {
+func (n *layer) deleteObject(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) error {
 	var (
 		err error
 		ids []*object.ID

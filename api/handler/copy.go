@@ -32,7 +32,7 @@ func path2BucketObject(path string) (bucket, prefix string) {
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
-		info     *layer.ObjectInfo
+		info     *api.ObjectInfo
 		metadata map[string]string
 
 		reqInfo   = api.GetReqInfo(r.Context())
@@ -118,7 +118,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("object is copied",
 		zap.String("bucket", info.Bucket),
 		zap.String("object", info.Name),
-		zap.Stringer("object_id", info.ID()))
+		zap.Stringer("object_id", info.ID))
 }
 
 func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
