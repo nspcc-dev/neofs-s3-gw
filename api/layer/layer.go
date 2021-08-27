@@ -29,7 +29,7 @@ type (
 	layer struct {
 		pool        pool.Pool
 		log         *zap.Logger
-		listsCache  ObjectsListCache
+		listsCache  cache.ObjectsListCache
 		objCache    cache.ObjectsCache
 		namesCache  cache.ObjectsNameCache
 		bucketCache cache.BucketCache
@@ -197,7 +197,7 @@ func NewLayer(log *zap.Logger, conns pool.Pool, config *CacheConfig) Client {
 	return &layer{
 		pool:       conns,
 		log:        log,
-		listsCache: newListObjectsCache(config.ListObjectsLifetime),
+		listsCache: cache.NewObjectsListCache(config.ListObjectsLifetime),
 		objCache:   cache.New(config.Size, config.Lifetime),
 		//todo reconsider cache params
 		namesCache:  cache.NewObjectsNameCache(1000, time.Minute),

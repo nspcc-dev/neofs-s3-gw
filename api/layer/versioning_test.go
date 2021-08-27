@@ -331,7 +331,7 @@ func prepareContext(t *testing.T) *testContext {
 		layer: NewLayer(l, tp, &CacheConfig{
 			Size:                cache.DefaultObjectsCacheSize,
 			Lifetime:            cache.DefaultObjectsCacheLifetime,
-			ListObjectsLifetime: DefaultObjectsListCacheLifetime},
+			ListObjectsLifetime: cache.DefaultObjectsListCacheLifetime},
 		),
 		bkt:      bktName,
 		bktID:    bktID,

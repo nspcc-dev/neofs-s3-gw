@@ -8,6 +8,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 )
 
@@ -153,7 +154,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 		return nil, err
 	}
 
-	cacheKey, err := createKey(bkt.CID, listVersionsMethod, p.Prefix, p.Delimiter)
+	cacheKey, err := cache.CreateObjectsListCacheKey(bkt.CID, cache.ListVersionsMethod, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
 	}
