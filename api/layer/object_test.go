@@ -3,16 +3,12 @@ package layer
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"sort"
 	"testing"
-	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/stretchr/testify/require"
 )
-
-const testingCacheLifetime = 5 * time.Second
 
 func randID(t *testing.T) *object.ID {
 	id := object.NewID()
@@ -113,109 +109,6 @@ func TestTrimAfterObjectID(t *testing.T) {
 
 	t.Run("empty id", func(t *testing.T) {
 		actual := trimAfterObjectID("", objects)
-		require.Nil(t, actual)
-	})
-}
-
-func TestObjectsListCache(t *testing.T) {
-	var (
-		cacheSize = 10
-		objects   []*api.ObjectInfo
-		userKey   = "key"
-	)
-
-	for i := 0; i < cacheSize; i++ {
-		id := randID(t)
-		objects = append(objects, &api.ObjectInfo{ID: id, Name: id.String()})
-	}
-
-	sort.Slice(objects, func(i, j int) bool {
-		return objects[i].Name < objects[j].Name
-	})
-
-	t.Run("lifetime", func(t *testing.T) {
-		var (
-			cache    = newListObjectsCache(testingCacheLifetime)
-			cacheKey = cacheOptions{key: userKey}
-		)
-
-		cache.Put(cacheKey, objects)
-
-		condition := func() bool {
-			return cache.Get(cacheKey) == nil
-		}
-
-		require.Never(t, condition, cache.cacheLifetime, time.Second)
-		require.Eventually(t, condition, time.Second, 10*time.Millisecond)
-	})
-
-	t.Run("get cache with empty delimiter, empty prefix", func(t *testing.T) {
-		var (
-			cache    = newListObjectsCache(testingCacheLifetime)
-			cacheKey = cacheOptions{key: userKey}
-		)
-		cache.Put(cacheKey, objects)
-		actual := cache.Get(cacheKey)
-
-		require.Equal(t, len(objects), len(actual))
-		for i := range objects {
-			require.Equal(t, objects[i], actual[i])
-		}
-	})
-
-	t.Run("get cache with delimiter and prefix", func(t *testing.T) {
-		cacheKey := cacheOptions{
-			key:       userKey,
-			delimiter: "/",
-			prefix:    "dir",
-		}
-
-		cache := newListObjectsCache(testingCacheLifetime)
-		cache.Put(cacheKey, objects)
-		actual := cache.Get(cacheKey)
-
-		require.Equal(t, len(objects), len(actual))
-		for i := range objects {
-			require.Equal(t, objects[i], actual[i])
-		}
-	})
-
-	t.Run("get cache with other delimiter and prefix", func(t *testing.T) {
-		var (
-			cacheKey = cacheOptions{
-				key:       userKey,
-				delimiter: "/",
-				prefix:    "dir",
-			}
-
-			newKey = cacheOptions{
-				key:       "key",
-				delimiter: "*",
-				prefix:    "obj",
-			}
-		)
-
-		cache := newListObjectsCache(testingCacheLifetime)
-		cache.Put(cacheKey, objects)
-
-		actual := cache.Get(newKey)
-		require.Nil(t, actual)
-	})
-
-	t.Run("get cache with non-existing key", func(t *testing.T) {
-		var (
-			cacheKey = cacheOptions{
-				key: userKey,
-			}
-			newKey = cacheOptions{
-				key: "asdf",
-			}
-		)
-
-		cache := newListObjectsCache(testingCacheLifetime)
-		cache.Put(cacheKey, objects)
-
-		actual := cache.Get(newKey)
 		require.Nil(t, actual)
 	})
 }

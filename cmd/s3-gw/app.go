@@ -216,7 +216,7 @@ func (a *App) Server(ctx context.Context) {
 
 func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CacheConfig {
 	cacheCfg := layer.CacheConfig{
-		ListObjectsLifetime: layer.DefaultObjectsListCacheLifetime,
+		ListObjectsLifetime: cache.DefaultObjectsListCacheLifetime,
 		Size:                cache.DefaultObjectsCacheSize,
 		Lifetime:            cache.DefaultObjectsCacheLifetime,
 	}
