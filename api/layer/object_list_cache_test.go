@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,11 +30,11 @@ func randSHA256Checksum(t *testing.T) (cs [sha256.Size]byte) {
 
 func TestTrimAfterObjectName(t *testing.T) {
 	var (
-		objects []*ObjectInfo
+		objects []*api.ObjectInfo
 		names   = []string{"b", "c", "d"}
 	)
 	for _, name := range names {
-		objects = append(objects, &ObjectInfo{Name: name})
+		objects = append(objects, &api.ObjectInfo{Name: name})
 	}
 
 	t.Run("startafter before all objects", func(t *testing.T) {
@@ -62,7 +63,7 @@ func TestTrimAfterObjectName(t *testing.T) {
 	})
 
 	t.Run("empty objects", func(t *testing.T) {
-		actual := trimAfterObjectName(names[0], []*ObjectInfo{})
+		actual := trimAfterObjectName(names[0], []*api.ObjectInfo{})
 		require.Nil(t, actual)
 	})
 
@@ -79,14 +80,14 @@ func TestTrimAfterObjectName(t *testing.T) {
 
 func TestTrimAfterObjectID(t *testing.T) {
 	var (
-		objects     []*ObjectInfo
+		objects     []*api.ObjectInfo
 		ids         []*object.ID
 		numberOfIDS = 3
 	)
 
 	for i := 0; i < numberOfIDS; i++ {
 		id := randID(t)
-		objects = append(objects, &ObjectInfo{id: id})
+		objects = append(objects, &api.ObjectInfo{ID: id})
 		ids = append(ids, id)
 	}
 
@@ -119,13 +120,13 @@ func TestTrimAfterObjectID(t *testing.T) {
 func TestObjectsListCache(t *testing.T) {
 	var (
 		cacheSize = 10
-		objects   []*ObjectInfo
+		objects   []*api.ObjectInfo
 		userKey   = "key"
 	)
 
 	for i := 0; i < cacheSize; i++ {
 		id := randID(t)
-		objects = append(objects, &ObjectInfo{id: id, Name: id.String()})
+		objects = append(objects, &api.ObjectInfo{ID: id, Name: id.String()})
 	}
 
 	sort.Slice(objects, func(i, j int) bool {

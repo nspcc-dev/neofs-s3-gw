@@ -14,7 +14,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/v2/acl"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
@@ -300,7 +299,7 @@ func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func checkOwner(info *cache.BucketInfo, owner string) error {
+func checkOwner(info *api.BucketInfo, owner string) error {
 	if owner == "" {
 		return nil
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 )
 
 /*
@@ -21,8 +22,8 @@ import (
 // ObjectsListCache provides interface for cache of ListObjectsV2 in a layer struct.
 type (
 	ObjectsListCache interface {
-		Get(key cacheOptions) []*ObjectInfo
-		Put(key cacheOptions, objects []*ObjectInfo)
+		Get(key cacheOptions) []*api.ObjectInfo
+		Put(key cacheOptions, objects []*api.ObjectInfo)
 	}
 )
 
@@ -41,7 +42,7 @@ type (
 		mtx           sync.RWMutex
 	}
 	cacheEntry struct {
-		list []*ObjectInfo
+		list []*api.ObjectInfo
 	}
 	cacheOptions struct {
 		method    string
@@ -58,7 +59,7 @@ func newListObjectsCache(lifetime time.Duration) *listObjectsCache {
 	}
 }
 
-func (l *listObjectsCache) Get(key cacheOptions) []*ObjectInfo {
+func (l *listObjectsCache) Get(key cacheOptions) []*api.ObjectInfo {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	if val, ok := l.caches[key]; ok {
@@ -67,7 +68,7 @@ func (l *listObjectsCache) Get(key cacheOptions) []*ObjectInfo {
 	return nil
 }
 
-func (l *listObjectsCache) Put(key cacheOptions, objects []*ObjectInfo) {
+func (l *listObjectsCache) Put(key cacheOptions, objects []*api.ObjectInfo) {
 	if len(objects) == 0 {
 		return
 	}

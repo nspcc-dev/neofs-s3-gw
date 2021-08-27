@@ -65,14 +65,14 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
 
-func writeHeaders(h http.Header, info *layer.ObjectInfo, tagSetLength int) {
+func writeHeaders(h http.Header, info *api.ObjectInfo, tagSetLength int) {
 	if len(info.ContentType) > 0 {
 		h.Set(api.ContentType, info.ContentType)
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
-	h.Set(api.AmzVersionID, info.ID().String())
+	h.Set(api.AmzVersionID, info.ID.String())
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
 	for key, val := range info.Headers {
@@ -83,7 +83,7 @@ func writeHeaders(h http.Header, info *layer.ObjectInfo, tagSetLength int) {
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error
-		info   *layer.ObjectInfo
+		info   *api.ObjectInfo
 		params *layer.RangeParams
 
 		reqInfo = api.GetReqInfo(r.Context())
@@ -143,7 +143,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkPreconditions(info *layer.ObjectInfo, args *conditionalArgs) error {
+func checkPreconditions(info *api.ObjectInfo, args *conditionalArgs) error {
 	if len(args.IfMatch) > 0 && args.IfMatch != info.HashSum {
 		return errors.GetAPIError(errors.ErrPreconditionFailed)
 	}
