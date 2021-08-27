@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
 )
@@ -572,7 +573,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 	var (
 		err        error
 		bkt        *api.BucketInfo
-		cacheKey   cacheOptions
+		cacheKey   cache.ObjectsListKey
 		allObjects []*api.ObjectInfo
 	)
 
@@ -580,7 +581,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 		return nil, err
 	}
 
-	if cacheKey, err = createKey(bkt.CID, listObjectsMethod, p.Prefix, p.Delimiter); err != nil {
+	if cacheKey, err = cache.CreateObjectsListCacheKey(bkt.CID, cache.ListObjectsMethod, p.Prefix, p.Delimiter); err != nil {
 		return nil, err
 	}
 
