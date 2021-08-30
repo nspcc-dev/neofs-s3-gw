@@ -114,7 +114,3 @@ func (h *handler) PutBucketEncryptionHandler(w http.ResponseWriter, r *http.Requ
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
-
-func (h *handler) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}

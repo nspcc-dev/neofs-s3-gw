@@ -175,6 +175,13 @@ type Tagging struct {
 	TagSet  []Tag    `xml:"TagSet>Tag"`
 }
 
+// PostResponse contains result of posting object.
+type PostResponse struct {
+	Bucket string `xml:"Bucket"`
+	Key    string `xml:"Key"`
+	ETag   string `xml:"Etag"`
+}
+
 // Tag is AWS key-value tag.
 type Tag struct {
 	Key   string
