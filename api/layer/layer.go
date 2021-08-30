@@ -469,7 +469,7 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return err
 	}
 
-	objects, err := n.listSortedObjectsFromNeoFS(ctx, allObjectParams{Bucket: bucketInfo})
+	objects, err := n.listSortedObjects(ctx, allObjectParams{Bucket: bucketInfo})
 	if err != nil {
 		return err
 	}

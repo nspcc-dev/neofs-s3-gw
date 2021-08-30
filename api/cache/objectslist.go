@@ -5,7 +5,7 @@ import (
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
-	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 )
 
 /*
@@ -22,20 +22,14 @@ import (
 // ObjectsListCache provides interface for cache of ListObjectsV2 in a layer struct.
 type (
 	ObjectsListCache interface {
-		Get(key ObjectsListKey) []*api.ObjectInfo
-		Put(key ObjectsListKey, objects []*api.ObjectInfo)
+		Get(key ObjectsListKey) []*object.ID
+		Put(key ObjectsListKey, oids []*object.ID)
+		Update(key ObjectsListKey, oids []*object.ID)
 	}
 )
 
 // DefaultObjectsListCacheLifetime is a default lifetime of entries in cache of ListObjects.
 const DefaultObjectsListCacheLifetime = time.Second * 60
-
-const (
-	// ListObjectsMethod is used to mark a cache entry for ListObjectsV1/V2.
-	ListObjectsMethod = "listObjects"
-	// ListVersionsMethod is used to mark a cache entry for ListObjectVersions.
-	ListVersionsMethod = "listVersions"
-)
 
 type (
 	// ListObjectsCache contains cache for ListObjects and ListObjectVersions.
@@ -45,14 +39,12 @@ type (
 		mtx           sync.RWMutex
 	}
 	objectsListEntry struct {
-		list []*api.ObjectInfo
+		list []*object.ID
 	}
 	// ObjectsListKey is a key to find a ObjectsListCache's entry.
 	ObjectsListKey struct {
-		Method    string
-		Key       string
-		Delimiter string
-		Prefix    string
+		cid    string
+		Prefix string
 	}
 )
 
@@ -65,7 +57,7 @@ func NewObjectsListCache(lifetime time.Duration) *ListObjectsCache {
 }
 
 // Get return list of ObjectInfo.
-func (l *ListObjectsCache) Get(key ObjectsListKey) []*api.ObjectInfo {
+func (l *ListObjectsCache) Get(key ObjectsListKey) []*object.ID {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	if val, ok := l.caches[key]; ok {
@@ -75,15 +67,19 @@ func (l *ListObjectsCache) Get(key ObjectsListKey) []*api.ObjectInfo {
 }
 
 // Put put a list of objects to cache.
-func (l *ListObjectsCache) Put(key ObjectsListKey, objects []*api.ObjectInfo) {
-	if len(objects) == 0 {
+func (l *ListObjectsCache) Put(key ObjectsListKey, oids []*object.ID) {
+	if len(oids) == 0 {
 		return
 	}
-	var c objectsListEntry
+	if _, ok := l.caches[key]; ok {
+		return
+	}
+	c := objectsListEntry{
+		list: oids,
+	}
 	l.mtx.Lock()
-	defer l.mtx.Unlock()
-	c.list = objects
 	l.caches[key] = c
+	l.mtx.Unlock()
 	time.AfterFunc(l.cacheLifetime, func() {
 		l.mtx.Lock()
 		delete(l.caches, key)
@@ -91,14 +87,25 @@ func (l *ListObjectsCache) Put(key ObjectsListKey, objects []*api.ObjectInfo) {
 	})
 }
 
+// Update updates an entry in cache without restarting timer.
+func (l *ListObjectsCache) Update(key ObjectsListKey, oids []*object.ID) {
+	if _, ok := l.caches[key]; !ok {
+		return
+	}
+	c := objectsListEntry{
+		list: oids,
+	}
+	l.mtx.Lock()
+	l.caches[key] = c
+	l.mtx.Unlock()
+}
+
 // CreateObjectsListCacheKey returns ObjectsListKey with given CID, method, prefix, and delimiter.
-func CreateObjectsListCacheKey(cid *cid.ID, method, prefix, delimiter string) (ObjectsListKey, error) {
+func CreateObjectsListCacheKey(cid *cid.ID, prefix string) ObjectsListKey {
 	p := ObjectsListKey{
-		Method:    method,
-		Key:       cid.String(),
-		Delimiter: delimiter,
-		Prefix:    prefix,
+		cid:    cid.String(),
+		Prefix: prefix,
 	}
 
-	return p, nil
+	return p
 }

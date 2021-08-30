@@ -22,9 +22,10 @@ import (
 
 type (
 	findParams struct {
-		attr string
-		val  string
-		cid  *cid.ID
+		attr   string
+		val    string
+		cid    *cid.ID
+		prefix string
 	}
 
 	getParams struct {
@@ -81,6 +82,9 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 		} else {
 			opts.AddFilter(p.attr, filename, object.MatchStringEqual)
 		}
+	}
+	if p.prefix != "" {
+		opts.AddFilter(object.AttributeFileName, p.prefix, object.MatchCommonPrefix)
 	}
 	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts), n.BearerOpt(ctx))
 }
@@ -448,7 +452,7 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	return &result, nil
 }
 
-func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParams) ([]*api.ObjectInfo, error) {
+func (n *layer) listSortedObjects(ctx context.Context, p allObjectParams) ([]*api.ObjectInfo, error) {
 	versions, err := n.getAllObjectsVersions(ctx, p.Bucket, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
@@ -470,19 +474,34 @@ func (n *layer) listSortedObjectsFromNeoFS(ctx context.Context, p allObjectParam
 }
 
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *api.BucketInfo, prefix, delimiter string) (map[string]*objectVersions, error) {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID})
-	if err != nil {
-		return nil, err
+	var (
+		err            error
+		idsListChanged = false
+	)
+
+	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix)
+	ids := n.listsCache.Get(cacheKey)
+
+	if ids == nil {
+		ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, prefix: prefix})
+		if err != nil {
+			return nil, err
+		}
+		n.listsCache.Put(cacheKey, ids)
 	}
 
 	versions := make(map[string]*objectVersions, len(ids)/2)
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, id)
-		if err != nil {
-			n.log.Warn("could not fetch object meta", zap.Error(err))
+
+	for i := 0; i < len(ids); i++ {
+		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt.CID, ids[i])
+		if obj == nil {
+			// remove an invalid object's address from list in cache
+			ids = append(ids[:i], ids[i+1:]...)
+			i--
+			idsListChanged = true
 			continue
 		}
-		if oi := objectInfoFromMeta(bkt, meta, prefix, delimiter); oi != nil {
+		if oi := objectInfoFromMeta(bkt, obj, prefix, delimiter); oi != nil {
 			if isSystem(oi) {
 				continue
 			}
@@ -494,6 +513,10 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *api.BucketInfo, 
 			objVersions.appendVersion(oi)
 			versions[oi.Name] = objVersions
 		}
+	}
+
+	if idsListChanged {
+		n.listsCache.Update(cacheKey, ids)
 	}
 
 	return versions, nil
@@ -564,7 +587,6 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 	var (
 		err        error
 		bkt        *api.BucketInfo
-		cacheKey   cache.ObjectsListKey
 		allObjects []*api.ObjectInfo
 	)
 
@@ -572,24 +594,13 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 		return nil, err
 	}
 
-	if cacheKey, err = cache.CreateObjectsListCacheKey(bkt.CID, cache.ListObjectsMethod, p.Prefix, p.Delimiter); err != nil {
+	allObjects, err = n.listSortedObjects(ctx, allObjectParams{
+		Bucket:    bkt,
+		Prefix:    p.Prefix,
+		Delimiter: p.Delimiter,
+	})
+	if err != nil {
 		return nil, err
-	}
-
-	allObjects = n.listsCache.Get(cacheKey)
-
-	if allObjects == nil {
-		allObjects, err = n.listSortedObjectsFromNeoFS(ctx, allObjectParams{
-			Bucket:    bkt,
-			Prefix:    p.Prefix,
-			Delimiter: p.Delimiter,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		// putting to cache a copy of allObjects because allObjects can be modified further
-		n.listsCache.Put(cacheKey, append([]*api.ObjectInfo(nil), allObjects...))
 	}
 
 	return allObjects, nil
@@ -603,4 +614,23 @@ func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *api.BucketInfo
 	}
 
 	return settings.VersioningEnabled
+}
+
+func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, cid *cid.ID, oid *object.ID) *object.Object {
+	var (
+		err  error
+		meta = n.objCache.Get(newAddress(cid, oid))
+	)
+	if meta == nil {
+		meta, err = n.objectHead(ctx, cid, oid)
+		if err != nil {
+			n.log.Warn("could not fetch object meta", zap.Error(err))
+			return nil
+		}
+		if err = n.objCache.Put(*meta); err != nil {
+			n.log.Error("couldn't cache an object", zap.Error(err))
+		}
+	}
+
+	return meta
 }

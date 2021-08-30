@@ -10,7 +10,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
 )
@@ -186,39 +185,31 @@ func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*Bu
 }
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
-	var versions map[string]*objectVersions
-	res := &ListObjectVersionsInfo{}
+	var (
+		versions   map[string]*objectVersions
+		allObjects = make([]*api.ObjectInfo, 0, p.MaxKeys)
+		res        = &ListObjectVersionsInfo{}
+	)
 
 	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		return nil, err
 	}
 
-	cacheKey, err := cache.CreateObjectsListCacheKey(bkt.CID, cache.ListVersionsMethod, p.Prefix, p.Delimiter)
+	versions, err = n.getAllObjectsVersions(ctx, bkt, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
 	}
 
-	allObjects := n.listsCache.Get(cacheKey)
-	if allObjects == nil {
-		versions, err = n.getAllObjectsVersions(ctx, bkt, p.Prefix, p.Delimiter)
-		if err != nil {
-			return nil, err
-		}
+	sortedNames := make([]string, 0, len(versions))
+	for k := range versions {
+		sortedNames = append(sortedNames, k)
+	}
+	sort.Strings(sortedNames)
 
-		sortedNames := make([]string, 0, len(versions))
-		for k := range versions {
-			sortedNames = append(sortedNames, k)
-		}
-		sort.Strings(sortedNames)
-
-		allObjects = make([]*api.ObjectInfo, 0, p.MaxKeys)
-		for _, name := range sortedNames {
-			allObjects = append(allObjects, versions[name].getFiltered()...)
-		}
-
-		// putting to cache a copy of allObjects because allObjects can be modified further
-		n.listsCache.Put(cacheKey, append([]*api.ObjectInfo(nil), allObjects...))
+	allObjects = make([]*api.ObjectInfo, 0, p.MaxKeys)
+	for _, name := range sortedNames {
+		allObjects = append(allObjects, versions[name].getFiltered()...)
 	}
 
 	for i, obj := range allObjects {
