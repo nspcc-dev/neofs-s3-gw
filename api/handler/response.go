@@ -57,8 +57,6 @@ type AccessControlPolicy struct {
 	XMLName           xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ AccessControlPolicy" json:"-"`
 	Owner             Owner
 	AccessControlList []*Grant `xml:"AccessControlList>Grant"`
-	Resource          string   `xml:"-"`
-	IsBucket          bool     `xml:"-"`
 }
 
 // Grant is container for Grantee data.
