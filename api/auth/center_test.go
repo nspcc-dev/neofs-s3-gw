@@ -3,6 +3,7 @@ package auth
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/stretchr/testify/require"
@@ -84,4 +85,17 @@ func TestAuthHeaderGetAddress(t *testing.T) {
 		_, err := tc.authHeader.getAddress()
 		require.Equal(t, tc.err, err, tc.authHeader.AccessKeyID)
 	}
+}
+
+func TestSignature(t *testing.T) {
+	secret := "66be461c3cd429941c55daf42fad2b8153e5a2016ba89c9494d97677cc9d3872"
+	strToSign := "eyAiZXhwaXJhdGlvbiI6ICIyMDE1LTEyLTMwVDEyOjAwOjAwLjAwMFoiLAogICJjb25kaXRpb25zIjogWwogICAgeyJidWNrZXQiOiAiYWNsIn0sCiAgICBbInN0YXJ0cy13aXRoIiwgIiRrZXkiLCAidXNlci91c2VyMS8iXSwKICAgIHsic3VjY2Vzc19hY3Rpb25fcmVkaXJlY3QiOiAiaHR0cDovL2xvY2FsaG9zdDo4MDg0L2FjbCJ9LAogICAgWyJzdGFydHMtd2l0aCIsICIkQ29udGVudC1UeXBlIiwgImltYWdlLyJdLAogICAgeyJ4LWFtei1tZXRhLXV1aWQiOiAiMTQzNjUxMjM2NTEyNzQifSwKICAgIFsic3RhcnRzLXdpdGgiLCAiJHgtYW16LW1ldGEtdGFnIiwgIiJdLAoKICAgIHsiWC1BbXotQ3JlZGVudGlhbCI6ICI4Vmk0MVBIbjVGMXNzY2J4OUhqMXdmMUU2aERUYURpNndxOGhxTU05NllKdTA1QzVDeUVkVlFoV1E2aVZGekFpTkxXaTlFc3BiUTE5ZDRuR3pTYnZVZm10TS8yMDE1MTIyOS91cy1lYXN0LTEvczMvYXdzNF9yZXF1ZXN0In0sCiAgICB7IngtYW16LWFsZ29yaXRobSI6ICJBV1M0LUhNQUMtU0hBMjU2In0sCiAgICB7IlgtQW16LURhdGUiOiAiMjAxNTEyMjlUMDAwMDAwWiIgfSwKICAgIHsieC1pZ25vcmUtdG1wIjogInNvbWV0aGluZyIgfQogIF0KfQ=="
+
+	signTime, err := time.Parse("20060102T150405Z", "20151229T000000Z")
+	if err != nil {
+		panic(err)
+	}
+
+	signature := signStr(secret, "s3", "us-east-1", signTime, strToSign)
+	require.Equal(t, "dfbe886241d9e369cf4b329ca0f15eb27306c97aa1022cc0bb5a914c4ef87634", signature)
 }

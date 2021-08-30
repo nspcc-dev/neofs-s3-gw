@@ -2,9 +2,13 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"regexp"
 	"strings"
@@ -24,6 +28,9 @@ import (
 // authorizationFieldRegexp -- is regexp for credentials with Base58 encoded cid and oid and '0' (zero) as delimiter.
 var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
 
+// postPolicyCredentialRegexp -- is regexp for credentials when uploading file using POST with policy.
+var postPolicyCredentialRegexp = regexp.MustCompile(`(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request`)
+
 type (
 	// Center is a user authentication interface.
 	Center interface {
@@ -31,8 +38,9 @@ type (
 	}
 
 	center struct {
-		reg *regexpSubmatcher
-		cli tokens.Credentials
+		reg     *regexpSubmatcher
+		postReg *regexpSubmatcher
+		cli     tokens.Credentials
 	}
 
 	// Params stores node connection parameters.
@@ -56,6 +64,7 @@ type (
 const (
 	accessKeyPartsNum  = 2
 	authHeaderPartsNum = 6
+	maxFormSizeMemory  = 50 * 1048576 // 50 MB
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -74,8 +83,9 @@ var _ io.ReadSeeker = prs(0)
 // New creates an instance of AuthCenter.
 func New(conns pool.Pool, key *keys.PrivateKey) Center {
 	return &center{
-		cli: tokens.New(conns, key),
-		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
+		cli:     tokens.New(conns, key),
+		reg:     &regexpSubmatcher{re: authorizationFieldRegexp},
+		postReg: &regexpSubmatcher{re: postPolicyCredentialRegexp},
 	}
 }
 
@@ -118,6 +128,9 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 
 	authHeaderField := r.Header["Authorization"]
 	if len(authHeaderField) != 1 {
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			return c.checkFormData(r)
+		}
 		return nil, ErrNoAuthorizationHeader
 	}
 
@@ -144,6 +157,51 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 	clonedRequest := cloneRequest(r, authHeader)
 	if err = c.checkSign(authHeader, box, clonedRequest, signatureDateTime); err != nil {
 		return nil, err
+	}
+
+	return box, nil
+}
+
+func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
+	if err := r.ParseMultipartForm(maxFormSizeMemory); err != nil {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidArgument)
+	}
+
+	if err := prepareForm(r.MultipartForm); err != nil {
+		return nil, fmt.Errorf("couldn't parse form: %w", err)
+	}
+
+	policy := MultipartFormValue(r, "policy")
+	if policy == "" {
+		return nil, ErrNoAuthorizationHeader
+	}
+
+	submatches := c.postReg.getSubmatches(MultipartFormValue(r, "x-amz-credential"))
+	if len(submatches) != 4 {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
+	}
+
+	signatureDateTime, err := time.Parse("20060102T150405Z", MultipartFormValue(r, "x-amz-date"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
+	}
+
+	address := object.NewAddress()
+	if err = address.Parse(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
+	}
+
+	box, err := c.cli.GetBox(r.Context(), address)
+	if err != nil {
+		return nil, err
+	}
+
+	secret := box.Gate.AccessKey
+	service, region := submatches["service"], submatches["region"]
+
+	signature := signStr(secret, service, region, signatureDateTime, policy)
+	if signature != MultipartFormValue(r, "x-amz-signature") {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
 	}
 
 	return box, nil
@@ -177,6 +235,80 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 	sms2 := c.reg.getSubmatches(request.Header.Get("Authorization"))
 	if authHeader.SignatureV4 != sms2["v4_signature"] {
 		return apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
+	}
+
+	return nil
+}
+
+func signStr(secret, service, region string, t time.Time, strToSign string) string {
+	creds := deriveKey(secret, service, region, t)
+	signature := hmacSHA256(creds, []byte(strToSign))
+	return hex.EncodeToString(signature)
+}
+
+func deriveKey(secret, service, region string, t time.Time) []byte {
+	hmacDate := hmacSHA256([]byte("AWS4"+secret), []byte(t.UTC().Format("20060102")))
+	hmacRegion := hmacSHA256(hmacDate, []byte(region))
+	hmacService := hmacSHA256(hmacRegion, []byte(service))
+	return hmacSHA256(hmacService, []byte("aws4_request"))
+}
+
+func hmacSHA256(key []byte, data []byte) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+// MultipartFormValue get value by key from multipart form.
+func MultipartFormValue(r *http.Request, key string) string {
+	if r.MultipartForm == nil {
+		return ""
+	}
+	if vs := r.MultipartForm.Value[key]; len(vs) > 0 {
+		return vs[0]
+	}
+
+	return ""
+}
+
+func prepareForm(form *multipart.Form) error {
+	var oldKeysValue []string
+	var oldKeysFile []string
+
+	for k, v := range form.Value {
+		lowerKey := strings.ToLower(k)
+		if lowerKey != k {
+			form.Value[lowerKey] = v
+			oldKeysValue = append(oldKeysValue, k)
+		}
+	}
+	for _, k := range oldKeysValue {
+		delete(form.Value, k)
+	}
+
+	for k, v := range form.File {
+		lowerKey := strings.ToLower(k)
+		if lowerKey != "file" {
+			oldKeysFile = append(oldKeysFile, k)
+			if len(v) > 0 {
+				field, err := v[0].Open()
+				if err != nil {
+					return err
+				}
+
+				data, err := io.ReadAll(field)
+				if err != nil {
+					return err
+				}
+				form.Value[lowerKey] = []string{string(data)}
+			}
+		} else if lowerKey != k {
+			form.File[lowerKey] = v
+			oldKeysFile = append(oldKeysFile, k)
+		}
+	}
+	for _, k := range oldKeysFile {
+		delete(form.File, k)
 	}
 
 	return nil
