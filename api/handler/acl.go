@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-api-go/v2/acl"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -69,6 +70,7 @@ type bucketPolicy struct {
 	Version   string      `json:"Version"`
 	ID        string      `json:"Id"`
 	Statement []statement `json:"Statement"`
+	Bucket    string      `json:"-"`
 }
 
 type statement struct {
@@ -89,8 +91,28 @@ type ast struct {
 }
 
 type astResource struct {
-	Name       string
+	resourceInfo
 	Operations []*astOperation
+}
+
+type resourceInfo struct {
+	Bucket  string
+	Object  string
+	Version string
+}
+
+func (r *resourceInfo) Name() string {
+	if len(r.Object) == 0 {
+		return r.Bucket
+	}
+	if len(r.Version) == 0 {
+		return r.Bucket + "/" + r.Object
+	}
+	return r.Bucket + "/" + r.Object + ":" + r.Version
+}
+
+func (r *resourceInfo) IsBucket() bool {
+	return len(r.Object) == 0
 }
 
 type astOperation struct {
@@ -137,27 +159,20 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list.Resource = reqInfo.BucketName
-	list.IsBucket = true
-
-	bktPolicy, err := aclToPolicy(list)
+	resInfo := &resourceInfo{Bucket: reqInfo.BucketName}
+	astBucket, err := aclToAst(list, resInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not translate acl to policy", reqInfo, err)
 		return
 	}
 
-	if err = h.updateBucketACL(r, bktPolicy, reqInfo.BucketName); err != nil {
+	if err = h.updateBucketACL(r, astBucket, reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
 }
 
-func (h *handler) updateBucketACL(r *http.Request, bktPolicy *bucketPolicy, bkt string) error {
-	astChild, err := policyToAst(bktPolicy)
-	if err != nil {
-		return fmt.Errorf("could not translate policy to ast: %w", err)
-	}
-
+func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bkt string) error {
 	bucketACL, err := h.obj.GetBucketACL(r.Context(), bkt)
 	if err != nil {
 		return fmt.Errorf("could not get bucket eacl: %w", err)
@@ -169,8 +184,8 @@ func (h *handler) updateBucketACL(r *http.Request, bktPolicy *bucketPolicy, bkt 
 
 	parentAst := tableToAst(bucketACL.EACL, bkt)
 	for _, resource := range parentAst.Resources {
-		if resource.Name == bucketACL.Info.CID.String() {
-			resource.Name = bkt
+		if resource.Bucket == bucketACL.Info.CID.String() {
+			resource.Bucket = bkt
 		}
 	}
 
@@ -179,7 +194,7 @@ func (h *handler) updateBucketACL(r *http.Request, bktPolicy *bucketPolicy, bkt 
 		return nil
 	}
 
-	table, err := astToTable(resAst, bkt)
+	table, err := astToTable(resAst)
 	if err != nil {
 		return fmt.Errorf("could not translate ast to table: %w", err)
 	}
@@ -216,8 +231,9 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err     error
-		reqInfo = api.GetReqInfo(r.Context())
+		err       error
+		reqInfo   = api.GetReqInfo(r.Context())
+		versionID = reqInfo.URL.Query().Get(api.QueryVersionID)
 	)
 
 	list := &AccessControlPolicy{}
@@ -232,18 +248,22 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list.Resource = reqInfo.BucketName + "/" + reqInfo.ObjectName
+	resInfo := &resourceInfo{
+		Bucket:  reqInfo.BucketName,
+		Object:  reqInfo.ObjectName,
+		Version: versionID,
+	}
 
-	bktPolicy, err := aclToPolicy(list)
+	astObject, err := aclToAst(list, resInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not translate acl to policy", reqInfo, err)
+		h.logAndSendError(w, "could not translate acl to ast", reqInfo, err)
 		return
 	}
 
 	p := &layer.HeadObjectParams{
 		Bucket:    reqInfo.BucketName,
 		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+		VersionID: versionID,
 	}
 
 	if _, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
@@ -251,7 +271,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.updateBucketACL(r, bktPolicy, reqInfo.BucketName); err != nil {
+	if err = h.updateBucketACL(r, astObject, reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
@@ -295,13 +315,19 @@ func checkOwner(info *cache.BucketInfo, owner string) error {
 
 func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	bktPolicy := &bucketPolicy{}
+	bktPolicy := &bucketPolicy{Bucket: reqInfo.BucketName}
 	if err := json.NewDecoder(r.Body).Decode(bktPolicy); err != nil {
 		h.logAndSendError(w, "could not parse bucket policy", reqInfo, err)
 		return
 	}
 
-	if err := h.updateBucketACL(r, bktPolicy, reqInfo.BucketName); err != nil {
+	astPolicy, err := policyToAst(bktPolicy)
+	if err != nil {
+		h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
+		return
+	}
+
+	if err = h.updateBucketACL(r, astPolicy, reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
@@ -465,22 +491,32 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 	rr := make(map[string]*astResource)
 
 	for _, record := range table.Records() {
-		resname := bktName
+		resName := bktName
+		var objectName string
+		var version string
 		for _, filter := range record.Filters() {
-			if filter.Matcher() == eacl.MatchStringEqual && filter.Key() == object.AttributeFileName {
-				resname = filter.Value()
+			if filter.Matcher() == eacl.MatchStringEqual {
+				if filter.Key() == object.AttributeFileName {
+					objectName = filter.Value()
+					resName += "/" + objectName
+				} else if filter.Key() == acl.FilterObjectID {
+					version = filter.Value()
+					resName += "/" + version
+				}
 			}
 		}
-		r, ok := rr[resname]
+		r, ok := rr[resName]
 		if !ok {
-			r = &astResource{
-				Name: resname,
-			}
+			r = &astResource{resourceInfo: resourceInfo{
+				Bucket:  bktName,
+				Object:  objectName,
+				Version: version,
+			}}
 		}
 		for _, target := range record.Targets() {
 			r.Operations = addToList(r.Operations, record, target)
 		}
-		rr[resname] = r
+		rr[resName] = r
 	}
 
 	for _, val := range rr {
@@ -493,7 +529,7 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 func mergeAst(parent, child *ast) (*ast, bool) {
 	updated := false
 	for _, resource := range child.Resources {
-		parentResource := getParentResource(parent, resource.Name)
+		parentResource := getParentResource(parent, resource)
 		if parentResource == nil {
 			parent.Resources = append(parent.Resources, resource)
 			updated = true
@@ -652,20 +688,21 @@ func removeUsers(resource *astResource, astOperation *astOperation, users []stri
 	}
 }
 
-func getParentResource(parent *ast, resource string) *astResource {
+func getParentResource(parent *ast, resource *astResource) *astResource {
 	for _, parentResource := range parent.Resources {
-		if resource == parentResource.Name {
+		if resource.Bucket == parentResource.Bucket && resource.Object == parentResource.Object &&
+			resource.Version == parentResource.Version {
 			return parentResource
 		}
 	}
 	return nil
 }
 
-func astToTable(ast *ast, bkt string) (*eacl.Table, error) {
+func astToTable(ast *ast) (*eacl.Table, error) {
 	table := eacl.NewTable()
 
 	for _, resource := range ast.Resources {
-		records, err := formRecords(resource.Operations, resource.Name, bkt)
+		records, err := formRecords(resource.Operations, resource)
 		if err != nil {
 			return nil, err
 		}
@@ -677,7 +714,7 @@ func astToTable(ast *ast, bkt string) (*eacl.Table, error) {
 	return table, nil
 }
 
-func formRecords(operations []*astOperation, resource, bkt string) ([]*eacl.Record, error) {
+func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Record, error) {
 	var res []*eacl.Record
 
 	for _, astOp := range operations {
@@ -695,9 +732,15 @@ func formRecords(operations []*astOperation, resource, bkt string) ([]*eacl.Reco
 				eacl.AddFormedTarget(record, eacl.RoleUser, (ecdsa.PublicKey)(*pk))
 			}
 		}
-		if resource != bkt {
-			trimmedName := strings.TrimPrefix(resource, bkt+"/")
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, trimmedName)
+		if len(resource.Object) != 0 {
+			if len(resource.Version) != 0 {
+				oid := object.NewID()
+				if err := oid.Parse(resource.Version); err != nil {
+					return nil, err
+				}
+				record.AddObjectIDFilter(eacl.MatchStringEqual, oid)
+			}
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
 		}
 		res = append(res, record)
 	}
@@ -756,14 +799,15 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
 			r, ok := rr[trimmedResource]
 			if !ok {
-				r = &astResource{
-					Name: trimmedResource,
+				r = &astResource{resourceInfo: resourceInfo{Bucket: bktPolicy.Bucket}}
+				if trimmedResource != bktPolicy.Bucket {
+					r.Object = strings.TrimPrefix(trimmedResource, bktPolicy.Bucket+"/")
 				}
 			}
 			for _, action := range state.Action {
 				for _, op := range actionToOpMap[action] {
 					toAction := effectToAction(state.Effect)
-					r.Operations = addTo(r.Operations, state, op, role, toAction)
+					r.Operations = addTo(r.Operations, state.Principal.CanonicalUser, op, role, toAction)
 				}
 			}
 
@@ -782,9 +826,12 @@ func astToPolicy(ast *ast) *bucketPolicy {
 	bktPolicy := &bucketPolicy{}
 
 	for _, resource := range ast.Resources {
+		if len(resource.Version) == 0 {
+			continue
+		}
 		allowed, denied := triageOperations(resource.Operations)
-		handleResourceOperations(bktPolicy, allowed, eacl.ActionAllow, resource.Name)
-		handleResourceOperations(bktPolicy, denied, eacl.ActionDeny, resource.Name)
+		handleResourceOperations(bktPolicy, allowed, eacl.ActionAllow, resource.Name())
+		handleResourceOperations(bktPolicy, denied, eacl.ActionDeny, resource.Name())
 	}
 
 	return bktPolicy
@@ -845,7 +892,7 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 	return allowed, denied
 }
 
-func addTo(list []*astOperation, state statement, op eacl.Operation, role eacl.Role, action eacl.Action) []*astOperation {
+func addTo(list []*astOperation, userID string, op eacl.Operation, role eacl.Role, action eacl.Action) []*astOperation {
 	var found *astOperation
 	for _, astop := range list {
 		if astop.Op == op && astop.Role == role {
@@ -855,7 +902,7 @@ func addTo(list []*astOperation, state statement, op eacl.Operation, role eacl.R
 
 	if found != nil {
 		if role == eacl.RoleUser {
-			found.Users = append(found.Users, state.Principal.CanonicalUser)
+			found.Users = append(found.Users, userID)
 		}
 	} else {
 		astoperation := &astOperation{
@@ -864,7 +911,7 @@ func addTo(list []*astOperation, state statement, op eacl.Operation, role eacl.R
 			Action: action,
 		}
 		if role == eacl.RoleUser {
-			astoperation.Users = append(astoperation.Users, state.Principal.CanonicalUser)
+			astoperation.Users = append(astoperation.Users, userID)
 		}
 
 		list = append(list, astoperation)
@@ -873,13 +920,56 @@ func addTo(list []*astOperation, state statement, op eacl.Operation, role eacl.R
 	return list
 }
 
-func aclToPolicy(acl *AccessControlPolicy) (*bucketPolicy, error) {
-	if acl.Resource == "" {
-		return nil, fmt.Errorf("resource must not be empty")
+func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
+	res := &ast{}
+
+	resource := &astResource{resourceInfo: *resInfo}
+
+	ops := readOps
+	if resInfo.IsBucket() {
+		ops = append(ops, writeOps...)
+	}
+
+	for _, op := range ops {
+		operation := &astOperation{
+			Users:  []string{acl.Owner.ID},
+			Role:   eacl.RoleUser,
+			Op:     op,
+			Action: eacl.ActionAllow,
+		}
+		resource.Operations = append(resource.Operations, operation)
+	}
+
+	for _, grant := range acl.AccessControlList {
+		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
+			return nil, fmt.Errorf("unsupported grantee: %v", grant.Grantee)
+		}
+
+		role := eacl.RoleUser
+		if grant.Grantee.Type == acpGroup {
+			role = eacl.RoleOthers
+		} else if grant.Grantee.ID == acl.Owner.ID {
+			continue
+		}
+
+		for _, action := range getActions(grant.Permission, resInfo.IsBucket()) {
+			for _, op := range actionToOpMap[action] {
+				resource.Operations = addTo(resource.Operations, grant.Grantee.ID, op, role, eacl.ActionAllow)
+			}
+		}
+	}
+
+	res.Resources = []*astResource{resource}
+	return res, nil
+}
+
+func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy, error) {
+	if resInfo.Bucket == "" {
+		return nil, fmt.Errorf("resource bucket must not be empty")
 	}
 
 	results := []statement{
-		getAllowStatement(acl, acl.Owner.ID, aclFullControl),
+		getAllowStatement(resInfo, acl.Owner.ID, aclFullControl),
 	}
 
 	for _, grant := range acl.AccessControlList {
@@ -893,7 +983,7 @@ func aclToPolicy(acl *AccessControlPolicy) (*bucketPolicy, error) {
 		} else if user == acl.Owner.ID {
 			continue
 		}
-		results = append(results, getAllowStatement(acl, user, grant.Permission))
+		results = append(results, getAllowStatement(resInfo, user, grant.Permission))
 	}
 
 	return &bucketPolicy{
@@ -901,14 +991,14 @@ func aclToPolicy(acl *AccessControlPolicy) (*bucketPolicy, error) {
 	}, nil
 }
 
-func getAllowStatement(acl *AccessControlPolicy, id string, permission AWSACL) statement {
+func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
 	state := statement{
 		Effect: "Allow",
 		Principal: principal{
 			CanonicalUser: id,
 		},
-		Action:   getActions(permission, acl.IsBucket),
-		Resource: []string{arnAwsPrefix + acl.Resource},
+		Action:   getActions(permission, resInfo.IsBucket()),
+		Resource: []string{arnAwsPrefix + resInfo.Name()},
 	}
 
 	if id == allUsersWildcard {
@@ -1081,8 +1171,8 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 
 type getRecordFunc func(op eacl.Operation) *eacl.Record
 
-func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
-	if !acp.IsBucket {
+func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Table, error) {
+	if !resInfo.IsBucket() {
 		return nil, fmt.Errorf("allowed only bucket acl")
 	}
 

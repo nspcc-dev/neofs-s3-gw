@@ -38,47 +38,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACLHeaders(r) {
-		objectACL, err := parseACLHeaders(r)
-		if err != nil {
-			h.logAndSendError(w, "could not parse object acl", reqInfo, err)
-			return
-		}
-		objectACL.Resource = reqInfo.BucketName + "/" + reqInfo.ObjectName
-
-		bktPolicy, err := aclToPolicy(objectACL)
-		if err != nil {
-			h.logAndSendError(w, "could not translate object acl to bucket policy", reqInfo, err)
-			return
-		}
-
-		astChild, err := policyToAst(bktPolicy)
-		if err != nil {
-			h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
-			return
-		}
-
-		bacl, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
-		if err != nil {
-			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
-			return
-		}
-
-		parentAst := tableToAst(bacl.EACL, reqInfo.BucketName)
-		for _, resource := range parentAst.Resources {
-			if resource.Name == bacl.Info.CID.String() {
-				resource.Name = reqInfo.BucketName
-			}
-		}
-
-		if resAst, updated := mergeAst(parentAst, astChild); updated {
-			if newEaclTable, err = astToTable(resAst, reqInfo.BucketName); err != nil {
-				h.logAndSendError(w, "could not translate ast to table", reqInfo, err)
-				return
-			}
-		}
-	}
-
 	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
@@ -106,6 +65,52 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
+	}
+
+	if containsACLHeaders(r) {
+		objectACL, err := parseACLHeaders(r)
+		if err != nil {
+			h.logAndSendError(w, "could not parse object acl", reqInfo, err)
+			return
+		}
+
+		resInfo := &resourceInfo{
+			Bucket:  reqInfo.BucketName,
+			Object:  reqInfo.ObjectName,
+			Version: info.Version(),
+		}
+
+		bktPolicy, err := aclToPolicy(objectACL, resInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not translate object acl to bucket policy", reqInfo, err)
+			return
+		}
+
+		astChild, err := policyToAst(bktPolicy)
+		if err != nil {
+			h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
+			return
+		}
+
+		bacl, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+			return
+		}
+
+		parentAst := tableToAst(bacl.EACL, reqInfo.BucketName)
+		for _, resource := range parentAst.Resources {
+			if resource.Bucket == bacl.Info.CID.String() {
+				resource.Bucket = reqInfo.BucketName
+			}
+		}
+
+		if resAst, updated := mergeAst(parentAst, astChild); updated {
+			if newEaclTable, err = astToTable(resAst); err != nil {
+				h.logAndSendError(w, "could not translate ast to table", reqInfo, err)
+				return
+			}
+		}
 	}
 
 	if tagSet != nil {
@@ -191,9 +196,9 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
 	}
-	bktACL.IsBucket = true
+	resInfo := &resourceInfo{Bucket: reqInfo.BucketName}
 
-	p.EACL, err = bucketACLToTable(bktACL)
+	p.EACL, err = bucketACLToTable(bktACL, resInfo)
 	if err != nil {
 		h.logAndSendError(w, "could translate bucket acl to eacl", reqInfo, err)
 		return

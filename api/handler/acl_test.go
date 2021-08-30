@@ -3,7 +3,10 @@ package handler
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"testing"
 
@@ -16,6 +19,12 @@ import (
 )
 
 func TestTableToAst(t *testing.T) {
+	b := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, b)
+	require.NoError(t, err)
+	oid := object.NewID()
+	oid.SetSHA256(sha256.Sum256(b))
+
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 	key2, err := keys.NewPrivateKey()
@@ -33,19 +42,24 @@ func TestTableToAst(t *testing.T) {
 	eacl.AddFormedTarget(record2, eacl.RoleUser, *(*ecdsa.PublicKey)(key.PublicKey()))
 	eacl.AddFormedTarget(record2, eacl.RoleUser, *(*ecdsa.PublicKey)(key2.PublicKey()))
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
+	record2.AddObjectIDFilter(eacl.MatchStringEqual, oid)
 	table.AddRecord(record2)
 
 	expectedAst := &ast{
 		Resources: []*astResource{
 			{
-				Name: "bucketName",
+				resourceInfo: resourceInfo{Bucket: "bucketName"},
 				Operations: []*astOperation{{
 					Role:   eacl.RoleOthers,
 					Op:     eacl.OperationGet,
 					Action: eacl.ActionAllow,
 				}}},
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket:  "bucketName",
+					Object:  "objectName",
+					Version: oid.String(),
+				},
 				Operations: []*astOperation{{
 					Users: []string{
 						hex.EncodeToString(key.PublicKey().Bytes()),
@@ -58,9 +72,9 @@ func TestTableToAst(t *testing.T) {
 		},
 	}
 
-	actualAst := tableToAst(table, expectedAst.Resources[0].Name)
+	actualAst := tableToAst(table, expectedAst.Resources[0].Bucket)
 
-	if actualAst.Resources[0].Name == expectedAst.Resources[0].Name {
+	if actualAst.Resources[0].Name() == expectedAst.Resources[0].Name() {
 		require.Equal(t, expectedAst, actualAst)
 	} else {
 		require.Equal(t, len(expectedAst.Resources), len(actualAst.Resources))
@@ -90,11 +104,14 @@ func TestPolicyToAst(t *testing.T) {
 				Resource: []string{"arn:aws:s3:::bucketName/object"},
 			}},
 	}
+	policy.Bucket = "bucketName"
 
 	expectedAst := &ast{
 		Resources: []*astResource{
 			{
-				Name: "bucketName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucketName",
+				},
 				Operations: []*astOperation{{
 					Role:   eacl.RoleOthers,
 					Op:     eacl.OperationPut,
@@ -102,7 +119,10 @@ func TestPolicyToAst(t *testing.T) {
 				}},
 			},
 			{
-				Name:       "bucketName/object",
+				resourceInfo: resourceInfo{
+					Bucket: "bucketName",
+					Object: "object",
+				},
 				Operations: getReadOps(key, eacl.RoleUser, eacl.ActionDeny),
 			},
 		},
@@ -111,7 +131,7 @@ func TestPolicyToAst(t *testing.T) {
 	actualAst, err := policyToAst(policy)
 	require.NoError(t, err)
 
-	if actualAst.Resources[0].Name == expectedAst.Resources[0].Name {
+	if actualAst.Resources[0].Name() == expectedAst.Resources[0].Name() {
 		require.Equal(t, expectedAst, actualAst)
 	} else {
 		require.Equal(t, len(expectedAst.Resources), len(actualAst.Resources))
@@ -142,7 +162,10 @@ func TestMergeAstUnModified(t *testing.T) {
 	child := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{{
 					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
 					Role:   eacl.RoleUser,
@@ -156,7 +179,9 @@ func TestMergeAstUnModified(t *testing.T) {
 	parent := &ast{
 		Resources: []*astResource{
 			{
-				Name: "bucket",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+				},
 				Operations: []*astOperation{{
 					Role:   eacl.RoleOthers,
 					Op:     eacl.OperationGet,
@@ -176,7 +201,10 @@ func TestMergeAstModified(t *testing.T) {
 	child := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{{
 					Role:   eacl.RoleOthers,
 					Op:     eacl.OperationPut,
@@ -194,7 +222,10 @@ func TestMergeAstModified(t *testing.T) {
 	parent := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{{
 					Users:  []string{"user1"},
 					Role:   eacl.RoleUser,
@@ -208,7 +239,10 @@ func TestMergeAstModified(t *testing.T) {
 	expected := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{
 					child.Resources[0].Operations[0],
 					{
@@ -231,7 +265,10 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 	child := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{{
 					Users:  []string{"user1"},
 					Role:   eacl.RoleUser,
@@ -250,7 +287,10 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 	parent := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{{
 					Users:  []string{"user1"},
 					Role:   eacl.RoleUser,
@@ -274,7 +314,10 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 	expected := &ast{
 		Resources: []*astResource{
 			{
-				Name: "objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{
 					{
 						Users:  []string{"user2", "user1"},
@@ -304,7 +347,9 @@ func TestAstToTable(t *testing.T) {
 	ast := &ast{
 		Resources: []*astResource{
 			{
-				Name: "bucketName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucketName",
+				},
 				Operations: []*astOperation{{
 					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
 					Role:   eacl.RoleUser,
@@ -313,7 +358,10 @@ func TestAstToTable(t *testing.T) {
 				}},
 			},
 			{
-				Name: "bucketName/objectName",
+				resourceInfo: resourceInfo{
+					Bucket: "bucketName",
+					Object: "objectName",
+				},
 				Operations: []*astOperation{{
 					Role:   eacl.RoleOthers,
 					Op:     eacl.OperationGet,
@@ -336,14 +384,16 @@ func TestAstToTable(t *testing.T) {
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
 	expectedTable.AddRecord(record2)
 
-	actualTable, err := astToTable(ast, "bucketName")
+	actualTable, err := astToTable(ast)
 	require.NoError(t, err)
 	require.Equal(t, expectedTable, actualTable)
 }
 
 func TestRemoveUsers(t *testing.T) {
 	resource := &astResource{
-		Name: "name",
+		resourceInfo: resourceInfo{
+			Bucket: "bucket",
+		},
 		Operations: []*astOperation{{
 			Users:  []string{"user1", "user3"},
 			Role:   eacl.RoleUser,
@@ -361,7 +411,7 @@ func TestRemoveUsers(t *testing.T) {
 	removeUsers(resource, op, []string{"user1", "user2"})
 
 	require.Equal(t, len(resource.Operations), 1)
-	require.Equal(t, resource.Name, resource.Name)
+	require.Equal(t, resource.Name(), resource.Name())
 	require.Equal(t, resource.Operations[0].Users, []string{"user3"})
 }
 
@@ -392,8 +442,10 @@ func TestBucketAclToPolicy(t *testing.T) {
 			},
 			Permission: aclWrite,
 		}},
-		Resource: "bucketName",
-		IsBucket: true,
+	}
+
+	resInfo := &resourceInfo{
+		Bucket: "bucketName",
 	}
 
 	expectedPolicy := &bucketPolicy{
@@ -404,24 +456,24 @@ func TestBucketAclToPolicy(t *testing.T) {
 					CanonicalUser: id,
 				},
 				Action:   []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:PutObject", "s3:DeleteObject"},
-				Resource: []string{arnAwsPrefix + acl.Resource},
+				Resource: []string{arnAwsPrefix + resInfo.Name()},
 			}, {
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
 				Action:    []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads"},
-				Resource:  []string{arnAwsPrefix + acl.Resource},
+				Resource:  []string{arnAwsPrefix + resInfo.Name()},
 			}, {
 				Effect: "Allow",
 				Principal: principal{
 					CanonicalUser: id2,
 				},
 				Action:   []string{"s3:PutObject", "s3:DeleteObject"},
-				Resource: []string{arnAwsPrefix + acl.Resource},
+				Resource: []string{arnAwsPrefix + resInfo.Name()},
 			},
 		},
 	}
 
-	actualPolicy, err := aclToPolicy(acl)
+	actualPolicy, err := aclToPolicy(acl, resInfo)
 	require.NoError(t, err)
 	require.Equal(t, expectedPolicy, actualPolicy)
 }
@@ -459,8 +511,11 @@ func TestObjectAclToPolicy(t *testing.T) {
 			},
 			Permission: aclRead,
 		}},
-		Resource: "bucketName/object",
-		IsBucket: false,
+	}
+
+	resInfo := &resourceInfo{
+		Bucket: "bucketName",
+		Object: "object",
 	}
 
 	expectedPolicy := &bucketPolicy{
@@ -471,7 +526,7 @@ func TestObjectAclToPolicy(t *testing.T) {
 					CanonicalUser: id,
 				},
 				Action:   []string{"s3:GetObject", "s3:GetObjectVersion"},
-				Resource: []string{arnAwsPrefix + acl.Resource},
+				Resource: []string{arnAwsPrefix + resInfo.Name()},
 			},
 			{
 				Effect: "Allow",
@@ -479,17 +534,17 @@ func TestObjectAclToPolicy(t *testing.T) {
 					CanonicalUser: id2,
 				},
 				Action:   []string{"s3:GetObject", "s3:GetObjectVersion"},
-				Resource: []string{arnAwsPrefix + acl.Resource},
+				Resource: []string{arnAwsPrefix + resInfo.Name()},
 			}, {
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
 				Action:    []string{"s3:GetObject", "s3:GetObjectVersion"},
-				Resource:  []string{arnAwsPrefix + acl.Resource},
+				Resource:  []string{arnAwsPrefix + resInfo.Name()},
 			},
 		},
 	}
 
-	actualPolicy, err := aclToPolicy(acl)
+	actualPolicy, err := aclToPolicy(acl, resInfo)
 	require.NoError(t, err)
 	require.Equal(t, expectedPolicy, actualPolicy)
 }
@@ -674,8 +729,6 @@ func TestBucketAclToTable(t *testing.T) {
 			},
 			Permission: aclWrite,
 		}},
-		Resource: "bucketName",
-		IsBucket: true,
 	}
 
 	expectedTable := new(eacl.Table)
@@ -691,8 +744,164 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))
 	}
+	resInfo := &resourceInfo{
+		Bucket: "bucketName",
+	}
 
-	actualTable, err := bucketACLToTable(acl)
+	actualTable, err := bucketACLToTable(acl, resInfo)
 	require.NoError(t, err)
 	require.Equal(t, expectedTable.Records(), actualTable.Records())
+}
+
+func TestObjectAclToAst(t *testing.T) {
+	b := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, b)
+	require.NoError(t, err)
+	oid := object.NewID()
+	oid.SetSHA256(sha256.Sum256(b))
+
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	key2, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
+	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
+
+	acl := &AccessControlPolicy{
+		Owner: Owner{
+			ID:          id,
+			DisplayName: "user1",
+		},
+		AccessControlList: []*Grant{{
+			Grantee: &Grantee{
+				ID:   id,
+				Type: acpCanonicalUser,
+			},
+			Permission: aclFullControl,
+		}, {
+			Grantee: &Grantee{
+				ID:   id2,
+				Type: acpCanonicalUser,
+			},
+			Permission: aclRead,
+		},
+		},
+	}
+
+	resInfo := &resourceInfo{
+		Bucket:  "bucketName",
+		Object:  "object",
+		Version: oid.String(),
+	}
+
+	var operations []*astOperation
+	for _, op := range readOps {
+		astOp := &astOperation{Users: []string{
+			hex.EncodeToString(key.PublicKey().Bytes()),
+			hex.EncodeToString(key2.PublicKey().Bytes()),
+		},
+			Role:   eacl.RoleUser,
+			Op:     op,
+			Action: eacl.ActionAllow,
+		}
+		operations = append(operations, astOp)
+	}
+
+	expectedAst := &ast{
+		Resources: []*astResource{
+			{
+				resourceInfo: *resInfo,
+				Operations:   operations,
+			},
+		},
+	}
+
+	actualAst, err := aclToAst(acl, resInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedAst, actualAst)
+}
+
+func TestBucketAclToAst(t *testing.T) {
+	b := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, b)
+	require.NoError(t, err)
+	oid := object.NewID()
+	oid.SetSHA256(sha256.Sum256(b))
+
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	key2, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
+	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
+
+	acl := &AccessControlPolicy{
+		Owner: Owner{
+			ID:          id,
+			DisplayName: "user1",
+		},
+		AccessControlList: []*Grant{
+			{
+				Grantee: &Grantee{
+					ID:   id2,
+					Type: acpCanonicalUser,
+				},
+				Permission: aclWrite,
+			}, {
+				Grantee: &Grantee{
+					URI:  allUsersGroup,
+					Type: acpGroup,
+				},
+				Permission: aclRead,
+			},
+		},
+	}
+
+	var operations []*astOperation
+	for _, op := range readOps {
+		astOp := &astOperation{Users: []string{
+			hex.EncodeToString(key.PublicKey().Bytes()),
+		},
+			Role:   eacl.RoleUser,
+			Op:     op,
+			Action: eacl.ActionAllow,
+		}
+		operations = append(operations, astOp)
+	}
+	for _, op := range writeOps {
+		astOp := &astOperation{Users: []string{
+			hex.EncodeToString(key.PublicKey().Bytes()),
+			hex.EncodeToString(key2.PublicKey().Bytes()),
+		},
+			Role:   eacl.RoleUser,
+			Op:     op,
+			Action: eacl.ActionAllow,
+		}
+		operations = append(operations, astOp)
+	}
+	for _, op := range readOps {
+		astOp := &astOperation{
+			Role:   eacl.RoleOthers,
+			Op:     op,
+			Action: eacl.ActionAllow,
+		}
+		operations = append(operations, astOp)
+	}
+
+	resInfo := &resourceInfo{Bucket: "bucketName"}
+
+	expectedAst := &ast{
+		Resources: []*astResource{
+			{
+				resourceInfo: *resInfo,
+				Operations:   operations,
+			},
+		},
+	}
+
+	actualAst, err := aclToAst(acl, resInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedAst, actualAst)
 }
