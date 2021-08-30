@@ -2,6 +2,38 @@
 
 This document outlines major changes between releases.
 
+## 0.17.0 (30 Aug 2021)
+With this release we introduce [ceph-based](https://github.com/ceph/s3-tests) S3 compatibility results.
+
+### Added
+* Versioning support (#122)
+* Ceph S3 compatibility results (#150)
+* Handling `X-Amz-Expected-Bucket-Owner` header (#216)
+* `X-Container-Id` header for `HeadBucket` response (#220)
+* Basic ACL support (#49, #213)
+* Caching (#206, #179)
+* Metadata directive when copying (#191)
+* Bucket name checking (189)
+* Continuation token support (#112, #154, #180)
+* Mapping `LocationConstraint` to `PlacementPolicy` (#89)
+* Tagging support (#196)
+
+### Changed
+* Default placement policy is now configurable (#218) 
+* README is split into different files (#210)
+* Unified error handling (#184, #149, #89)
+* Authmate issue-secret response contains container id (#163)
+* Removed "github.com/nspcc-dev/neofs-node" dependency (#234)
+
+### Fixed
+* ListObjects results are now the same for different users (#230)
+* Error response for invalid authentication header is now correct (#199)
+* Saving object metadata (#198)
+* Range header handling (#194)
+* Correct NotFound status (#118)
+* HeadObject for "directories" (#160)
+* Fetch-owner parameter support (#159)
+
 ## 0.16.0 (16 Jul 2021)
 
 With this release we publish S3 gateway source code. It includes various S3
@@ -58,8 +90,7 @@ Improvements:
  * stricter linters (#45)
  * removed non-standard errors package from dependencies (#54)
  * refactoring, reusing new sdk-go component (#60, #62, #63)
- * updated neofs-api-go for compatibility with current NeoFS node 0.21.0 (#60,
-   #68)
+ * updated neofs-api-go for compatibility with current NeoFS node 0.21.0 (#60, #68)
  * extended README (#67, #76)
 
 Bugs fixed:
