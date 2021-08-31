@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,8 @@ type (
 		Get(key ObjectsListKey) []*object.ID
 		Put(key ObjectsListKey, oids []*object.ID)
 		Update(key ObjectsListKey, oids []*object.ID)
+		Contains(key ObjectsListKey) bool
+		CleanCacheEntriesChangedWithPutObject(objectName string, cid *cid.ID)
 	}
 )
 
@@ -71,7 +74,7 @@ func (l *ListObjectsCache) Put(key ObjectsListKey, oids []*object.ID) {
 	if len(oids) == 0 {
 		return
 	}
-	if _, ok := l.caches[key]; ok {
+	if l.Contains(key) {
 		return
 	}
 	c := objectsListEntry{
@@ -89,7 +92,7 @@ func (l *ListObjectsCache) Put(key ObjectsListKey, oids []*object.ID) {
 
 // Update updates an entry in cache without restarting timer.
 func (l *ListObjectsCache) Update(key ObjectsListKey, oids []*object.ID) {
-	if _, ok := l.caches[key]; !ok {
+	if !l.Contains(key) {
 		return
 	}
 	c := objectsListEntry{
@@ -98,6 +101,26 @@ func (l *ListObjectsCache) Update(key ObjectsListKey, oids []*object.ID) {
 	l.mtx.Lock()
 	l.caches[key] = c
 	l.mtx.Unlock()
+}
+
+// Contains return does cache contain an entry for key or not.
+func (l *ListObjectsCache) Contains(key ObjectsListKey) bool {
+	l.mtx.RLock()
+	_, ok := l.caches[key]
+	l.mtx.RUnlock()
+	return ok
+}
+
+// CleanCacheEntriesChangedWithPutObject deletes entries containing specified object.
+func (l *ListObjectsCache) CleanCacheEntriesChangedWithPutObject(objectName string, cid *cid.ID) {
+	cidStr := cid.String()
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+	for k := range l.caches {
+		if cidStr == k.cid && strings.HasPrefix(objectName, k.Prefix) {
+			delete(l.caches, k)
+		}
+	}
 }
 
 // CreateObjectsListCacheKey returns ObjectsListKey with given CID, method, prefix, and delimiter.

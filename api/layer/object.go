@@ -177,6 +177,8 @@ func (n *layer) objectPut(ctx context.Context, bkt *api.BucketInfo, p *PutObject
 		n.log.Error("couldn't cache an object", zap.Error(err))
 	}
 
+	n.listsCache.CleanCacheEntriesChangedWithPutObject(p.Object, bkt.CID)
+
 	for _, id := range idsToDeleteArr {
 		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
 			n.log.Warn("couldn't delete object",
