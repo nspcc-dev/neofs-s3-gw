@@ -11,14 +11,16 @@ import (
 )
 
 /*
-	This is an implementation of a cache for ListObjectsV2/V1 which we can return to users when we receive a ListObjects
-	request.
+	This is an implementation of a cache which keeps unsorted lists of objects' IDs (all versions)
+	for a specified bucket and a prefix.
 
-	The cache is a map which has a key: ObjectsListKey struct and a value: list of objects. After putting a record we
-	start a timer (via time.AfterFunc) that removes the record after DefaultObjectsListCacheLifetime value.
+	The cache contains gcache whose entries have a key: ObjectsListKey struct and a value: list of ids.
+	After putting a record it lives for a while (default value is 60 seconds).
 
-	When we get a request from the user we just try to find the suitable and non-expired cache and then we return
-	the list of objects. Otherwise we send the request to NeoFS.
+	When we receive a request from the user we try to find the suitable and non-expired cache entry, go through the list
+	and get ObjectInfos from common object cache or with a request to NeoFS.
+
+	When we put an object into a container we invalidate entries with prefixes that are prefixes of the object's name.
 */
 
 type (
@@ -100,7 +102,7 @@ func (l *ListObjectsCache) CleanCacheEntriesContainingObject(objectName string, 
 	}
 }
 
-// CreateObjectsListCacheKey returns ObjectsListKey with given CID, method, prefix, and delimiter.
+// CreateObjectsListCacheKey returns ObjectsListKey with given CID and prefix.
 func CreateObjectsListCacheKey(cid *cid.ID, prefix string) ObjectsListKey {
 	p := ObjectsListKey{
 		cid:    cid.String(),
