@@ -217,6 +217,7 @@ func (a *App) Server(ctx context.Context) {
 func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CacheConfig {
 	cacheCfg := layer.CacheConfig{
 		ListObjectsLifetime: cache.DefaultObjectsListCacheLifetime,
+		ListObjectsSize:     cache.DefaultObjectsListCacheSize,
 		Size:                cache.DefaultObjectsCacheSize,
 		Lifetime:            cache.DefaultObjectsCacheLifetime,
 	}
@@ -253,6 +254,18 @@ func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CacheConfig {
 			cacheCfg.ListObjectsLifetime = lifetime
 		}
 	}
+
+	if v.IsSet(cfgListObjectsCacheSize) {
+		size := v.GetInt(cfgListObjectsCacheSize)
+		if size <= 0 {
+			l.Error("invalid cache size, using default value",
+				zap.Int("value in config", size),
+				zap.Int("default", cacheCfg.ListObjectsSize))
+		} else {
+			cacheCfg.Size = size
+		}
+	}
+
 	return &cacheCfg
 }
 

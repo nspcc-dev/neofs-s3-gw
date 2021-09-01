@@ -58,6 +58,7 @@ const ( // Settings.
 	cfgObjectsCacheLifetime     = "cache.lifetime"
 	cfgCacheSize                = "cache.size"
 	cfgListObjectsCacheLifetime = "cache.list_objects_lifetime"
+	cfgListObjectsCacheSize     = "cache.list_objects_size"
 
 	// Policy.
 	cfgDefaultPolicy = "default_policy"
