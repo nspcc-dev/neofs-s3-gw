@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -25,6 +26,7 @@ type (
 	ObjectsListCache interface {
 		Get(key ObjectsListKey) []*object.ID
 		Put(key ObjectsListKey, oids []*object.ID) error
+		CleanCacheEntriesContainingObject(objectName string, cid *cid.ID)
 	}
 )
 
@@ -81,6 +83,21 @@ func (l *ListObjectsCache) Put(key ObjectsListKey, oids []*object.ID) error {
 	}
 
 	return l.cache.SetWithExpire(key, oids, l.lifetime)
+}
+
+// CleanCacheEntriesContainingObject deletes entries containing specified object.
+func (l *ListObjectsCache) CleanCacheEntriesContainingObject(objectName string, cid *cid.ID) {
+	cidStr := cid.String()
+	keys := l.cache.Keys(true)
+	for _, key := range keys {
+		k, ok := key.(ObjectsListKey)
+		if !ok {
+			continue
+		}
+		if cidStr == k.cid && strings.HasPrefix(objectName, k.prefix) {
+			l.cache.Remove(k)
+		}
+	}
 }
 
 // CreateObjectsListCacheKey returns ObjectsListKey with given CID, method, prefix, and delimiter.

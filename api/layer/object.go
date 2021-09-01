@@ -179,6 +179,8 @@ func (n *layer) objectPut(ctx context.Context, bkt *api.BucketInfo, p *PutObject
 		n.log.Error("couldn't cache an object", zap.Error(err))
 	}
 
+	n.listsCache.CleanCacheEntriesContainingObject(p.Object, bkt.CID)
+
 	for _, id := range idsToDeleteArr {
 		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
 			n.log.Warn("couldn't delete object",
@@ -503,13 +505,8 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *api.BucketInfo, 
 	versions := make(map[string]*objectVersions, len(ids)/2)
 
 	for i := 0; i < len(ids); i++ {
-		if ids[i] == nil {
-			continue
-		}
 		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt.CID, ids[i])
 		if obj == nil {
-			// mark ids[i] as an address of invalid object
-			ids[i] = nil
 			continue
 		}
 		if oi := objectInfoFromMeta(bkt, obj, prefix, delimiter); oi != nil {
