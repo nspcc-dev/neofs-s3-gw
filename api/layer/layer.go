@@ -41,6 +41,7 @@ type (
 		Lifetime            time.Duration
 		Size                int
 		ListObjectsLifetime time.Duration
+		ListObjectsSize     int
 	}
 
 	// Params stores basic API parameters.
@@ -197,7 +198,7 @@ func NewLayer(log *zap.Logger, conns pool.Pool, config *CacheConfig) Client {
 	return &layer{
 		pool:       conns,
 		log:        log,
-		listsCache: cache.NewObjectsListCache(config.ListObjectsLifetime),
+		listsCache: cache.NewObjectsListCache(config.ListObjectsSize, config.ListObjectsLifetime),
 		objCache:   cache.New(config.Size, config.Lifetime),
 		//todo reconsider cache params
 		namesCache:  cache.NewObjectsNameCache(1000, time.Minute),
@@ -671,7 +672,7 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return err
 	}
 
-	objects, err := n.listSortedObjectsFromNeoFS(ctx, allObjectParams{Bucket: bucketInfo})
+	objects, err := n.listSortedObjects(ctx, allObjectParams{Bucket: bucketInfo})
 	if err != nil {
 		return err
 	}

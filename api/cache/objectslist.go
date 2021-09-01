@@ -1,11 +1,12 @@
 package cache
 
 import (
-	"sync"
+	"fmt"
 	"time"
 
+	"github.com/bluele/gcache"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
-	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 )
 
 /*
@@ -19,86 +20,75 @@ import (
 	the list of objects. Otherwise we send the request to NeoFS.
 */
 
-// ObjectsListCache provides interface for cache of ListObjectsV2 in a layer struct.
 type (
+	// ObjectsListCache provides interface for cache of ListObjectsV2 in a layer struct.
 	ObjectsListCache interface {
-		Get(key ObjectsListKey) []*api.ObjectInfo
-		Put(key ObjectsListKey, objects []*api.ObjectInfo)
+		Get(key ObjectsListKey) []*object.ID
+		Put(key ObjectsListKey, oids []*object.ID) error
 	}
 )
 
-// DefaultObjectsListCacheLifetime is a default lifetime of entries in cache of ListObjects.
-const DefaultObjectsListCacheLifetime = time.Second * 60
-
 const (
-	// ListObjectsMethod is used to mark a cache entry for ListObjectsV1/V2.
-	ListObjectsMethod = "listObjects"
-	// ListVersionsMethod is used to mark a cache entry for ListObjectVersions.
-	ListVersionsMethod = "listVersions"
+	// DefaultObjectsListCacheLifetime is a default lifetime of entries in cache of ListObjects.
+	DefaultObjectsListCacheLifetime = time.Second * 60
+	// DefaultObjectsListCacheSize is a default size of cache of ListObjects.
+	DefaultObjectsListCacheSize = 1e5
 )
 
 type (
 	// ListObjectsCache contains cache for ListObjects and ListObjectVersions.
 	ListObjectsCache struct {
-		cacheLifetime time.Duration
-		caches        map[ObjectsListKey]objectsListEntry
-		mtx           sync.RWMutex
+		lifetime time.Duration
+		cache    gcache.Cache
 	}
-	objectsListEntry struct {
-		list []*api.ObjectInfo
-	}
+
 	// ObjectsListKey is a key to find a ObjectsListCache's entry.
 	ObjectsListKey struct {
-		Method    string
-		Key       string
-		Delimiter string
-		Prefix    string
+		cid    string
+		prefix string
 	}
 )
 
 // NewObjectsListCache is a constructor which creates an object of ListObjectsCache with given lifetime of entries.
-func NewObjectsListCache(lifetime time.Duration) *ListObjectsCache {
+func NewObjectsListCache(cacheSize int, lifetime time.Duration) *ListObjectsCache {
+	gc := gcache.New(cacheSize).LRU().Build()
+
 	return &ListObjectsCache{
-		caches:        make(map[ObjectsListKey]objectsListEntry),
-		cacheLifetime: lifetime,
+		cache:    gc,
+		lifetime: lifetime,
 	}
 }
 
 // Get return list of ObjectInfo.
-func (l *ListObjectsCache) Get(key ObjectsListKey) []*api.ObjectInfo {
-	l.mtx.RLock()
-	defer l.mtx.RUnlock()
-	if val, ok := l.caches[key]; ok {
-		return val.list
+func (l *ListObjectsCache) Get(key ObjectsListKey) []*object.ID {
+	entry, err := l.cache.Get(key)
+	if err != nil {
+		return nil
 	}
-	return nil
+
+	result, ok := entry.([]*object.ID)
+	if !ok {
+		return nil
+	}
+
+	return result
 }
 
-// Put put a list of objects to cache.
-func (l *ListObjectsCache) Put(key ObjectsListKey, objects []*api.ObjectInfo) {
-	if len(objects) == 0 {
-		return
+// Put puts a list of objects to cache.
+func (l *ListObjectsCache) Put(key ObjectsListKey, oids []*object.ID) error {
+	if len(oids) == 0 {
+		return fmt.Errorf("list is empty, cid: %s, prefix: %s", key.cid, key.prefix)
 	}
-	var c objectsListEntry
-	l.mtx.Lock()
-	defer l.mtx.Unlock()
-	c.list = objects
-	l.caches[key] = c
-	time.AfterFunc(l.cacheLifetime, func() {
-		l.mtx.Lock()
-		delete(l.caches, key)
-		l.mtx.Unlock()
-	})
+
+	return l.cache.SetWithExpire(key, oids, l.lifetime)
 }
 
 // CreateObjectsListCacheKey returns ObjectsListKey with given CID, method, prefix, and delimiter.
-func CreateObjectsListCacheKey(cid *cid.ID, method, prefix, delimiter string) (ObjectsListKey, error) {
+func CreateObjectsListCacheKey(cid *cid.ID, prefix string) ObjectsListKey {
 	p := ObjectsListKey{
-		Method:    method,
-		Key:       cid.String(),
-		Delimiter: delimiter,
-		Prefix:    prefix,
+		cid:    cid.String(),
+		prefix: prefix,
 	}
 
-	return p, nil
+	return p
 }
