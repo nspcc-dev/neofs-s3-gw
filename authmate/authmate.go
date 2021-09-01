@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strconv"
 	"time"
 
@@ -57,6 +58,7 @@ type (
 		ContextRules          []byte
 		SessionTkn            bool
 		Lifetime              uint64
+		AwsCliCredentialsFile string
 		ContainerPolicies     ContainerPolicies
 	}
 
@@ -241,7 +243,26 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(ir)
+	if err = enc.Encode(ir); err != nil {
+		return err
+	}
+
+	if options.AwsCliCredentialsFile != "" {
+		profileName := "authmate_cred_" + address.ObjectID().String()
+		if _, err = os.Stat(options.AwsCliCredentialsFile); os.IsNotExist(err) {
+			profileName = "default"
+		}
+		file, err := os.OpenFile(options.AwsCliCredentialsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			return fmt.Errorf("couldn't open aws cli credentials file: %w", err)
+		}
+		defer file.Close()
+		if _, err = file.WriteString(fmt.Sprintf("\n[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
+			profileName, accessKeyID, secrets.AccessKey)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ObtainSecret receives an existing secret access key from NeoFS and
