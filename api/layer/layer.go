@@ -632,6 +632,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *api.BucketInfo, obj *Vers
 			return err
 		}
 	}
+	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 
 	return nil
 }
