@@ -47,6 +47,7 @@ var (
 	sessionTokenFlag       bool
 	lifetimeFlag           uint64
 	containerPolicies      string
+	awcCliCredFile         string
 )
 
 const (
@@ -209,6 +210,12 @@ func issueSecret() *cli.Command {
 				Required:    false,
 				Destination: &containerPolicies,
 			},
+			&cli.StringFlag{
+				Name:        "aws-cli-credentials",
+				Usage:       "path to the aws cli credential file",
+				Required:    false,
+				Destination: &awcCliCredFile,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
@@ -264,6 +271,7 @@ func issueSecret() *cli.Command {
 				ContainerPolicies:     policies,
 				SessionTkn:            sessionTokenFlag,
 				Lifetime:              lifetimeFlag,
+				AwsCliCredentialsFile: awcCliCredFile,
 			}
 
 			if err = agent.IssueSecret(ctx, os.Stdout, issueSecretOptions); err != nil {
