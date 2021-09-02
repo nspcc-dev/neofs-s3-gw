@@ -419,7 +419,7 @@ func containsACLHeaders(r *http.Request) bool {
 		r.Header.Get(api.AmzGrantFullControl) != "" || r.Header.Get(api.AmzGrantWrite) != ""
 }
 
-func (h *handler) getNewEAclTable(r *http.Request, objInfo *layer.ObjectInfo) (*eacl.Table, error) {
+func (h *handler) getNewEAclTable(r *http.Request, objInfo *api.ObjectInfo) (*eacl.Table, error) {
 	var newEaclTable *eacl.Table
 	objectACL, err := parseACLHeaders(r)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -445,13 +446,13 @@ func TestNoVersioningDeleteObject(t *testing.T) {
 }
 
 func TestGetLastVersion(t *testing.T) {
-	obj1 := getTestObjectInfo(1, getOID(1), "", "", "")
-	obj1V2 := getTestObjectInfo(1, getOID(2), "", "", "")
-	obj2 := getTestObjectInfo(2, getOID(2), obj1.Version(), "", "")
-	obj3 := getTestObjectInfo(3, getOID(3), joinVers(obj1, obj2), "", "*")
-	obj4 := getTestObjectInfo(4, getOID(4), joinVers(obj1, obj2), obj2.Version(), obj2.Version())
-	obj5 := getTestObjectInfo(5, getOID(5), obj1.Version(), obj1.Version(), obj1.Version())
-	obj6 := getTestObjectInfo(6, getOID(6), joinVers(obj1, obj2, obj3), obj3.Version(), obj3.Version())
+	obj1 := getTestObjectInfo(1, "", "", "")
+	obj1V2 := getTestObjectInfo(2, "", "", "")
+	obj2 := getTestObjectInfoEpoch(1, 2, obj1.Version(), "", "")
+	obj3 := getTestObjectInfoEpoch(1, 3, joinVers(obj1, obj2), "", "*")
+	obj4 := getTestObjectInfoEpoch(1, 4, joinVers(obj1, obj2), obj2.Version(), obj2.Version())
+	obj5 := getTestObjectInfoEpoch(1, 5, obj1.Version(), obj1.Version(), obj1.Version())
+	obj6 := getTestObjectInfoEpoch(1, 6, joinVers(obj1, obj2, obj3), obj3.Version(), obj3.Version())
 
 	for _, tc := range []struct {
 		versions *objectVersions
@@ -510,9 +511,7 @@ func TestGetLastVersion(t *testing.T) {
 				objects: []*api.ObjectInfo{obj1, obj1V2},
 				addList: []string{obj1.Version(), obj1V2.Version()},
 			},
-			// creation epochs are equal
-			// obj1 version/oid > obj1_1 version/oid
-			expected: obj1,
+			expected: obj1V2,
 		},
 	} {
 		actualObjInfo := tc.versions.getLast()
@@ -521,10 +520,12 @@ func TestGetLastVersion(t *testing.T) {
 }
 
 func TestAppendVersions(t *testing.T) {
-	obj1 := getTestObjectInfo(1, getOID(1), "", "", "")
-	obj2 := getTestObjectInfo(2, getOID(2), obj1.Version(), "", "")
-	obj3 := getTestObjectInfo(3, getOID(3), joinVers(obj1, obj2), "", "*")
-	obj4 := getTestObjectInfo(4, getOID(4), joinVers(obj1, obj2), obj2.Version(), obj2.Version())
+	obj1 := getTestObjectInfo(1, "", "", "")
+	obj2 := getTestObjectInfo(2, obj1.Version(), "", "")
+	obj3 := getTestObjectInfo(3, joinVers(obj1, obj2), "", "*")
+	obj4 := getTestObjectInfo(4, joinVers(obj1, obj2), obj2.Version(), obj2.Version())
+	obj5 := getTestObjectInfo(5, joinVers(obj1, obj2), "", "")
+	obj6 := getTestObjectInfo(6, joinVers(obj1, obj3), "", "")
 
 	for _, tc := range []struct {
 		versions         *objectVersions
@@ -535,38 +536,88 @@ func TestAppendVersions(t *testing.T) {
 			versions:    &objectVersions{},
 			objectToAdd: obj1,
 			expectedVersions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1},
-				addList: []string{obj1.Version()},
+				objects:  []*api.ObjectInfo{obj1},
+				addList:  []string{obj1.Version()},
+				isSorted: true,
 			},
 		},
 		{
 			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1}},
 			objectToAdd: obj2,
 			expectedVersions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1, obj2},
-				addList: []string{obj1.Version(), obj2.Version()},
+				objects:  []*api.ObjectInfo{obj1, obj2},
+				addList:  []string{obj1.Version(), obj2.Version()},
+				isSorted: true,
 			},
 		},
 		{
 			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1, obj2}},
 			objectToAdd: obj3,
 			expectedVersions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1, obj2, obj3},
-				addList: []string{obj1.Version(), obj2.Version(), obj3.Version()},
+				objects:  []*api.ObjectInfo{obj1, obj2, obj3},
+				addList:  []string{obj1.Version(), obj2.Version(), obj3.Version()},
+				isSorted: true,
 			},
 		},
 		{
 			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1, obj2}},
 			objectToAdd: obj4,
 			expectedVersions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1, obj2, obj4},
-				addList: []string{obj1.Version(), obj2.Version(), obj4.Version()},
-				delList: []string{obj2.Version()},
+				objects:  []*api.ObjectInfo{obj1, obj2, obj4},
+				addList:  []string{obj1.Version(), obj2.Version(), obj4.Version()},
+				delList:  []string{obj2.Version()},
+				isSorted: true,
+			},
+		},
+		{
+			versions:    &objectVersions{objects: []*api.ObjectInfo{obj5}},
+			objectToAdd: obj6,
+			expectedVersions: &objectVersions{
+				objects:  []*api.ObjectInfo{obj5, obj6},
+				addList:  []string{obj1.Version(), obj2.Version(), obj3.Version(), obj5.Version(), obj6.Version()},
+				isSorted: true,
 			},
 		},
 	} {
 		tc.versions.appendVersion(tc.objectToAdd)
+		tc.versions.sort()
 		require.Equal(t, tc.expectedVersions, tc.versions)
+	}
+}
+
+func TestSortAddHeaders(t *testing.T) {
+	obj1 := getTestObjectInfo(1, "", "", "")
+	obj2 := getTestObjectInfo(2, "", "", "")
+	obj3 := getTestObjectInfo(3, "", "", "")
+	obj4 := getTestObjectInfo(4, "", "", "")
+	obj5 := getTestObjectInfo(5, "", "", "")
+
+	obj6 := getTestObjectInfoEpoch(1, 6, joinVers(obj1, obj2, obj3), "", "")
+	obj7 := getTestObjectInfoEpoch(1, 7, joinVers(obj1, obj4), "", "")
+	obj8 := getTestObjectInfoEpoch(1, 8, joinVers(obj5), "", "")
+	obj9 := getTestObjectInfoEpoch(1, 8, joinVers(obj1, obj5), "", "")
+	obj10 := getTestObjectInfo(11, "", "", "")
+	obj11 := getTestObjectInfo(10, joinVers(obj10), "", "")
+	obj12 := getTestObjectInfo(9, joinVers(obj10, obj11), "", "")
+
+	for _, tc := range []struct {
+		versions           *objectVersions
+		expectedAddHeaders string
+	}{
+		{
+			versions:           &objectVersions{objects: []*api.ObjectInfo{obj6, obj7, obj8}},
+			expectedAddHeaders: joinVers(obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8),
+		},
+		{
+			versions:           &objectVersions{objects: []*api.ObjectInfo{obj7, obj9}},
+			expectedAddHeaders: joinVers(obj1, obj4, obj5, obj7, obj9),
+		},
+		{
+			versions:           &objectVersions{objects: []*api.ObjectInfo{obj11, obj10, obj12}},
+			expectedAddHeaders: joinVers(obj10, obj11, obj12),
+		},
+	} {
+		require.Equal(t, tc.expectedAddHeaders, tc.versions.getAddHeader())
 	}
 }
 
@@ -584,14 +635,14 @@ func joinVers(objs ...*api.ObjectInfo) string {
 }
 
 func getOID(id byte) *object.ID {
-	b := make([]byte, 32)
-	b[0] = id
+	b := [32]byte{}
+	b[31] = id
 	oid := object.NewID()
-	oid.SetSHA256(sha256.Sum256(b))
+	oid.SetSHA256(b)
 	return oid
 }
 
-func getTestObjectInfo(epoch uint64, oid *object.ID, addAttr, delAttr, delMarkAttr string) *api.ObjectInfo {
+func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *api.ObjectInfo {
 	headers := make(map[string]string)
 	if addAttr != "" {
 		headers[versionsAddAttr] = addAttr
@@ -604,8 +655,14 @@ func getTestObjectInfo(epoch uint64, oid *object.ID, addAttr, delAttr, delMarkAt
 	}
 
 	return &api.ObjectInfo{
-		ID:            oid,
-		CreationEpoch: epoch,
-		Headers:       headers,
+		ID:      getOID(id),
+		Name:    strconv.Itoa(int(id)),
+		Headers: headers,
 	}
+}
+
+func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr string) *api.ObjectInfo {
+	obj := getTestObjectInfo(id, addAttr, delAttr, delMarkAttr)
+	obj.CreationEpoch = epoch
+	return obj
 }
