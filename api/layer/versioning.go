@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,15 +35,15 @@ func newObjectVersions(name string) *objectVersions {
 	return &objectVersions{name: name}
 }
 
+func (v *objectVersions) isAddListEmpty() bool {
+	v.sort()
+	return len(v.addList) == 0
+}
+
 func (v *objectVersions) appendVersion(oi *api.ObjectInfo) {
-	addVers := append(splitVersions(oi.Headers[versionsAddAttr]), oi.Version())
 	delVers := splitVersions(oi.Headers[versionsDelAttr])
 	v.objects = append(v.objects, oi)
-	for _, add := range addVers {
-		if !contains(v.addList, add) {
-			v.addList = append(v.addList, add)
-		}
-	}
+
 	for _, del := range delVers {
 		if !contains(v.delList, del) {
 			v.delList = append(v.delList, del)
@@ -54,19 +55,114 @@ func (v *objectVersions) appendVersion(oi *api.ObjectInfo) {
 func (v *objectVersions) sort() {
 	if !v.isSorted {
 		sort.Slice(v.objects, func(i, j int) bool {
-			return less(v.objects[i], v.objects[j])
+			o1, o2 := v.objects[i], v.objects[j]
+			if o1.CreationEpoch == o2.CreationEpoch {
+				l1, l2 := o1.Headers[versionsAddAttr], o2.Headers[versionsAddAttr]
+				if len(l1) != len(l2) {
+					if strings.HasPrefix(l1, l2) {
+						return false
+					} else if strings.HasPrefix(l2, l1) {
+						return true
+					}
+				}
+				return o1.Version() < o2.Version()
+			}
+			return o1.CreationEpoch < o2.CreationEpoch
 		})
+
+		v.formAddList()
 		v.isSorted = true
 	}
 }
 
+func (v *objectVersions) formAddList() {
+	for i := 0; i < len(v.objects); i++ {
+		var conflicts [][]string
+		for { // forming conflicts set (objects with the same creation epoch)
+			addVers := append(splitVersions(v.objects[i].Headers[versionsAddAttr]), v.objects[i].Version())
+			conflicts = append(conflicts, addVers)
+			if i == len(v.objects)-1 || v.objects[i].CreationEpoch != v.objects[i+1].CreationEpoch ||
+				containsVersions(v.objects[i+1], addVers) {
+				break
+			}
+			i++
+		}
+
+		if len(conflicts) == 1 {
+			v.addList = addIfNotContains(v.addList, conflicts[0])
+			continue
+		}
+
+		commonVersions, prevConflictedVersions, conflictedVersions := mergeVersionsConflicts(conflicts)
+		v.addList = commonVersions
+		v.addList = addIfNotContains(v.addList, prevConflictedVersions)
+		v.addList = addIfNotContains(v.addList, conflictedVersions)
+	}
+}
+
+func containsVersions(obj *api.ObjectInfo, versions []string) bool {
+	header := obj.Headers[versionsAddAttr]
+	for _, version := range versions {
+		if !strings.Contains(header, version) {
+			return false
+		}
+	}
+	return true
+}
+
+func addIfNotContains(list1, list2 []string) []string {
+	for _, add := range list2 {
+		if !contains(list1, add) {
+			list1 = append(list1, add)
+		}
+	}
+	return list1
+}
+
+func mergeVersionsConflicts(conflicts [][]string) ([]string, []string, []string) {
+	var currentVersions []string
+	var prevVersions []string
+	minLength := math.MaxInt32
+	for _, conflicted := range conflicts {
+		if len(conflicted)-1 < minLength {
+			minLength = len(conflicted) - 1
+		}
+		//last := conflicted[len(conflicted)-1]
+		//conflicts[j] = conflicted[:len(conflicted)-1]
+		//currentVersions = append(currentVersions, last)
+	}
+	var commonAddedVersions []string
+	diffIndex := 0
+LOOP:
+	for k := 0; k < minLength; k++ {
+		candidate := conflicts[0][k]
+		for _, conflicted := range conflicts {
+			if conflicted[k] != candidate {
+				diffIndex = k
+				break LOOP
+			}
+		}
+		commonAddedVersions = append(commonAddedVersions, candidate)
+	}
+
+	for _, conflicted := range conflicts {
+		for j := diffIndex; j < len(conflicted); j++ {
+			prevVersions = append(prevVersions, conflicted[j])
+		}
+	}
+
+	sort.Strings(prevVersions)
+	sort.Strings(currentVersions)
+	return commonAddedVersions, prevVersions, currentVersions
+}
+
 func (v *objectVersions) getLast() *api.ObjectInfo {
-	if len(v.objects) == 0 {
+	if v == nil || len(v.objects) == 0 {
 		return nil
 	}
 
 	v.sort()
-	existedVersions := getExistedVersions(v)
+	existedVersions := v.existedVersions()
 	for i := len(v.objects) - 1; i >= 0; i-- {
 		if contains(existedVersions, v.objects[i].Version()) {
 			delMarkHeader := v.objects[i].Headers[versionsDeleteMarkAttr]
@@ -82,13 +178,24 @@ func (v *objectVersions) getLast() *api.ObjectInfo {
 	return nil
 }
 
-func (v *objectVersions) getFiltered() []*api.ObjectInfo {
+func (v *objectVersions) existedVersions() []string {
+	v.sort()
+	var res []string
+	for _, add := range v.addList {
+		if !contains(v.delList, add) {
+			res = append(res, add)
+		}
+	}
+	return res
+}
+
+func (v *objectVersions) getFiltered(reverse bool) []*api.ObjectInfo {
 	if len(v.objects) == 0 {
 		return nil
 	}
 
 	v.sort()
-	existedVersions := getExistedVersions(v)
+	existedVersions := v.existedVersions()
 	res := make([]*api.ObjectInfo, 0, len(v.objects))
 
 	for _, version := range v.objects {
@@ -98,10 +205,17 @@ func (v *objectVersions) getFiltered() []*api.ObjectInfo {
 		}
 	}
 
+	if reverse {
+		for i, j := 0, len(res)-1; i < j; i, j = i+1, j-1 {
+			res[i], res[j] = res[j], res[i]
+		}
+	}
+
 	return res
 }
 
 func (v *objectVersions) getAddHeader() string {
+	v.sort()
 	return strings.Join(v.addList, ",")
 }
 
@@ -149,6 +263,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 		versions   map[string]*objectVersions
 		allObjects = make([]*api.ObjectInfo, 0, p.MaxKeys)
 		res        = &ListObjectVersionsInfo{}
+		reverse    = true
 	)
 
 	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
@@ -167,7 +282,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	sort.Strings(sortedNames)
 
 	for _, name := range sortedNames {
-		allObjects = append(allObjects, versions[name].getFiltered()...)
+		allObjects = append(allObjects, versions[name].getFiltered(reverse)...)
 	}
 
 	for i, obj := range allObjects {
@@ -192,7 +307,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	objects := make([]*ObjectVersionInfo, len(allObjects))
 	for i, obj := range allObjects {
 		objects[i] = &ObjectVersionInfo{Object: obj}
-		if i == len(allObjects)-1 || allObjects[i+1].Name != obj.Name {
+		if i == 0 || allObjects[i-1].Name != obj.Name {
 			objects[i].IsLatest = true
 		}
 	}
@@ -218,13 +333,6 @@ func triageVersions(objVersions []*ObjectVersionInfo) ([]*ObjectVersionInfo, []*
 	}
 
 	return resVersion, resDelMarkVersions
-}
-
-func less(ov1, ov2 *api.ObjectInfo) bool {
-	if ov1.CreationEpoch == ov2.CreationEpoch {
-		return ov1.Version() < ov2.Version()
-	}
-	return ov1.CreationEpoch < ov2.CreationEpoch
 }
 
 func contains(list []string, elem string) bool {
@@ -267,7 +375,7 @@ func (n *layer) checkVersionsExist(ctx context.Context, bkt *api.BucketInfo, obj
 	if err != nil {
 		return nil, err
 	}
-	if !contains(getExistedVersions(versions), obj.VersionID) {
+	if !contains(versions.existedVersions(), obj.VersionID) {
 		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
 	}
 

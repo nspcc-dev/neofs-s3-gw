@@ -249,7 +249,7 @@ func updateCRDT2PSetHeaders(p *PutObjectParams, versions *objectVersions, versio
 	}
 
 	if versioningEnabled {
-		if len(versions.addList) != 0 {
+		if !versions.isAddListEmpty() {
 			p.Header[versionsAddAttr] = versions.getAddHeader()
 		}
 
@@ -319,11 +319,11 @@ func (n *layer) headVersions(ctx context.Context, bkt *api.BucketInfo, objectNam
 		return nil, err
 	}
 
+	versions := newObjectVersions(objectName)
 	if len(ids) == 0 {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
+		return versions, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
-	versions := newObjectVersions(objectName)
 	for _, id := range ids {
 		meta, err := n.objectHead(ctx, bkt.CID, id)
 		if err != nil {
@@ -524,16 +524,6 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *api.BucketInfo, 
 	}
 
 	return versions, nil
-}
-
-func getExistedVersions(versions *objectVersions) []string {
-	var res []string
-	for _, add := range versions.addList {
-		if !contains(versions.delList, add) {
-			res = append(res, add)
-		}
-	}
-	return res
 }
 
 func splitVersions(header string) []string {

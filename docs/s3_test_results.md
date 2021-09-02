@@ -377,34 +377,34 @@ Compatibility: 9/8/11
 
 ## Versioning
 
-Compatibility: 1/24/26
+Compatibility: 11/24/26
 
 |    | Test                                                                                        | s3-gw | aws s3 |
 |----|---------------------------------------------------------------------------------------------|-------|--------|
 | 1  | s3tests_boto3.functional.test_s3.test_versioning_bucket_create_suspend                      | ok    | ok     |
-| 2  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove                     | ERROR | ok     |
+| 2  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove                     | ok    | ok     |
 | 3  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove_head                | ERROR | ok     |
 | 4  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_removal             | ERROR | ok     |
 | 5  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite           | ERROR | ok     |
 | 6  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite_suspended | ERROR | ok     |
 | 7  | s3tests_boto3.functional.test_s3.test_versioning_obj_suspend_versions                       | ERROR | ok     |
-| 8  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_all             | ERROR | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_special_names   | ERROR | ok     |
+| 8  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_all             | ok    | ok     |
+| 9  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_special_names   | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_versioning_obj_create_overwrite_multipart             | ERROR | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_versioning_obj_list_marker                            | ERROR | ok     |
-| 12 | s3tests_boto3.functional.test_s3.test_versioning_copy_obj_version                           | ERROR | ok     |
-| 13 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete                        | ERROR | ok     |
-| 14 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete_with_marker            | ERROR | ok     |
+| 11 | s3tests_boto3.functional.test_s3.test_versioning_obj_list_marker                            | ok    | ok     |
+| 12 | s3tests_boto3.functional.test_s3.test_versioning_copy_obj_version                           | ok    | ok     |
+| 13 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete                        | ok    | ok     |
+| 14 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete_with_marker            | ok    | ok     |
 | 15 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete_with_marker_create     | ERROR | ok     |
 | 16 | s3tests_boto3.functional.test_s3.test_versioned_object_acl                                  | ERROR | FAIL   |
 | 17 | s3tests_boto3.functional.test_s3.test_versioned_object_acl_no_version_specified             | ERROR | FAIL   |
 | 18 | s3tests_boto3.functional.test_s3.test_versioned_concurrent_object_create_concurrent_remove  | ERROR | ok     |
 | 19 | s3tests_boto3.functional.test_s3.test_versioned_concurrent_object_create_and_remove         | ERROR | ok     |
-| 20 | s3tests_boto3.functional.test_s3.test_versioning_bucket_atomic_upload_return_version_id     | ERROR | ok     |
+| 20 | s3tests_boto3.functional.test_s3.test_versioning_bucket_atomic_upload_return_version_id     | ok    | ok     |
 | 21 | s3tests_boto3.functional.test_s3.test_versioning_bucket_multipart_upload_return_version_id  | ERROR | ok     |
 | 22 | s3tests_boto3.functional.test_s3.test_bucket_list_return_data_versioning                    | ERROR | ok     |
-| 23 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_bucket                          | ERROR | ok     |
-| 24 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_url_encoding                    | ERROR | ok     |
+| 23 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_bucket                          | ok    | ok     |
+| 24 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_url_encoding                    | ok    | ok     |
 | 25 | s3tests_boto3.functional.test_s3.test_object_copy_versioning_multipart_upload               | ERROR | ok     |
 | 26 | s3tests_boto3.functional.test_s3.test_multipart_copy_versioned                              | ERROR | ok     |
 
