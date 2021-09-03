@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/stretchr/testify/require"
 )
@@ -29,12 +30,12 @@ func randSHA256Checksum(t *testing.T) (cs [sha256.Size]byte) {
 
 func TestObjectsListCache(t *testing.T) {
 	var (
-		cacheSize = 10
-		ids       []*object.ID
-		userKey   = "key"
+		listSize = 10
+		ids      []*object.ID
+		userKey  = "key"
 	)
 
-	for i := 0; i < cacheSize; i++ {
+	for i := 0; i < listSize; i++ {
 		id := randID(t)
 		ids = append(ids, id)
 	}
@@ -127,5 +128,64 @@ func TestObjectsListCache(t *testing.T) {
 
 		actual := cache.Get(newKey)
 		require.Nil(t, actual)
+	})
+}
+
+func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
+	var (
+		cid  = cid.New()
+		oids = []*object.ID{randID(t)}
+		keys []ObjectsListKey
+	)
+
+	for _, p := range []string{"", "dir/", "dir/lol/"} {
+		keys = append(keys, ObjectsListKey{cid: cid.String(), prefix: p})
+	}
+
+	t.Run("put object to the root of the bucket", func(t *testing.T) {
+		cache := NewObjectsListCache(testingCacheSize, time.Minute)
+		for _, k := range keys {
+			err := cache.Put(k, oids)
+			require.NoError(t, err)
+		}
+		cache.CleanCacheEntriesContainingObject("obj1", cid)
+		for _, k := range keys {
+			list := cache.Get(k)
+			if k.prefix == "" {
+				require.Nil(t, list)
+			} else {
+				require.NotNil(t, list)
+			}
+		}
+	})
+
+	t.Run("put object to dir/", func(t *testing.T) {
+		cache := NewObjectsListCache(testingCacheSize, time.Minute)
+		for _, k := range keys {
+			err := cache.Put(k, oids)
+			require.NoError(t, err)
+		}
+		cache.CleanCacheEntriesContainingObject("dir/obj", cid)
+		for _, k := range keys {
+			list := cache.Get(k)
+			if k.prefix == "" || k.prefix == "dir/" {
+				require.Nil(t, list)
+			} else {
+				require.NotNil(t, list)
+			}
+		}
+	})
+
+	t.Run("put object to dir/lol/", func(t *testing.T) {
+		cache := NewObjectsListCache(testingCacheSize, time.Minute)
+		for _, k := range keys {
+			err := cache.Put(k, oids)
+			require.NoError(t, err)
+		}
+		cache.CleanCacheEntriesContainingObject("dir/lol/obj", cid)
+		for _, k := range keys {
+			list := cache.Get(k)
+			require.Nil(t, list)
+		}
 	})
 }
