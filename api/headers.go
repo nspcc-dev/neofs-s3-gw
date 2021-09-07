@@ -7,6 +7,7 @@ const (
 	AmzVersionID         = "X-Amz-Version-Id"
 	AmzTaggingCount      = "X-Amz-Tagging-Count"
 	AmzTagging           = "X-Amz-Tagging"
+	AmzDeleteMarker      = "X-Amz-Delete-Marker"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"

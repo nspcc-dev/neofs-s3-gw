@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/xml"
 	"net/http"
+	"strconv"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -25,6 +26,13 @@ type ObjectIdentifier struct {
 	VersionID  string `xml:"VersionId,omitempty"`
 }
 
+// DeletedObject carries key name for the object to delete.
+type DeletedObject struct {
+	ObjectIdentifier
+	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
+	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
+}
+
 // DeleteError structure.
 type DeleteError struct {
 	Code      string
@@ -38,7 +46,7 @@ type DeleteObjectsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteResult" json:"-"`
 
 	// Collection of all deleted objects
-	DeletedObjects []ObjectIdentifier `xml:"Deleted,omitempty"`
+	DeletedObjects []DeletedObject `xml:"Deleted,omitempty"`
 
 	// Collection of errors deleting certain objects.
 	Errors []DeleteError `xml:"Error,omitempty"`
@@ -56,20 +64,22 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if errs := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, versionedObject); len(errs) != 0 && errs[0] != nil {
+	deletedObjects, err := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, versionedObject)
+	deletedObject := deletedObjects[0]
+	if err == nil {
+		err = deletedObject.Error
+	}
+	if err != nil {
 		h.log.Error("could not delete object",
 			zap.String("request_id", reqInfo.RequestID),
 			zap.String("bucket_name", reqInfo.BucketName),
 			zap.String("object_name", reqInfo.ObjectName),
-			zap.Error(errs[0]))
+			zap.Error(err))
+	}
 
-		// Ignore delete errors:
-
-		// api.WriteErrorResponse(r.Context(), w, api.Error{
-		// 	Code:           api.GetAPIError(api.ErrInternalError).Code,
-		// 	Description:    err.Error(),
-		// 	HTTPStatusCode: http.StatusInternalServerError,
-		// }, r.URL)
+	if deletedObject.DeleteMarkVersion != "" {
+		w.Header().Set(api.AmzDeleteMarker, strconv.FormatBool(true))
+		w.Header().Set(api.AmzVersionID, deletedObject.DeleteMarkVersion)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -113,7 +123,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 
 	response := &DeleteObjectsResponse{
 		Errors:         make([]DeleteError, 0, len(toRemove)),
-		DeletedObjects: make([]ObjectIdentifier, 0, len(toRemove)),
+		DeletedObjects: make([]DeletedObject, 0, len(toRemove)),
 	}
 
 	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
@@ -128,34 +138,47 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return nil
 	})
 
-	if errs := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, toRemove); errs != nil && !requested.Quiet {
+	deletedObjects, err := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, toRemove)
+	if !requested.Quiet && err != nil {
+		h.logAndSendError(w, "couldn't delete objects", reqInfo, err)
+		return
+	}
+
+	var errs []error
+	for _, obj := range deletedObjects {
+		if obj.Error == nil {
+			deletedObj := DeletedObject{
+				ObjectIdentifier: ObjectIdentifier{
+					ObjectName: obj.Name,
+					VersionID:  obj.VersionID,
+				},
+				DeleteMarkerVersionID: obj.DeleteMarkVersion,
+			}
+			if deletedObj.DeleteMarkerVersionID != "" {
+				deletedObj.DeleteMarker = true
+			}
+			response.DeletedObjects = append(response.DeletedObjects, deletedObj)
+		} else if !requested.Quiet {
+			code := "BadRequest"
+			if s3err, ok := obj.Error.(errors.Error); ok {
+				code = s3err.Code
+			}
+			response.Errors = append(response.Errors, DeleteError{
+				Code:      code,
+				Message:   obj.Error.Error(),
+				Key:       obj.Name,
+				VersionID: obj.VersionID,
+			})
+			errs = append(errs, obj.Error)
+		}
+	}
+
+	if !requested.Quiet && len(errs) != 0 {
 		additional := []zap.Field{
 			zap.Array("objects", marshaler),
 			zap.Errors("errors", errs),
 		}
 		h.logAndSendError(w, "could not delete objects", reqInfo, nil, additional...)
-
-		for _, e := range errs {
-			if err, ok := e.(*errors.ObjectError); ok {
-				code := "BadRequest"
-				if s3err, ok := err.Err.(errors.Error); ok {
-					code = s3err.Code
-				}
-
-				response.Errors = append(response.Errors, DeleteError{
-					Code:      code,
-					Message:   err.Error(),
-					Key:       err.Object,
-					VersionID: err.Version,
-				})
-
-				delete(removed, err.ObjectVersion())
-			}
-		}
-	}
-
-	for _, val := range removed {
-		response.DeletedObjects = append(response.DeletedObjects, ObjectIdentifier{ObjectName: val.Name, VersionID: val.VersionID})
 	}
 
 	if err := api.EncodeToResponse(w, response); err != nil {

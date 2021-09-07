@@ -245,11 +245,12 @@ func (tc *testContext) getObject(objectName, versionID string, needError bool) (
 }
 
 func (tc *testContext) deleteObject(objectName, versionID string) {
-	errs := tc.layer.DeleteObjects(tc.ctx, tc.bkt, []*VersionedObject{
+	deletedObjects, err := tc.layer.DeleteObjects(tc.ctx, tc.bkt, []*VersionedObject{
 		{Name: objectName, VersionID: versionID},
 	})
-	for _, err := range errs {
-		require.NoError(tc.t, err)
+	require.NoError(tc.t, err)
+	for _, obj := range deletedObjects {
+		require.NoError(tc.t, obj.Error)
 	}
 }
 

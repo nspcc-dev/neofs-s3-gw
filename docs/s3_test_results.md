@@ -383,7 +383,7 @@ Compatibility: 11/24/26
 |----|---------------------------------------------------------------------------------------------|-------|--------|
 | 1  | s3tests_boto3.functional.test_s3.test_versioning_bucket_create_suspend                      | ok    | ok     |
 | 2  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove                     | ok    | ok     |
-| 3  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove_head                | ERROR | ok     |
+| 3  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove_head                | ok    | ok     |
 | 4  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_removal             | ERROR | ok     |
 | 5  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite           | ERROR | ok     |
 | 6  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite_suspended | ERROR | ok     |
@@ -395,7 +395,7 @@ Compatibility: 11/24/26
 | 12 | s3tests_boto3.functional.test_s3.test_versioning_copy_obj_version                           | ok    | ok     |
 | 13 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete                        | ok    | ok     |
 | 14 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete_with_marker            | ok    | ok     |
-| 15 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete_with_marker_create     | ERROR | ok     |
+| 15 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete_with_marker_create     | ok    | ok     |
 | 16 | s3tests_boto3.functional.test_s3.test_versioned_object_acl                                  | ERROR | FAIL   |
 | 17 | s3tests_boto3.functional.test_s3.test_versioned_object_acl_no_version_specified             | ERROR | FAIL   |
 | 18 | s3tests_boto3.functional.test_s3.test_versioned_concurrent_object_create_concurrent_remove  | ERROR | ok     |
