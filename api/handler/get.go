@@ -141,6 +141,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)
 	}
+	api.WriteSuccessResponseHeadersOnly(w)
 }
 
 func checkPreconditions(info *api.ObjectInfo, args *conditionalArgs) error {

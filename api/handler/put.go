@@ -551,7 +551,8 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("bucket is created",
-		zap.String("container_id", cid.String()))
+		zap.String("container_id", cid.String()),
+		zap.String("bucket name", p.Name))
 
 	api.WriteSuccessResponseHeadersOnly(w)
 }
