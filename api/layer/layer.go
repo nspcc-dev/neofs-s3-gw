@@ -131,10 +131,12 @@ type (
 		Encode          string
 	}
 
-	// VersionedObject stores object name and version.
+	// VersionedObject stores info about objects to delete.
 	VersionedObject struct {
-		Name      string
-		VersionID string
+		Name              string
+		VersionID         string
+		DeleteMarkVersion string
+		Error             error
 	}
 
 	// PutTaggingParams stores tag set params.
@@ -177,7 +179,7 @@ type (
 		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
-		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error
+		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error)
 		DeleteObjectTagging(ctx context.Context, p *api.ObjectInfo) error
 		DeleteBucketTagging(ctx context.Context, bucket string) error
 	}
@@ -586,7 +588,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*api.Objec
 }
 
 // DeleteObject removes all objects with passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) error {
+func (n *layer) deleteObject(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) *VersionedObject {
 	var (
 		err error
 		ids []*object.ID
@@ -594,7 +596,8 @@ func (n *layer) deleteObject(ctx context.Context, bkt *api.BucketInfo, obj *Vers
 
 	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
 	if !versioningEnabled && obj.VersionID != unversionedObjectVersionID && obj.VersionID != "" {
-		return errors.GetAPIError(errors.ErrInvalidVersion)
+		obj.Error = errors.GetAPIError(errors.ErrInvalidVersion)
+		return obj
 	}
 
 	if versioningEnabled {
@@ -604,55 +607,63 @@ func (n *layer) deleteObject(ctx context.Context, bkt *api.BucketInfo, obj *Vers
 			Header: map[string]string{versionsDeleteMarkAttr: obj.VersionID},
 		}
 		if len(obj.VersionID) != 0 {
-			id, err := n.checkVersionsExist(ctx, bkt, obj)
+			version, err := n.checkVersionsExist(ctx, bkt, obj)
 			if err != nil {
-				return err
+				obj.Error = err
+				return obj
 			}
-			ids = []*object.ID{id}
+			ids = []*object.ID{version.ID}
+			if version.Headers[versionsDeleteMarkAttr] == delMarkFullObject {
+				obj.DeleteMarkVersion = version.Version()
+			}
 
 			p.Header[versionsDelAttr] = obj.VersionID
 		} else {
 			p.Header[versionsDeleteMarkAttr] = delMarkFullObject
 		}
-		if _, err = n.objectPut(ctx, bkt, p); err != nil {
-			return err
+		objInfo, err := n.objectPut(ctx, bkt, p)
+		if err != nil {
+			obj.Error = err
+			return obj
+		}
+		if len(obj.VersionID) == 0 {
+			obj.DeleteMarkVersion = objInfo.Version()
 		}
 	} else {
 		ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: obj.Name})
 		if err != nil {
-			return err
+			obj.Error = err
+			return obj
 		}
 	}
 
 	for _, id := range ids {
 		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
-			return err
+			obj.Error = err
+			return obj
 		}
 		if err = n.DeleteObjectTagging(ctx, &api.ObjectInfo{ID: id, Bucket: bkt.Name, Name: obj.Name}); err != nil {
-			return err
+			obj.Error = err
+			return obj
 		}
 	}
 	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 
-	return nil
+	return obj
 }
 
 // DeleteObjects from the storage.
-func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) []error {
-	var errs = make([]error, 0, len(objects))
-
+func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error) {
 	bkt, err := n.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		return append(errs, err)
+		return nil, err
 	}
 
-	for _, obj := range objects {
-		if err := n.deleteObject(ctx, bkt, obj); err != nil {
-			errs = append(errs, &errors.ObjectError{Err: err, Object: obj.Name, Version: obj.VersionID})
-		}
+	for i, obj := range objects {
+		objects[i] = n.deleteObject(ctx, bkt, obj)
 	}
 
-	return errs
+	return objects, nil
 }
 
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {

@@ -225,7 +225,10 @@ func (v *objectVersions) getDelHeader() string {
 
 func (v *objectVersions) getVersion(oid *object.ID) *api.ObjectInfo {
 	for _, version := range v.objects {
-		if version.ID == oid {
+		if version.Version() == oid.String() {
+			if contains(v.delList, oid.String()) {
+				return nil
+			}
 			return version
 		}
 	}
@@ -365,7 +368,7 @@ func objectInfoToBucketSettings(info *api.ObjectInfo) *BucketSettings {
 	return res
 }
 
-func (n *layer) checkVersionsExist(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) (*object.ID, error) {
+func (n *layer) checkVersionsExist(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) (*api.ObjectInfo, error) {
 	id := object.NewID()
 	if err := id.Parse(obj.VersionID); err != nil {
 		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
@@ -375,9 +378,10 @@ func (n *layer) checkVersionsExist(ctx context.Context, bkt *api.BucketInfo, obj
 	if err != nil {
 		return nil, err
 	}
-	if !contains(versions.existedVersions(), obj.VersionID) {
+	version := versions.getVersion(id)
+	if version == nil {
 		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
 	}
 
-	return id, nil
+	return version, nil
 }
