@@ -1,5 +1,10 @@
 # S3 compatibility test results
 
+To update this file using tests result run:
+```sh
+./updateTestsResult.sh ceph_tests_result.txt
+```
+
 ## CopyObject
 
 Compatibility: 14/17/17
