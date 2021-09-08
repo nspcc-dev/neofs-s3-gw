@@ -353,10 +353,12 @@ func contains(list []string, elem string) bool {
 }
 
 func (n *layer) getBucketSettings(ctx context.Context, bktInfo *api.BucketInfo) (*BucketSettings, error) {
-	objInfo, err := n.getSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
+	obj, err := n.getSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName(), false)
 	if err != nil {
 		return nil, err
 	}
+
+	objInfo := objInfoFromMeta(bktInfo, obj)
 
 	return objectInfoToBucketSettings(objInfo), nil
 }

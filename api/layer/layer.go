@@ -376,10 +376,12 @@ func (n *layer) GetObjectTagging(ctx context.Context, oi *api.ObjectInfo) (map[s
 		Owner: oi.Owner,
 	}
 
-	objInfo, err := n.getSystemObject(ctx, bktInfo, oi.TagsObject())
+	obj, err := n.getSystemObject(ctx, bktInfo, oi.TagsObject(), false)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
+
+	objInfo := objInfoFromMeta(bktInfo, obj)
 
 	return formTagSet(objInfo), nil
 }
@@ -391,10 +393,12 @@ func (n *layer) GetBucketTagging(ctx context.Context, bucketName string) (map[st
 		return nil, err
 	}
 
-	objInfo, err := n.getSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+	obj, err := n.getSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName), false)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
+
+	objInfo := objInfoFromMeta(bktInfo, obj)
 
 	return formTagSet(objInfo), nil
 }
@@ -567,9 +571,10 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 	return meta, nil
 }
 
-func (n *layer) getSystemObject(ctx context.Context, bkt *api.BucketInfo, objName string) (*api.ObjectInfo, error) {
-	if meta := n.systemCache.Get(bkt.SystemObjectKey(objName)); meta != nil {
-		return objInfoFromMeta(bkt, meta), nil
+func (n *layer) getSystemObject(ctx context.Context, bkt *api.BucketInfo, objName string, withPayload bool) (*object.Object, error) {
+	var meta *object.Object
+	if meta = n.systemCache.Get(bkt.SystemObjectKey(objName)); meta != nil {
+		return meta, nil
 	}
 
 	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: objName})
@@ -577,15 +582,29 @@ func (n *layer) getSystemObject(ctx context.Context, bkt *api.BucketInfo, objNam
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, bkt.CID, oid)
-	if err != nil {
-		return nil, err
+	if withPayload {
+		buf := new(bytes.Buffer)
+		ops := new(client.GetObjectParams).WithAddress(newAddress(bkt.CID, oid)).WithPayloadWriter(buf)
+
+		meta, err = n.pool.GetObject(
+			ctx,
+			ops,
+		)
+		if err != nil {
+			return nil, err
+		}
+		meta.ToV2().SetPayload(buf.Bytes())
+	} else {
+		meta, err = n.objectHead(ctx, bkt.CID, oid)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err = n.systemCache.Put(bkt.SystemObjectKey(objName), meta); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	return objInfoFromMeta(bkt, meta), nil
+	return meta, nil
 }
 
 // CopyObject from one bucket into another bucket.
