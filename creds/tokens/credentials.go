@@ -25,8 +25,9 @@ type (
 	}
 
 	cred struct {
-		key  *keys.PrivateKey
-		pool pool.Pool
+		key   *keys.PrivateKey
+		pool  pool.Pool
+		cache *AccessBoxCache
 	}
 )
 
@@ -46,8 +47,8 @@ var bufferPool = sync.Pool{
 var _ = New
 
 // New creates new Credentials instance using given cli and key.
-func New(conns pool.Pool, key *keys.PrivateKey) Credentials {
-	return &cred{pool: conns, key: key}
+func New(conns pool.Pool, key *keys.PrivateKey, config *CacheConfig) Credentials {
+	return &cred{pool: conns, key: key, cache: NewAccessBoxCache(config)}
 }
 
 func (c *cred) acquireBuffer() *bytes.Buffer {
@@ -59,22 +60,27 @@ func (c *cred) releaseBuffer(buf *bytes.Buffer) {
 	bufferPool.Put(buf)
 }
 
-func (c *cred) GetTokens(ctx context.Context, address *object.Address) (*accessbox.GateData, error) {
-	box, err := c.getAccessBox(ctx, address)
-	if err != nil {
-		return nil, err
-	}
-
-	return box.GetTokens(c.key)
-}
-
 func (c *cred) GetBox(ctx context.Context, address *object.Address) (*accessbox.Box, error) {
+	cachedBox := c.cache.Get(address)
+	if cachedBox != nil {
+		return cachedBox, nil
+	}
+
 	box, err := c.getAccessBox(ctx, address)
 	if err != nil {
 		return nil, err
 	}
 
-	return box.GetBox(c.key)
+	cachedBox, err = box.GetBox(c.key)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = c.cache.Put(address, cachedBox); err != nil {
+		return nil, err
+	}
+
+	return cachedBox, nil
 }
 
 func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*accessbox.AccessBox, error) {

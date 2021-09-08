@@ -226,7 +226,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	}
 
 	address, err := tokens.
-		New(a.pool, secrets.EphemeralKey).
+		New(a.pool, secrets.EphemeralKey, tokens.DefaultCacheConfig()).
 		Put(ctx, cid, oid, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
@@ -268,7 +268,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
-	bearerCreds := tokens.New(a.pool, options.GatePrivateKey)
+	bearerCreds := tokens.New(a.pool, options.GatePrivateKey, tokens.DefaultCacheConfig())
 	address := object.NewAddress()
 	if err := address.Parse(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)

@@ -108,8 +108,14 @@ If the value is not set at all it will be set as `REP 3`.
 Parameters for caches in s3-gw can be specified in a .yaml config file. E.g.:
 ```
 cache:
-  lifetime: 300s
-  size: 150
-  list_objects_lifetime: 1m
+  objects:
+    lifetime: 300s
+    size: 150
+  list:
+    lifetime: 1m
+    size: 100
+  accessbox:
+    lifetime: 5m
+    size: 10
 ```
 If invalid values are set, the gateway will use default values instead.

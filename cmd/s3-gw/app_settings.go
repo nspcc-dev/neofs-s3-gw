@@ -55,10 +55,12 @@ const ( // Settings.
 	cfgRebalanceTimer = "rebalance_timer"
 
 	// Caching.
-	cfgObjectsCacheLifetime     = "cache.lifetime"
-	cfgCacheSize                = "cache.size"
-	cfgListObjectsCacheLifetime = "cache.list_objects_lifetime"
-	cfgListObjectsCacheSize     = "cache.list_objects_size"
+	cfgObjectsCacheLifetime     = "cache.objects.lifetime"
+	cfgObjectsCacheSize         = "cache.objects.size"
+	cfgListObjectsCacheLifetime = "cache.list.lifetime"
+	cfgListObjectsCacheSize     = "cache.list.size"
+	cfgAccessBoxCacheLifetime   = "cache.accessbox.lifetime"
+	cfgAccessBoxCacheSize       = "cache.accessbox.size"
 
 	// Policy.
 	cfgDefaultPolicy = "default_policy"

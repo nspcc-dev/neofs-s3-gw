@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -116,7 +118,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	obj = layer.NewLayer(l, conns, cacheCfg)
 
 	// prepare auth center
-	ctr = auth.New(conns, key)
+	ctr = auth.New(conns, key, getAccessBoxCacheConfig(v, l))
 
 	handlerOptions := getHandlerOptions(v, l)
 
@@ -222,51 +224,52 @@ func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CacheConfig {
 		Lifetime:            cache.DefaultObjectsCacheLifetime,
 	}
 
-	if v.IsSet(cfgObjectsCacheLifetime) {
-		lifetime := v.GetDuration(cfgObjectsCacheLifetime)
-		if lifetime <= 0 {
-			l.Error("invalid cache lifetime, using default value (in seconds)",
-				zap.Duration("value in config", lifetime),
-				zap.Duration("default", cacheCfg.Lifetime))
-		} else {
-			cacheCfg.Lifetime = lifetime
-		}
-	}
+	cacheCfg.Lifetime = getLifetime(v, l, cfgObjectsCacheLifetime, cacheCfg.Lifetime)
+	cacheCfg.Size = getSize(v, l, cfgObjectsCacheSize, cacheCfg.Size)
 
-	if v.IsSet(cfgCacheSize) {
-		size := v.GetInt(cfgCacheSize)
-		if size <= 0 {
-			l.Error("invalid cache size, using default value",
-				zap.Int("value in config", size),
-				zap.Int("default", cacheCfg.Size))
-		} else {
-			cacheCfg.Size = size
-		}
-	}
-
-	if v.IsSet(cfgListObjectsCacheLifetime) {
-		lifetime := v.GetDuration(cfgListObjectsCacheLifetime)
-		if lifetime <= 0 {
-			l.Error("invalid list objects cache lifetime, using default value (in seconds)",
-				zap.Duration("value in config", lifetime),
-				zap.Duration("default", cacheCfg.ListObjectsLifetime))
-		} else {
-			cacheCfg.ListObjectsLifetime = lifetime
-		}
-	}
-
-	if v.IsSet(cfgListObjectsCacheSize) {
-		size := v.GetInt(cfgListObjectsCacheSize)
-		if size <= 0 {
-			l.Error("invalid cache size, using default value",
-				zap.Int("value in config", size),
-				zap.Int("default", cacheCfg.ListObjectsSize))
-		} else {
-			cacheCfg.Size = size
-		}
-	}
+	cacheCfg.ListObjectsLifetime = getLifetime(v, l, cfgListObjectsCacheLifetime, cacheCfg.ListObjectsLifetime)
+	cacheCfg.ListObjectsSize = getSize(v, l, cfgListObjectsCacheSize, cacheCfg.ListObjectsSize)
 
 	return &cacheCfg
+}
+
+func getLifetime(v *viper.Viper, l *zap.Logger, cfgEntry string, defaultValue time.Duration) time.Duration {
+	if v.IsSet(cfgEntry) {
+		lifetime := v.GetDuration(cfgEntry)
+		if lifetime <= 0 {
+			l.Error("invalid lifetime, using default value (in seconds)",
+				zap.String("parameter", cfgEntry),
+				zap.Duration("value in config", lifetime),
+				zap.Duration("default", defaultValue))
+		} else {
+			return lifetime
+		}
+	}
+	return defaultValue
+}
+
+func getSize(v *viper.Viper, l *zap.Logger, cfgEntry string, defaultValue int) int {
+	if v.IsSet(cfgEntry) {
+		size := v.GetInt(cfgEntry)
+		if size <= 0 {
+			l.Error("invalid cache size, using default value",
+				zap.String("parameter", cfgEntry),
+				zap.Int("value in config", size),
+				zap.Int("default", defaultValue))
+		} else {
+			return size
+		}
+	}
+	return defaultValue
+}
+
+func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *tokens.CacheConfig {
+	cacheCfg := tokens.DefaultCacheConfig()
+
+	cacheCfg.Lifetime = getLifetime(v, l, cfgAccessBoxCacheLifetime, cacheCfg.Lifetime)
+	cacheCfg.Size = getSize(v, l, cfgAccessBoxCacheSize, cacheCfg.Size)
+
+	return cacheCfg
 }
 
 func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
