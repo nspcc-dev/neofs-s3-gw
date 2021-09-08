@@ -120,6 +120,15 @@ type (
 	DeleteBucketParams struct {
 		Name string
 	}
+
+	// PutSystemObjectParams stores putSystemObject parameters.
+	PutSystemObjectParams struct {
+		bktInfo  *api.BucketInfo
+		objName  string
+		metadata map[string]string
+		prefix   string
+		payload  []byte
+	}
 	// ListObjectVersionsParams stores list objects versions parameters.
 	ListObjectVersionsParams struct {
 		Bucket          string
@@ -414,7 +423,15 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 		Owner: p.ObjectInfo.Owner,
 	}
 
-	if _, err := n.putSystemObject(ctx, bktInfo, p.ObjectInfo.TagsObject(), p.TagSet, tagPrefix); err != nil {
+	s := &PutSystemObjectParams{
+		bktInfo:  bktInfo,
+		objName:  p.ObjectInfo.TagsObject(),
+		metadata: p.TagSet,
+		prefix:   tagPrefix,
+		payload:  nil,
+	}
+
+	if _, err := n.putSystemObject(ctx, s); err != nil {
 		return err
 	}
 
@@ -428,7 +445,15 @@ func (n *layer) PutBucketTagging(ctx context.Context, bucketName string, tagSet 
 		return err
 	}
 
-	if _, err = n.putSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName), tagSet, tagPrefix); err != nil {
+	s := &PutSystemObjectParams{
+		bktInfo:  bktInfo,
+		objName:  formBucketTagObjectName(bucketName),
+		metadata: tagSet,
+		prefix:   tagPrefix,
+		payload:  nil,
+	}
+
+	if _, err = n.putSystemObject(ctx, s); err != nil {
 		return err
 	}
 
@@ -473,15 +498,15 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) erro
 	return n.deleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
 }
 
-func (n *layer) putSystemObject(ctx context.Context, bktInfo *api.BucketInfo, objName string, metadata map[string]string, prefix string) (*object.Object, error) {
+func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (*object.Object, error) {
 	var (
 		err    error
 		oldOID *object.ID
 	)
-	if meta := n.systemCache.Get(bktInfo.SystemObjectKey(objName)); meta != nil {
+	if meta := n.systemCache.Get(p.bktInfo.SystemObjectKey(p.objName)); meta != nil {
 		oldOID = meta.ID()
 	} else {
-		oldOID, err = n.objectFindID(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: objName})
+		oldOID, err = n.objectFindID(ctx, &findParams{cid: p.bktInfo.CID, attr: objectSystemAttributeName, val: p.objName})
 		if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 			return nil, err
 		}
@@ -491,7 +516,7 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *api.BucketInfo, ob
 
 	filename := object.NewAttribute()
 	filename.SetKey(objectSystemAttributeName)
-	filename.SetValue(objName)
+	filename.SetValue(p.objName)
 
 	createdAt := object.NewAttribute()
 	createdAt.SetKey(object.AttributeTimestamp)
@@ -503,10 +528,10 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *api.BucketInfo, ob
 
 	attributes = append(attributes, filename, createdAt, versioningIgnore)
 
-	for k, v := range metadata {
+	for k, v := range p.metadata {
 		attr := object.NewAttribute()
-		attr.SetKey(prefix + k)
-		if prefix == tagPrefix && v == "" {
+		attr.SetKey(p.prefix + k)
+		if p.prefix == tagPrefix && v == "" {
 			v = tagEmptyMark
 		}
 		attr.SetValue(v)
@@ -514,25 +539,27 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *api.BucketInfo, ob
 	}
 
 	raw := object.NewRaw()
-	raw.SetOwnerID(bktInfo.Owner)
-	raw.SetContainerID(bktInfo.CID)
+	raw.SetOwnerID(p.bktInfo.Owner)
+	raw.SetContainerID(p.bktInfo.CID)
 	raw.SetAttributes(attributes...)
 
-	ops := new(client.PutObjectParams).WithObject(raw.Object())
+	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(bytes.NewReader(p.payload))
 	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, bktInfo.CID, oid)
+	meta, err := n.objectHead(ctx, p.bktInfo.CID, oid)
 	if err != nil {
 		return nil, err
 	}
-	if err = n.systemCache.Put(bktInfo.SystemObjectKey(objName), meta); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
+
+	if p.payload != nil {
+		meta.ToV2().SetPayload(p.payload)
 	}
+	
 	if oldOID != nil {
-		if err = n.objectDelete(ctx, bktInfo.CID, oldOID); err != nil {
+		if err = n.objectDelete(ctx, p.bktInfo.CID, oldOID); err != nil {
 			return nil, err
 		}
 	}

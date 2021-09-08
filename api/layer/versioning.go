@@ -241,7 +241,15 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 		attrSettingsVersioningEnabled: strconv.FormatBool(p.Settings.VersioningEnabled),
 	}
 
-	meta, err := n.putSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName(), metadata, "")
+	s := &PutSystemObjectParams{
+		bktInfo:  bktInfo,
+		objName:  bktInfo.SettingsObjectName(),
+		metadata: metadata,
+		prefix:   "",
+		payload:  nil,
+	}
+
+	meta, err := n.putSystemObject(ctx, s)
 	if err != nil {
 		return nil, err
 	}
