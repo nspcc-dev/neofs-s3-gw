@@ -81,9 +81,9 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(conns pool.Pool, key *keys.PrivateKey) Center {
+func New(conns pool.Pool, key *keys.PrivateKey, config *tokens.CacheConfig) Center {
 	return &center{
-		cli:     tokens.New(conns, key),
+		cli:     tokens.New(conns, key, config),
 		reg:     &regexpSubmatcher{re: authorizationFieldRegexp},
 		postReg: &regexpSubmatcher{re: postPolicyCredentialRegexp},
 	}
