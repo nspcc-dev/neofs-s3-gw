@@ -59,6 +59,12 @@ const ( // Settings.
 	cfgObjectsCacheSize         = "cache.objects.size"
 	cfgListObjectsCacheLifetime = "cache.list.lifetime"
 	cfgListObjectsCacheSize     = "cache.list.size"
+	cfgBucketsCacheLifetime     = "cache.buckets.lifetime"
+	cfgBucketsCacheSize         = "cache.buckets.size"
+	cfgNamesCacheLifetime       = "cache.names.lifetime"
+	cfgNamesCacheSize           = "cache.names.size"
+	cfgSystemLifetimeSize       = "cache.system.lifetime"
+	cfgSystemCacheSize          = "cache.system.size"
 	cfgAccessBoxCacheLifetime   = "cache.accessbox.lifetime"
 	cfgAccessBoxCacheSize       = "cache.accessbox.size"
 

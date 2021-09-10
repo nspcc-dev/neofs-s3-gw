@@ -9,7 +9,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +20,7 @@ var (
 	defaultTestContentType   = http.DetectContentType(defaultTestPayload)
 )
 
-func newTestObject(oid *object.ID, bkt *api.BucketInfo, name string) *object.Object {
+func newTestObject(oid *object.ID, bkt *data.BucketInfo, name string) *object.Object {
 	filename := object.NewAttribute()
 	filename.SetKey(object.AttributeFileName)
 	filename.SetValue(name)
@@ -44,8 +44,8 @@ func newTestObject(oid *object.ID, bkt *api.BucketInfo, name string) *object.Obj
 	return raw.Object()
 }
 
-func newTestInfo(oid *object.ID, bkt *api.BucketInfo, name string, isDir bool) *api.ObjectInfo {
-	info := &api.ObjectInfo{
+func newTestInfo(oid *object.ID, bkt *data.BucketInfo, name string, isDir bool) *data.ObjectInfo {
+	info := &data.ObjectInfo{
 		ID:          oid,
 		Name:        name,
 		Bucket:      bkt.Name,
@@ -72,7 +72,7 @@ func Test_objectInfoFromMeta(t *testing.T) {
 	oid := object.NewID()
 	containerID := cid.New()
 
-	bkt := &api.BucketInfo{
+	bkt := &data.BucketInfo{
 		Name:    "test-container",
 		CID:     containerID,
 		Owner:   uid,
@@ -82,7 +82,7 @@ func Test_objectInfoFromMeta(t *testing.T) {
 	cases := []struct {
 		name      string
 		prefix    string
-		result    *api.ObjectInfo
+		result    *data.ObjectInfo
 		object    *object.Object
 		delimiter string
 	}{

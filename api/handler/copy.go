@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -32,7 +33,7 @@ func path2BucketObject(path string) (bucket, prefix string) {
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
-		info     *api.ObjectInfo
+		info     *data.ObjectInfo
 		metadata map[string]string
 
 		reqInfo   = api.GetReqInfo(r.Context())

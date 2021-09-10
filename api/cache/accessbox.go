@@ -1,4 +1,4 @@
-package tokens
+package cache
 
 import (
 	"time"
@@ -8,31 +8,33 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 )
 
-const (
-	// DefaultCacheSize is a default maximum number of entries in cache.
-	DefaultCacheSize = 100
-	// DefaultCacheLifetime is a default lifetime of entries in  cache.
-	DefaultCacheLifetime = 10 * time.Minute
+type (
+	// AccessBoxCache stores access box by its address.
+	AccessBoxCache struct {
+		cache gcache.Cache
+	}
+
+	// Config stores expiration params for cache.
+	Config struct {
+		Size     int
+		Lifetime time.Duration
+	}
 )
 
-// CacheConfig stores expiration params for cache.
-type CacheConfig struct {
-	Size     int
-	Lifetime time.Duration
-}
+const (
+	// DefaultAccessBoxCacheSize is a default maximum number of entries in cache.
+	DefaultAccessBoxCacheSize = 100
+	// DefaultAccessBoxCacheLifetime is a default lifetime of entries in  cache.
+	DefaultAccessBoxCacheLifetime = 10 * time.Minute
+)
 
-// DefaultCacheConfig return new default cache expiration values.
-func DefaultCacheConfig() *CacheConfig {
-	return &CacheConfig{Size: DefaultCacheSize, Lifetime: DefaultCacheLifetime}
-}
-
-// AccessBoxCache stores access box by its address.
-type AccessBoxCache struct {
-	cache gcache.Cache
+// DefaultAccessBoxConfig return new default cache expiration values.
+func DefaultAccessBoxConfig() *Config {
+	return &Config{Size: DefaultAccessBoxCacheSize, Lifetime: DefaultAccessBoxCacheLifetime}
 }
 
 // NewAccessBoxCache creates an object of BucketCache.
-func NewAccessBoxCache(config *CacheConfig) *AccessBoxCache {
+func NewAccessBoxCache(config *Config) *AccessBoxCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
 
 	return &AccessBoxCache{cache: gc}

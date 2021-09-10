@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
@@ -65,7 +66,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
 
-func writeHeaders(h http.Header, info *api.ObjectInfo, tagSetLength int) {
+func writeHeaders(h http.Header, info *data.ObjectInfo, tagSetLength int) {
 	if len(info.ContentType) > 0 {
 		h.Set(api.ContentType, info.ContentType)
 	}
@@ -83,7 +84,7 @@ func writeHeaders(h http.Header, info *api.ObjectInfo, tagSetLength int) {
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error
-		info   *api.ObjectInfo
+		info   *data.ObjectInfo
 		params *layer.RangeParams
 
 		reqInfo = api.GetReqInfo(r.Context())
@@ -143,7 +144,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkPreconditions(info *api.ObjectInfo, args *conditionalArgs) error {
+func checkPreconditions(info *data.ObjectInfo, args *conditionalArgs) error {
 	if len(args.IfMatch) > 0 && args.IfMatch != info.HashSum {
 		return errors.GetAPIError(errors.ErrPreconditionFailed)
 	}

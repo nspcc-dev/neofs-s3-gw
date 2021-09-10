@@ -14,7 +14,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -216,21 +215,25 @@ func (a *App) Server(ctx context.Context) {
 	close(a.webDone)
 }
 
-func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CacheConfig {
-	cacheCfg := layer.CacheConfig{
-		ListObjectsLifetime: cache.DefaultObjectsListCacheLifetime,
-		ListObjectsSize:     cache.DefaultObjectsListCacheSize,
-		Size:                cache.DefaultObjectsCacheSize,
-		Lifetime:            cache.DefaultObjectsCacheLifetime,
-	}
+func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CachesConfig {
+	cacheCfg := layer.DefaultCachesConfigs()
 
-	cacheCfg.Lifetime = getLifetime(v, l, cfgObjectsCacheLifetime, cacheCfg.Lifetime)
-	cacheCfg.Size = getSize(v, l, cfgObjectsCacheSize, cacheCfg.Size)
+	cacheCfg.Objects.Lifetime = getLifetime(v, l, cfgObjectsCacheLifetime, cacheCfg.Objects.Lifetime)
+	cacheCfg.Objects.Size = getSize(v, l, cfgObjectsCacheSize, cacheCfg.Objects.Size)
 
-	cacheCfg.ListObjectsLifetime = getLifetime(v, l, cfgListObjectsCacheLifetime, cacheCfg.ListObjectsLifetime)
-	cacheCfg.ListObjectsSize = getSize(v, l, cfgListObjectsCacheSize, cacheCfg.ListObjectsSize)
+	cacheCfg.ObjectsList.Lifetime = getLifetime(v, l, cfgListObjectsCacheLifetime, cacheCfg.ObjectsList.Lifetime)
+	cacheCfg.ObjectsList.Size = getSize(v, l, cfgListObjectsCacheSize, cacheCfg.ObjectsList.Size)
 
-	return &cacheCfg
+	cacheCfg.Buckets.Lifetime = getLifetime(v, l, cfgBucketsCacheLifetime, cacheCfg.Buckets.Lifetime)
+	cacheCfg.Buckets.Size = getSize(v, l, cfgBucketsCacheSize, cacheCfg.Buckets.Size)
+
+	cacheCfg.Names.Lifetime = getLifetime(v, l, cfgNamesCacheLifetime, cacheCfg.Names.Lifetime)
+	cacheCfg.Names.Size = getSize(v, l, cfgNamesCacheSize, cacheCfg.Names.Size)
+
+	cacheCfg.System.Lifetime = getLifetime(v, l, cfgSystemLifetimeSize, cacheCfg.System.Lifetime)
+	cacheCfg.System.Size = getSize(v, l, cfgSystemCacheSize, cacheCfg.System.Size)
+
+	return cacheCfg
 }
 
 func getLifetime(v *viper.Viper, l *zap.Logger, cfgEntry string, defaultValue time.Duration) time.Duration {
@@ -263,8 +266,8 @@ func getSize(v *viper.Viper, l *zap.Logger, cfgEntry string, defaultValue int) i
 	return defaultValue
 }
 
-func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *tokens.CacheConfig {
-	cacheCfg := tokens.DefaultCacheConfig()
+func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
+	cacheCfg := cache.DefaultAccessBoxConfig()
 
 	cacheCfg.Lifetime = getLifetime(v, l, cfgAccessBoxCacheLifetime, cacheCfg.Lifetime)
 	cacheCfg.Size = getSize(v, l, cfgAccessBoxCacheSize, cacheCfg.Size)

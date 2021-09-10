@@ -21,7 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -208,7 +208,7 @@ func (t *testPool) WaitForContainerPresence(ctx context.Context, id *cid.ID, par
 	return nil
 }
 
-func (tc *testContext) putObject(content []byte) *api.ObjectInfo {
+func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 	objInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
 		Bucket: tc.bkt,
 		Object: tc.obj,
@@ -221,7 +221,7 @@ func (tc *testContext) putObject(content []byte) *api.ObjectInfo {
 	return objInfo
 }
 
-func (tc *testContext) getObject(objectName, versionID string, needError bool) (*api.ObjectInfo, []byte) {
+func (tc *testContext) getObject(objectName, versionID string, needError bool) (*data.ObjectInfo, []byte) {
 	objInfo, err := tc.layer.GetObjectInfo(tc.ctx, &HeadObjectParams{
 		Bucket:    tc.bkt,
 		Object:    objectName,
@@ -254,7 +254,7 @@ func (tc *testContext) deleteObject(objectName, versionID string) {
 	}
 }
 
-func (tc *testContext) listObjectsV1() []*api.ObjectInfo {
+func (tc *testContext) listObjectsV1() []*data.ObjectInfo {
 	res, err := tc.layer.ListObjectsV1(tc.ctx, &ListObjectsParamsV1{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
 			Bucket:  tc.bkt,
@@ -265,7 +265,7 @@ func (tc *testContext) listObjectsV1() []*api.ObjectInfo {
 	return res.Objects
 }
 
-func (tc *testContext) listObjectsV2() []*api.ObjectInfo {
+func (tc *testContext) listObjectsV2() []*data.ObjectInfo {
 	res, err := tc.layer.ListObjectsV2(tc.ctx, &ListObjectsParamsV2{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
 			Bucket:  tc.bkt,
@@ -329,13 +329,8 @@ func prepareContext(t *testing.T) *testContext {
 	require.NoError(t, err)
 
 	return &testContext{
-		ctx: ctx,
-		layer: NewLayer(l, tp, &CacheConfig{
-			Size:                cache.DefaultObjectsCacheSize,
-			Lifetime:            cache.DefaultObjectsCacheLifetime,
-			ListObjectsLifetime: cache.DefaultObjectsListCacheLifetime,
-			ListObjectsSize:     cache.DefaultObjectsListCacheSize},
-		),
+		ctx:      ctx,
+		layer:    NewLayer(l, tp, DefaultCachesConfigs()),
 		bkt:      bktName,
 		bktID:    bktID,
 		obj:      "obj1",
@@ -457,7 +452,7 @@ func TestGetLastVersion(t *testing.T) {
 
 	for _, tc := range []struct {
 		versions *objectVersions
-		expected *api.ObjectInfo
+		expected *data.ObjectInfo
 	}{
 		{
 			versions: &objectVersions{},
@@ -465,21 +460,21 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj2, obj1},
+				objects: []*data.ObjectInfo{obj2, obj1},
 				addList: []string{obj1.Version(), obj2.Version()},
 			},
 			expected: obj2,
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj2, obj1, obj3},
+				objects: []*data.ObjectInfo{obj2, obj1, obj3},
 				addList: []string{obj1.Version(), obj2.Version(), obj3.Version()},
 			},
 			expected: nil,
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj2, obj1, obj4},
+				objects: []*data.ObjectInfo{obj2, obj1, obj4},
 				addList: []string{obj1.Version(), obj2.Version(), obj4.Version()},
 				delList: []string{obj2.Version()},
 			},
@@ -487,7 +482,7 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1, obj5},
+				objects: []*data.ObjectInfo{obj1, obj5},
 				addList: []string{obj1.Version(), obj5.Version()},
 				delList: []string{obj1.Version()},
 			},
@@ -495,13 +490,13 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj5},
+				objects: []*data.ObjectInfo{obj5},
 			},
 			expected: nil,
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1, obj2, obj3, obj6},
+				objects: []*data.ObjectInfo{obj1, obj2, obj3, obj6},
 				addList: []string{obj1.Version(), obj2.Version(), obj3.Version(), obj6.Version()},
 				delList: []string{obj3.Version()},
 			},
@@ -509,7 +504,7 @@ func TestGetLastVersion(t *testing.T) {
 		},
 		{
 			versions: &objectVersions{
-				objects: []*api.ObjectInfo{obj1, obj1V2},
+				objects: []*data.ObjectInfo{obj1, obj1V2},
 				addList: []string{obj1.Version(), obj1V2.Version()},
 			},
 			expected: obj1V2,
@@ -530,51 +525,51 @@ func TestAppendVersions(t *testing.T) {
 
 	for _, tc := range []struct {
 		versions         *objectVersions
-		objectToAdd      *api.ObjectInfo
+		objectToAdd      *data.ObjectInfo
 		expectedVersions *objectVersions
 	}{
 		{
 			versions:    &objectVersions{},
 			objectToAdd: obj1,
 			expectedVersions: &objectVersions{
-				objects:  []*api.ObjectInfo{obj1},
+				objects:  []*data.ObjectInfo{obj1},
 				addList:  []string{obj1.Version()},
 				isSorted: true,
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1}},
+			versions:    &objectVersions{objects: []*data.ObjectInfo{obj1}},
 			objectToAdd: obj2,
 			expectedVersions: &objectVersions{
-				objects:  []*api.ObjectInfo{obj1, obj2},
+				objects:  []*data.ObjectInfo{obj1, obj2},
 				addList:  []string{obj1.Version(), obj2.Version()},
 				isSorted: true,
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1, obj2}},
+			versions:    &objectVersions{objects: []*data.ObjectInfo{obj1, obj2}},
 			objectToAdd: obj3,
 			expectedVersions: &objectVersions{
-				objects:  []*api.ObjectInfo{obj1, obj2, obj3},
+				objects:  []*data.ObjectInfo{obj1, obj2, obj3},
 				addList:  []string{obj1.Version(), obj2.Version(), obj3.Version()},
 				isSorted: true,
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*api.ObjectInfo{obj1, obj2}},
+			versions:    &objectVersions{objects: []*data.ObjectInfo{obj1, obj2}},
 			objectToAdd: obj4,
 			expectedVersions: &objectVersions{
-				objects:  []*api.ObjectInfo{obj1, obj2, obj4},
+				objects:  []*data.ObjectInfo{obj1, obj2, obj4},
 				addList:  []string{obj1.Version(), obj2.Version(), obj4.Version()},
 				delList:  []string{obj2.Version()},
 				isSorted: true,
 			},
 		},
 		{
-			versions:    &objectVersions{objects: []*api.ObjectInfo{obj5}},
+			versions:    &objectVersions{objects: []*data.ObjectInfo{obj5}},
 			objectToAdd: obj6,
 			expectedVersions: &objectVersions{
-				objects:  []*api.ObjectInfo{obj5, obj6},
+				objects:  []*data.ObjectInfo{obj5, obj6},
 				addList:  []string{obj1.Version(), obj2.Version(), obj3.Version(), obj5.Version(), obj6.Version()},
 				isSorted: true,
 			},
@@ -606,15 +601,15 @@ func TestSortAddHeaders(t *testing.T) {
 		expectedAddHeaders string
 	}{
 		{
-			versions:           &objectVersions{objects: []*api.ObjectInfo{obj6, obj7, obj8}},
+			versions:           &objectVersions{objects: []*data.ObjectInfo{obj6, obj7, obj8}},
 			expectedAddHeaders: joinVers(obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8),
 		},
 		{
-			versions:           &objectVersions{objects: []*api.ObjectInfo{obj7, obj9}},
+			versions:           &objectVersions{objects: []*data.ObjectInfo{obj7, obj9}},
 			expectedAddHeaders: joinVers(obj1, obj4, obj5, obj7, obj9),
 		},
 		{
-			versions:           &objectVersions{objects: []*api.ObjectInfo{obj11, obj10, obj12}},
+			versions:           &objectVersions{objects: []*data.ObjectInfo{obj11, obj10, obj12}},
 			expectedAddHeaders: joinVers(obj10, obj11, obj12),
 		},
 	} {
@@ -622,7 +617,7 @@ func TestSortAddHeaders(t *testing.T) {
 	}
 }
 
-func joinVers(objs ...*api.ObjectInfo) string {
+func joinVers(objs ...*data.ObjectInfo) string {
 	if len(objs) == 0 {
 		return ""
 	}
@@ -643,7 +638,7 @@ func getOID(id byte) *object.ID {
 	return oid
 }
 
-func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *api.ObjectInfo {
+func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *data.ObjectInfo {
 	headers := make(map[string]string)
 	if addAttr != "" {
 		headers[versionsAddAttr] = addAttr
@@ -655,14 +650,14 @@ func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *api.Objec
 		headers[versionsDeleteMarkAttr] = delMarkAttr
 	}
 
-	return &api.ObjectInfo{
+	return &data.ObjectInfo{
 		ID:      getOID(id),
 		Name:    strconv.Itoa(int(id)),
 		Headers: headers,
 	}
 }
 
-func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr string) *api.ObjectInfo {
+func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr string) *data.ObjectInfo {
 	obj := getTestObjectInfo(id, addAttr, delAttr, delMarkAttr)
 	obj.CreationEpoch = epoch
 	return obj

@@ -7,11 +7,9 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 )
 
-// ObjectsCache provides interface for lru cache for objects.
-type ObjectsCache interface {
-	Get(address *object.Address) *object.Object
-	Put(obj object.Object) error
-	Delete(address *object.Address) bool
+// ObjectsCache provides lru cache for objects.
+type ObjectsCache struct {
+	cache gcache.Cache
 }
 
 const (
@@ -21,23 +19,19 @@ const (
 	DefaultObjectsCacheSize = 1e6
 )
 
-type (
-	// ObjectHeadersCache contains cache with objects and lifetime of cache entries.
-	ObjectHeadersCache struct {
-		cache    gcache.Cache
-		lifetime time.Duration
-	}
-)
+// DefaultObjectsConfig return new default cache expiration values.
+func DefaultObjectsConfig() *Config {
+	return &Config{Size: DefaultObjectsCacheSize, Lifetime: DefaultObjectsCacheLifetime}
+}
 
 // New creates an object of ObjectHeadersCache.
-func New(cacheSize int, lifetime time.Duration) *ObjectHeadersCache {
-	gc := gcache.New(cacheSize).LRU().Build()
-
-	return &ObjectHeadersCache{cache: gc, lifetime: lifetime}
+func New(config *Config) *ObjectsCache {
+	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
+	return &ObjectsCache{cache: gc}
 }
 
 // Get returns cached object.
-func (o *ObjectHeadersCache) Get(address *object.Address) *object.Object {
+func (o *ObjectsCache) Get(address *object.Address) *object.Object {
 	entry, err := o.cache.Get(address.String())
 	if err != nil {
 		return nil
@@ -52,11 +46,11 @@ func (o *ObjectHeadersCache) Get(address *object.Address) *object.Object {
 }
 
 // Put puts an object to cache.
-func (o *ObjectHeadersCache) Put(obj object.Object) error {
-	return o.cache.SetWithExpire(obj.ContainerID().String()+"/"+obj.ID().String(), obj, o.lifetime)
+func (o *ObjectsCache) Put(obj object.Object) error {
+	return o.cache.Set(obj.ContainerID().String()+"/"+obj.ID().String(), obj)
 }
 
 // Delete deletes an object from cache.
-func (o *ObjectHeadersCache) Delete(address *object.Address) bool {
+func (o *ObjectsCache) Delete(address *object.Address) bool {
 	return o.cache.Remove(address.String())
 }
