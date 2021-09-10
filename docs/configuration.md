@@ -114,6 +114,15 @@ cache:
   list:
     lifetime: 1m
     size: 100
+  names:
+    lifetime: 1m
+    size: 1000
+  buckets:
+    lifetime: 1m
+    size: 500
+  system:
+    lifetime: 2m
+    size: 1000
   accessbox:
     lifetime: 5m
     size: 10

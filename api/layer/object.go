@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
 )
@@ -62,7 +63,7 @@ type (
 	}
 
 	allObjectParams struct {
-		Bucket    *api.BucketInfo
+		Bucket    *data.BucketInfo
 		Delimiter string
 		Prefix    string
 	}
@@ -134,7 +135,7 @@ func (n *layer) objectRange(ctx context.Context, p *getParams) ([]byte, error) {
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
-func (n *layer) objectPut(ctx context.Context, bkt *api.BucketInfo, p *PutObjectParams) (*api.ObjectInfo, error) {
+func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjectParams) (*data.ObjectInfo, error) {
 	own := n.Owner(ctx)
 	obj, err := url.QueryUnescape(p.Object)
 	if err != nil {
@@ -198,7 +199,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *api.BucketInfo, p *PutObject
 		}
 	}
 
-	return &api.ObjectInfo{
+	return &data.ObjectInfo{
 		ID:  oid,
 		CID: bkt.CID,
 
@@ -287,7 +288,7 @@ func updateCRDT2PSetHeaders(p *PutObjectParams, versions *objectVersions, versio
 	return idsToDeleteArr
 }
 
-func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *api.BucketInfo, objectName string) (*api.ObjectInfo, error) {
+func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ObjectInfo, error) {
 	if address := n.namesCache.Get(bkt.Name + "/" + objectName); address != nil {
 		if headInfo := n.objCache.Get(address); headInfo != nil {
 			return objInfoFromMeta(bkt, headInfo), nil
@@ -313,7 +314,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *api.Bucket
 	return lastVersion, nil
 }
 
-func (n *layer) headVersions(ctx context.Context, bkt *api.BucketInfo, objectName string) (*objectVersions, error) {
+func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectName string) (*objectVersions, error) {
 	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, val: objectName})
 	if err != nil {
 		return nil, err
@@ -351,7 +352,7 @@ func (n *layer) headVersions(ctx context.Context, bkt *api.BucketInfo, objectNam
 	return versions, nil
 }
 
-func (n *layer) headVersion(ctx context.Context, bkt *api.BucketInfo, versionID string) (*api.ObjectInfo, error) {
+func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, versionID string) (*data.ObjectInfo, error) {
 	oid := object.NewID()
 	if err := oid.Parse(versionID); err != nil {
 		return nil, err
@@ -396,7 +397,7 @@ func (n *layer) ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*Lis
 	var (
 		err        error
 		result     ListObjectsInfoV1
-		allObjects []*api.ObjectInfo
+		allObjects []*data.ObjectInfo
 	)
 
 	if p.MaxKeys == 0 {
@@ -431,7 +432,7 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	var (
 		err        error
 		result     ListObjectsInfoV2
-		allObjects []*api.ObjectInfo
+		allObjects []*data.ObjectInfo
 	)
 
 	if p.MaxKeys == 0 {
@@ -465,13 +466,13 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	return &result, nil
 }
 
-func (n *layer) listSortedObjects(ctx context.Context, p allObjectParams) ([]*api.ObjectInfo, error) {
+func (n *layer) listSortedObjects(ctx context.Context, p allObjectParams) ([]*data.ObjectInfo, error) {
 	versions, err := n.getAllObjectsVersions(ctx, p.Bucket, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
 	}
 
-	objects := make([]*api.ObjectInfo, 0, len(versions))
+	objects := make([]*data.ObjectInfo, 0, len(versions))
 	for _, v := range versions {
 		lastVersion := v.getLast()
 		if lastVersion != nil {
@@ -486,7 +487,7 @@ func (n *layer) listSortedObjects(ctx context.Context, p allObjectParams) ([]*ap
 	return objects, nil
 }
 
-func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *api.BucketInfo, prefix, delimiter string) (map[string]*objectVersions, error) {
+func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string]*objectVersions, error) {
 	var err error
 
 	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix)
@@ -534,12 +535,12 @@ func splitVersions(header string) []string {
 	return strings.Split(header, ",")
 }
 
-func isSystem(obj *api.ObjectInfo) bool {
+func isSystem(obj *data.ObjectInfo) bool {
 	return len(obj.Headers[objectSystemAttributeName]) > 0 ||
 		len(obj.Headers[attrVersionsIgnore]) > 0
 }
 
-func trimAfterObjectName(startAfter string, objects []*api.ObjectInfo) []*api.ObjectInfo {
+func trimAfterObjectName(startAfter string, objects []*data.ObjectInfo) []*data.ObjectInfo {
 	if len(objects) != 0 && objects[len(objects)-1].Name <= startAfter {
 		return nil
 	}
@@ -552,9 +553,9 @@ func trimAfterObjectName(startAfter string, objects []*api.ObjectInfo) []*api.Ob
 	return nil
 }
 
-func trimAfterObjectID(id string, objects []*api.ObjectInfo) []*api.ObjectInfo {
+func trimAfterObjectID(id string, objects []*data.ObjectInfo) []*data.ObjectInfo {
 	if len(objects) != 0 && objects[len(objects)-1].ID.String() == id {
-		return []*api.ObjectInfo{}
+		return []*data.ObjectInfo{}
 	}
 	for i, obj := range objects {
 		if obj.ID.String() == id {
@@ -565,7 +566,7 @@ func trimAfterObjectID(id string, objects []*api.ObjectInfo) []*api.ObjectInfo {
 	return nil
 }
 
-func triageObjects(allObjects []*api.ObjectInfo) (prefixes []string, objects []*api.ObjectInfo) {
+func triageObjects(allObjects []*data.ObjectInfo) (prefixes []string, objects []*data.ObjectInfo) {
 	for _, ov := range allObjects {
 		if ov.IsDir {
 			prefixes = append(prefixes, ov.Name)
@@ -577,11 +578,11 @@ func triageObjects(allObjects []*api.ObjectInfo) (prefixes []string, objects []*
 	return
 }
 
-func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) ([]*api.ObjectInfo, error) {
+func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) ([]*data.ObjectInfo, error) {
 	var (
 		err        error
-		bkt        *api.BucketInfo
-		allObjects []*api.ObjectInfo
+		bkt        *data.BucketInfo
+		allObjects []*data.ObjectInfo
 	)
 
 	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
@@ -600,7 +601,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 	return allObjects, nil
 }
 
-func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *api.BucketInfo) bool {
+func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInfo) bool {
 	settings, err := n.getBucketSettings(ctx, bktInfo)
 	if err != nil {
 		n.log.Warn("couldn't get versioning settings object", zap.Error(err))

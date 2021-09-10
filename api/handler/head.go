@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -27,7 +28,7 @@ func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err  error
-		info *api.ObjectInfo
+		info *data.ObjectInfo
 
 		reqInfo = api.GetReqInfo(r.Context())
 	)

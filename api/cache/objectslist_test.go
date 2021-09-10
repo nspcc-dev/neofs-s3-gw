@@ -14,6 +14,13 @@ import (
 const testingCacheLifetime = 5 * time.Second
 const testingCacheSize = 10
 
+func getTestObjectsListConfig() *Config {
+	return &Config{
+		Size:     testingCacheSize,
+		Lifetime: testingCacheLifetime,
+	}
+}
+
 func randID(t *testing.T) *object.ID {
 	id := object.NewID()
 	id.SetSHA256(randSHA256Checksum(t))
@@ -42,7 +49,8 @@ func TestObjectsListCache(t *testing.T) {
 
 	t.Run("lifetime", func(t *testing.T) {
 		var (
-			cache    = NewObjectsListCache(testingCacheSize, testingCacheLifetime)
+			config   = getTestObjectsListConfig()
+			cache    = NewObjectsListCache(config)
 			cacheKey = ObjectsListKey{cid: userKey}
 		)
 
@@ -53,13 +61,13 @@ func TestObjectsListCache(t *testing.T) {
 			return cache.Get(cacheKey) == nil
 		}
 
-		require.Never(t, condition, cache.lifetime, time.Second)
+		require.Never(t, condition, config.Lifetime, time.Second)
 		require.Eventually(t, condition, time.Second, 10*time.Millisecond)
 	})
 
 	t.Run("get cache with empty prefix", func(t *testing.T) {
 		var (
-			cache    = NewObjectsListCache(testingCacheSize, testingCacheLifetime)
+			cache    = NewObjectsListCache(getTestObjectsListConfig())
 			cacheKey = ObjectsListKey{cid: userKey}
 		)
 		err := cache.Put(cacheKey, ids)
@@ -79,7 +87,7 @@ func TestObjectsListCache(t *testing.T) {
 			prefix: "dir",
 		}
 
-		cache := NewObjectsListCache(testingCacheSize, testingCacheLifetime)
+		cache := NewObjectsListCache(getTestObjectsListConfig())
 		err := cache.Put(cacheKey, ids)
 		require.NoError(t, err)
 
@@ -104,7 +112,7 @@ func TestObjectsListCache(t *testing.T) {
 			}
 		)
 
-		cache := NewObjectsListCache(testingCacheSize, testingCacheLifetime)
+		cache := NewObjectsListCache(getTestObjectsListConfig())
 		err := cache.Put(cacheKey, ids)
 		require.NoError(t, err)
 
@@ -122,7 +130,7 @@ func TestObjectsListCache(t *testing.T) {
 			}
 		)
 
-		cache := NewObjectsListCache(testingCacheSize, testingCacheLifetime)
+		cache := NewObjectsListCache(getTestObjectsListConfig())
 		err := cache.Put(cacheKey, ids)
 		require.NoError(t, err)
 
@@ -143,7 +151,9 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	}
 
 	t.Run("put object to the root of the bucket", func(t *testing.T) {
-		cache := NewObjectsListCache(testingCacheSize, time.Minute)
+		config := getTestObjectsListConfig()
+		config.Lifetime = time.Minute
+		cache := NewObjectsListCache(config)
 		for _, k := range keys {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
@@ -160,7 +170,9 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	})
 
 	t.Run("put object to dir/", func(t *testing.T) {
-		cache := NewObjectsListCache(testingCacheSize, time.Minute)
+		config := getTestObjectsListConfig()
+		config.Lifetime = time.Minute
+		cache := NewObjectsListCache(config)
 		for _, k := range keys {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
@@ -177,7 +189,9 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	})
 
 	t.Run("put object to dir/lol/", func(t *testing.T) {
-		cache := NewObjectsListCache(testingCacheSize, time.Minute)
+		config := getTestObjectsListConfig()
+		config.Lifetime = time.Minute
+		cache := NewObjectsListCache(config)
 		for _, k := range keys {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)

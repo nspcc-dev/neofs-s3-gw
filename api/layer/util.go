@@ -10,6 +10,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 )
 
@@ -17,7 +18,7 @@ type (
 	// ListObjectsInfo contains common fields of data for ListObjectsV1 and ListObjectsV2.
 	ListObjectsInfo struct {
 		Prefixes    []string
-		Objects     []*api.ObjectInfo
+		Objects     []*data.ObjectInfo
 		IsTruncated bool
 	}
 
@@ -35,7 +36,7 @@ type (
 
 	// ObjectVersionInfo stores info about objects versions.
 	ObjectVersionInfo struct {
-		Object   *api.ObjectInfo
+		Object   *data.ObjectInfo
 		IsLatest bool
 	}
 
@@ -65,11 +66,11 @@ func userHeaders(attrs []*object.Attribute) map[string]string {
 	return result
 }
 
-func objInfoFromMeta(bkt *api.BucketInfo, meta *object.Object) *api.ObjectInfo {
+func objInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectInfo {
 	return objectInfoFromMeta(bkt, meta, "", "")
 }
 
-func objectInfoFromMeta(bkt *api.BucketInfo, meta *object.Object, prefix, delimiter string) *api.ObjectInfo {
+func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object, prefix, delimiter string) *data.ObjectInfo {
 	var (
 		isDir    bool
 		size     int64
@@ -110,7 +111,7 @@ func objectInfoFromMeta(bkt *api.BucketInfo, meta *object.Object, prefix, delimi
 		size = int64(meta.PayloadSize())
 	}
 
-	return &api.ObjectInfo{
+	return &data.ObjectInfo{
 		ID:    meta.ID(),
 		CID:   bkt.CID,
 		IsDir: isDir,

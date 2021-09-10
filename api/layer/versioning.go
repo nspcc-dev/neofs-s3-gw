@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 )
 
 type objectVersions struct {
 	name     string
-	objects  []*api.ObjectInfo
+	objects  []*data.ObjectInfo
 	addList  []string
 	delList  []string
 	isSorted bool
@@ -40,7 +40,7 @@ func (v *objectVersions) isAddListEmpty() bool {
 	return len(v.addList) == 0
 }
 
-func (v *objectVersions) appendVersion(oi *api.ObjectInfo) {
+func (v *objectVersions) appendVersion(oi *data.ObjectInfo) {
 	delVers := splitVersions(oi.Headers[versionsDelAttr])
 	v.objects = append(v.objects, oi)
 
@@ -100,7 +100,7 @@ func (v *objectVersions) formAddList() {
 	}
 }
 
-func containsVersions(obj *api.ObjectInfo, versions []string) bool {
+func containsVersions(obj *data.ObjectInfo, versions []string) bool {
 	header := obj.Headers[versionsAddAttr]
 	for _, version := range versions {
 		if !strings.Contains(header, version) {
@@ -156,7 +156,7 @@ LOOP:
 	return commonAddedVersions, prevVersions, currentVersions
 }
 
-func (v *objectVersions) getLast() *api.ObjectInfo {
+func (v *objectVersions) getLast() *data.ObjectInfo {
 	if v == nil || len(v.objects) == 0 {
 		return nil
 	}
@@ -189,14 +189,14 @@ func (v *objectVersions) existedVersions() []string {
 	return res
 }
 
-func (v *objectVersions) getFiltered(reverse bool) []*api.ObjectInfo {
+func (v *objectVersions) getFiltered(reverse bool) []*data.ObjectInfo {
 	if len(v.objects) == 0 {
 		return nil
 	}
 
 	v.sort()
 	existedVersions := v.existedVersions()
-	res := make([]*api.ObjectInfo, 0, len(v.objects))
+	res := make([]*data.ObjectInfo, 0, len(v.objects))
 
 	for _, version := range v.objects {
 		delMark := version.Headers[versionsDeleteMarkAttr]
@@ -223,7 +223,7 @@ func (v *objectVersions) getDelHeader() string {
 	return strings.Join(v.delList, ",")
 }
 
-func (v *objectVersions) getVersion(oid *object.ID) *api.ObjectInfo {
+func (v *objectVersions) getVersion(oid *object.ID) *data.ObjectInfo {
 	for _, version := range v.objects {
 		if version.Version() == oid.String() {
 			if contains(v.delList, oid.String()) {
@@ -234,7 +234,7 @@ func (v *objectVersions) getVersion(oid *object.ID) *api.ObjectInfo {
 	}
 	return nil
 }
-func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*api.ObjectInfo, error) {
+func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*data.ObjectInfo, error) {
 	bktInfo, err := n.GetBucketInfo(ctx, p.Bucket)
 	if err != nil {
 		return nil, err
@@ -264,7 +264,7 @@ func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*Bu
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
 	var (
 		versions   map[string]*objectVersions
-		allObjects = make([]*api.ObjectInfo, 0, p.MaxKeys)
+		allObjects = make([]*data.ObjectInfo, 0, p.MaxKeys)
 		res        = &ListObjectVersionsInfo{}
 		reverse    = true
 	)
@@ -347,7 +347,7 @@ func contains(list []string, elem string) bool {
 	return false
 }
 
-func (n *layer) getBucketSettings(ctx context.Context, bktInfo *api.BucketInfo) (*BucketSettings, error) {
+func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*BucketSettings, error) {
 	objInfo, err := n.getSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
 		return nil, err
@@ -356,7 +356,7 @@ func (n *layer) getBucketSettings(ctx context.Context, bktInfo *api.BucketInfo) 
 	return objectInfoToBucketSettings(objInfo), nil
 }
 
-func objectInfoToBucketSettings(info *api.ObjectInfo) *BucketSettings {
+func objectInfoToBucketSettings(info *data.ObjectInfo) *BucketSettings {
 	res := &BucketSettings{}
 
 	enabled, ok := info.Headers[attrSettingsVersioningEnabled]
@@ -368,7 +368,7 @@ func objectInfoToBucketSettings(info *api.ObjectInfo) *BucketSettings {
 	return res
 }
 
-func (n *layer) checkVersionsExist(ctx context.Context, bkt *api.BucketInfo, obj *VersionedObject) (*api.ObjectInfo, error) {
+func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) (*data.ObjectInfo, error) {
 	id := object.NewID()
 	if err := id.Parse(obj.VersionID); err != nil {
 		return nil, errors.GetAPIError(errors.ErrInvalidVersion)

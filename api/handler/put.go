@@ -17,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -419,7 +420,7 @@ func containsACLHeaders(r *http.Request) bool {
 		r.Header.Get(api.AmzGrantFullControl) != "" || r.Header.Get(api.AmzGrantWrite) != ""
 }
 
-func (h *handler) getNewEAclTable(r *http.Request, objInfo *api.ObjectInfo) (*eacl.Table, error) {
+func (h *handler) getNewEAclTable(r *http.Request, objInfo *data.ObjectInfo) (*eacl.Table, error) {
 	var newEaclTable *eacl.Table
 	objectACL, err := parseACLHeaders(r)
 	if err != nil {

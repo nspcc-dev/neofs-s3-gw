@@ -13,6 +13,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 )
@@ -27,7 +28,7 @@ type (
 	cred struct {
 		key   *keys.PrivateKey
 		pool  pool.Pool
-		cache *AccessBoxCache
+		cache *cache.AccessBoxCache
 	}
 )
 
@@ -47,8 +48,8 @@ var bufferPool = sync.Pool{
 var _ = New
 
 // New creates new Credentials instance using given cli and key.
-func New(conns pool.Pool, key *keys.PrivateKey, config *CacheConfig) Credentials {
-	return &cred{pool: conns, key: key, cache: NewAccessBoxCache(config)}
+func New(conns pool.Pool, key *keys.PrivateKey, config *cache.Config) Credentials {
+	return &cred{pool: conns, key: key, cache: cache.NewAccessBoxCache(config)}
 }
 
 func (c *cred) acquireBuffer() *bytes.Buffer {

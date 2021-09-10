@@ -9,10 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	cachesize = 10
-	lifetime  = time.Second * 5
-)
+func getTestConfig() *Config {
+	return &Config{
+		Size:     10,
+		Lifetime: 5 * time.Second,
+	}
+}
 
 func TestCache(t *testing.T) {
 	obj := objecttest.Object()
@@ -21,7 +23,7 @@ func TestCache(t *testing.T) {
 	address.SetObjectID(obj.ID())
 
 	t.Run("check get", func(t *testing.T) {
-		cache := New(cachesize, lifetime)
+		cache := New(getTestConfig())
 		err := cache.Put(*obj)
 		require.NoError(t, err)
 
@@ -30,7 +32,7 @@ func TestCache(t *testing.T) {
 	})
 
 	t.Run("check delete", func(t *testing.T) {
-		cache := New(cachesize, lifetime)
+		cache := New(getTestConfig())
 		err := cache.Put(*obj)
 		require.NoError(t, err)
 

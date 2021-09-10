@@ -24,11 +24,15 @@ import (
 */
 
 type (
-	// ObjectsListCache provides interface for cache of ListObjectsV2 in a layer struct.
-	ObjectsListCache interface {
-		Get(key ObjectsListKey) []*object.ID
-		Put(key ObjectsListKey, oids []*object.ID) error
-		CleanCacheEntriesContainingObject(objectName string, cid *cid.ID)
+	// ObjectsListCache contains cache for ListObjects and ListObjectVersions.
+	ObjectsListCache struct {
+		cache gcache.Cache
+	}
+
+	// ObjectsListKey is a key to find a ObjectsListCache's entry.
+	ObjectsListKey struct {
+		cid    string
+		prefix string
 	}
 )
 
@@ -39,32 +43,19 @@ const (
 	DefaultObjectsListCacheSize = 1e5
 )
 
-type (
-	// ListObjectsCache contains cache for ListObjects and ListObjectVersions.
-	ListObjectsCache struct {
-		lifetime time.Duration
-		cache    gcache.Cache
-	}
-
-	// ObjectsListKey is a key to find a ObjectsListCache's entry.
-	ObjectsListKey struct {
-		cid    string
-		prefix string
-	}
-)
+// DefaultObjectsListConfig return new default cache expiration values.
+func DefaultObjectsListConfig() *Config {
+	return &Config{Size: DefaultObjectsListCacheSize, Lifetime: DefaultObjectsListCacheLifetime}
+}
 
 // NewObjectsListCache is a constructor which creates an object of ListObjectsCache with given lifetime of entries.
-func NewObjectsListCache(cacheSize int, lifetime time.Duration) *ListObjectsCache {
-	gc := gcache.New(cacheSize).LRU().Build()
-
-	return &ListObjectsCache{
-		cache:    gc,
-		lifetime: lifetime,
-	}
+func NewObjectsListCache(config *Config) *ObjectsListCache {
+	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
+	return &ObjectsListCache{cache: gc}
 }
 
 // Get return list of ObjectInfo.
-func (l *ListObjectsCache) Get(key ObjectsListKey) []*object.ID {
+func (l *ObjectsListCache) Get(key ObjectsListKey) []*object.ID {
 	entry, err := l.cache.Get(key)
 	if err != nil {
 		return nil
@@ -79,16 +70,16 @@ func (l *ListObjectsCache) Get(key ObjectsListKey) []*object.ID {
 }
 
 // Put puts a list of objects to cache.
-func (l *ListObjectsCache) Put(key ObjectsListKey, oids []*object.ID) error {
+func (l *ObjectsListCache) Put(key ObjectsListKey, oids []*object.ID) error {
 	if len(oids) == 0 {
 		return fmt.Errorf("list is empty, cid: %s, prefix: %s", key.cid, key.prefix)
 	}
 
-	return l.cache.SetWithExpire(key, oids, l.lifetime)
+	return l.cache.Set(key, oids)
 }
 
 // CleanCacheEntriesContainingObject deletes entries containing specified object.
-func (l *ListObjectsCache) CleanCacheEntriesContainingObject(objectName string, cid *cid.ID) {
+func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, cid *cid.ID) {
 	cidStr := cid.String()
 	keys := l.cache.Keys(true)
 	for _, key := range keys {

@@ -7,32 +7,33 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 )
 
-// ObjectsNameCache provides interface for lru cache for objects.
+// ObjectsNameCache provides for lru cache for objects.
 // This cache contains mapping nice name to object addresses.
 // Key is bucketName+objectName.
-type ObjectsNameCache interface {
-	Get(key string) *object.Address
-	Put(key string, address *object.Address) error
-	Delete(key string) bool
+type ObjectsNameCache struct {
+	cache gcache.Cache
 }
 
-type (
-	// NameCache contains cache with objects and lifetime of cache entries.
-	NameCache struct {
-		cache    gcache.Cache
-		lifetime time.Duration
-	}
+const (
+	// DefaultObjectsNameCacheSize is a default maximum number of entries in cache.
+	DefaultObjectsNameCacheSize = 1e4
+	// DefaultObjectsNameCacheLifetime is a default lifetime of entries in  cache.
+	DefaultObjectsNameCacheLifetime = time.Minute
 )
 
-// NewObjectsNameCache creates an object of ObjectsNameCache.
-func NewObjectsNameCache(cacheSize int, lifetime time.Duration) *NameCache {
-	gc := gcache.New(cacheSize).LRU().Build()
+// DefaultObjectsNameConfig return new default cache expiration values.
+func DefaultObjectsNameConfig() *Config {
+	return &Config{Size: DefaultObjectsNameCacheSize, Lifetime: DefaultObjectsNameCacheLifetime}
+}
 
-	return &NameCache{cache: gc, lifetime: lifetime}
+// NewObjectsNameCache creates an object of ObjectsNameCache.
+func NewObjectsNameCache(config *Config) *ObjectsNameCache {
+	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
+	return &ObjectsNameCache{cache: gc}
 }
 
 // Get returns cached object.
-func (o *NameCache) Get(key string) *object.Address {
+func (o *ObjectsNameCache) Get(key string) *object.Address {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
@@ -47,11 +48,11 @@ func (o *NameCache) Get(key string) *object.Address {
 }
 
 // Put puts an object to cache.
-func (o *NameCache) Put(key string, address *object.Address) error {
-	return o.cache.SetWithExpire(key, address, o.lifetime)
+func (o *ObjectsNameCache) Put(key string, address *object.Address) error {
+	return o.cache.Set(key, address)
 }
 
 // Delete deletes an object from cache.
-func (o *NameCache) Delete(key string) bool {
+func (o *ObjectsNameCache) Delete(key string) bool {
 	return o.cache.Remove(key)
 }

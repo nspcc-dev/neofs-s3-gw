@@ -7,32 +7,33 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 )
 
-type (
-	// SystemCache provides interface for lru cache for objects.
-	// This cache contains "system" objects (bucket versioning settings, tagging object etc.).
-	// Key is bucketName+systemFileName.
-	SystemCache interface {
-		Get(key string) *object.Object
-		Put(key string, obj *object.Object) error
-		Delete(key string) bool
-	}
+// SystemCache provides lru cache for objects.
+// This cache contains "system" objects (bucket versioning settings, tagging object etc.).
+// Key is bucketName+systemFileName.
+type SystemCache struct {
+	cache gcache.Cache
+}
 
-	// SysCache contains cache with objects and lifetime of cache entries.
-	SysCache struct {
-		cache    gcache.Cache
-		lifetime time.Duration
-	}
+const (
+	// DefaultSystemCacheSize is a default maximum number of entries in cache.
+	DefaultSystemCacheSize = 1e4
+	// DefaultSystemCacheLifetime is a default lifetime of entries in  cache.
+	DefaultSystemCacheLifetime = 5 * time.Minute
 )
 
-// NewSystemCache creates an object of SystemCache.
-func NewSystemCache(cacheSize int, lifetime time.Duration) *SysCache {
-	gc := gcache.New(cacheSize).LRU().Build()
+// DefaultSystemConfig return new default cache expiration values.
+func DefaultSystemConfig() *Config {
+	return &Config{Size: DefaultSystemCacheSize, Lifetime: DefaultSystemCacheLifetime}
+}
 
-	return &SysCache{cache: gc, lifetime: lifetime}
+// NewSystemCache creates an object of SystemCache.
+func NewSystemCache(config *Config) *SystemCache {
+	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
+	return &SystemCache{cache: gc}
 }
 
 // Get returns cached object.
-func (o *SysCache) Get(key string) *object.Object {
+func (o *SystemCache) Get(key string) *object.Object {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
@@ -47,11 +48,11 @@ func (o *SysCache) Get(key string) *object.Object {
 }
 
 // Put puts an object to cache.
-func (o *SysCache) Put(key string, obj *object.Object) error {
-	return o.cache.SetWithExpire(key, obj, o.lifetime)
+func (o *SystemCache) Put(key string, obj *object.Object) error {
+	return o.cache.Set(key, obj)
 }
 
 // Delete deletes an object from cache.
-func (o *SysCache) Delete(key string) bool {
+func (o *SystemCache) Delete(key string) bool {
 	return o.cache.Remove(key)
 }
