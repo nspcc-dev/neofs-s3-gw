@@ -227,7 +227,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	address, err := tokens.
 		New(a.pool, secrets.EphemeralKey).
-		Put(ctx, cid, oid, box, options.GatesPublicKeys...)
+		Put(ctx, cid, oid, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
