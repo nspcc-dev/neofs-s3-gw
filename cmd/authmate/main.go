@@ -26,8 +26,8 @@ import (
 const (
 	poolConnectTimeout = 5 * time.Second
 	poolRequestTimeout = 5 * time.Second
-	// a number of 15-second blocks in a month.
-	defaultLifetime = 172800
+	// a number of 1-hour epochs in a month.
+	defaultLifetime = 720
 )
 
 var (
@@ -199,7 +199,7 @@ func issueSecret() *cli.Command {
 			},
 			&cli.Uint64Flag{
 				Name:        "lifetime",
-				Usage:       "Lifetime of tokens in NeoFS epoch (number of blocks in sidechain)",
+				Usage:       "Lifetime of tokens in NeoFS epoch",
 				Required:    false,
 				Destination: &lifetimeFlag,
 				Value:       defaultLifetime,

@@ -21,7 +21,7 @@ type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
 		GetBox(context.Context, *object.Address) (*accessbox.Box, error)
-		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, ...*keys.PublicKey) (*object.Address, error)
+		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (*object.Address, error)
 	}
 
 	cred struct {
@@ -100,7 +100,7 @@ func (c *cred) getAccessBox(ctx context.Context, address *object.Address) (*acce
 	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, keys ...*keys.PublicKey) (*object.Address, error) {
+func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*object.Address, error) {
 	var (
 		err     error
 		created = strconv.FormatInt(time.Now().Unix(), 10)
@@ -124,10 +124,14 @@ func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *acce
 	filename.SetKey(object.AttributeFileName)
 	filename.SetValue(created + "_access.box")
 
+	expirationAttr := object.NewAttribute()
+	expirationAttr.SetKey("__NEOFS__EXPIRATION_EPOCH")
+	expirationAttr.SetValue(strconv.FormatUint(expiration, 10))
+
 	raw := object.NewRaw()
 	raw.SetContainerID(cid)
 	raw.SetOwnerID(issuer)
-	raw.SetAttributes(filename, timestamp)
+	raw.SetAttributes(filename, timestamp, expirationAttr)
 
 	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(bytes.NewBuffer(data))
 	oid, err := c.pool.PutObject(
