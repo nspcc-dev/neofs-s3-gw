@@ -44,6 +44,8 @@ type (
 		GetBucketACLHandler(http.ResponseWriter, *http.Request)
 		PutBucketACLHandler(http.ResponseWriter, *http.Request)
 		GetBucketCorsHandler(http.ResponseWriter, *http.Request)
+		PutBucketCorsHandler(http.ResponseWriter, *http.Request)
+		DeleteBucketCorsHandler(http.ResponseWriter, *http.Request)
 		GetBucketWebsiteHandler(http.ResponseWriter, *http.Request)
 		GetBucketAccelerateHandler(http.ResponseWriter, *http.Request)
 		GetBucketRequestPaymentHandler(http.ResponseWriter, *http.Request)
@@ -296,7 +298,15 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketencryption", h.GetBucketEncryptionHandler))).Queries("encryption", "").
 			Name("GetBucketEncryption")
-
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getbucketcors", h.GetBucketCorsHandler))).Queries("cors", "").
+			Name("GetBucketCors")
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putbucketcors", h.PutBucketCorsHandler))).Queries("cors", "").
+			Name("PutBucketCors")
+		bucket.Methods(http.MethodDelete).HandlerFunc(
+			m.Handle(metrics.APIStats("deletebucketcors", h.DeleteBucketCorsHandler))).Queries("cors", "").
+			Name("DeleteBucketCors")
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
@@ -306,10 +316,6 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("putbucketacl", h.PutBucketACLHandler))).Queries("acl", "").
 			Name("PutBucketACL")
-		// GetBucketCors - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			m.Handle(metrics.APIStats("getbucketcors", h.GetBucketCorsHandler))).Queries("cors", "").
-			Name("GetBucketCors")
 		// GetBucketWebsiteHandler - this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketwebsite", h.GetBucketWebsiteHandler))).Queries("website", "").

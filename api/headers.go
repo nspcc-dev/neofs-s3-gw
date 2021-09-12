@@ -45,6 +45,11 @@ const (
 	AmzSourceExpectedBucketOwner = "X-Amz-Source-Expected-Bucket-Owner"
 
 	ContainerID = "X-Container-Id"
+
+	AccessControlAllowOrigin   = "Access-Control-Allow-Origin"
+	AccessControlAllowMethods  = "Access-Control-Allow-Methods"
+	AccessControlExposeHeaders = "Access-Control-Expose-Headers"
+	AccessControlAllowHeaders  = "Access-Control-Allow-Headers"
 )
 
 // S3 request query params.

@@ -8,7 +8,10 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 )
 
-const bktVersionSettingsObject = ".s3-versioning-settings"
+const (
+	bktVersionSettingsObject   = ".s3-versioning-settings"
+	bktCORSConfigurationObject = ".s3-cors"
+)
 
 type (
 	// BucketInfo stores basic bucket data.
@@ -40,6 +43,9 @@ type (
 
 // SettingsObjectName is system name for bucket settings file.
 func (b *BucketInfo) SettingsObjectName() string { return bktVersionSettingsObject }
+
+// CORSObjectName returns system name for bucket CORS configuration file.
+func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject }
 
 // Version returns object version from ObjectInfo.
 func (o *ObjectInfo) Version() string { return o.ID.String() }

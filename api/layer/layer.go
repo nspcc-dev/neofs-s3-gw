@@ -90,6 +90,12 @@ type (
 		Settings *BucketSettings
 	}
 
+	// PutCORSParams stores PutCORS request parameters.
+	PutCORSParams struct {
+		BktInfo               *api.BucketInfo
+		CORSConfigurationJSON []byte
+	}
+
 	// BucketSettings stores settings such as versioning.
 	BucketSettings struct {
 		VersioningEnabled bool
@@ -163,6 +169,10 @@ type (
 
 		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*api.ObjectInfo, error)
 		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
+
+		PutBucketCORS(ctx context.Context, p *PutCORSParams) error
+		GetBucketCORS(ctx context.Context, bktInfo *api.BucketInfo) ([]byte, error)
+		DeleteBucketCORS(ctx context.Context, bktInfo *api.BucketInfo) error
 
 		ListBuckets(ctx context.Context) ([]*api.BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*api.BucketInfo, error)
