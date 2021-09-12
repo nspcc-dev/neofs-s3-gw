@@ -41,11 +41,6 @@ type (
 // SettingsObjectName is system name for bucket settings file.
 func (b *BucketInfo) SettingsObjectName() string { return bktVersionSettingsObject }
 
-// SystemObjectKey is key to use in SystemCache.
-func (b *BucketInfo) SystemObjectKey(obj string) string {
-	return b.Name + obj
-}
-
 // Version returns object version from ObjectInfo.
 func (o *ObjectInfo) Version() string { return o.ID.String() }
 

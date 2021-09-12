@@ -55,3 +55,8 @@ func (o *SysCache) Put(key string, obj *object.Object) error {
 func (o *SysCache) Delete(key string) bool {
 	return o.cache.Remove(key)
 }
+
+// SystemObjectKey is key to use in SystemCache.
+func SystemObjectKey(bucket, obj string) string {
+	return bucket + obj
+}

@@ -475,7 +475,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *api.ObjectInfo) erro
 
 func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *api.BucketInfo, name string) error {
 	var oid *object.ID
-	if meta := n.systemCache.Get(bktInfo.SystemObjectKey(name)); meta != nil {
+	if meta := n.systemCache.Get(cache.SystemObjectKey(bktInfo.Name, name)); meta != nil {
 		oid = meta.ID()
 	} else {
 		var err error
@@ -488,7 +488,7 @@ func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *api.BucketInfo,
 		}
 	}
 
-	n.systemCache.Delete(bktInfo.SystemObjectKey(name))
+	n.systemCache.Delete(cache.SystemObjectKey(bktInfo.Name, name))
 	return n.objectDelete(ctx, bktInfo.CID, oid)
 }
 
@@ -507,7 +507,7 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 		err    error
 		oldOID *object.ID
 	)
-	if meta := n.systemCache.Get(p.bktInfo.SystemObjectKey(p.objName)); meta != nil {
+	if meta := n.systemCache.Get(cache.SystemObjectKey(p.bktInfo.Name, p.objName)); meta != nil {
 		oldOID = meta.ID()
 	} else {
 		oldOID, err = n.objectFindID(ctx, &findParams{cid: p.bktInfo.CID, attr: objectSystemAttributeName, val: p.objName})
@@ -561,7 +561,11 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 	if p.payload != nil {
 		meta.ToV2().SetPayload(p.payload)
 	}
-	
+
+	if err = n.systemCache.Put(cache.SystemObjectKey(p.bktInfo.Name, p.objName), meta); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
+	}
+
 	if oldOID != nil {
 		if err = n.objectDelete(ctx, p.bktInfo.CID, oldOID); err != nil {
 			return nil, err
@@ -573,7 +577,7 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 
 func (n *layer) getSystemObject(ctx context.Context, bkt *api.BucketInfo, objName string, withPayload bool) (*object.Object, error) {
 	var meta *object.Object
-	if meta = n.systemCache.Get(bkt.SystemObjectKey(objName)); meta != nil {
+	if meta = n.systemCache.Get(cache.SystemObjectKey(bkt.Name, objName)); meta != nil {
 		return meta, nil
 	}
 
@@ -600,7 +604,8 @@ func (n *layer) getSystemObject(ctx context.Context, bkt *api.BucketInfo, objNam
 			return nil, err
 		}
 	}
-	if err = n.systemCache.Put(bkt.SystemObjectKey(objName), meta); err != nil {
+
+	if err = n.systemCache.Put(cache.SystemObjectKey(bkt.Name, objName), meta); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
