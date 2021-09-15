@@ -7,8 +7,8 @@ Reference:
 |----|-------------------------------------------|
 | 🟢 | Supported                                 |
 | 🟡 | Partially supported                       |
-| 🔴 | Not supported yet, but will be in future  |
-| 🔵 | Not applicable or will never be supported |
+| 🔵 | Not supported yet, but will be in future  |
+| 🔴 | Not applicable or will never be supported |
 
 ## Object
 
@@ -18,14 +18,14 @@ Reference:
 | 🟢 | DeleteObject           |                                         |
 | 🟢 | DeleteObjects          | aka DeleteMultipleObjects               |
 | 🟢 | GetObject              |                                         |
-| 🔵 | GetObjectTorrent       | We don't plan implementing BT gateway   |
+| 🔴 | GetObjectTorrent       | We don't plan implementing BT gateway   |
 | 🟢 | HeadObject             |                                         |
-| 🔴 | ListObjectParts        |                                         |
+| 🔵 | ListObjectParts        |                                         |
 | 🟢 | ListObjects            |                                         |
 | 🟢 | ListObjectsV2          |                                         |
 | 🟢 | PutObject              | Content-MD5 header deprecated           |
-| 🔴 | SelectObjectContent    | Need to have some Lambda to execute SQL |
-| 🔴 | WriteGetObjectResponse | Waiting for Lambda to be developed      |
+| 🔵 | SelectObjectContent    | Need to have some Lambda to execute SQL |
+| 🔵 | WriteGetObjectResponse | Waiting for Lambda to be developed      |
 
 ## ACL
 
@@ -43,12 +43,12 @@ For now there are some limitations:
 
 |    | Method                     | Comments                  |
 |----|----------------------------|---------------------------|
-| 🔴 | GetObjectLegalHold         |                           |
-| 🔴 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
-| 🔴 | GetObjectRetention         |                           |
-| 🔴 | PutObjectLegalHold         |                           |
-| 🔴 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
-| 🔴 | PutObjectRetention         |                           |
+| 🔵 | GetObjectLegalHold         |                           |
+| 🔵 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
+| 🔵 | GetObjectRetention         |                           |
+| 🔵 | PutObjectLegalHold         |                           |
+| 🔵 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
+| 🔵 | PutObjectRetention         |                           |
 
 ## Multipart
 
@@ -56,13 +56,13 @@ Should be supported soon.
 
 |    | Method                  | Comments                                       |
 |----|-------------------------|------------------------------------------------|
-| 🔴 | AbortMultipartUpload    |                                                |
-| 🔴 | CompleteMultipartUpload |                                                |
-| 🔴 | CreateMultipartUpload   | InitiateMultipartUpload and NewMultipartUpload |
-| 🔴 | ListMultipartUploads    |                                                |
-| 🔴 | ListParts               |                                                |
-| 🔴 | UploadPart              | PutObjectPart                                  |
-| 🔴 | UploadPartCopy          | CopyObjectPart                                 |
+| 🔵 | AbortMultipartUpload    |                                                |
+| 🔵 | CompleteMultipartUpload |                                                |
+| 🔵 | CreateMultipartUpload   | InitiateMultipartUpload and NewMultipartUpload |
+| 🔵 | ListMultipartUploads    |                                                |
+| 🔵 | ListParts               |                                                |
+| 🔵 | UploadPart              | PutObjectPart                                  |
+| 🔵 | UploadPartCopy          | CopyObjectPart                                 |
 
 ## Tagging
 
@@ -79,7 +79,7 @@ See also `GetObject` and other method parameters.
 |    | Method             | Comments                 |
 |----|--------------------|--------------------------|
 | 🟢 | ListObjectVersions | ListBucketObjectVersions |
-| 🔴 | RestoreObject      |                          |
+| 🔵 | RestoreObject      |                          |
 
 ## Bucket
 
@@ -87,123 +87,123 @@ See also `GetObject` and other method parameters.
 |----|----------------------|-----------|
 | 🟢 | CreateBucket         | PutBucket |
 | 🟢 | DeleteBucket         |           |
-| 🔴 | GetBucketLocation    |           |
+| 🔵 | GetBucketLocation    |           |
 | 🟢 | HeadBucket           |           |
 | 🟢 | ListBuckets          |           |
-| 🔴 | PutPublicAccessBlock |           |
+| 🔵 | PutPublicAccessBlock |           |
 
 ## Acceleration
 
 |    | Method                           | Comments            |
 |----|----------------------------------|---------------------|
-| 🔵 | GetBucketAccelerateConfiguration | GetBucketAccelerate |
-| 🔵 | PutBucketAccelerateConfiguration |                     |
+| 🔴 | GetBucketAccelerateConfiguration | GetBucketAccelerate |
+| 🔴 | PutBucketAccelerateConfiguration |                     |
 
 ## ACL
 
-|    | Method       | Comments  |
-|----|--------------|-----------|
-| 🟢 | GetBucketAcl | Supported |
-| 🟢 | PutBucketAcl | Supported |
+|    | Method       | Comments            |
+|----|--------------|---------------------|
+| 🟡 | GetBucketAcl | See ACL limitations |
+| 🟡 | PutBucketAcl | See ACL Limitations |
 
 ## Analytics
 
 |    | Method                             | Comments |
 |----|------------------------------------|----------|
-| 🔴 | DeleteBucketAnalyticsConfiguration |          |
-| 🔴 | GetBucketAnalyticsConfiguration    |          |
-| 🔴 | ListBucketAnalyticsConfigurations  |          |
-| 🔴 | PutBucketAnalyticsConfiguration    |          |
+| 🔵 | DeleteBucketAnalyticsConfiguration |          |
+| 🔵 | GetBucketAnalyticsConfiguration    |          |
+| 🔵 | ListBucketAnalyticsConfigurations  |          |
+| 🔵 | PutBucketAnalyticsConfiguration    |          |
 
 ## CORS
 
 |    | Method           | Comments |
 |----|------------------|----------|
-| 🔴 | DeleteBucketCors |          |
-| 🔴 | GetBucketCors    |          |
-| 🔴 | PutBucketCors    |          |
+| 🔵 | DeleteBucketCors |          |
+| 🔵 | GetBucketCors    |          |
+| 🔵 | PutBucketCors    |          |
 
 ## Encryption
 
 |    | Method                 | Comments |
 |----|------------------------|----------|
-| 🔴 | DeleteBucketEncryption |          |
-| 🔴 | GetBucketEncryption    |          |
-| 🔴 | PutBucketEncryption    |          |
+| 🔵 | DeleteBucketEncryption |          |
+| 🔵 | GetBucketEncryption    |          |
+| 🔵 | PutBucketEncryption    |          |
 
 ## Inventory
 
 |    | Method                             | Comments |
 |----|------------------------------------|----------|
-| 🔴 | DeleteBucketInventoryConfiguration |          |
-| 🔴 | GetBucketInventoryConfiguration    |          |
-| 🔴 | ListBucketInventoryConfigurations  |          |
-| 🔴 | PutBucketInventoryConfiguration    |          |
+| 🔵 | DeleteBucketInventoryConfiguration |          |
+| 🔵 | GetBucketInventoryConfiguration    |          |
+| 🔵 | ListBucketInventoryConfigurations  |          |
+| 🔵 | PutBucketInventoryConfiguration    |          |
      
 ## Lifecycle
 
 |    | Method                          | Comments |
 |----|---------------------------------|----------|
-| 🔴 | DeleteBucketLifecycle           |          |
-| 🔴 | GetBucketLifecycle              |          |
-| 🔴 | GetBucketLifecycleConfiguration |          |
-| 🔴 | PutBucketLifecycle              |          |
-| 🔴 | PutBucketLifecycleConfiguration |          |
+| 🔵 | DeleteBucketLifecycle           |          |
+| 🔵 | GetBucketLifecycle              |          |
+| 🔵 | GetBucketLifecycleConfiguration |          |
+| 🔵 | PutBucketLifecycle              |          |
+| 🔵 | PutBucketLifecycleConfiguration |          |
 
 ## Logging
 
 |    | Method           | Comments |
 |----|------------------|----------|
-| 🔴 | GetBucketLogging |          |
-| 🔴 | PutBucketLogging |          |
+| 🔵 | GetBucketLogging |          |
+| 🔵 | PutBucketLogging |          |
 
 ## Metrics
 
 |    | Method                           | Comments |
 |----|----------------------------------|----------|
-| 🔴 | DeleteBucketMetricsConfiguration |          |
-| 🔴 | GetBucketMetricsConfiguration    |          |
-| 🔴 | ListBucketMetricsConfigurations  |          |
-| 🔴 | PutBucketMetricsConfiguration    |          |
+| 🔵 | DeleteBucketMetricsConfiguration |          |
+| 🔵 | GetBucketMetricsConfiguration    |          |
+| 🔵 | ListBucketMetricsConfigurations  |          |
+| 🔵 | PutBucketMetricsConfiguration    |          |
 
 ## Notifications
 
 |    | Method                             | Comments      |
 |----|------------------------------------|---------------|
-| 🔴 | GetBucketNotification              |               |
-| 🔴 | GetBucketNotificationConfiguration |               |
-| 🔴 | ListenBucketNotification           | non-standard? |
-| 🔴 | PutBucketNotification              |               |
-| 🔴 | PutBucketNotificationConfiguration |               |
+| 🔵 | GetBucketNotification              |               |
+| 🔵 | GetBucketNotificationConfiguration |               |
+| 🔵 | ListenBucketNotification           | non-standard? |
+| 🔵 | PutBucketNotification              |               |
+| 🔵 | PutBucketNotificationConfiguration |               |
 
 ## Ownership controls
 
 |    | Method                        | Comments |
 |----|-------------------------------|----------|
-| 🔴 | DeleteBucketOwnershipControls |          |
-| 🔴 | GetBucketOwnershipControls    |          |
-| 🔴 | PutBucketOwnershipControls    |          |
+| 🔵 | DeleteBucketOwnershipControls |          |
+| 🔵 | GetBucketOwnershipControls    |          |
+| 🔵 | PutBucketOwnershipControls    |          |
 
 ## Policy and replication
 
-|    | Method                  | Comments      |
-|----|-------------------------|---------------|
-| 🔴 | DeleteBucketPolicy      |               |
-| 🔴 | DeleteBucketReplication |               |
-| 🔴 | DeletePublicAccessBlock |               |
-| 🟢 | GetBucketPolicy         |               |
-| 🔴 | GetBucketPolicyStatus   |               |
-| 🔴 | GetBucketReplication    |               |
-| 🔴 | PostPolicyBucket        | non-standard? |
-| 🟢 | PutBucketPolicy         |               |
-| 🔴 | PutBucketReplication    |               |
+|    | Method                  | Comments                    |
+|----|-------------------------|-----------------------------|
+| 🔵 | DeleteBucketPolicy      |                             |
+| 🔵 | DeleteBucketReplication |                             |
+| 🔵 | DeletePublicAccessBlock |                             |
+| 🟡 | GetBucketPolicy         | See ACL limitations         |
+| 🔵 | GetBucketPolicyStatus   |                             |
+| 🔵 | GetBucketReplication    |                             |
+| 🟢 | PostPolicyBucket        | Upload file using POST form |
+| 🟡 | PutBucketPolicy         | See ACL limitations         |
+| 🔵 | PutBucketReplication    |                             |
 
 ## Request payment
 
 |    | Method                  | Comments |
 |----|-------------------------|----------|
-| 🔵 | GetBucketRequestPayment |          |
-| 🔵 | PutBucketRequestPayment |          |
+| 🔴 | GetBucketRequestPayment |          |
+| 🔴 | PutBucketRequestPayment |          |
 
 ## Tagging
 
@@ -217,10 +217,10 @@ See also `GetObject` and other method parameters.
 
 |    | Method                                      | Comments |
 |----|---------------------------------------------|----------|
-| 🔴 | DeleteBucketIntelligentTieringConfiguration |          |
-| 🔴 | GetBucketIntelligentTieringConfiguration    |          |
-| 🔴 | ListBucketIntelligentTieringConfigurations  |          |
-| 🟢 | PutBucketIntelligentTieringConfiguration    |          |
+| 🔵 | DeleteBucketIntelligentTieringConfiguration |          |
+| 🔵 | GetBucketIntelligentTieringConfiguration    |          |
+| 🔵 | ListBucketIntelligentTieringConfigurations  |          |
+| 🔵 | PutBucketIntelligentTieringConfiguration    |          |
 
 ## Versioning
 
@@ -233,6 +233,6 @@ See also `GetObject` and other method parameters.
 
 |    | Method              | Comments |
 |----|---------------------|----------|
-| 🔴 | DeleteBucketWebsite |          |
-| 🔴 | GetBucketWebsite    |          |
-| 🔴 | PutBucketWebsite    |          |
+| 🔵 | DeleteBucketWebsite |          |
+| 🔵 | GetBucketWebsite    |          |
+| 🔵 | PutBucketWebsite    |          |
