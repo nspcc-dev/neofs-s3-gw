@@ -156,8 +156,12 @@ LOOP:
 	return commonAddedVersions, prevVersions, currentVersions
 }
 
+func (v *objectVersions) isEmpty() bool {
+	return v == nil || len(v.objects) == 0
+}
+
 func (v *objectVersions) getLast() *data.ObjectInfo {
-	if v == nil || len(v.objects) == 0 {
+	if v.isEmpty() {
 		return nil
 	}
 

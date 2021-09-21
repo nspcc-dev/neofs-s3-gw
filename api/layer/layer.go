@@ -459,22 +459,19 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) err
 }
 
 func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
-	var oid *object.ID
-	if meta := n.systemCache.Get(bktInfo.SystemObjectKey(name)); meta != nil {
-		oid = meta.ID()
-	} else {
-		var err error
-		oid, err = n.objectFindID(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: name})
-		if err != nil {
-			if errors.IsS3Error(err, errors.ErrNoSuchKey) {
-				return nil
-			}
+	ids, err := n.objectSearch(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: name})
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
 			return err
 		}
 	}
 
 	n.systemCache.Delete(bktInfo.SystemObjectKey(name))
-	return n.objectDelete(ctx, bktInfo.CID, oid)
+	return nil
 }
 
 // DeleteBucketTagging from storage.
@@ -488,18 +485,11 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) erro
 }
 
 func (n *layer) putSystemObject(ctx context.Context, bktInfo *data.BucketInfo, objName string, metadata map[string]string, prefix string) (*object.Object, error) {
-	var (
-		err    error
-		oldOID *object.ID
-	)
-	if meta := n.systemCache.Get(bktInfo.SystemObjectKey(objName)); meta != nil {
-		oldOID = meta.ID()
-	} else {
-		oldOID, err = n.objectFindID(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: objName})
-		if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-			return nil, err
-		}
+	versions, err := n.headSystemVersions(ctx, bktInfo, objName)
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		return nil, err
 	}
+	idsToDeleteArr := updateCRDT2PSetHeaders(metadata, versions, false) // false means "last write wins"
 
 	attributes := make([]*object.Attribute, 0, 3)
 
@@ -545,9 +535,13 @@ func (n *layer) putSystemObject(ctx context.Context, bktInfo *data.BucketInfo, o
 	if err = n.systemCache.Put(bktInfo.SystemObjectKey(objName), meta); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
-	if oldOID != nil {
-		if err = n.objectDelete(ctx, bktInfo.CID, oldOID); err != nil {
-			return nil, err
+
+	for _, id := range idsToDeleteArr {
+		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
+			n.log.Warn("couldn't delete system object",
+				zap.Stringer("version id", id),
+				zap.String("name", objName),
+				zap.Error(err))
 		}
 	}
 
@@ -559,20 +553,12 @@ func (n *layer) getSystemObject(ctx context.Context, bkt *data.BucketInfo, objNa
 		return objInfoFromMeta(bkt, meta), nil
 	}
 
-	oid, err := n.objectFindID(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: objName})
+	versions, err := n.headSystemVersions(ctx, bkt, objName)
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, bkt.CID, oid)
-	if err != nil {
-		return nil, err
-	}
-	if err = n.systemCache.Put(bkt.SystemObjectKey(objName), meta); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
-
-	return objInfoFromMeta(bkt, meta), nil
+	return versions.getLast(), nil
 }
 
 // CopyObject from one bucket into another bucket.
