@@ -170,6 +170,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bkt string) error {
@@ -275,6 +276,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
@@ -331,6 +333,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func parseACLHeaders(r *http.Request) (*AccessControlPolicy, error) {

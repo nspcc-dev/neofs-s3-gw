@@ -37,6 +37,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	if _, err := h.obj.PutBucketVersioning(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put update versioning settings", reqInfo, err)
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // GetBucketVersioningHandler implements bucket versioning getter handler.

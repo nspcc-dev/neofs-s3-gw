@@ -131,6 +131,8 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	writeHeaders(w.Header(), info, len(tagSet))
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
+	} else {
+		w.WriteHeader(http.StatusOK)
 	}
 
 	getParams := &layer.GetObjectParams{

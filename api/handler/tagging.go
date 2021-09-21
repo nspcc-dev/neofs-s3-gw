@@ -56,6 +56,7 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +135,7 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 	if err := h.obj.PutBucketTagging(r.Context(), reqInfo.BucketName, tagSet); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *handler) GetBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
