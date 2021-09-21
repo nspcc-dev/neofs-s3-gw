@@ -299,6 +299,17 @@ func (tc *testContext) checkListObjects(ids ...*object.ID) {
 	}
 }
 
+func (tc *testContext) getSystemObject(objectName string) *object.Object {
+	for _, obj := range tc.testPool.objects {
+		for _, attr := range obj.Attributes() {
+			if attr.Key() == objectSystemAttributeName && attr.Value() == objectName {
+				return obj
+			}
+		}
+	}
+	return nil
+}
+
 type testContext struct {
 	t        *testing.T
 	ctx      context.Context
@@ -309,7 +320,7 @@ type testContext struct {
 	testPool *testPool
 }
 
-func prepareContext(t *testing.T) *testContext {
+func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
@@ -328,9 +339,14 @@ func prepareContext(t *testing.T) *testContext {
 	bktID, err := tp.PutContainer(ctx, cnr)
 	require.NoError(t, err)
 
+	config := DefaultCachesConfigs()
+	if len(cachesConfig) != 0 {
+		config = cachesConfig[0]
+	}
+
 	return &testContext{
 		ctx:      ctx,
-		layer:    NewLayer(l, tp, DefaultCachesConfigs()),
+		layer:    NewLayer(l, tp, config),
 		bkt:      bktName,
 		bktID:    bktID,
 		obj:      "obj1",
@@ -661,4 +677,126 @@ func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr
 	obj := getTestObjectInfo(id, addAttr, delAttr, delMarkAttr)
 	obj.CreationEpoch = epoch
 	return obj
+}
+
+func TestUpdateCRDT2PSetHeaders(t *testing.T) {
+	obj1 := getTestObjectInfo(1, "", "", "")
+	obj2 := getTestObjectInfo(2, "", "", "")
+
+	for _, tc := range []struct {
+		header              map[string]string
+		versions            *objectVersions
+		versioningEnabled   bool
+		expectedHeader      map[string]string
+		expectedIdsToDelete []*object.ID
+	}{
+		{
+			header:              map[string]string{"someKey": "someValue"},
+			expectedHeader:      map[string]string{"someKey": "someValue"},
+			expectedIdsToDelete: nil,
+		},
+		{
+			header: map[string]string{},
+			versions: &objectVersions{
+				objects: []*data.ObjectInfo{obj1},
+			},
+			expectedHeader:      map[string]string{versionsDelAttr: obj1.Version()},
+			expectedIdsToDelete: []*object.ID{obj1.ID},
+		},
+		{
+			header: map[string]string{},
+			versions: &objectVersions{
+				objects: []*data.ObjectInfo{obj2},
+				delList: []string{obj1.Version()},
+			},
+			expectedHeader:      map[string]string{versionsDelAttr: joinVers(obj1, obj2)},
+			expectedIdsToDelete: []*object.ID{obj2.ID},
+		},
+		{
+			header: map[string]string{},
+			versions: &objectVersions{
+				objects: []*data.ObjectInfo{obj1},
+			},
+			versioningEnabled:   true,
+			expectedHeader:      map[string]string{versionsAddAttr: obj1.Version()},
+			expectedIdsToDelete: nil,
+		},
+		{
+			header: map[string]string{versionsDelAttr: obj2.Version()},
+			versions: &objectVersions{
+				objects: []*data.ObjectInfo{obj2},
+				delList: []string{obj1.Version()},
+			},
+			versioningEnabled: true,
+			expectedHeader: map[string]string{
+				versionsAddAttr: obj2.Version(),
+				versionsDelAttr: joinVers(obj1, obj2),
+			},
+			expectedIdsToDelete: nil,
+		},
+	} {
+		idsToDelete := updateCRDT2PSetHeaders(tc.header, tc.versions, tc.versioningEnabled)
+		require.Equal(t, tc.expectedHeader, tc.header)
+		require.Equal(t, tc.expectedIdsToDelete, idsToDelete)
+	}
+}
+
+func TestSystemObjectsVersioning(t *testing.T) {
+	cacheConfig := DefaultCachesConfigs()
+	cacheConfig.System.Lifetime = 0
+
+	tc := prepareContext(t, cacheConfig)
+	objInfo, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
+		Bucket:   tc.bkt,
+		Settings: &BucketSettings{VersioningEnabled: false},
+	})
+	require.NoError(t, err)
+
+	objMeta, ok := tc.testPool.objects[objInfo.Address().String()]
+	require.True(t, ok)
+
+	_, err = tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
+		Bucket:   tc.bkt,
+		Settings: &BucketSettings{VersioningEnabled: true},
+	})
+	require.NoError(t, err)
+
+	// simulate failed deletion
+	tc.testPool.objects[objInfo.Address().String()] = objMeta
+
+	versioning, err := tc.layer.GetBucketVersioning(tc.ctx, tc.bkt)
+	require.NoError(t, err)
+	require.True(t, versioning.VersioningEnabled)
+}
+
+func TestDeleteSystemObjectsVersioning(t *testing.T) {
+	cacheConfig := DefaultCachesConfigs()
+	cacheConfig.System.Lifetime = 0
+
+	tc := prepareContext(t, cacheConfig)
+
+	tagSet := map[string]string{
+		"tag1": "val1",
+	}
+
+	err := tc.layer.PutBucketTagging(tc.ctx, tc.bkt, tagSet)
+	require.NoError(t, err)
+
+	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bkt))
+
+	tagSet["tag2"] = "val2"
+	err = tc.layer.PutBucketTagging(tc.ctx, tc.bkt, tagSet)
+	require.NoError(t, err)
+
+	// simulate failed deletion
+	tc.testPool.objects[newAddress(objMeta.ContainerID(), objMeta.ID()).String()] = objMeta
+
+	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bkt)
+	require.NoError(t, err)
+	require.Equal(t, tagSet, tagging)
+
+	err = tc.layer.DeleteBucketTagging(tc.ctx, tc.bkt)
+	require.NoError(t, err)
+
+	require.Nil(t, tc.getSystemObject(formBucketTagObjectName(tc.bkt)))
 }

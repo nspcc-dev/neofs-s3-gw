@@ -2,7 +2,6 @@ package layer
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/url"
 	"sort"
@@ -92,20 +91,6 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts), n.BearerOpt(ctx))
 }
 
-// objectFindID returns object id (uuid) based on it's nice name in s3. If
-// nice name is uuid compatible, then function returns it.
-func (n *layer) objectFindID(ctx context.Context, p *findParams) (*object.ID, error) {
-	if result, err := n.objectSearch(ctx, p); err != nil {
-		return nil, err
-	} else if ln := len(result); ln == 0 {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
-	} else if ln == 1 {
-		return result[0], nil
-	}
-
-	return nil, errors.New("several objects with the same name found")
-}
-
 func newAddress(cid *cid.ID, oid *object.ID) *object.Address {
 	address := object.NewAddress()
 	address.SetContainerID(cid)
@@ -147,7 +132,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		return nil, err
 	}
-	idsToDeleteArr := updateCRDT2PSetHeaders(p, versions, versioningEnabled)
+	idsToDeleteArr := updateCRDT2PSetHeaders(p.Header, versions, versioningEnabled)
 
 	r := p.Reader
 	if len(p.Header[api.ContentType]) == 0 {
@@ -243,27 +228,27 @@ func formRawObject(p *PutObjectParams, bktID *cid.ID, own *owner.ID, obj string)
 	return raw
 }
 
-func updateCRDT2PSetHeaders(p *PutObjectParams, versions *objectVersions, versioningEnabled bool) []*object.ID {
+func updateCRDT2PSetHeaders(header map[string]string, versions *objectVersions, versioningEnabled bool) []*object.ID {
 	var idsToDeleteArr []*object.ID
-	if versions == nil {
+	if versions.isEmpty() {
 		return idsToDeleteArr
 	}
 
 	if versioningEnabled {
 		if !versions.isAddListEmpty() {
-			p.Header[versionsAddAttr] = versions.getAddHeader()
+			header[versionsAddAttr] = versions.getAddHeader()
 		}
 
 		deleted := versions.getDelHeader()
-		// p.Header[versionsDelAttr] can be not empty when deleting specific version
-		if delAttr := p.Header[versionsDelAttr]; len(delAttr) != 0 {
+		// header[versionsDelAttr] can be not empty when deleting specific version
+		if delAttr := header[versionsDelAttr]; len(delAttr) != 0 {
 			if len(deleted) != 0 {
-				p.Header[versionsDelAttr] = deleted + "," + delAttr
+				header[versionsDelAttr] = deleted + "," + delAttr
 			} else {
-				p.Header[versionsDelAttr] = delAttr
+				header[versionsDelAttr] = delAttr
 			}
 		} else if len(deleted) != 0 {
-			p.Header[versionsDelAttr] = deleted
+			header[versionsDelAttr] = deleted
 		}
 	} else {
 		versionsDeletedStr := versions.getDelHeader()
@@ -272,10 +257,10 @@ func updateCRDT2PSetHeaders(p *PutObjectParams, versions *objectVersions, versio
 		}
 
 		if lastVersion := versions.getLast(); lastVersion != nil {
-			p.Header[versionsDelAttr] = versionsDeletedStr + lastVersion.Version()
+			header[versionsDelAttr] = versionsDeletedStr + lastVersion.Version()
 			idsToDeleteArr = append(idsToDeleteArr, lastVersion.ID)
 		} else if len(versionsDeletedStr) != 0 {
-			p.Header[versionsDelAttr] = versionsDeletedStr
+			header[versionsDelAttr] = versionsDeletedStr
 		}
 
 		for _, version := range versions.objects {
@@ -347,6 +332,50 @@ func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectNa
 			}
 			versions.appendVersion(oi)
 		}
+	}
+
+	return versions, nil
+}
+
+func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
+	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: sysName})
+	if err != nil {
+		return nil, err
+	}
+
+	// should be changed when system cache will store payload instead of meta
+	metas := make(map[string]*object.Object, len(ids))
+
+	versions := newObjectVersions(sysName)
+	for _, id := range ids {
+		meta, err := n.objectHead(ctx, bkt.CID, id)
+		if err != nil {
+			n.log.Warn("couldn't head object",
+				zap.Stringer("object id", id),
+				zap.Stringer("bucket id", bkt.CID),
+				zap.Error(err))
+			continue
+		}
+
+		if oi := objectInfoFromMeta(bkt, meta, "", ""); oi != nil {
+			if !isSystem(oi) {
+				continue
+			}
+			versions.appendVersion(oi)
+			metas[oi.Version()] = meta
+		}
+	}
+
+	lastVersion := versions.getLast()
+	if lastVersion == nil {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
+	}
+
+	if err = n.systemCache.Put(bkt.SystemObjectKey(sysName), metas[lastVersion.Version()]); err != nil {
+		n.log.Warn("couldn't put system meta to objects cache",
+			zap.Stringer("object id", lastVersion.ID),
+			zap.Stringer("bucket id", bkt.CID),
+			zap.Error(err))
 	}
 
 	return versions, nil
