@@ -196,4 +196,5 @@ func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if err := h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{Name: reqInfo.BucketName}); err != nil {
 		h.logAndSendError(w, "couldn't delete bucket", reqInfo, err)
 	}
+	w.WriteHeader(http.StatusNoContent)
 }
