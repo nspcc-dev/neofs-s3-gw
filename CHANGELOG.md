@@ -2,35 +2,41 @@
 
 This document outlines major changes between releases.
 
-## 0.17.0 (30 Aug 2021)
+## 0.17.0 (24 Sep 2021)
 With this release we introduce [ceph-based](https://github.com/ceph/s3-tests) S3 compatibility results.
 
 ### Added
-* Versioning support (#122)
-* Ceph S3 compatibility results (#150)
+* Versioning support (#122, #242, #263)
+* Ceph S3 compatibility results (#150, #249, #266)
 * Handling `X-Amz-Expected-Bucket-Owner` header (#216)
 * `X-Container-Id` header for `HeadBucket` response (#220)
 * Basic ACL support (#49, #213)
-* Caching (#206, #179)
+* Caching (#179, #206, #231, #236, #253)
 * Metadata directive when copying (#191)
 * Bucket name checking (189)
 * Continuation token support (#112, #154, #180)
 * Mapping `LocationConstraint` to `PlacementPolicy` (#89)
 * Tagging support (#196)
+* POST uploading support (#190)
+* Delete marker support (#248)
+* Expiration for access box (#255)
+* AWS CLI credential generating by authmate (#241) 
 
 ### Changed
 * Default placement policy is now configurable (#218) 
 * README is split into different files (#210)
-* Unified error handling (#184, #149, #89)
+* Unified error handling (#89, #149, #184)
 * Authmate issue-secret response contains container id (#163)
 * Removed "github.com/nspcc-dev/neofs-node" dependency (#234)
+* Removed GitHub workflow of image publishing (#243)
+* Changed license to AGPLv3 (#264)
 
 ### Fixed
 * ListObjects results are now the same for different users (#230)
 * Error response for invalid authentication header is now correct (#199)
 * Saving object metadata (#198)
 * Range header handling (#194)
-* Correct NotFound status (#118)
+* Correct status codes (#118, #262)
 * HeadObject for "directories" (#160)
 * Fetch-owner parameter support (#159)
 
