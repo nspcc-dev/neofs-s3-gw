@@ -161,11 +161,7 @@ func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *e
 		return err
 	}
 
-	if err := n.waitEACLPresence(ctx, cid, table, defaultWaitParams()); err != nil {
-		return err
-	}
-
-	return nil
+	return n.waitEACLPresence(ctx, cid, table, defaultWaitParams())
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, cid *cid.ID) (*eacl.Table, error) {
