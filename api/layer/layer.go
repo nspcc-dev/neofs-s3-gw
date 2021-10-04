@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -122,6 +121,16 @@ type (
 	DeleteBucketParams struct {
 		Name string
 	}
+
+	// PutSystemObjectParams stores putSystemObject parameters.
+	PutSystemObjectParams struct {
+		BktInfo  *data.BucketInfo
+		ObjName  string
+		Metadata map[string]string
+		Prefix   string
+		Payload  []byte
+	}
+
 	// ListObjectVersionsParams stores list objects versions parameters.
 	ListObjectVersionsParams struct {
 		Bucket          string
@@ -381,7 +390,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, oi *data.ObjectInfo) (map[
 		Owner: oi.Owner,
 	}
 
-	objInfo, err := n.getSystemObject(ctx, bktInfo, oi.TagsObject())
+	objInfo, err := n.headSystemObject(ctx, bktInfo, oi.TagsObject())
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -396,7 +405,8 @@ func (n *layer) GetBucketTagging(ctx context.Context, bucketName string) (map[st
 		return nil, err
 	}
 
-	objInfo, err := n.getSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+	objInfo, err := n.headSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -428,7 +438,15 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 		Owner: p.ObjectInfo.Owner,
 	}
 
-	if _, err := n.putSystemObject(ctx, bktInfo, p.ObjectInfo.TagsObject(), p.TagSet, tagPrefix); err != nil {
+	s := &PutSystemObjectParams{
+		BktInfo:  bktInfo,
+		ObjName:  p.ObjectInfo.TagsObject(),
+		Metadata: p.TagSet,
+		Prefix:   tagPrefix,
+		Payload:  nil,
+	}
+
+	if _, err := n.putSystemObject(ctx, s); err != nil {
 		return err
 	}
 
@@ -442,7 +460,15 @@ func (n *layer) PutBucketTagging(ctx context.Context, bucketName string, tagSet 
 		return err
 	}
 
-	if _, err = n.putSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName), tagSet, tagPrefix); err != nil {
+	s := &PutSystemObjectParams{
+		BktInfo:  bktInfo,
+		ObjName:  formBucketTagObjectName(bucketName),
+		Metadata: tagSet,
+		Prefix:   tagPrefix,
+		Payload:  nil,
+	}
+
+	if _, err = n.putSystemObject(ctx, s); err != nil {
 		return err
 	}
 
@@ -458,22 +484,6 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) err
 	return n.deleteSystemObject(ctx, bktInfo, p.TagsObject())
 }
 
-func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: name})
-	if err != nil {
-		return err
-	}
-
-	for _, id := range ids {
-		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
-			return err
-		}
-	}
-
-	n.systemCache.Delete(bktInfo.SystemObjectKey(name))
-	return nil
-}
-
 // DeleteBucketTagging from storage.
 func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) error {
 	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
@@ -482,83 +492,6 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) erro
 	}
 
 	return n.deleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
-}
-
-func (n *layer) putSystemObject(ctx context.Context, bktInfo *data.BucketInfo, objName string, metadata map[string]string, prefix string) (*object.Object, error) {
-	versions, err := n.headSystemVersions(ctx, bktInfo, objName)
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		return nil, err
-	}
-	idsToDeleteArr := updateCRDT2PSetHeaders(metadata, versions, false) // false means "last write wins"
-
-	attributes := make([]*object.Attribute, 0, 3)
-
-	filename := object.NewAttribute()
-	filename.SetKey(objectSystemAttributeName)
-	filename.SetValue(objName)
-
-	createdAt := object.NewAttribute()
-	createdAt.SetKey(object.AttributeTimestamp)
-	createdAt.SetValue(strconv.FormatInt(time.Now().UTC().Unix(), 10))
-
-	versioningIgnore := object.NewAttribute()
-	versioningIgnore.SetKey(attrVersionsIgnore)
-	versioningIgnore.SetValue(strconv.FormatBool(true))
-
-	attributes = append(attributes, filename, createdAt, versioningIgnore)
-
-	for k, v := range metadata {
-		attr := object.NewAttribute()
-		attr.SetKey(prefix + k)
-		if prefix == tagPrefix && v == "" {
-			v = tagEmptyMark
-		}
-		attr.SetValue(v)
-		attributes = append(attributes, attr)
-	}
-
-	raw := object.NewRaw()
-	raw.SetOwnerID(bktInfo.Owner)
-	raw.SetContainerID(bktInfo.CID)
-	raw.SetAttributes(attributes...)
-
-	ops := new(client.PutObjectParams).WithObject(raw.Object())
-	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
-	if err != nil {
-		return nil, err
-	}
-
-	meta, err := n.objectHead(ctx, bktInfo.CID, oid)
-	if err != nil {
-		return nil, err
-	}
-	if err = n.systemCache.Put(bktInfo.SystemObjectKey(objName), meta); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
-
-	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
-			n.log.Warn("couldn't delete system object",
-				zap.Stringer("version id", id),
-				zap.String("name", objName),
-				zap.Error(err))
-		}
-	}
-
-	return meta, nil
-}
-
-func (n *layer) getSystemObject(ctx context.Context, bkt *data.BucketInfo, objName string) (*data.ObjectInfo, error) {
-	if meta := n.systemCache.Get(bkt.SystemObjectKey(objName)); meta != nil {
-		return objInfoFromMeta(bkt, meta), nil
-	}
-
-	versions, err := n.headSystemVersions(ctx, bkt, objName)
-	if err != nil {
-		return nil, err
-	}
-
-	return versions.getLast(), nil
 }
 
 // CopyObject from one bucket into another bucket.

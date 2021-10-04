@@ -248,7 +248,15 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 		attrSettingsVersioningEnabled: strconv.FormatBool(p.Settings.VersioningEnabled),
 	}
 
-	meta, err := n.putSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName(), metadata, "")
+	s := &PutSystemObjectParams{
+		BktInfo:  bktInfo,
+		ObjName:  bktInfo.SettingsObjectName(),
+		Metadata: metadata,
+		Prefix:   "",
+		Payload:  nil,
+	}
+
+	meta, err := n.putSystemObject(ctx, s)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +360,7 @@ func contains(list []string, elem string) bool {
 }
 
 func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*BucketSettings, error) {
-	objInfo, err := n.getSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
+	objInfo, err := n.headSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
 		return nil, err
 	}

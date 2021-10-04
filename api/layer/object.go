@@ -326,56 +326,12 @@ func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectNa
 				zap.Error(err))
 		}
 
-		if oi := objectInfoFromMeta(bkt, meta, "", ""); oi != nil {
+		if oi := objInfoFromMeta(bkt, meta); oi != nil {
 			if isSystem(oi) {
 				continue
 			}
 			versions.appendVersion(oi)
 		}
-	}
-
-	return versions, nil
-}
-
-func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: sysName})
-	if err != nil {
-		return nil, err
-	}
-
-	// should be changed when system cache will store payload instead of meta
-	metas := make(map[string]*object.Object, len(ids))
-
-	versions := newObjectVersions(sysName)
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, id)
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", id),
-				zap.Stringer("bucket id", bkt.CID),
-				zap.Error(err))
-			continue
-		}
-
-		if oi := objectInfoFromMeta(bkt, meta, "", ""); oi != nil {
-			if !isSystem(oi) {
-				continue
-			}
-			versions.appendVersion(oi)
-			metas[oi.Version()] = meta
-		}
-	}
-
-	lastVersion := versions.getLast()
-	if lastVersion == nil {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
-	}
-
-	if err = n.systemCache.Put(bkt.SystemObjectKey(sysName), metas[lastVersion.Version()]); err != nil {
-		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", lastVersion.ID),
-			zap.Stringer("bucket id", bkt.CID),
-			zap.Error(err))
 	}
 
 	return versions, nil
@@ -399,7 +355,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, versionID
 		return nil, err
 	}
 
-	objInfo := objectInfoFromMeta(bkt, meta, "", "")
+	objInfo := objInfoFromMeta(bkt, meta)
 	if err = n.objCache.Put(*meta); err != nil {
 		n.log.Warn("couldn't put obj to object cache",
 			zap.String("bucket name", objInfo.Bucket),
