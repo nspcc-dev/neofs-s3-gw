@@ -91,6 +91,12 @@ type (
 		Settings *BucketSettings
 	}
 
+	// PutCORSParams stores PutCORS request parameters.
+	PutCORSParams struct {
+		BktInfo           *data.BucketInfo
+		CORSConfiguration []byte
+	}
+
 	// BucketSettings stores settings such as versioning.
 	BucketSettings struct {
 		VersioningEnabled bool
@@ -167,6 +173,10 @@ type (
 
 		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*data.ObjectInfo, error)
 		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
+
+		PutBucketCORS(ctx context.Context, p *PutCORSParams) error
+		GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) ([]byte, error)
+		DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		ListBuckets(ctx context.Context) ([]*data.BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*data.BucketInfo, error)
@@ -346,7 +356,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 		params.Range = objRange
 		_, err = n.objectRange(ctx, params)
 	} else {
-		_, err = n.objectGet(ctx, params)
+		_, err = n.objectGetWithPayloadWriter(ctx, params)
 	}
 
 	if err != nil {
