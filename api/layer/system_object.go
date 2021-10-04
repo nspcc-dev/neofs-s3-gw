@@ -107,19 +107,17 @@ func (n *layer) getSystemObject(ctx context.Context, bktInfo *data.BucketInfo, o
 
 	objInfo := versions.getLast()
 
-	buf := new(bytes.Buffer)
-	p := &getParams{
-		Writer: buf,
-		cid:    bktInfo.CID,
-		oid:    objInfo.ID,
-	}
-
-	obj, err := n.objectGet(ctx, p)
+	obj, err := n.objectGet(ctx, bktInfo.CID, objInfo.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	obj.ToV2().SetPayload(buf.Bytes())
+	if err = n.systemCache.Put(systemObjectKey(bktInfo, objName), obj); err != nil {
+		n.log.Warn("couldn't put system meta to objects cache",
+			zap.Stringer("object id", obj.ID()),
+			zap.Stringer("bucket id", obj.ContainerID()),
+			zap.Error(err))
+	}
 
 	return obj, nil
 }

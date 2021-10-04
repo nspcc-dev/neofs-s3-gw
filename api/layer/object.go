@@ -104,11 +104,17 @@ func (n *layer) objectHead(ctx context.Context, cid *cid.ID, oid *object.ID) (*o
 	return n.pool.GetObjectHeader(ctx, ops, n.BearerOpt(ctx))
 }
 
-// objectGet and write it into provided io.Reader.
-func (n *layer) objectGet(ctx context.Context, p *getParams) (*object.Object, error) {
+// objectGetWithPayloadWriter and write it into provided io.Reader.
+func (n *layer) objectGetWithPayloadWriter(ctx context.Context, p *getParams) (*object.Object, error) {
 	// prepare length/offset writer
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.GetObjectParams).WithAddress(newAddress(p.cid, p.oid)).WithPayloadWriter(w)
+	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
+}
+
+// objectGet returns an object with payload in the object.
+func (n *layer) objectGet(ctx context.Context, cid *cid.ID, oid *object.ID) (*object.Object, error) {
+	ops := new(client.GetObjectParams).WithAddress(newAddress(cid, oid))
 	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
 }
 

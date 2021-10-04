@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -277,9 +278,10 @@ func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
 
 func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 	var (
-		cfg       handler.Config
-		err       error
-		policyStr = handler.DefaultPolicy
+		cfg           handler.Config
+		err           error
+		policyStr     = handler.DefaultPolicy
+		defaultMaxAge = handler.DefaultMaxAge
 	)
 
 	if v.IsSet(cfgDefaultPolicy) {
@@ -290,6 +292,18 @@ func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 		l.Fatal("couldn't parse container default policy",
 			zap.Error(err))
 	}
+
+	if v.IsSet(cfgDefaultMaxAge) {
+		defaultMaxAge = v.GetInt(cfgDefaultMaxAge)
+
+		if defaultMaxAge <= 0 && defaultMaxAge != -1 {
+			l.Fatal("invalid defaultMaxAge",
+				zap.String("parameter", cfgDefaultMaxAge),
+				zap.String("value in config", strconv.Itoa(defaultMaxAge)))
+		}
+	}
+
+	cfg.DefaultMaxAge = defaultMaxAge
 
 	return &cfg
 }

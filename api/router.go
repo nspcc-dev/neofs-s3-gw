@@ -44,6 +44,8 @@ type (
 		GetBucketACLHandler(http.ResponseWriter, *http.Request)
 		PutBucketACLHandler(http.ResponseWriter, *http.Request)
 		GetBucketCorsHandler(http.ResponseWriter, *http.Request)
+		PutBucketCorsHandler(http.ResponseWriter, *http.Request)
+		DeleteBucketCorsHandler(http.ResponseWriter, *http.Request)
 		GetBucketWebsiteHandler(http.ResponseWriter, *http.Request)
 		GetBucketAccelerateHandler(http.ResponseWriter, *http.Request)
 		GetBucketRequestPaymentHandler(http.ResponseWriter, *http.Request)
@@ -77,6 +79,8 @@ type (
 		DeleteBucketEncryptionHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketHandler(http.ResponseWriter, *http.Request)
 		ListBucketsHandler(http.ResponseWriter, *http.Request)
+		Preflight(w http.ResponseWriter, r *http.Request)
+		AppendCORSHeaders(w http.ResponseWriter, r *http.Request)
 	}
 
 	// mimeType represents various MIME type used API responses.
@@ -129,6 +133,15 @@ func setRequestID(h http.Handler) http.Handler {
 		// continue execution
 		h.ServeHTTP(w, r)
 	})
+}
+
+func appendCORS(handler Handler) mux.MiddlewareFunc {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler.AppendCORSHeaders(w, r)
+			h.ServeHTTP(w, r)
+		})
+	}
 }
 
 func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
@@ -197,6 +210,11 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 	for _, bucket := range buckets {
 		// Object operations
 		// HeadObject
+		bucket.Use(
+			// -- append CORS headers to a response for
+			appendCORS(h),
+		)
+		bucket.Methods(http.MethodOptions).HandlerFunc(m.Handle(metrics.APIStats("preflight", h.Preflight))).Name("Options")
 		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("headobject", h.HeadObjectHandler))).Name("HeadObject")
 		// CopyObjectPart
@@ -296,7 +314,15 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketencryption", h.GetBucketEncryptionHandler))).Queries("encryption", "").
 			Name("GetBucketEncryption")
-
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getbucketcors", h.GetBucketCorsHandler))).Queries("cors", "").
+			Name("GetBucketCors")
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putbucketcors", h.PutBucketCorsHandler))).Queries("cors", "").
+			Name("PutBucketCors")
+		bucket.Methods(http.MethodDelete).HandlerFunc(
+			m.Handle(metrics.APIStats("deletebucketcors", h.DeleteBucketCorsHandler))).Queries("cors", "").
+			Name("DeleteBucketCors")
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
@@ -306,10 +332,6 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("putbucketacl", h.PutBucketACLHandler))).Queries("acl", "").
 			Name("PutBucketACL")
-		// GetBucketCors - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			m.Handle(metrics.APIStats("getbucketcors", h.GetBucketCorsHandler))).Queries("cors", "").
-			Name("GetBucketCors")
 		// GetBucketWebsiteHandler - this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketwebsite", h.GetBucketWebsiteHandler))).Queries("website", "").

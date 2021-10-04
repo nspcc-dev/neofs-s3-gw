@@ -71,6 +71,9 @@ const ( // Settings.
 	// Policy.
 	cfgDefaultPolicy = "default_policy"
 
+	// CORS.
+	cfgDefaultMaxAge = "cors.default_max_age"
+
 	// MaxClients.
 	cfgMaxClientsCount    = "max_clients_count"
 	cfgMaxClientsDeadline = "max_clients_deadline"
