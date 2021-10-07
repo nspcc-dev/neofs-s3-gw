@@ -525,10 +525,10 @@ Compatibility: 0/3/4
 
 |   | Test                                                       | s3-gw  | aws s3 |
 |---|------------------------------------------------------------|--------|--------|
-| 1 | s3tests_boto3.functional.test_s3.test_set_cors             | FAIL   | ok     |
+| 1 | s3tests_boto3.functional.test_s3.test_set_cors             | ok     | ok     |
 | 2 | s3tests_boto3.functional.test_s3.test_cors_origin_response | FAIL   | FAIL   |
-| 3 | s3tests_boto3.functional.test_s3.test_cors_origin_wildcard | FAIL   | ok     |
-| 4 | s3tests_boto3.functional.test_s3.test_cors_header_option   | FAIL   | ok     |
+| 3 | s3tests_boto3.functional.test_s3.test_cors_origin_wildcard | ok     | ok     |
+| 4 | s3tests_boto3.functional.test_s3.test_cors_header_option   | ok     | ok     |
 
 ## Encryption
 
