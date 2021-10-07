@@ -162,6 +162,7 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 				for _, m := range rule.AllowedMethods {
 					if m == r.Method {
 						w.Header().Set(api.AccessControlAllowOrigin, origin)
+						w.Header().Set(api.AccessControlAllowMethods, strings.Join(rule.AllowedMethods, ", "))
 						w.Header().Set(api.AccessControlAllowCredentials, "true")
 						w.Header().Set(api.Vary, api.Origin)
 						return
@@ -178,6 +179,7 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 						} else {
 							w.Header().Set(api.AccessControlAllowOrigin, o)
 						}
+						w.Header().Set(api.AccessControlAllowMethods, strings.Join(rule.AllowedMethods, ", "))
 						return
 					}
 				}
