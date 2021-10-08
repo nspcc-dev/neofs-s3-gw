@@ -262,13 +262,12 @@ func checkCORS(cors *CORSConfiguration) error {
 	for _, r := range cors.CORSRules {
 		for _, m := range r.AllowedMethods {
 			if _, ok := supportedMethods[m]; !ok {
-				return fmt.Errorf("unsupported HTTP method in CORS config %s", m)
+				return errors.GetAPIErrorWithError(errors.ErrCORSUnsupportedMethod, fmt.Errorf("unsupported method is %s", m))
 			}
 		}
 		for _, h := range r.ExposeHeaders {
 			if h == wildcard {
-				return fmt.Errorf("ExposeHeader \"*\" contains wildcard. We currently do not support wildcard " +
-					"for ExposeHeader")
+				return errors.GetAPIError(errors.ErrCORSWildcardExposeHeaders)
 			}
 		}
 	}

@@ -312,6 +312,10 @@ const (
 	ErrAdminAccountNotEligible
 	ErrServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
+
+	//CORS configuration errors.
+	ErrCORSUnsupportedMethod
+	ErrCORSWildcardExposeHeaders
 )
 
 // error code to Error structure, these fields carry respective
@@ -1909,6 +1913,18 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid according to Policy: Policy Condition failed",
 		HTTPStatusCode: http.StatusForbidden,
 	},
+	ErrCORSUnsupportedMethod: {
+		ErrCode:        ErrCORSUnsupportedMethod,
+		Code:           "InvalidRequest",
+		Description:    "Found unsupported HTTP method in CORS config",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCORSWildcardExposeHeaders: {
+		ErrCode:        ErrCORSWildcardExposeHeaders,
+		Code:           "InvalidRequest",
+		Description:    "ExposeHeader \"*\" contains wildcard. We currently do not support wildcard for ExposeHeader",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -1943,6 +1959,11 @@ func GetAPIError(code ErrorCode) Error {
 		return apiErr
 	}
 	return errorCodes.toAPIErr(ErrInternalError)
+}
+
+// GetAPIErrorWithError provides API Error with additional error message for input API error code.
+func GetAPIErrorWithError(code ErrorCode, err error) Error {
+	return errorCodes.toAPIErrWithErr(code, err)
 }
 
 // ObjectError - error that linked to specific object.
