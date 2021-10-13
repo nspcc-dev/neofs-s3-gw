@@ -93,8 +93,8 @@ type (
 
 	// PutCORSParams stores PutCORS request parameters.
 	PutCORSParams struct {
-		BktInfo           *data.BucketInfo
-		CORSConfiguration []byte
+		BktInfo *data.BucketInfo
+		Reader  io.Reader
 	}
 
 	// BucketSettings stores settings such as versioning.
@@ -134,7 +134,7 @@ type (
 		ObjName  string
 		Metadata map[string]string
 		Prefix   string
-		Payload  []byte
+		Reader   io.Reader
 	}
 
 	// ListObjectVersionsParams stores list objects versions parameters.
@@ -175,7 +175,7 @@ type (
 		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
 
 		PutBucketCORS(ctx context.Context, p *PutCORSParams) error
-		GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) ([]byte, error)
+		GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error)
 		DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		ListBuckets(ctx context.Context) ([]*data.BucketInfo, error)
@@ -453,7 +453,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 		ObjName:  p.ObjectInfo.TagsObject(),
 		Metadata: p.TagSet,
 		Prefix:   tagPrefix,
-		Payload:  nil,
+		Reader:   nil,
 	}
 
 	if _, err := n.putSystemObject(ctx, s); err != nil {
@@ -475,7 +475,7 @@ func (n *layer) PutBucketTagging(ctx context.Context, bucketName string, tagSet 
 		ObjName:  formBucketTagObjectName(bucketName),
 		Metadata: tagSet,
 		Prefix:   tagPrefix,
-		Payload:  nil,
+		Reader:   nil,
 	}
 
 	if _, err = n.putSystemObject(ctx, s); err != nil {

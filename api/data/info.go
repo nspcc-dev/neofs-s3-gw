@@ -1,6 +1,7 @@
 package data
 
 import (
+	"encoding/xml"
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
@@ -38,6 +39,22 @@ type (
 		HashSum       string
 		Owner         *owner.ID
 		Headers       map[string]string
+	}
+
+	// CORSConfiguration stores CORS configuration of a request.
+	CORSConfiguration struct {
+		XMLName   xml.Name   `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CORSConfiguration" json:"-"`
+		CORSRules []CORSRule `xml:"CORSRule" json:"CORSRules"`
+	}
+
+	// CORSRule stores rules for CORS in a bucket.
+	CORSRule struct {
+		ID             string   `xml:"ID,omitempty" json:"ID,omitempty"`
+		AllowedHeaders []string `xml:"AllowedHeader" json:"AllowedHeaders"`
+		AllowedMethods []string `xml:"AllowedMethod" json:"AllowedMethods"`
+		AllowedOrigins []string `xml:"AllowedOrigin" json:"AllowedOrigins"`
+		ExposeHeaders  []string `xml:"ExposeHeader" json:"ExposeHeaders"`
+		MaxAgeSeconds  int      `xml:"MaxAgeSeconds,omitempty" json:"MaxAgeSeconds,omitempty"`
 	}
 )
 

@@ -1,8 +1,8 @@
 package layer
 
 import (
-	"bytes"
 	"context"
+	"encoding/xml"
 	"strconv"
 	"time"
 
@@ -13,7 +13,53 @@ import (
 	"go.uber.org/zap"
 )
 
-func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (*object.Object, error) {
+func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
+	objInfo, err := n.putSystemObjectIntoNeoFS(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = n.systemCache.PutObject(systemObjectKey(p.BktInfo, p.ObjName), objInfo); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
+	}
+
+	return objInfo, nil
+}
+
+func (n *layer) headSystemObject(ctx context.Context, bkt *data.BucketInfo, objName string) (*data.ObjectInfo, error) {
+	if objInfo := n.systemCache.GetObject(systemObjectKey(bkt, objName)); objInfo != nil {
+		return objInfo, nil
+	}
+
+	versions, err := n.headSystemVersions(ctx, bkt, objName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = n.systemCache.PutObject(systemObjectKey(bkt, objName), versions.getLast()); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
+	}
+
+	return versions.getLast(), nil
+}
+
+func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
+	ids, err := n.objectSearch(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: name})
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
+			return err
+		}
+	}
+
+	n.systemCache.Delete(systemObjectKey(bktInfo, name))
+	return nil
+}
+
+func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
 	versions, err := n.headSystemVersions(ctx, p.BktInfo, p.ObjName)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
@@ -51,7 +97,7 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 	raw.SetContainerID(p.BktInfo.CID)
 	raw.SetAttributes(attributes...)
 
-	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(bytes.NewReader(p.Payload))
+	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(p.Reader)
 	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
 	if err != nil {
 		return nil, err
@@ -60,14 +106,6 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 	meta, err := n.objectHead(ctx, p.BktInfo.CID, oid)
 	if err != nil {
 		return nil, err
-	}
-
-	if p.Payload != nil {
-		meta.ToV2().SetPayload(p.Payload)
-	}
-
-	if err = n.systemCache.Put(systemObjectKey(p.BktInfo, p.ObjName), meta); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
 	for _, id := range idsToDeleteArr {
@@ -79,63 +117,52 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 		}
 	}
 
-	return meta, nil
+	return objInfoFromMeta(p.BktInfo, meta), nil
 }
 
-func (n *layer) headSystemObject(ctx context.Context, bkt *data.BucketInfo, objName string) (*data.ObjectInfo, error) {
-	if meta := n.systemCache.Get(systemObjectKey(bkt, objName)); meta != nil {
-		return objInfoFromMeta(bkt, meta), nil
-	}
-
+func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketInfo, objName string) (*object.Object, error) {
 	versions, err := n.headSystemVersions(ctx, bkt, objName)
-	if err != nil {
-		return nil, err
-	}
-
-	return versions.getLast(), nil
-}
-
-func (n *layer) getSystemObject(ctx context.Context, bktInfo *data.BucketInfo, objName string) (*object.Object, error) {
-	if meta := n.systemCache.Get(systemObjectKey(bktInfo, objName)); meta != nil {
-		return meta, nil
-	}
-
-	versions, err := n.headSystemVersions(ctx, bktInfo, objName)
 	if err != nil {
 		return nil, err
 	}
 
 	objInfo := versions.getLast()
 
-	obj, err := n.objectGet(ctx, bktInfo.CID, objInfo.ID)
+	obj, err := n.objectGet(ctx, bkt.CID, objInfo.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = n.systemCache.Put(systemObjectKey(bktInfo, objName), obj); err != nil {
-		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", obj.ID()),
-			zap.Stringer("bucket id", obj.ContainerID()),
-			zap.Error(err))
+	if len(obj.Payload()) == 0 {
+		return nil, errors.GetAPIError(errors.ErrInternalError)
 	}
-
 	return obj, nil
 }
 
-func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: name})
+func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName string) (*data.CORSConfiguration, error) {
+	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
+		return cors, nil
+	}
+
+	obj, err := n.getSystemObjectFromNeoFS(ctx, bkt, sysName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for _, id := range ids {
-		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
-			return err
-		}
+	cors := &data.CORSConfiguration{}
+
+	if err = xml.Unmarshal(obj.Payload(), &cors); err != nil {
+		return nil, err
 	}
 
-	n.systemCache.Delete(systemObjectKey(bktInfo, name))
-	return nil
+	if err = n.systemCache.PutCORS(systemObjectKey(bkt, sysName), cors); err != nil {
+		n.log.Warn("couldn't put system meta to objects cache",
+			zap.Stringer("object id", obj.ID()),
+			zap.Stringer("bucket id", bkt.CID),
+			zap.Error(err))
+	}
+
+	return cors, nil
 }
 
 func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
@@ -143,9 +170,6 @@ func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sy
 	if err != nil {
 		return nil, err
 	}
-
-	// should be changed when system cache will store payload instead of meta
-	metas := make(map[string]*object.Object, len(ids))
 
 	versions := newObjectVersions(sysName)
 	for _, id := range ids {
@@ -163,20 +187,12 @@ func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sy
 				continue
 			}
 			versions.appendVersion(oi)
-			metas[oi.Version()] = meta
 		}
 	}
 
 	lastVersion := versions.getLast()
 	if lastVersion == nil {
 		return nil, errors.GetAPIError(errors.ErrNoSuchKey)
-	}
-
-	if err = n.systemCache.Put(systemObjectKey(bkt, sysName), metas[lastVersion.Version()]); err != nil {
-		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", lastVersion.ID),
-			zap.Stringer("bucket id", bkt.CID),
-			zap.Error(err))
 	}
 
 	return versions, nil
