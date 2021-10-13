@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
-	"github.com/nspcc-dev/neofs-api-go/pkg/object"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 )
 
 // SystemCache provides lru cache for objects.
@@ -32,14 +32,14 @@ func NewSystemCache(config *Config) *SystemCache {
 	return &SystemCache{cache: gc}
 }
 
-// Get returns cached object.
-func (o *SystemCache) Get(key string) *object.Object {
+// GetObject returns cached object.
+func (o *SystemCache) GetObject(key string) *data.ObjectInfo {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.(*object.Object)
+	result, ok := entry.(*data.ObjectInfo)
 	if !ok {
 		return nil
 	}
@@ -47,8 +47,26 @@ func (o *SystemCache) Get(key string) *object.Object {
 	return result
 }
 
-// Put puts an object to cache.
-func (o *SystemCache) Put(key string, obj *object.Object) error {
+func (o *SystemCache) GetCORS(key string) *data.CORSConfiguration {
+	entry, err := o.cache.Get(key)
+	if err != nil {
+		return nil
+	}
+
+	result, ok := entry.(*data.CORSConfiguration)
+	if !ok {
+		return nil
+	}
+
+	return result
+}
+
+// PutObject puts an object to cache.
+func (o *SystemCache) PutObject(key string, obj *data.ObjectInfo) error {
+	return o.cache.Set(key, obj)
+}
+
+func (o *SystemCache) PutCORS(key string, obj *data.CORSConfiguration) error {
 	return o.cache.Set(key, obj)
 }
 

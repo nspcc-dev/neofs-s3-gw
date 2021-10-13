@@ -253,15 +253,10 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 		ObjName:  bktInfo.SettingsObjectName(),
 		Metadata: metadata,
 		Prefix:   "",
-		Payload:  nil,
+		Reader:   nil,
 	}
 
-	meta, err := n.putSystemObject(ctx, s)
-	if err != nil {
-		return nil, err
-	}
-
-	return objInfoFromMeta(bktInfo, meta), nil
+	return n.putSystemObject(ctx, s)
 }
 
 func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*BucketSettings, error) {

@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"encoding/xml"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,30 +10,11 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
-type (
-	// CORSConfiguration stores CORS configuration of a request.
-	CORSConfiguration struct {
-		XMLName   xml.Name   `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CORSConfiguration" json:"-"`
-		CORSRules []CORSRule `xml:"CORSRule" json:"CORSRules"`
-	}
-	// CORSRule stores rules for CORS in a bucket.
-	CORSRule struct {
-		ID             string   `xml:"ID,omitempty" json:"ID,omitempty"`
-		AllowedHeaders []string `xml:"AllowedHeader" json:"AllowedHeaders"`
-		AllowedMethods []string `xml:"AllowedMethod" json:"AllowedMethods"`
-		AllowedOrigins []string `xml:"AllowedOrigin" json:"AllowedOrigins"`
-		ExposeHeaders  []string `xml:"ExposeHeader" json:"ExposeHeaders"`
-		MaxAgeSeconds  int      `xml:"MaxAgeSeconds,omitempty" json:"MaxAgeSeconds,omitempty"`
-	}
-)
-
 const (
 	// DefaultMaxAge -- default value of Access-Control-Max-Age if this value is not set in a rule.
 	DefaultMaxAge = 600
 	wildcard      = "*"
 )
-
-var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
 
 func (h *handler) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
@@ -51,13 +30,16 @@ func (h *handler) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
+	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get cors", reqInfo, err)
 		return
 	}
 
-	api.WriteResponse(w, http.StatusOK, info, api.MimeNone)
+	if err = api.EncodeToResponse(w, cors); err != nil {
+		h.logAndSendError(w, "could not encode cors to response", reqInfo, err)
+		return
+	}
 }
 
 func (h *handler) PutBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,30 +56,9 @@ func (h *handler) PutBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cors := &CORSConfiguration{}
-	if err := xml.NewDecoder(r.Body).Decode(cors); err != nil {
-		h.logAndSendError(w, "could not parse cors configuration", reqInfo, err)
-		return
-	}
-	if cors.CORSRules == nil {
-		h.logAndSendError(w, "could not parse cors rules", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
-		return
-	}
-
-	if err = checkCORS(cors); err != nil {
-		h.logAndSendError(w, "invalid cors configuration", reqInfo, err)
-		return
-	}
-
-	xml, err := xml.Marshal(cors)
-	if err != nil {
-		h.logAndSendError(w, "could not encode cors configuration to xml", reqInfo, err)
-		return
-	}
-
 	p := &layer.PutCORSParams{
-		BktInfo:           bktInfo,
-		CORSConfiguration: xml,
+		BktInfo: bktInfo,
+		Reader:  r.Body,
 	}
 
 	if err = h.obj.PutBucketCORS(r.Context(), p); err != nil {
@@ -146,14 +107,11 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
+	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
 	if err != nil {
 		return
 	}
-	cors := &CORSConfiguration{}
-	if err = xml.Unmarshal(info, cors); err != nil {
-		return
-	}
+
 	withCredentials := r.Header.Get(api.Authorization) != ""
 
 	for _, rule := range cors.CORSRules {
@@ -213,14 +171,9 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 		headers = strings.Split(requestHeaders, ", ")
 	}
 
-	info, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
+	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get cors", reqInfo, err)
-		return
-	}
-	cors := &CORSConfiguration{}
-	if err = xml.Unmarshal(info, cors); err != nil {
-		h.logAndSendError(w, "could not parse cors configuration", reqInfo, err)
 		return
 	}
 
@@ -256,22 +209,6 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.logAndSendError(w, "Forbidden", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
-}
-
-func checkCORS(cors *CORSConfiguration) error {
-	for _, r := range cors.CORSRules {
-		for _, m := range r.AllowedMethods {
-			if _, ok := supportedMethods[m]; !ok {
-				return errors.GetAPIErrorWithError(errors.ErrCORSUnsupportedMethod, fmt.Errorf("unsupported method is %s", m))
-			}
-		}
-		for _, h := range r.ExposeHeaders {
-			if h == wildcard {
-				return errors.GetAPIError(errors.ErrCORSWildcardExposeHeaders)
-			}
-		}
-	}
-	return nil
 }
 
 func checkSubslice(slice []string, subSlice []string) bool {
