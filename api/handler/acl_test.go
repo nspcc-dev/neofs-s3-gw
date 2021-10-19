@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
@@ -14,7 +13,6 @@ import (
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/stretchr/testify/require"
 )
 
@@ -562,14 +560,6 @@ func TestParseCannedACLHeaders(t *testing.T) {
 		},
 	}
 
-	box := &accessbox.Box{
-		Gate: &accessbox.GateData{
-			GateKey: key.PublicKey(),
-		},
-	}
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, api.BoxData, box)
-
 	expectedACL := &AccessControlPolicy{
 		Owner: Owner{
 			ID:          id,
@@ -591,7 +581,7 @@ func TestParseCannedACLHeaders(t *testing.T) {
 		}},
 	}
 
-	actualACL, err := parseACLHeaders(req.WithContext(ctx))
+	actualACL, err := parseACLHeaders(req.Header, key.PublicKey())
 	require.NoError(t, err)
 	require.Equal(t, expectedACL, actualACL)
 }
@@ -610,14 +600,6 @@ func TestParseACLHeaders(t *testing.T) {
 			api.AmzGrantWrite:       {"id=\"user2\", id=\"user3\""},
 		},
 	}
-
-	box := &accessbox.Box{
-		Gate: &accessbox.GateData{
-			GateKey: key.PublicKey(),
-		},
-	}
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, api.BoxData, box)
 
 	expectedACL := &AccessControlPolicy{
 		Owner: Owner{
@@ -664,7 +646,7 @@ func TestParseACLHeaders(t *testing.T) {
 		}},
 	}
 
-	actualACL, err := parseACLHeaders(req.WithContext(ctx))
+	actualACL, err := parseACLHeaders(req.Header, key.PublicKey())
 	require.NoError(t, err)
 	require.Equal(t, expectedACL, actualACL)
 }

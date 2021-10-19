@@ -98,7 +98,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	raw.SetAttributes(attributes...)
 
 	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(p.Reader)
-	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
+	oid, err := n.pool.PutObject(ctx, ops, n.CallOptions(ctx)...)
 	if err != nil {
 		return nil, err
 	}

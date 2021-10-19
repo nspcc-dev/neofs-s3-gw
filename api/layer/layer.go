@@ -6,20 +6,24 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
 	"github.com/nspcc-dev/neofs-api-go/pkg/client"
 	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
 	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
 	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
+	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"go.uber.org/zap"
@@ -29,11 +33,17 @@ type (
 	layer struct {
 		pool        pool.Pool
 		log         *zap.Logger
+		anonKey     AnonymousKey
 		listsCache  *cache.ObjectsListCache
 		objCache    *cache.ObjectsCache
 		namesCache  *cache.ObjectsNameCache
 		bucketCache *cache.BucketCache
 		systemCache *cache.SystemCache
+	}
+
+	// AnonymousKey contains data for anonymous requests.
+	AnonymousKey struct {
+		Key *keys.PrivateKey
 	}
 
 	// CachesConfig contains params for caches.
@@ -112,11 +122,11 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name    string
-		ACL     uint32
-		Policy  *netmap.PlacementPolicy
-		EACL    *eacl.Table
-		BoxData *accessbox.Box
+		Name         string
+		ACL          uint32
+		Policy       *netmap.PlacementPolicy
+		EACL         *eacl.Table
+		SessionToken *session.Token
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {
@@ -170,6 +180,8 @@ type (
 	// Client provides S3 API client interface.
 	Client interface {
 		NeoFS
+
+		EphemeralKey() *keys.PublicKey
 
 		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*data.ObjectInfo, error)
 		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
@@ -228,10 +240,11 @@ func DefaultCachesConfigs() *CachesConfig {
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, conns pool.Pool, config *CachesConfig) Client {
+func NewLayer(log *zap.Logger, conns pool.Pool, config *CachesConfig, anonKey AnonymousKey) Client {
 	return &layer{
 		pool:        conns,
 		log:         log,
+		anonKey:     anonKey,
 		listsCache:  cache.NewObjectsListCache(config.ObjectsList),
 		objCache:    cache.New(config.Objects),
 		namesCache:  cache.NewObjectsNameCache(config.Names),
@@ -240,22 +253,40 @@ func NewLayer(log *zap.Logger, conns pool.Pool, config *CachesConfig) Client {
 	}
 }
 
+func (n *layer) EphemeralKey() *keys.PublicKey {
+	return n.anonKey.Key.PublicKey()
+}
+
+// randomSession returns client.WithSession for ephemeral key or nil if access box matches gate key.
+func (n *layer) randomSession(ctx context.Context) client.CallOption {
+	c, _, err := n.pool.Connection()
+	if err != nil {
+		return client.WithSession(nil)
+	}
+	st, err := c.CreateSession(ctx, math.MaxUint64, client.WithKey(&n.anonKey.Key.PrivateKey))
+	if err != nil {
+		return client.WithSession(nil)
+	}
+	return client.WithSession(st)
+}
+
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
 	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
 		return data.Gate.BearerToken.Issuer()
 	}
 
-	return n.pool.OwnerID()
+	id, _ := authmate.OwnerIDFromNeoFSKey(n.EphemeralKey())
+	return id
 }
 
-// BearerOpt returns client.WithBearer call option with token from context or with nil token.
-func (n *layer) BearerOpt(ctx context.Context) client.CallOption {
+// CallOptions returns []client.CallOption options: client.WithBearer and client.WithKey.
+func (n *layer) CallOptions(ctx context.Context) []client.CallOption {
 	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
-		return client.WithBearer(data.Gate.BearerToken)
+		return []client.CallOption{client.WithBearer(data.Gate.BearerToken)}
 	}
 
-	return client.WithBearer(nil)
+	return []client.CallOption{client.WithKey(&n.anonKey.Key.PrivateKey), n.randomSession(ctx)}
 }
 
 // SessionOpt returns client.WithSession call option with token from context or with nil token.
@@ -270,7 +301,7 @@ func (n *layer) SessionOpt(ctx context.Context) client.CallOption {
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
 	ops := new(client.GetObjectParams).WithAddress(address)
-	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
+	return n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
 }
 
 // GetBucketInfo returns bucket info by name.
