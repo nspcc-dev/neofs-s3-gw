@@ -20,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"go.uber.org/zap"
 )
 
@@ -422,7 +423,11 @@ func containsACLHeaders(r *http.Request) bool {
 
 func (h *handler) getNewEAclTable(r *http.Request, objInfo *data.ObjectInfo) (*eacl.Table, error) {
 	var newEaclTable *eacl.Table
-	objectACL, err := parseACLHeaders(r)
+	gateKey, err := h.gateKey(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	objectACL, err := parseACLHeaders(r.Header, gateKey)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse object acl: %w", err)
 	}
@@ -508,7 +513,13 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktACL, err := parseACLHeaders(r)
+	gateKey, err := h.gateKey(r.Context())
+	if err != nil {
+		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+		return
+	}
+
+	bktACL, err := parseACLHeaders(r.Header, gateKey)
 	if err != nil {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
@@ -527,14 +538,15 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.BoxData, err = layer.GetBoxData(r.Context())
-	if err != nil {
-		h.logAndSendError(w, "could not get boxData", reqInfo, err)
-		return
+	var policies []*accessbox.ContainerPolicy
+	boxData, err := layer.GetBoxData(r.Context())
+	if err == nil {
+		policies = boxData.Policies
+		p.SessionToken = boxData.Gate.SessionToken
 	}
 
 	if createParams.LocationConstraint != "" {
-		for _, placementPolicy := range p.BoxData.Policies {
+		for _, placementPolicy := range policies {
 			if placementPolicy.LocationConstraint == createParams.LocationConstraint {
 				p.Policy = placementPolicy.Policy
 				break

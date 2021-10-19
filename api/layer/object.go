@@ -88,7 +88,8 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	} else if prefix != "" {
 		opts.AddFilter(object.AttributeFileName, prefix, object.MatchCommonPrefix)
 	}
-	return n.pool.SearchObject(ctx, new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts), n.BearerOpt(ctx))
+	searchParams := new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts)
+	return n.pool.SearchObject(ctx, searchParams, n.CallOptions(ctx)...)
 }
 
 func newAddress(cid *cid.ID, oid *object.ID) *object.Address {
@@ -101,7 +102,7 @@ func newAddress(cid *cid.ID, oid *object.ID) *object.Address {
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, cid *cid.ID, oid *object.ID) (*object.Object, error) {
 	ops := new(client.ObjectHeaderParams).WithAddress(newAddress(cid, oid)).WithAllFields()
-	return n.pool.GetObjectHeader(ctx, ops, n.BearerOpt(ctx))
+	return n.pool.GetObjectHeader(ctx, ops, n.CallOptions(ctx)...)
 }
 
 // objectGetWithPayloadWriter and write it into provided io.Reader.
@@ -109,20 +110,20 @@ func (n *layer) objectGetWithPayloadWriter(ctx context.Context, p *getParams) (*
 	// prepare length/offset writer
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.GetObjectParams).WithAddress(newAddress(p.cid, p.oid)).WithPayloadWriter(w)
-	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
+	return n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
 }
 
 // objectGet returns an object with payload in the object.
 func (n *layer) objectGet(ctx context.Context, cid *cid.ID, oid *object.ID) (*object.Object, error) {
 	ops := new(client.GetObjectParams).WithAddress(newAddress(cid, oid))
-	return n.pool.GetObject(ctx, ops, n.BearerOpt(ctx))
+	return n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
 }
 
 // objectRange gets object range and writes it into provided io.Writer.
 func (n *layer) objectRange(ctx context.Context, p *getParams) ([]byte, error) {
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.RangeDataParams).WithAddress(newAddress(p.cid, p.oid)).WithDataWriter(w).WithRange(p.Range)
-	return n.pool.ObjectPayloadRangeData(ctx, ops, n.BearerOpt(ctx))
+	return n.pool.ObjectPayloadRangeData(ctx, ops, n.CallOptions(ctx)...)
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
@@ -151,7 +152,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 	rawObject := formRawObject(p, bkt.CID, own, obj)
 
 	ops := new(client.PutObjectParams).WithObject(rawObject.Object()).WithPayloadReader(r)
-	oid, err := n.pool.PutObject(ctx, ops, n.BearerOpt(ctx))
+	oid, err := n.pool.PutObject(ctx, ops, n.CallOptions(ctx)...)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +381,7 @@ func (n *layer) objectDelete(ctx context.Context, cid *cid.ID, oid *object.ID) e
 	dop := new(client.DeleteObjectParams)
 	dop.WithAddress(address)
 	n.objCache.Delete(address)
-	return n.pool.DeleteObject(ctx, dop, n.BearerOpt(ctx))
+	return n.pool.DeleteObject(ctx, dop, n.CallOptions(ctx)...)
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.

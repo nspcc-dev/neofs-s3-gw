@@ -240,7 +240,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	box.ContainerPolicy = policies
 
-	oid, err := ownerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
+	oid, err := OwnerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 }
 
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*token.BearerToken, error) {
-	oid, err := ownerIDFromNeoFSKey(gateKey)
+	oid, err := OwnerIDFromNeoFSKey(gateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
-		oid, err := ownerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
+		oid, err := OwnerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
 		if err != nil {
 			return nil, err
 		}
@@ -483,7 +483,7 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 	return gates, nil
 }
 
-func ownerIDFromNeoFSKey(key *keys.PublicKey) (*owner.ID, error) {
+func OwnerIDFromNeoFSKey(key *keys.PublicKey) (*owner.ID, error) {
 	wallet, err := owner.NEO3WalletFromPublicKey((*ecdsa.PublicKey)(key))
 	if err != nil {
 		return nil, err

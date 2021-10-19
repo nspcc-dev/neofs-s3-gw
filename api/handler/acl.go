@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
@@ -141,15 +142,30 @@ func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *handler) gateKey(ctx context.Context) (*keys.PublicKey, error) {
+	gateKey := h.obj.EphemeralKey()
+	box, err := layer.GetBoxData(ctx)
+	if err == nil {
+		if box.Gate.GateKey == nil {
+			return nil, fmt.Errorf("gate key must not be nil")
+		}
+		gateKey = box.Gate.GateKey
+	}
+
+	return gateKey, nil
+}
+
 func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		err     error
-		reqInfo = api.GetReqInfo(r.Context())
-	)
+	reqInfo := api.GetReqInfo(r.Context())
+	gateKey, err := h.gateKey(r.Context())
+	if err != nil {
+		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+		return
+	}
 
 	list := &AccessControlPolicy{}
 	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r)
+		list, err = parseACLHeaders(r.Header, gateKey)
 		if err != nil {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
@@ -231,15 +247,17 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		err       error
-		reqInfo   = api.GetReqInfo(r.Context())
-		versionID = reqInfo.URL.Query().Get(api.QueryVersionID)
-	)
+	reqInfo := api.GetReqInfo(r.Context())
+	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
+	gateKey, err := h.gateKey(r.Context())
+	if err != nil {
+		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+		return
+	}
 
 	list := &AccessControlPolicy{}
 	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r)
+		list, err = parseACLHeaders(r.Header, gateKey)
 		if err != nil {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
@@ -336,16 +354,8 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-func parseACLHeaders(r *http.Request) (*AccessControlPolicy, error) {
+func parseACLHeaders(header http.Header, gateKey *keys.PublicKey) (*AccessControlPolicy, error) {
 	var err error
-	box, err := layer.GetBoxData(r.Context())
-	if err != nil {
-		return nil, err
-	} else if box.Gate.GateKey == nil {
-		return nil, fmt.Errorf("gate key must not be nil")
-	}
-	gateKey := box.Gate.GateKey
-
 	acp := &AccessControlPolicy{Owner: Owner{
 		ID:          hex.EncodeToString(gateKey.Bytes()),
 		DisplayName: gateKey.Address(),
@@ -359,18 +369,18 @@ func parseACLHeaders(r *http.Request) (*AccessControlPolicy, error) {
 		Permission: aclFullControl,
 	}}
 
-	cannedACL := r.Header.Get(api.AmzACL)
+	cannedACL := header.Get(api.AmzACL)
 	if cannedACL != "" {
 		return addPredefinedACP(acp, cannedACL)
 	}
 
-	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, r.Header, api.AmzGrantFullControl); err != nil {
+	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, header, api.AmzGrantFullControl); err != nil {
 		return nil, err
 	}
-	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, r.Header, api.AmzGrantRead); err != nil {
+	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, header, api.AmzGrantRead); err != nil {
 		return nil, err
 	}
-	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, r.Header, api.AmzGrantWrite); err != nil {
+	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, header, api.AmzGrantWrite); err != nil {
 		return nil, err
 	}
 

@@ -28,17 +28,16 @@ type (
 
 func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInfo, error) {
 	var (
-		err       error
-		res       *container.Container
-		rid       = api.GetRequestID(ctx)
-		bearerOpt = n.BearerOpt(ctx)
+		err error
+		res *container.Container
+		rid = api.GetRequestID(ctx)
 
 		info = &data.BucketInfo{
 			CID:  cid,
 			Name: cid.String(),
 		}
 	)
-	res, err = n.pool.GetContainer(ctx, cid, bearerOpt)
+	res, err = n.pool.GetContainer(ctx, cid, n.CallOptions(ctx)...)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.Stringer("cid", cid),
@@ -86,13 +85,12 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInf
 
 func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 	var (
-		err       error
-		own       = n.Owner(ctx)
-		bearerOpt = n.BearerOpt(ctx)
-		res       []*cid.ID
-		rid       = api.GetRequestID(ctx)
+		err error
+		own = n.Owner(ctx)
+		res []*cid.ID
+		rid = api.GetRequestID(ctx)
 	)
-	res, err = n.pool.ListContainers(ctx, own, bearerOpt)
+	res, err = n.pool.ListContainers(ctx, own, n.CallOptions(ctx)...)
 	if err != nil {
 		n.log.Error("could not fetch container",
 			zap.String("request_id", rid),
@@ -130,7 +128,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		container.WithAttribute(container.AttributeName, p.Name),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)))
 
-	cnr.SetSessionToken(p.BoxData.Gate.SessionToken)
+	cnr.SetSessionToken(p.SessionToken)
 	cnr.SetOwnerID(bktInfo.Owner)
 
 	if bktInfo.CID, err = n.pool.PutContainer(ctx, cnr); err != nil {

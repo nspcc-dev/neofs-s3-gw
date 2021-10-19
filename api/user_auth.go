@@ -24,7 +24,7 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 			box, err := center.Authenticate(r)
 			if err != nil {
 				if err == auth.ErrNoAuthorizationHeader {
-					log.Debug("couldn't receive bearer token, using neofs-key")
+					log.Debug("couldn't receive access box for gate key, random key will be used")
 					ctx = r.Context()
 				} else {
 					log.Error("failed to pass authentication", zap.Error(err))

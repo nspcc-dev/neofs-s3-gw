@@ -346,7 +346,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 	return &testContext{
 		ctx:      ctx,
-		layer:    NewLayer(l, tp, config),
+		layer:    NewLayer(l, tp, config, AnonymousKey{Key: key}),
 		bkt:      bktName,
 		bktID:    bktID,
 		obj:      "obj1",
