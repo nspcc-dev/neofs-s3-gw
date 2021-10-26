@@ -3,6 +3,7 @@ package authmate
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -58,7 +59,7 @@ type (
 		EACLRules             []byte
 		ContextRules          []byte
 		SessionTkn            bool
-		Lifetime              uint64
+		Lifetime              time.Duration
 		AwsCliCredentialsFile string
 		ContainerPolicies     ContainerPolicies
 	}
@@ -74,6 +75,12 @@ type (
 type lifetimeOptions struct {
 	Iat uint64
 	Exp uint64
+}
+
+type epochDurations struct {
+	currentEpoch  uint64
+	msPerBlock    int64
+	blocksInEpoch uint64
 }
 
 type (
@@ -119,13 +126,30 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 	return cid, nil
 }
 
-func (a *Agent) getCurrentEpoch(ctx context.Context) (uint64, error) {
+func (a *Agent) getEpochDurations(ctx context.Context) (*epochDurations, error) {
 	if conn, _, err := a.pool.Connection(); err != nil {
-		return 0, err
+		return nil, err
 	} else if networkInfo, err := conn.NetworkInfo(ctx); err != nil {
-		return 0, err
+		return nil, err
 	} else {
-		return networkInfo.CurrentEpoch(), nil
+		res := &epochDurations{
+			currentEpoch: networkInfo.CurrentEpoch(),
+			msPerBlock:   networkInfo.MsPerBlock(),
+		}
+
+		networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
+			if string(parameter.Key()) == "EpochDuration" {
+				data := make([]byte, 8)
+				copy(data, parameter.Value())
+				res.blocksInEpoch = binary.LittleEndian.Uint64(data)
+				return true
+			}
+			return false
+		})
+		if res.blocksInEpoch == 0 {
+			return nil, fmt.Errorf("not found param: EpochDuration")
+		}
+		return res, nil
 	}
 }
 
@@ -182,15 +206,21 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
-	lifetime.Iat, err = a.getCurrentEpoch(ctx)
+	durations, err := a.getEpochDurations(ctx)
 	if err != nil {
 		return err
 	}
+	lifetime.Iat = durations.currentEpoch
+	msPerEpoch := durations.blocksInEpoch * uint64(durations.msPerBlock)
+	epochLifetime := uint64(options.Lifetime.Milliseconds()) / msPerEpoch
+	if uint64(options.Lifetime.Milliseconds())%msPerEpoch != 0 {
+		epochLifetime++
+	}
 
-	if options.Lifetime >= math.MaxUint64-lifetime.Iat {
+	if epochLifetime >= math.MaxUint64-lifetime.Iat {
 		lifetime.Exp = math.MaxUint64
 	} else {
-		lifetime.Exp = lifetime.Iat + options.Lifetime
+		lifetime.Exp = lifetime.Iat + epochLifetime
 	}
 
 	a.log.Info("check container", zap.Stringer("cid", options.ContainerID))

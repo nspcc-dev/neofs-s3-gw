@@ -45,7 +45,7 @@ var (
 	logEnabledFlag         bool
 	logDebugEnabledFlag    bool
 	sessionTokenFlag       bool
-	lifetimeFlag           uint64
+	lifetimeFlag           time.Duration
 	containerPolicies      string
 	awcCliCredFile         string
 )
@@ -197,9 +197,9 @@ func issueSecret() *cli.Command {
 				Destination: &sessionTokenFlag,
 				Value:       false,
 			},
-			&cli.Uint64Flag{
+			&cli.DurationFlag{
 				Name:        "lifetime",
-				Usage:       "Lifetime of tokens in NeoFS epoch",
+				Usage:       "Lifetime of tokens (e.g. 1d2h30m, it will be ceil rounded to the nearest amount of epoch)",
 				Required:    false,
 				Destination: &lifetimeFlag,
 				Value:       defaultLifetime,
@@ -253,7 +253,7 @@ func issueSecret() *cli.Command {
 			}
 
 			if lifetimeFlag <= 0 {
-				return cli.Exit(fmt.Sprintf("lifetime must be at least 1, current value: %d", lifetimeFlag), 5)
+				return cli.Exit(fmt.Sprintf("lifetime must be greater 0, current value: %d", lifetimeFlag), 5)
 			}
 
 			policies, err := parsePolicies(containerPolicies)
