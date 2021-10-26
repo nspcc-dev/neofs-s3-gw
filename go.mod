@@ -8,8 +8,8 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
-	github.com/nspcc-dev/neo-go v0.97.2
-	github.com/nspcc-dev/neofs-api-go v1.29.0
+	github.com/nspcc-dev/neo-go v0.97.3
+	github.com/nspcc-dev/neofs-api-go v1.30.0
 	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20210728122117-c55ae2c13f78
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/pflag v1.0.5
@@ -19,6 +19,6 @@ require (
 	go.uber.org/zap v1.18.1
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
-	google.golang.org/grpc v1.36.1
-	google.golang.org/protobuf v1.26.0-rc.1
+	google.golang.org/grpc v1.41.0
+	google.golang.org/protobuf v1.27.1
 )
