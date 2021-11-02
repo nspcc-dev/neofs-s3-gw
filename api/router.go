@@ -18,10 +18,10 @@ type (
 	Handler interface {
 		HeadObjectHandler(http.ResponseWriter, *http.Request)
 		CopyObjectPartHandler(http.ResponseWriter, *http.Request)
-		PutObjectPartHandler(http.ResponseWriter, *http.Request)
+		UploadPartHandler(http.ResponseWriter, *http.Request)
 		ListObjectPartsHandler(http.ResponseWriter, *http.Request)
 		CompleteMultipartUploadHandler(http.ResponseWriter, *http.Request)
-		NewMultipartUploadHandler(http.ResponseWriter, *http.Request)
+		CreateMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		AbortMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		GetObjectACLHandler(http.ResponseWriter, *http.Request)
 		PutObjectACLHandler(http.ResponseWriter, *http.Request)
@@ -222,7 +222,7 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 			Name("CopyObjectPart")
 		// PutObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
-			m.Handle(metrics.APIStats("putobjectpart", h.PutObjectPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
+			m.Handle(metrics.APIStats("putobjectpart", h.UploadPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
 			Name("PutObjectObject")
 		// ListObjectParts
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
@@ -234,7 +234,7 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 			Name("CompleteMultipartUpload")
 		// NewMultipartUpload
 		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
-			m.Handle(metrics.APIStats("newmultipartupload", h.NewMultipartUploadHandler))).Queries("uploads", "").
+			m.Handle(metrics.APIStats("newmultipartupload", h.CreateMultipartUploadHandler))).Queries("uploads", "").
 			Name("NewMultipartUpload")
 		// AbortMultipartUpload
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
@@ -388,6 +388,9 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
 			Name("ListMultipartUploads")
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("uploadpart", h.UploadPartHandler))).Queries("upload", "").
+			Name("UploadPart")
 		// ListObjectsV2M
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv2M", h.ListObjectsV2MHandler))).Queries("list-type", "2", "metadata", "true").

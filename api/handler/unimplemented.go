@@ -11,19 +11,7 @@ func (h *handler) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) 
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
 
-func (h *handler) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
 func (h *handler) ListObjectPartsHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
-func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
-func (h *handler) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
 

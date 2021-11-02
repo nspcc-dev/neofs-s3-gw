@@ -203,6 +203,12 @@ type (
 		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error)
 		DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) error
 		DeleteBucketTagging(ctx context.Context, bucket string) error
+
+		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error)
+		UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error)
+		ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) ([]*data.ObjectInfo, error)
+		AbortMultipartUpload(ctx context.Context, p *AbortMultipartUploadParams) error
+		ListParts(ctx context.Context, p *ListPartsParams) ([]*data.ObjectInfo, error)
 	}
 )
 

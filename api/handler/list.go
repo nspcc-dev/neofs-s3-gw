@@ -54,17 +54,3 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
-
-// ListMultipartUploadsHandler implements multipart uploads listing handler.
-func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		reqInfo = api.GetReqInfo(r.Context())
-		res     = new(ListMultipartUploadsResult)
-	)
-
-	res.Xmlns = "http://s3.amazonaws.com/doc/2006-03-01/"
-
-	if err := api.EncodeToResponse(w, res); err != nil {
-		h.logAndSendError(w, "something went wrong", reqInfo, err)
-	}
-}
