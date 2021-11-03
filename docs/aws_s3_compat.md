@@ -119,9 +119,9 @@ See also `GetObject` and other method parameters.
 
 |    | Method           | Comments |
 |----|------------------|----------|
-| 🔵 | DeleteBucketCors |          |
-| 🔵 | GetBucketCors    |          |
-| 🔵 | PutBucketCors    |          |
+| 🟢 | DeleteBucketCors |          |
+| 🟢 | GetBucketCors    |          |
+| 🟢 | PutBucketCors    |          |
 
 ## Encryption
 
