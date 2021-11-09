@@ -58,7 +58,7 @@ type (
 		GetBucketVersioningHandler(http.ResponseWriter, *http.Request)
 		GetBucketNotificationHandler(http.ResponseWriter, *http.Request)
 		ListenBucketNotificationHandler(http.ResponseWriter, *http.Request)
-		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
+		//ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
 		ListObjectsV2MHandler(http.ResponseWriter, *http.Request)
 		ListObjectsV2Handler(http.ResponseWriter, *http.Request)
 		ListBucketObjectVersionsHandler(http.ResponseWriter, *http.Request)
@@ -384,10 +384,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		// ListenBucketNotification
 		bucket.Methods(http.MethodGet).HandlerFunc(metrics.APIStats("listenbucketnotification", h.ListenBucketNotificationHandler)).Queries("events", "{events:.*}").
 			Name("ListenBucketNotification")
-		// ListMultipartUploads
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
-			Name("ListMultipartUploads")
+		//// ListMultipartUploads
+		//bucket.Methods(http.MethodGet).HandlerFunc(
+		//	m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
+		//	Name("ListMultipartUploads")
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("uploadpart", h.UploadPartHandler))).Queries("upload", "").
 			Name("UploadPart")

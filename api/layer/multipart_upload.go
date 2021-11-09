@@ -14,6 +14,7 @@ const (
 	UploadIdAttributeName   = "S3-Upload-Id"
 	PartNumberAttributeName = "S3-Upload-Part-Number"
 	UploadPartKeyPrefix = ".upload-"
+	UploadMinSize  = 5 * 1048576
 )
 
 type (
@@ -52,11 +53,11 @@ type (
 		Key string
 		MaxParts int
 		PartNumberMarker int
-
 	}
 )
 
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error) {
+
 	f := &findParams{
 		attr:   UploadIdAttributeName,
 		val:    p.UploadID,
@@ -65,21 +66,20 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.Obje
 	}
 
 	_, err := n.objectSearch(ctx, f)
-	if err != nil && errors.IsS3Error(err, errors.ErrNoSuchKey){
-		return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
+	if err != nil {
+		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
+			return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
+		} else {
+			return nil, err
+		}
 	}
-	
-	metadata := make(map[string]string)
 
-	metadata[UploadIdAttributeName] = p.UploadID
-	metadata[PartNumberAttributeName] = strconv.Itoa(p.PartNumber)
 
 	params := &PutObjectParams {
 		Bucket: p.Bkt.Name,
 		Object: createUploadPartName(p.Key, p.PartNumber),
 		Reader: p.Reader,
 		Size:   p.Size,
-		Header: metadata,
 	}
 
 	return n.objectPut(ctx, p.Bkt, params)
@@ -99,7 +99,11 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 	ids, err := n.objectSearch(ctx, f)
 	if err != nil {
-		return nil, err
+		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
+			return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
+		} else {
+			return nil, err
+		}
 	}
 
 	order := make(map[int]*data.ObjectInfo)
@@ -112,13 +116,17 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 				zap.Stringer("object id", id),
 				zap.Stringer("bucket id", p.Bkt.CID),
 				zap.Error(err))
-			return nil, err // TODO add specific error in this case
+			return nil, err
 		}
+		if meta.ToV2().GetHeader().GetPayloadLength() <= UploadMinSize {
+			return nil, errors.GetAPIError(errors.ErrEntityTooSmall)
+		}
+
 		attrs := userHeaders(meta.Attributes())
 		numStr := attrs[PartNumberAttributeName]
 		num, err := strconv.Atoi(numStr)
 		if err != nil {
-			continue // ???
+			return nil, errors.GetAPIError(errors.ErrInternalError)
 		}
 		order[num] = objInfoFromMeta(p.Bkt, meta)
 		partNumbers = append(partNumbers, num)
@@ -223,33 +231,37 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *AbortMultipartUploa
 	return nil
 }
 
-func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) ([]*data.ObjectInfo, error) {
-	f := &findParams {
-		attr:   UploadIdAttributeName,
-		val:    p.UploadID,
-		cid:    p.Bkt.CID,
-		prefix: "",
-	}
-
-	ids, err := n.objectSearch(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	res := make([]*data.ObjectInfo, 0, len(ids))
-
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, id)
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", id),
-				zap.Stringer("bucket id", p.Bkt.CID),
-				zap.Error(err))
-			continue
-		}
-		info := objInfoFromMeta(p.Bkt, meta)
-
-		res = append(res, info)
-	}
-
-	return res, nil
-}
+//func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) ([]*data.ObjectInfo, error) {
+//	f := &findParams {
+//		attr:   UploadIdAttributeName,
+//		val:    p.UploadID,
+//		cid:    p.Bkt.CID,
+//		prefix: "",
+//	}
+//
+//	ids, err := n.objectSearch(ctx, f)
+//	if err != nil {
+//		return nil, err
+//	}
+//	res := make([]*data.ObjectInfo, 0, len(ids))
+//
+//	for _, id := range ids {
+//		meta, err := n.objectHead(ctx, p.Bkt.CID, id)
+//		if err != nil {
+//			n.log.Warn("couldn't head object",
+//				zap.Stringer("object id", id),
+//				zap.Stringer("bucket id", p.Bkt.CID),
+//				zap.Error(err))
+//			continue
+//		}
+//		info := objInfoFromMeta(p.Bkt, meta)
+//
+//		res = append(res, info)
+//	}
+//
+//	return res, nil
+//}
+//
+//func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) ([]*data.ObjectInfo, error) {
+//
+//}
