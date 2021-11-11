@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/xml"
+	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
+	"go.uber.org/zap"
 	"net/http"
 	"strconv"
 
@@ -51,30 +53,53 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 
 	uploadID := uuid.New()
 
-	metadata[layer.UploadIdAttributeName] = uploadID.String()
-	metadata[layer.PartNumberAttributeName] = "0"
-
-	p := &layer.PutObjectParams{
-		Bucket: reqInfo.BucketName,
-		Object: reqInfo.ObjectName,
-		Size:   r.ContentLength,
-		Reader: r.Body,
-		Header: metadata,
+	p := &layer.UploadPartParams{
+		UploadID:   uploadID.String(),
+		PartNumber: 0,
+		Bkt:        bktInfo,
+		Key:        reqInfo.ObjectName,
+		Header:     metadata,
 	}
 
-	_, err = h.obj.PutObject(r.Context(), p)
+	info, err := h.obj.UploadPart(r.Context(), p)
 	if err != nil {
-		h.logAndSendError(w, "could not upload object", reqInfo, err)
-		return
+		h.logAndSendError(w, "could not upload a part",reqInfo, err)
 	}
 
-	res := InitiateMultipartUploadResponse {
+	var newEaclTable *eacl.Table
+	if containsACLHeaders(r) {
+		if newEaclTable, err = h.getNewEAclTable(r, info); err != nil {
+			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
+			return
+		}
+	}
+	if newEaclTable != nil {
+		p := &layer.PutBucketACLParams{
+			Name: reqInfo.BucketName,
+			EACL: newEaclTable,
+		}
+
+		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
+			return
+		}
+	}
+
+	tagSet, err := parseTaggingHeader(r.Header)
+	if tagSet != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), &layer.PutTaggingParams{ObjectInfo: info, TagSet: tagSet}); err != nil {
+			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
+			return
+		}
+	}
+
+	resp := InitiateMultipartUploadResponse {
 		Bucket:   bktInfo.Name,
 		Key:      reqInfo.ObjectName,
 		UploadID: uploadID.String(),
 	}
 
-	if err := api.EncodeToResponse(w, res); err != nil {
+	if err := api.EncodeToResponse(w, resp); err != nil {
 		h.logAndSendError(w, "could not encode InitiateMultipartUploadResponse to response", reqInfo, err)
 		return
 	}
@@ -103,17 +128,17 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &layer.UploadPartParams{
-		UploadID: queryValues.Get(uploadIdHeaderName),
+		UploadID:   queryValues.Get(uploadIdHeaderName),
 		PartNumber: partNum,
-		Key:        reqInfo.ObjectName,
 		Bkt:        bktInfo,
-		Reader:     r.Body,
+		Key:        reqInfo.ObjectName,
 		Size:       r.ContentLength,
+		Reader:     r.Body,
 	}
 
 	info, err := h.obj.UploadPart(r.Context(), p)
 	if err != nil {
-		h.logAndSendError(w, "could not upload a part", reqInfo, err)
+		h.logAndSendError(w, "could not upload part", reqInfo, err)
 		return
 	}
 
@@ -134,6 +159,24 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
+
+	h := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: "",
+	}
+
+	objInfo := h.obj.GetObjectInfo(r.Context(), )
+
+	tags, err := h.obj.GetObjectTagging(ctx, )
+	if err != nil {
+		n.log.Error("could not get tagging file of multipart upload",
+			zap.String("uploadID", p.UploadID),
+			zap.String("part number", initMetadata[PartNumberAttributeName]),
+			zap.Error(err))
+		return nil, err
+	}
+
 	p := &layer.CompleteMultipartParams{
 		Bkt:      bktInfo,
 		Key:      reqInfo.ObjectName,
@@ -142,7 +185,9 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	info, err := h.obj.CompleteMultipartUpload(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err)
+		return
 	}
+
 	res := &CompleteMultipartUploadResponse{
 		Bucket:  info.Bucket,
 		Key:     info.Name,
@@ -194,4 +239,5 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 //
 //
 //}
+
 

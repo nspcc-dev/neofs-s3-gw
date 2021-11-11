@@ -602,5 +602,3 @@ func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
 	}
 	return params, nil
 }
-
-func putObject()
