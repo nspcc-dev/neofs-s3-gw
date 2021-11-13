@@ -22,34 +22,18 @@ const (
 )
 
 type (
-	CompleteMultipartParams struct {
-		Bkt      *data.BucketInfo
-		Key      string
+	UploadInfo struct {
 		UploadID string
-		Parts []*Part
-	}
-
-	Part struct {
-		ETag string
-		PartNum int
-		LastModified string
-		Size int64
+		Bkt *data.BucketInfo
+		Key string
 	}
 
 	UploadPartParams struct {
-		UploadID string
+		Info *UploadInfo
 		PartNumber int
-		Bkt *data.BucketInfo
-		Key string
 		Size int64
 		Reader io.Reader
 		Header map[string]string
-	}
-
-	AbortMultipartUploadParams struct {
-		UploadID string
-		Key string
-		Bkt *data.BucketInfo
 	}
 
 	ListMultipartUploadsParams struct {
@@ -61,34 +45,33 @@ type (
 	}
 
 	ListPartsParams struct {
-		Bkt *data.BucketInfo
-		UploadID string
-		Key string
+		Info *UploadInfo
 		MaxParts int
 		PartNumberMarker int
 	}
+
 	ListPartsInfo struct {
-		Parts []*Part
+		Parts []*data.ObjectInfo
 		Owner *owner.ID
-		
+
 	}
 )
 
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error) {
 	if p.PartNumber != 0 {
-		_, err := n.getUploadParts(ctx, p.UploadID, p.Key, p.Bkt)
+		_, err := n.getUploadParts(ctx, p.Info.UploadID, p.Info.Key, p.Info.Bkt)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	p.Header[UploadIdAttributeName] = p.UploadID
+	p.Header[UploadIdAttributeName] = p.Info.UploadID
 	p.Header[PartNumberAttributeName] = strconv.Itoa(p.PartNumber)
-	p.Header[UploadKeyAttributeName] = p.Key
+	p.Header[UploadKeyAttributeName] = p.Info.Key
 
 	params := &PutObjectParams{
-		Bucket: p.Bkt.Name,
-		Object: createUploadPartName(p.Key, p.PartNumber),
+		Bucket: p.Info.Bkt.Name,
+		Object: createUploadPartName(p.Info.Key, p.PartNumber),
 		Size:   p.Size,
 		Reader: p.Reader,
 		Header: p.Header,
@@ -98,88 +81,136 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.Obje
 }
 
 func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error) {
+	var (
+		obj             *data.ObjectInfo
+		tagsCompleted   = false
+		aclExist        = false
+		uploadCompleted = false
+		initPartInfo    *data.ObjectInfo
+	)
+
 	objects, err := n.getUploadParts(ctx, p.UploadID, p.Key, p.Bkt)
-	if err != nil {
-		return nil, err
-	}
-	parts := make([]*data.ObjectInfo, 0, len(p.Parts))
+	if err == nil  {
+		initPartInfo = objects[0]
+		if len(objects) >= len(p.Parts) {
+			parts := make([]*data.ObjectInfo, 0, len(p.Parts))
 
-	for i, part := range p.Parts {
-		info, ok := objects[part.PartNum]
-		if !ok || part.ETag != info.HashSum {
-			return nil, errors.GetAPIError(errors.ErrInvalidPart)
+			for i, part := range p.Parts {
+				info, ok := objects[part.PartNum]
+				if !ok || part.ETag != info.HashSum {
+					return nil, errors.GetAPIError(errors.ErrInvalidPart)
+				}
+				if i != len(p.Parts)-1 && info.Size <= UploadMinSize {
+					return nil, errors.GetAPIError(errors.ErrEntityTooSmall)
+				}
+				parts = append(parts, info)
+			}
+
+			initMetadata := initPartInfo.Headers
+
+			pr, pw := io.Pipe()
+
+			done := make(chan bool)
+
+			delete(initMetadata, UploadIdAttributeName)
+			delete(initMetadata, PartNumberAttributeName)
+			delete(initMetadata, UploadKeyAttributeName)
+
+			go func(done chan bool) {
+				obj, err = n.objectPut(ctx, p.Bkt, &PutObjectParams{
+					Bucket: p.Bkt.Name,
+					Object: p.Key,
+					Reader: pr,
+					Header: initMetadata,
+				})
+				if err != nil {
+					done <- true
+					return
+				}
+				uploadCompleted = true
+				done <- true
+			}(done)
+			for _, part := range parts {
+				_, err := n.objectGetWithPayloadWriter(ctx, &getParams{
+					Writer: pw,
+					cid:    p.Bkt.CID,
+					oid:    part.ID,
+				})
+				if err != nil {
+					n.log.Error("could not download a part of multipart upload",
+						zap.String("uploadID", p.UploadID),
+						zap.String("part number", part.Headers[PartNumberAttributeName]),
+						zap.Error(err))
+					return nil, err
+				}
+			}
+			pw.Close()
+			<-done
 		}
-		if i != len(p.Parts) - 1 && info.Size <= UploadMinSize {
-			return nil, errors.GetAPIError(errors.ErrEntityTooSmall)
-		}
-		parts = append(parts, info)
-	}
-
-	initMetadata := objects[0].Headers
-
-
-	pr, pw := io.Pipe()
-
-	var obj *data.ObjectInfo
-	done := make(chan bool)
-
-	success := false
-
-
-	delete(initMetadata, UploadIdAttributeName)
-	delete(initMetadata, PartNumberAttributeName)
-	delete(initMetadata, UploadKeyAttributeName)
-
-	go func(done chan bool) {
-		obj, err = n.objectPut(ctx, p.Bkt, &PutObjectParams{
-			Bucket: p.Bkt.Name,
-			Object: p.Key,
-			Reader: pr,
-			Header: initMetadata,
-		})
-		if err != nil {
-			done <- true
-			return
-		}
-		success = true
-		done <- true
-	}(done)
-
-	for _, part := range parts {
-		_, err := n.objectGetWithPayloadWriter(ctx, &getParams{
-			Writer: pw,
-			cid:    p.Bkt.CID,
-			oid:    part.ID,
-		})
-		if err != nil {
-			n.log.Error("could not download a part of multipart upload",
-				zap.String("uploadID", p.UploadID),
-				zap.String("part number", part.Headers[PartNumberAttributeName]),
-				zap.Error(err))
+	} else {
+		if err == errors.GetAPIError(errors.ErrNoSuchUpload) {
+			f := &findParams{
+				attr: object.AttributeFileName,
+				val: p.Key,
+				cid: p.Bkt.CID,
+			}
+			_, err = n.objectSearch(ctx, f)
+			if err != nil {
+				return nil, err
+			}
+		} else {
 			return nil, err
 		}
+		uploadCompleted = true
 	}
 
-	pw.Close()
-	<- done
+	if !uploadCompleted {
+		return nil, errors.GetAPIError(errors.ErrInternalError)
+	}
 
-	if success {
+	for partNum, objInfo := range objects {
+		if partNum == 0 {
+			continue
+		}
+		if err = n.objectDelete(ctx, p.Bkt.CID, objInfo.ID); err != nil {
+			n.log.Warn("could not delete upload part",
+				zap.Stringer("object id", objInfo.ID),
+				zap.Stringer("bucket id", p.Bkt.CID),
+				zap.Error(err))
+		}
+	}
+
+	tags, err := n.GetObjectTagging(ctx, initPartInfo)
+	if err != nil {
+		if err == errors.GetAPIError(errors.ErrNoSuchKey) {
+			tags, err = n.GetObjectTagging(ctx, obj)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
 		t := &PutTaggingParams{
 			ObjectInfo: obj,
 			TagSet:     tags,
 		}
 		err := n.PutObjectTagging(ctx, t)
 		if err != nil {
+			return nil, err
+		}
+	}
 
-		}
-		for _, objInfo := range parts {
-			if err = n.objectDelete(ctx, p.Bkt.CID, objInfo.ID); err != nil {
-				n.log.Warn("could not delete upload part",
-					zap.Stringer("object id", objInfo.ID),
-					zap.Stringer("bucket id", p.Bkt.CID),
-					zap.Error(err))
-			}
-		}
+
+
+
+
+
+
+
+
+
+
+	if uploadCompleted {
+
 	} else {
 		err = n.objectDelete(ctx, obj.CID, obj.ID)
 		if err != nil {
@@ -337,4 +368,8 @@ func (n* layer) getUploadParts(ctx context.Context, uploadID, key string, bktInf
 
 func createUploadPartName(key string, partNumber int ) string {
 	return UploadPartKeyPrefix + key + strconv.Itoa(partNumber)
+}
+
+func (n* layer) GetUploadInitInfo(ctx context.Context, p *UploadInfo) (*data.ObjectInfo, error) {
+
 }

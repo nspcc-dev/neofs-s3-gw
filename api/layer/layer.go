@@ -209,6 +209,7 @@ type (
 		ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) ([]*data.ObjectInfo, error)
 		AbortMultipartUpload(ctx context.Context, p *AbortMultipartUploadParams) error
 		ListParts(ctx context.Context, p *ListPartsParams) ([]*data.ObjectInfo, error)
+		GetUploadInitInfo(ctx context.Context, p *UploadInfo) (*data.ObjectInfo, error)
 	}
 )
 
