@@ -44,7 +44,11 @@ func (n *layer) headSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 }
 
 func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bktInfo.CID, attr: objectSystemAttributeName, val: name})
+	f := &findParams{
+		filters: []filter{{attr: objectSystemAttributeName, val: name}},
+		cid:     bktInfo.CID,
+	}
+	ids, err := n.objectSearch(ctx, f)
 	if err != nil {
 		return err
 	}
@@ -166,7 +170,11 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 }
 
 func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, attr: objectSystemAttributeName, val: sysName})
+	f := &findParams{
+		filters: []filter{{attr: objectSystemAttributeName, val: sysName}},
+		cid:     bkt.CID,
+	}
+	ids, err := n.objectSearch(ctx, f)
 	if err != nil {
 		return nil, err
 	}
