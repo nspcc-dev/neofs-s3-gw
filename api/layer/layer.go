@@ -587,7 +587,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 			obj.DeleteMarkVersion = objInfo.Version()
 		}
 	} else {
-		ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, val: obj.Name})
+		ids, err = n.objectSearchByName(ctx, bkt.CID, obj.Name)
 		if err != nil {
 			obj.Error = err
 			return obj

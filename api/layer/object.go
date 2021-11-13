@@ -22,10 +22,14 @@ import (
 
 type (
 	findParams struct {
-		attr   string
-		val    string
-		cid    *cid.ID
-		prefix string
+		filters []filter
+		cid     *cid.ID
+		prefix  string
+	}
+
+	filter struct {
+		attr string
+		val  string
 	}
 
 	getParams struct {
@@ -68,21 +72,29 @@ type (
 	}
 )
 
+func (n *layer) objectSearchByName(ctx context.Context, cid *cid.ID, filename string) ([]*object.ID, error) {
+	f := &findParams{
+		filters: []filter{{attr: object.AttributeFileName, val: filename}},
+		cid:     cid,
+		prefix:  "",
+	}
+	return n.objectSearch(ctx, f)
+}
+
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, error) {
 	var opts object.SearchFilters
 
 	opts.AddRootFilter()
 
-	if filename, err := url.QueryUnescape(p.val); err != nil {
-		return nil, err
-	} else if filename != "" {
-		if p.attr == "" {
-			opts.AddFilter(object.AttributeFileName, filename, object.MatchStringEqual)
-		} else {
-			opts.AddFilter(p.attr, filename, object.MatchStringEqual)
+	for _, filter := range p.filters {
+		if val, err := url.QueryUnescape(filter.val); err != nil {
+			return nil, err
+		} else if val != "" {
+			opts.AddFilter(filter.attr, val, object.MatchStringEqual)
 		}
 	}
+
 	if prefix, err := url.QueryUnescape(p.prefix); err != nil {
 		return nil, err
 	} else if prefix != "" {
@@ -142,12 +154,14 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 	idsToDeleteArr := updateCRDT2PSetHeaders(p.Header, versions, versioningEnabled)
 
 	r := p.Reader
-	if len(p.Header[api.ContentType]) == 0 {
-		d := newDetector(r)
-		if contentType, err := d.Detect(); err == nil {
-			p.Header[api.ContentType] = contentType
+	if r != nil {
+		if len(p.Header[api.ContentType]) == 0 {
+			d := newDetector(r)
+			if contentType, err := d.Detect(); err == nil {
+				p.Header[api.ContentType] = contentType
+			}
+			r = d.MultiReader()
 		}
-		r = d.MultiReader()
 	}
 	rawObject := formRawObject(p, bkt.CID, own, obj)
 
@@ -307,7 +321,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 }
 
 func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectName string) (*objectVersions, error) {
-	ids, err := n.objectSearch(ctx, &findParams{cid: bkt.CID, val: objectName})
+	ids, err := n.objectSearchByName(ctx, bkt.CID, objectName)
 	if err != nil {
 		return nil, err
 	}
