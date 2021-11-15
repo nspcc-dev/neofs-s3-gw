@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
-	"github.com/nspcc-dev/neofs-api-go/pkg/object"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 )
 
 type (

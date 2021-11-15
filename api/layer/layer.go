@@ -6,26 +6,25 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
-	"math"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
-	"github.com/nspcc-dev/neofs-api-go/pkg/client"
-	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
-	"github.com/nspcc-dev/neofs-api-go/pkg/netmap"
-	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/session"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
+	"github.com/nspcc-dev/neofs-sdk-go/netmap"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
@@ -257,19 +256,6 @@ func (n *layer) EphemeralKey() *keys.PublicKey {
 	return n.anonKey.Key.PublicKey()
 }
 
-// randomSession returns client.WithSession for ephemeral key or nil if access box matches gate key.
-func (n *layer) randomSession(ctx context.Context) client.CallOption {
-	c, _, err := n.pool.Connection()
-	if err != nil {
-		return client.WithSession(nil)
-	}
-	st, err := c.CreateSession(ctx, math.MaxUint64, client.WithKey(&n.anonKey.Key.PrivateKey))
-	if err != nil {
-		return client.WithSession(nil)
-	}
-	return client.WithSession(st)
-}
-
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
 	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
@@ -280,22 +266,22 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 	return id
 }
 
-// CallOptions returns []client.CallOption options: client.WithBearer and client.WithKey.
-func (n *layer) CallOptions(ctx context.Context) []client.CallOption {
+// CallOptions returns []pool.CallOption options: client.WithBearer or client.WithKey (if request is anonymous).
+func (n *layer) CallOptions(ctx context.Context) []pool.CallOption {
 	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
-		return []client.CallOption{client.WithBearer(data.Gate.BearerToken)}
+		return []pool.CallOption{pool.WithBearer(data.Gate.BearerToken)}
 	}
 
-	return []client.CallOption{client.WithKey(&n.anonKey.Key.PrivateKey), n.randomSession(ctx)}
+	return []pool.CallOption{pool.WithKey(&n.anonKey.Key.PrivateKey)}
 }
 
 // SessionOpt returns client.WithSession call option with token from context or with nil token.
-func (n *layer) SessionOpt(ctx context.Context) client.CallOption {
+func (n *layer) SessionOpt(ctx context.Context) pool.CallOption {
 	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
-		return client.WithSession(data.Gate.SessionToken)
+		return pool.WithSession(data.Gate.SessionToken)
 	}
 
-	return client.WithSession(nil)
+	return pool.WithSession(nil)
 }
 
 // Get NeoFS Object by refs.Address (should be used by auth.Center).

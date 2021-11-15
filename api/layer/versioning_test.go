@@ -12,19 +12,19 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neofs-api-go/pkg/acl/eacl"
-	"github.com/nspcc-dev/neofs-api-go/pkg/client"
-	"github.com/nspcc-dev/neofs-api-go/pkg/container"
-	cid "github.com/nspcc-dev/neofs-api-go/pkg/container/id"
-	"github.com/nspcc-dev/neofs-api-go/pkg/object"
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
-	"github.com/nspcc-dev/neofs-api-go/pkg/session"
-	"github.com/nspcc-dev/neofs-api-go/pkg/token"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
+	"github.com/nspcc-dev/neofs-sdk-go/container"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/token"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +41,7 @@ func newTestPool() *testPool {
 	}
 }
 
-func (t *testPool) PutObject(ctx context.Context, params *client.PutObjectParams, option ...client.CallOption) (*object.ID, error) {
+func (t *testPool) PutObject(ctx context.Context, params *client.PutObjectParams, option ...pool.CallOption) (*object.ID, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return nil, err
@@ -68,12 +68,12 @@ func (t *testPool) PutObject(ctx context.Context, params *client.PutObjectParams
 	return raw.ID(), nil
 }
 
-func (t *testPool) DeleteObject(ctx context.Context, params *client.DeleteObjectParams, option ...client.CallOption) error {
+func (t *testPool) DeleteObject(ctx context.Context, params *client.DeleteObjectParams, option ...pool.CallOption) error {
 	delete(t.objects, params.Address().String())
 	return nil
 }
 
-func (t *testPool) GetObject(ctx context.Context, params *client.GetObjectParams, option ...client.CallOption) (*object.Object, error) {
+func (t *testPool) GetObject(ctx context.Context, params *client.GetObjectParams, option ...pool.CallOption) (*object.Object, error) {
 	if obj, ok := t.objects[params.Address().String()]; ok {
 		if params.PayloadWriter() != nil {
 			_, err := params.PayloadWriter().Write(obj.Payload())
@@ -87,24 +87,24 @@ func (t *testPool) GetObject(ctx context.Context, params *client.GetObjectParams
 	return nil, fmt.Errorf("object not found " + params.Address().String())
 }
 
-func (t *testPool) GetObjectHeader(ctx context.Context, params *client.ObjectHeaderParams, option ...client.CallOption) (*object.Object, error) {
+func (t *testPool) GetObjectHeader(ctx context.Context, params *client.ObjectHeaderParams, option ...pool.CallOption) (*object.Object, error) {
 	p := new(client.GetObjectParams).WithAddress(params.Address())
 	return t.GetObject(ctx, p)
 }
 
-func (t *testPool) ObjectPayloadRangeData(ctx context.Context, params *client.RangeDataParams, option ...client.CallOption) ([]byte, error) {
+func (t *testPool) ObjectPayloadRangeData(ctx context.Context, params *client.RangeDataParams, option ...pool.CallOption) ([]byte, error) {
 	panic("implement me")
 }
 
-func (t *testPool) ObjectPayloadRangeSHA256(ctx context.Context, params *client.RangeChecksumParams, option ...client.CallOption) ([][32]byte, error) {
+func (t *testPool) ObjectPayloadRangeSHA256(ctx context.Context, params *client.RangeChecksumParams, option ...pool.CallOption) ([][32]byte, error) {
 	panic("implement me")
 }
 
-func (t *testPool) ObjectPayloadRangeTZ(ctx context.Context, params *client.RangeChecksumParams, option ...client.CallOption) ([][64]byte, error) {
+func (t *testPool) ObjectPayloadRangeTZ(ctx context.Context, params *client.RangeChecksumParams, option ...pool.CallOption) ([][64]byte, error) {
 	panic("implement me")
 }
 
-func (t *testPool) SearchObject(ctx context.Context, params *client.SearchObjectParams, option ...client.CallOption) ([]*object.ID, error) {
+func (t *testPool) SearchObject(ctx context.Context, params *client.SearchObjectParams, option ...pool.CallOption) ([]*object.ID, error) {
 	cidStr := params.ContainerID().String()
 
 	var res []*object.ID
@@ -143,7 +143,7 @@ func isMatched(attributes []*object.Attribute, filter object.SearchFilter) bool 
 	return false
 }
 
-func (t *testPool) PutContainer(ctx context.Context, container *container.Container, option ...client.CallOption) (*cid.ID, error) {
+func (t *testPool) PutContainer(ctx context.Context, container *container.Container, option ...pool.CallOption) (*cid.ID, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func (t *testPool) PutContainer(ctx context.Context, container *container.Contai
 	return id, nil
 }
 
-func (t *testPool) GetContainer(ctx context.Context, id *cid.ID, option ...client.CallOption) (*container.Container, error) {
+func (t *testPool) GetContainer(ctx context.Context, id *cid.ID, option ...pool.CallOption) (*container.Container, error) {
 	for k, v := range t.containers {
 		if k == id.String() {
 			return v, nil
@@ -166,7 +166,7 @@ func (t *testPool) GetContainer(ctx context.Context, id *cid.ID, option ...clien
 	return nil, fmt.Errorf("container not found " + id.String())
 }
 
-func (t *testPool) ListContainers(ctx context.Context, id *owner.ID, option ...client.CallOption) ([]*cid.ID, error) {
+func (t *testPool) ListContainers(ctx context.Context, id *owner.ID, option ...pool.CallOption) ([]*cid.ID, error) {
 	var res []*cid.ID
 	for k := range t.containers {
 		cID := cid.New()
@@ -179,24 +179,28 @@ func (t *testPool) ListContainers(ctx context.Context, id *owner.ID, option ...c
 	return res, nil
 }
 
-func (t *testPool) DeleteContainer(ctx context.Context, id *cid.ID, option ...client.CallOption) error {
+func (t *testPool) DeleteContainer(ctx context.Context, id *cid.ID, option ...pool.CallOption) error {
 	delete(t.containers, id.String())
 	return nil
 }
 
-func (t *testPool) GetEACL(ctx context.Context, id *cid.ID, option ...client.CallOption) (*client.EACLWithSignature, error) {
+func (t *testPool) GetEACL(ctx context.Context, id *cid.ID, option ...pool.CallOption) (*client.EACLWithSignature, error) {
 	panic("implement me")
 }
 
-func (t *testPool) SetEACL(ctx context.Context, table *eacl.Table, option ...client.CallOption) error {
+func (t *testPool) SetEACL(ctx context.Context, table *eacl.Table, option ...pool.CallOption) error {
 	panic("implement me")
 }
 
-func (t *testPool) AnnounceContainerUsedSpace(ctx context.Context, announcements []container.UsedSpaceAnnouncement, option ...client.CallOption) error {
+func (t *testPool) AnnounceContainerUsedSpace(ctx context.Context, announcements []container.UsedSpaceAnnouncement, option ...pool.CallOption) error {
 	panic("implement me")
 }
 
 func (t *testPool) Connection() (client.Client, *session.Token, error) {
+	panic("implement me")
+}
+
+func (t *testPool) Close() {
 	panic("implement me")
 }
 
