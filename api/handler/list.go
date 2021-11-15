@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nspcc-dev/neofs-api-go/pkg/owner"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-sdk-go/owner"
 )
 
 // ListMultipartUploadsResult contains ListMultipartUploadsResult XML representation.
