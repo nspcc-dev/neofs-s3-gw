@@ -27,8 +27,8 @@ import (
 const (
 	poolConnectTimeout = 5 * time.Second
 	poolRequestTimeout = 5 * time.Second
-	// a number of 1-hour epochs in a month.
-	defaultLifetime = 720
+	// a month.
+	defaultLifetime = 30 * 24 * time.Hour
 )
 
 var (
@@ -199,8 +199,9 @@ func issueSecret() *cli.Command {
 				Value:       false,
 			},
 			&cli.DurationFlag{
-				Name:        "lifetime",
-				Usage:       "Lifetime of tokens (e.g. 1d2h30m, it will be ceil rounded to the nearest amount of epoch)",
+				Name: "lifetime",
+				Usage: `Lifetime of tokens. For example 50h30m (note: max time unit is an hour so to set a day you should use 24h). 
+It will be ceil rounded to the nearest amount of epoch.`,
 				Required:    false,
 				Destination: &lifetimeFlag,
 				Value:       defaultLifetime,
