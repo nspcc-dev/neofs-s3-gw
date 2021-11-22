@@ -117,14 +117,16 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	if err != nil {
 		l.Fatal("couldn't generate random key", zap.Error(err))
 	}
-	anonKey := layer.AnonymousKey{
-		Key: randomKey,
+
+	layerCfg := &layer.Config{
+		Caches: getCacheOptions(v, l),
+		AnonKey: layer.AnonymousKey{
+			Key: randomKey,
+		},
 	}
 
-	cacheCfg := getCacheOptions(v, l)
-
 	// prepare object layer
-	obj = layer.NewLayer(l, conns, cacheCfg, anonKey)
+	obj = layer.NewLayer(l, conns, layerCfg)
 
 	// prepare auth center
 	ctr = auth.New(conns, key, getAccessBoxCacheConfig(v, l))

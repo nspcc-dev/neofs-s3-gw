@@ -26,6 +26,8 @@ type (
 	}
 )
 
+const nnsNameAttr = "__NEOFS__NAME"
+
 func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInfo, error) {
 	var (
 		err error
@@ -126,6 +128,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		container.WithPolicy(p.Policy),
 		container.WithCustomBasicACL(p.ACL),
 		container.WithAttribute(container.AttributeName, p.Name),
+		container.WithAttribute(nnsNameAttr, p.Name),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)))
 
 	cnr.SetSessionToken(p.SessionToken)
