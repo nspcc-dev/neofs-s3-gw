@@ -214,7 +214,7 @@ func (t *testPool) WaitForContainerPresence(ctx context.Context, id *cid.ID, par
 
 func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 	objInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
-		Bucket: tc.bkt,
+		Bucket: tc.bktID.String(),
 		Object: tc.obj,
 		Size:   int64(len(content)),
 		Reader: bytes.NewReader(content),
@@ -348,9 +348,14 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		config = cachesConfig[0]
 	}
 
+	layerCfg := &Config{
+		Caches:  config,
+		AnonKey: AnonymousKey{Key: key},
+	}
+
 	return &testContext{
 		ctx:      ctx,
-		layer:    NewLayer(l, tp, config, AnonymousKey{Key: key}),
+		layer:    NewLayer(l, tp, layerCfg),
 		bkt:      bktName,
 		bktID:    bktID,
 		obj:      "obj1",
@@ -362,7 +367,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 func TestSimpleVersioning(t *testing.T) {
 	tc := prepareContext(t)
 	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bkt,
+		Bucket:   tc.bktID.String(),
 		Settings: &BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
@@ -403,7 +408,7 @@ func TestSimpleNoVersioning(t *testing.T) {
 func TestVersioningDeleteObject(t *testing.T) {
 	tc := prepareContext(t)
 	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bkt,
+		Bucket:   tc.bktID.String(),
 		Settings: &BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
@@ -420,7 +425,7 @@ func TestVersioningDeleteObject(t *testing.T) {
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	tc := prepareContext(t)
 	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bkt,
+		Bucket:   tc.bktID.String(),
 		Settings: &BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
@@ -751,7 +756,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 
 	tc := prepareContext(t, cacheConfig)
 	objInfo, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bkt,
+		Bucket:   tc.bktID.String(),
 		Settings: &BucketSettings{VersioningEnabled: false},
 	})
 	require.NoError(t, err)
@@ -760,7 +765,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	require.True(t, ok)
 
 	_, err = tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bkt,
+		Bucket:   tc.bktID.String(),
 		Settings: &BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
@@ -783,10 +788,10 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 		"tag1": "val1",
 	}
 
-	err := tc.layer.PutBucketTagging(tc.ctx, tc.bkt, tagSet)
+	err := tc.layer.PutBucketTagging(tc.ctx, tc.bktID.String(), tagSet)
 	require.NoError(t, err)
 
-	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bkt))
+	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktID.String()))
 
 	tagSet["tag2"] = "val2"
 	err = tc.layer.PutBucketTagging(tc.ctx, tc.bkt, tagSet)

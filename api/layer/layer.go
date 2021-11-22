@@ -24,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/resolver"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -38,6 +39,12 @@ type (
 		namesCache  *cache.ObjectsNameCache
 		bucketCache *cache.BucketCache
 		systemCache *cache.SystemCache
+	}
+
+	Config struct {
+		ChainAddress string
+		Caches       *CachesConfig
+		AnonKey      AnonymousKey
 	}
 
 	// AnonymousKey contains data for anonymous requests.
@@ -218,8 +225,9 @@ type (
 )
 
 const (
-	tagPrefix    = "S3-Tag-"
-	tagEmptyMark = "\\"
+	tagPrefix             = "S3-Tag-"
+	tagEmptyMark          = "\\"
+	networkSystemDNSParam = "SystemDNS"
 )
 
 func (t *VersionedObject) String() string {
@@ -239,16 +247,16 @@ func DefaultCachesConfigs() *CachesConfig {
 
 // NewLayer creates instance of layer. It checks credentials
 // and establishes gRPC connection with node.
-func NewLayer(log *zap.Logger, conns pool.Pool, config *CachesConfig, anonKey AnonymousKey) Client {
+func NewLayer(log *zap.Logger, conns pool.Pool, config *Config) Client {
 	return &layer{
 		pool:        conns,
 		log:         log,
-		anonKey:     anonKey,
-		listsCache:  cache.NewObjectsListCache(config.ObjectsList),
-		objCache:    cache.New(config.Objects),
-		namesCache:  cache.NewObjectsNameCache(config.Names),
-		bucketCache: cache.NewBucketCache(config.Buckets),
-		systemCache: cache.NewSystemCache(config.System),
+		anonKey:     config.AnonKey,
+		listsCache:  cache.NewObjectsListCache(config.Caches.ObjectsList),
+		objCache:    cache.New(config.Caches.Objects),
+		namesCache:  cache.NewObjectsNameCache(config.Caches.Names),
+		bucketCache: cache.NewBucketCache(config.Caches.Buckets),
+		systemCache: cache.NewSystemCache(config.Caches.System),
 	}
 }
 
@@ -301,18 +309,9 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 		return bktInfo, nil
 	}
 
-	containerID := new(cid.ID)
-	if err := containerID.Parse(name); err != nil {
-		list, err := n.containerList(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, bkt := range list {
-			if bkt.Name == name {
-				return bkt, nil
-			}
-		}
-
+	containerID, err := n.ResolveBucket(ctx, name)
+	if err != nil {
+		n.log.Debug("bucket not found", zap.Error(err))
 		return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 	}
 
@@ -634,6 +633,45 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.I
 	}
 
 	return nil, errors.GetAPIError(errors.ErrBucketAlreadyExists)
+}
+
+func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error) {
+	cnrID := cid.New()
+	if err := cnrID.Parse(name); err != nil {
+		conn, _, err := n.pool.Connection()
+		if err != nil {
+			return nil, err
+		}
+
+		networkInfo, err := conn.NetworkInfo(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		var domain string
+		networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
+			if string(parameter.Key()) == networkSystemDNSParam {
+				domain = string(parameter.Value())
+				return true
+			}
+			return false
+		})
+
+		if domain != "" {
+			domain = name + "." + domain
+			if cnrID, err = resolver.ResolveContainerDomainName(domain); err == nil {
+				return cnrID, nil
+			}
+			n.log.Debug("trying fallback to direct nns since couldn't resolve system dns record",
+				zap.String("domain", domain), zap.Error(err))
+		}
+
+		// todo add fallback to use nns contract directly
+
+		return nil, fmt.Errorf("couldn't resolve container name '%s': not found", name)
+	}
+
+	return cnrID, nil
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
