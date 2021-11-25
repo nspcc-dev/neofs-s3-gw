@@ -336,31 +336,33 @@ Compatibility:  0/29/30
 
 ## Multipart
 
-Compatibility: 0/19/22
+Compatibility: 18/19/22
 
 |    | Test                                                                             | s3-gw | aws s3 |
 |----|----------------------------------------------------------------------------------|-------|--------|
-| 1  | s3tests_boto3.functional.test_s3.test_multipart_upload_empty                     | ERROR | FAIL   |
+| 1  | s3tests_boto3.functional.test_s3.test_multipart_upload_empty                     | ok    | FAIL   |
 | 2  | s3tests_boto3.functional.test_s3.test_multipart_upload_small                     | ERROR | ok     |
-| 3  | s3tests_boto3.functional.test_s3.test_multipart_copy_small                       | ERROR | ok     |
-| 4  | s3tests_boto3.functional.test_s3.test_multipart_copy_invalid_range               | ERROR | FAIL   |
-| 5  | s3tests_boto3.functional.test_s3.test_multipart_copy_improper_range              | ERROR | ok     |
-| 6  | s3tests_boto3.functional.test_s3.test_multipart_copy_without_range               | ERROR | ok     |
-| 7  | s3tests_boto3.functional.test_s3.test_multipart_copy_special_names               | ERROR | ok     |
+| 3  | s3tests_boto3.functional.test_s3.test_multipart_copy_small                       | ok    | ok     |
+| 4  | s3tests_boto3.functional.test_s3.test_multipart_copy_invalid_range               | ok    | FAIL   |
+| 5  | s3tests_boto3.functional.test_s3.test_multipart_copy_improper_range              | ok    | ok     |
+| 6  | s3tests_boto3.functional.test_s3.test_multipart_copy_without_range               | ok    | ok     |
+| 7  | s3tests_boto3.functional.test_s3.test_multipart_copy_special_names               | ok    | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_multipart_upload                           | ERROR | ok     |
-| 10 | s3tests_boto3.functional.test_s3.test_multipart_upload_resend_part               | ERROR | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_multipart_upload_multiple_sizes            | ERROR | ok     |
-| 12 | s3tests_boto3.functional.test_s3.test_multipart_copy_multiple_sizes              | ERROR | ok     |
-| 13 | s3tests_boto3.functional.test_s3.test_multipart_upload_size_too_small            | ERROR | ok     |
-| 14 | s3tests_boto3.functional.test_s3.test_multipart_upload_contents                  | ERROR | ok     |
-| 15 | s3tests_boto3.functional.test_s3.test_multipart_upload_overwrite_existing_object | ERROR | ok     |
-| 16 | s3tests_boto3.functional.test_s3.test_abort_multipart_upload                     | ERROR | ok     |
-| 17 | s3tests_boto3.functional.test_s3.test_abort_multipart_upload_not_found           | ERROR | ok     |
-| 18 | s3tests_boto3.functional.test_s3.test_list_multipart_upload                      | ERROR | ok     |
-| 19 | s3tests_boto3.functional.test_s3.test_multipart_upload_missing_part              | ERROR | ok     |
-| 20 | s3tests_boto3.functional.test_s3.test_multipart_upload_incorrect_etag            | ERROR | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_multipart_resend_first_finishes_last       | ERROR | ERROR  |
-| 22 | s3tests_boto3.functional.test_s3.test_atomic_multipart_upload_write              | ERROR | ok     |
+| 9 | s3tests_boto3.functional.test_s3.test_multipart_upload_resend_part                | FAIL  | ok     |
+| 10 | s3tests_boto3.functional.test_s3.test_multipart_upload_multiple_sizes            | ok    | ok     |
+| 11 | s3tests_boto3.functional.test_s3.test_multipart_copy_multiple_sizes              | ok    | ok     |
+| 12 | s3tests_boto3.functional.test_s3.test_multipart_upload_size_too_small            | ok    | ok     |
+| 13 | s3tests_boto3.functional.test_s3.test_multipart_upload_contents                  | ok    | ok     |
+| 14 | s3tests_boto3.functional.test_s3.test_multipart_upload_overwrite_existing_object | ok    | ok     |
+| 15 | s3tests_boto3.functional.test_s3.test_abort_multipart_upload                     | ok    | ok     |
+| 16 | s3tests_boto3.functional.test_s3.test_abort_multipart_upload_not_found           | ok    | ok     |
+| 17 | s3tests_boto3.functional.test_s3.test_list_multipart_upload                      | ok    | ok     |
+| 18 | s3tests_boto3.functional.test_s3.test_multipart_upload_missing_part              | ok    | ok     |
+| 19 | s3tests_boto3.functional.test_s3.test_multipart_upload_incorrect_etag            | ok    | ok     |
+| 20 | s3tests_boto3.functional.test_s3.test_multipart_resend_first_finishes_last       | ERROR | ERROR  |
+| 21 | s3tests_boto3.functional.test_s3.test_atomic_multipart_upload_write              | ok    | ok     |
+| 22 | s3tests_boto3.functional.test_s3.test_multipart_copy_versioned                   | ok    | ok     |
+Comments: in [PR](https://github.com/nspcc-dev/s3-tests/pull/5)
 
 ## Tagging
 
@@ -411,7 +413,7 @@ Compatibility: 11/24/26
 | 23 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_bucket                          | ok    | ok     |
 | 24 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_url_encoding                    | ok    | ok     |
 | 25 | s3tests_boto3.functional.test_s3.test_object_copy_versioning_multipart_upload               | ERROR | ok     |
-| 26 | s3tests_boto3.functional.test_s3.test_multipart_copy_versioned                              | ERROR | ok     |
+| 26 | s3tests_boto3.functional.test_s3.test_multipart_copy_versioned                              | ok    | ok     |
 
 ## Bucket
 
