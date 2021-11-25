@@ -8,6 +8,8 @@ const (
 	AmzTaggingCount      = "X-Amz-Tagging-Count"
 	AmzTagging           = "X-Amz-Tagging"
 	AmzDeleteMarker      = "X-Amz-Delete-Marker"
+	AmzCopySource        = "X-Amz-Copy-Source"
+	AmzCopySourceRange   = "X-Amz-Copy-Source-Range"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"

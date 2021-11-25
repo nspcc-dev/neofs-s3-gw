@@ -44,6 +44,7 @@ const (
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
 	ErrInvalidPartNumberMarker
+	ErrInvalidPartNumber
 	ErrInvalidRequestBody
 	ErrInvalidCopySource
 	ErrInvalidMetadataDirective
@@ -998,7 +999,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrInvalidCopyPartRangeSource: {
 		ErrCode:        ErrInvalidCopyPartRangeSource,
-		Code:           "InvalidArgument",
+		Code:           "InvalidRange",
 		Description:    "Range specified is not valid for source object",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
@@ -1923,6 +1924,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrCORSWildcardExposeHeaders,
 		Code:           "InvalidRequest",
 		Description:    "ExposeHeader \"*\" contains wildcard. We currently do not support wildcard for ExposeHeader",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidPartNumber: {
+		ErrCode:        ErrInvalidPartNumber,
+		Code:           "InvalidArgument",
+		Description:    "Part number must be an integer between 1 and 10000, inclusive",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.

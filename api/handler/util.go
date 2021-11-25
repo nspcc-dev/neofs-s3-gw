@@ -2,8 +2,12 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -37,4 +41,40 @@ func (h *handler) checkBucketOwner(r *http.Request, bucket string, header ...str
 	}
 
 	return checkOwner(bktInfo, expected)
+}
+
+func parseRange(s string) (*layer.RangeParams, error) {
+	if s == "" {
+		return nil, nil
+	}
+
+	prefix := "bytes="
+
+	if !strings.HasPrefix(s, prefix) {
+		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+	}
+
+	s = strings.TrimPrefix(s, prefix)
+
+	valuesStr := strings.Split(s, "-")
+	if len(valuesStr) != 2 {
+		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+	}
+
+	values := make([]uint64, 0, len(valuesStr))
+	for _, v := range valuesStr {
+		num, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, errors.GetAPIError(errors.ErrInvalidRange)
+		}
+		values = append(values, num)
+	}
+	if values[0] > values[1] {
+		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+	}
+
+	return &layer.RangeParams{
+		Start: values[0],
+		End:   values[1],
+	}, nil
 }

@@ -125,6 +125,7 @@ type (
 		DstObject string
 		SrcSize   int64
 		Header    map[string]string
+		Range     *RangeParams
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
@@ -221,6 +222,14 @@ type (
 		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error)
 		DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) error
 		DeleteBucketTagging(ctx context.Context, bucket string) error
+
+		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error)
+		UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error)
+		UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error)
+		ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error)
+		AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) error
+		ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsInfo, error)
+		GetUploadInitInfo(ctx context.Context, p *UploadInfoParams) (*data.ObjectInfo, error)
 	}
 )
 
@@ -528,6 +537,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 		err := n.GetObject(ctx, &GetObjectParams{
 			ObjectInfo: p.SrcObject,
 			Writer:     pw,
+			Range:      p.Range,
 		})
 
 		if err = pw.CloseWithError(err); err != nil {
