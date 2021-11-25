@@ -21,14 +21,15 @@ type objectVersions struct {
 }
 
 const (
+	VersionsDeleteMarkAttr = "S3-Versions-delete-mark"
+	DelMarkFullObject      = "*"
+
 	unversionedObjectVersionID    = "null"
 	objectSystemAttributeName     = "S3-System-name"
 	attrVersionsIgnore            = "S3-Versions-ignore"
 	attrSettingsVersioningEnabled = "S3-Settings-Versioning-enabled"
 	versionsDelAttr               = "S3-Versions-del"
 	versionsAddAttr               = "S3-Versions-add"
-	versionsDeleteMarkAttr        = "S3-Versions-delete-mark"
-	delMarkFullObject             = "*"
 )
 
 func newObjectVersions(name string) *objectVersions {
@@ -169,11 +170,11 @@ func (v *objectVersions) getLast() *data.ObjectInfo {
 	existedVersions := v.existedVersions()
 	for i := len(v.objects) - 1; i >= 0; i-- {
 		if contains(existedVersions, v.objects[i].Version()) {
-			delMarkHeader := v.objects[i].Headers[versionsDeleteMarkAttr]
+			delMarkHeader := v.objects[i].Headers[VersionsDeleteMarkAttr]
 			if delMarkHeader == "" {
 				return v.objects[i]
 			}
-			if delMarkHeader == delMarkFullObject {
+			if delMarkHeader == DelMarkFullObject {
 				return nil
 			}
 		}
@@ -203,8 +204,8 @@ func (v *objectVersions) getFiltered(reverse bool) []*data.ObjectInfo {
 	res := make([]*data.ObjectInfo, 0, len(v.objects))
 
 	for _, version := range v.objects {
-		delMark := version.Headers[versionsDeleteMarkAttr]
-		if contains(existedVersions, version.Version()) && (delMark == delMarkFullObject || delMark == "") {
+		delMark := version.Headers[VersionsDeleteMarkAttr]
+		if contains(existedVersions, version.Version()) && (delMark == DelMarkFullObject || delMark == "") {
 			res = append(res, version)
 		}
 	}
@@ -335,7 +336,7 @@ func triageVersions(objVersions []*ObjectVersionInfo) ([]*ObjectVersionInfo, []*
 	var resDelMarkVersions []*ObjectVersionInfo
 
 	for _, version := range objVersions {
-		if version.Object.Headers[versionsDeleteMarkAttr] == delMarkFullObject {
+		if version.Object.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
 			resDelMarkVersions = append(resDelMarkVersions, version)
 		} else {
 			resVersion = append(resVersion, version)

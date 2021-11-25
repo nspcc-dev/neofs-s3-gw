@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -251,6 +253,8 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
+		versionID string
+
 		queryValues = reqInfo.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
 		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
@@ -263,6 +267,10 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := r.Header.Get(api.AmzCopySource)
+	if u, err := url.Parse(src); err == nil {
+		versionID = u.Query().Get(api.QueryVersionID)
+		src = u.Path
+	}
 	srcBucket, srcObject := path2BucketObject(src)
 
 	srcRange, err := parseRange(r.Header.Get(api.AmzCopySourceRange))
@@ -273,11 +281,27 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	srcInfo, err := h.obj.GetObjectInfo(r.Context(), &layer.HeadObjectParams{
-		Bucket: srcBucket,
-		Object: srcObject,
+		Bucket:    srcBucket,
+		Object:    srcObject,
+		VersionID: versionID,
 	})
 	if err != nil {
+		if errors.IsS3Error(err, errors.ErrNoSuchKey) && versionID != "" {
+			h.logAndSendError(w, "could not head source object version", reqInfo,
+				errors.GetAPIError(errors.ErrBadRequest), additional...)
+			return
+		}
 		h.logAndSendError(w, "could not head source object", reqInfo, err, additional...)
+		return
+	}
+	if isDeleted(srcInfo) {
+		if versionID != "" {
+			h.logAndSendError(w, "could not head source object version", reqInfo,
+				errors.GetAPIError(errors.ErrBadRequest), additional...)
+			return
+		}
+		h.logAndSendError(w, "could not head source object", reqInfo,
+			errors.GetAPIError(errors.ErrNoSuchKey), additional...)
 		return
 	}
 
@@ -642,4 +666,8 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		UploadID:         params.Info.UploadID,
 		Parts:            info.Parts,
 	}
+}
+
+func isDeleted(objInfo *data.ObjectInfo) bool {
+	return objInfo.Headers[layer.VersionsDeleteMarkAttr] == layer.DelMarkFullObject
 }
