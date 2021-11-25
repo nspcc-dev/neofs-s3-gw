@@ -17,12 +17,6 @@ type (
 	// Handler is an S3 API handler interface.
 	Handler interface {
 		HeadObjectHandler(http.ResponseWriter, *http.Request)
-		CopyObjectPartHandler(http.ResponseWriter, *http.Request)
-		PutObjectPartHandler(http.ResponseWriter, *http.Request)
-		ListObjectPartsHandler(http.ResponseWriter, *http.Request)
-		CompleteMultipartUploadHandler(http.ResponseWriter, *http.Request)
-		NewMultipartUploadHandler(http.ResponseWriter, *http.Request)
-		AbortMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		GetObjectACLHandler(http.ResponseWriter, *http.Request)
 		PutObjectACLHandler(http.ResponseWriter, *http.Request)
 		GetObjectTaggingHandler(http.ResponseWriter, *http.Request)
@@ -58,7 +52,6 @@ type (
 		GetBucketVersioningHandler(http.ResponseWriter, *http.Request)
 		GetBucketNotificationHandler(http.ResponseWriter, *http.Request)
 		ListenBucketNotificationHandler(http.ResponseWriter, *http.Request)
-		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
 		ListObjectsV2MHandler(http.ResponseWriter, *http.Request)
 		ListObjectsV2Handler(http.ResponseWriter, *http.Request)
 		ListBucketObjectVersionsHandler(http.ResponseWriter, *http.Request)
@@ -81,6 +74,13 @@ type (
 		ListBucketsHandler(http.ResponseWriter, *http.Request)
 		Preflight(w http.ResponseWriter, r *http.Request)
 		AppendCORSHeaders(w http.ResponseWriter, r *http.Request)
+		CreateMultipartUploadHandler(http.ResponseWriter, *http.Request)
+		UploadPartHandler(http.ResponseWriter, *http.Request)
+		UploadPartCopy(w http.ResponseWriter, r *http.Request)
+		CompleteMultipartUploadHandler(http.ResponseWriter, *http.Request)
+		AbortMultipartUploadHandler(http.ResponseWriter, *http.Request)
+		ListPartsHandler(w http.ResponseWriter, r *http.Request)
+		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME type used API responses.
@@ -218,28 +218,32 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("headobject", h.HeadObjectHandler))).Name("HeadObject")
 		// CopyObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(hdrAmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(m.Handle(metrics.APIStats("copyobjectpart", h.CopyObjectPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
-			Name("CopyObjectPart")
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(hdrAmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(m.Handle(metrics.APIStats("uploadpartcopy", h.UploadPartCopy))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
+			Name("UploadPartCopy")
 		// PutObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
-			m.Handle(metrics.APIStats("putobjectpart", h.PutObjectPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
-			Name("PutObjectObject")
-		// ListObjectParts
+			m.Handle(metrics.APIStats("uploadpart", h.UploadPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
+			Name("UploadPart")
+		// ListParts
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
-			m.Handle(metrics.APIStats("listobjectparts", h.ListObjectPartsHandler))).Queries("uploadId", "{uploadId:.*}").
+			m.Handle(metrics.APIStats("listobjectparts", h.ListPartsHandler))).Queries("uploadId", "{uploadId:.*}").
 			Name("ListObjectParts")
 		// CompleteMultipartUpload
 		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("completemutipartupload", h.CompleteMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}").
 			Name("CompleteMultipartUpload")
-		// NewMultipartUpload
+		// CreateMultipartUpload
 		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
-			m.Handle(metrics.APIStats("newmultipartupload", h.NewMultipartUploadHandler))).Queries("uploads", "").
-			Name("NewMultipartUpload")
+			m.Handle(metrics.APIStats("createmultipartupload", h.CreateMultipartUploadHandler))).Queries("uploads", "").
+			Name("CreateMultipartUpload")
 		// AbortMultipartUpload
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("abortmultipartupload", h.AbortMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}").
 			Name("AbortMultipartUpload")
+		// ListMultipartUploads
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
+			Name("ListMultipartUploads")
 		// GetObjectACL - this is a dummy call.
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectacl", h.GetObjectACLHandler))).Queries("acl", "").
@@ -384,10 +388,6 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		// ListenBucketNotification
 		bucket.Methods(http.MethodGet).HandlerFunc(metrics.APIStats("listenbucketnotification", h.ListenBucketNotificationHandler)).Queries("events", "{events:.*}").
 			Name("ListenBucketNotification")
-		// ListMultipartUploads
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
-			Name("ListMultipartUploads")
 		// ListObjectsV2M
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv2M", h.ListObjectsV2MHandler))).Queries("list-type", "2", "metadata", "true").
