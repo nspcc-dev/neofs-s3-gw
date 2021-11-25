@@ -54,15 +54,15 @@ For now there are some limitations:
 
 Should be supported soon.
 
-|    | Method                  | Comments                                       |
-|----|-------------------------|------------------------------------------------|
-| 🔵 | AbortMultipartUpload    |                                                |
-| 🔵 | CompleteMultipartUpload |                                                |
-| 🔵 | CreateMultipartUpload   | InitiateMultipartUpload and NewMultipartUpload |
-| 🔵 | ListMultipartUploads    |                                                |
-| 🔵 | ListParts               |                                                |
-| 🔵 | UploadPart              | PutObjectPart                                  |
-| 🔵 | UploadPartCopy          | CopyObjectPart                                 |
+|    | Method                  | Comments |
+|----|-------------------------|----------|
+| 🟢 | AbortMultipartUpload    |          |
+| 🟢 | CompleteMultipartUpload |          |
+| 🟢 | CreateMultipartUpload   |          |
+| 🟢 | ListMultipartUploads    |          |
+| 🟢 | ListParts               |          |
+| 🟢 | UploadPart              |          |
+| 🟢 | UploadPartCopy          |          |
 
 ## Tagging
 
