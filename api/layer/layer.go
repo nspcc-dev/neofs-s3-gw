@@ -571,7 +571,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 		p := &PutObjectParams{
 			Object: obj.Name,
 			Reader: bytes.NewReader(nil),
-			Header: map[string]string{versionsDeleteMarkAttr: obj.VersionID},
+			Header: map[string]string{VersionsDeleteMarkAttr: obj.VersionID},
 		}
 		if len(obj.VersionID) != 0 {
 			version, err := n.checkVersionsExist(ctx, bkt, obj)
@@ -580,13 +580,13 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 				return obj
 			}
 			ids = []*object.ID{version.ID}
-			if version.Headers[versionsDeleteMarkAttr] == delMarkFullObject {
+			if version.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
 				obj.DeleteMarkVersion = version.Version()
 			}
 
 			p.Header[versionsDelAttr] = obj.VersionID
 		} else {
-			p.Header[versionsDeleteMarkAttr] = delMarkFullObject
+			p.Header[VersionsDeleteMarkAttr] = DelMarkFullObject
 		}
 		objInfo, err := n.objectPut(ctx, bkt, p)
 		if err != nil {

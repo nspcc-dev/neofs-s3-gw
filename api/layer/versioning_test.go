@@ -672,7 +672,7 @@ func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *data.Obje
 		headers[versionsDelAttr] = delAttr
 	}
 	if delMarkAttr != "" {
-		headers[versionsDeleteMarkAttr] = delMarkAttr
+		headers[VersionsDeleteMarkAttr] = delMarkAttr
 	}
 
 	return &data.ObjectInfo{

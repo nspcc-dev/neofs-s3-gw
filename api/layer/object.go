@@ -171,7 +171,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 		return nil, err
 	}
 
-	if p.Header[versionsDeleteMarkAttr] == delMarkFullObject {
+	if p.Header[VersionsDeleteMarkAttr] == DelMarkFullObject {
 		if last := versions.getLast(); last != nil {
 			n.objCache.Delete(last.Address())
 		}
