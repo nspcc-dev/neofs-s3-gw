@@ -380,6 +380,10 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			errors.GetAPIError(errors.ErrMalformedXML), additional...)
 		return
 	}
+	if len(reqBody.Parts) == 0 {
+		h.logAndSendError(w, "invalid xml with parts", reqInfo, errors.GetAPIError(errors.ErrMalformedXML), additional...)
+		return
+	}
 
 	initPart, err := h.obj.GetUploadInitInfo(r.Context(), uploadInfo)
 	if err != nil {
