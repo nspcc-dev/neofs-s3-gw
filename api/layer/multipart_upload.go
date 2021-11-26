@@ -186,6 +186,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	if len(objects) == 1 {
 		obj, err := n.headLastVersionIfNotDeleted(ctx, p.Info.Bkt, p.Info.Key)
 		if err != nil {
+			if errors.IsS3Error(err, errors.ErrNoSuchKey) {
+				return nil, errors.GetAPIError(errors.ErrInvalidPart)
+			}
 			return nil, err
 		}
 		if obj != nil && obj.Headers[UploadIDAttributeName] != "" {
