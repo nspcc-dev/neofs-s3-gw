@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -155,7 +156,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 // Wait waits for application to finish.
 func (a *App) Wait() {
-	a.log.Info("application started")
+	a.log.Info("application started", zap.String("version", version.Version))
 
 	<-a.webDone // wait for web-server to be stopped
 
