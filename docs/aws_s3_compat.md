@@ -20,7 +20,7 @@ Reference:
 | 🟢 | GetObject              |                                         |
 | 🔴 | GetObjectTorrent       | We don't plan implementing BT gateway   |
 | 🟢 | HeadObject             |                                         |
-| 🔵 | ListObjectParts        |                                         |
+| 🟢 | ListParts              | Parts loaded with MultipartUpload       |
 | 🟢 | ListObjects            |                                         |
 | 🟢 | ListObjectsV2          |                                         |
 | 🟢 | PutObject              | Content-MD5 header deprecated           |
