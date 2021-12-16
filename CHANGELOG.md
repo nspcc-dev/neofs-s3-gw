@@ -2,6 +2,20 @@
 
 This document outlines major changes between releases.
 
+## [0.18.0] - 2021-12-16
+
+### Added
+- Support for MultipartUpload (#186, #187) 
+- CORS support (#217)
+- Authmate supports setting of tokens lifetime in a more convenient format (duration) (#258)
+- Generation of a random key for `--no-sign-request` (#276)
+
+### Changed
+- Bucket name resolving mechanism from listing owner's containers to using DNS (#219)
+
+### Removed
+- Deprecated golint, replaced by revive (#272)
+
 ## 0.17.0 (24 Sep 2021)
 With this release we introduce [ceph-based](https://github.com/ceph/s3-tests) S3 compatibility results.
 
@@ -107,3 +121,5 @@ Bugs fixed:
 Please refer to [Github
 releases](https://github.com/nspcc-dev/neofs-s3-gw/releases/) for older
 releases.
+
+[0.18.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.17.0...v0.18.0
