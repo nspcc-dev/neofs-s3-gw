@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        go_versions: [ '1.16' ]
+        go_versions: [ '1.16.x', '1.17.x' ]
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
