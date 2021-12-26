@@ -49,6 +49,7 @@ var (
 	lifetimeFlag           time.Duration
 	containerPolicies      string
 	awcCliCredFile         string
+	timeoutFlag            time.Duration
 )
 
 const (
@@ -123,6 +124,13 @@ func appFlags() []cli.Flag {
 			Name:        "debug",
 			Usage:       "Enable debug logger level",
 			Destination: &logDebugEnabledFlag,
+		},
+		&cli.DurationFlag{
+			Name: "timeout",
+			Usage: "timeout of processing of the command, for example 2m " +
+				"(note: max time unit is an hour so to set a day you should use 24h)",
+			Destination: &timeoutFlag,
+			Value:       1 * time.Minute,
 		},
 	}
 }
@@ -276,10 +284,13 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				AwsCliCredentialsFile: awcCliCredFile,
 			}
 
-			if err = agent.IssueSecret(ctx, os.Stdout, issueSecretOptions); err != nil {
-				return cli.Exit(fmt.Sprintf("failed to issue secret: %s", err), 6)
-			}
+			var tcancel context.CancelFunc
+			ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
+			defer tcancel()
 
+			if err = agent.IssueSecret(ctx, os.Stdout, issueSecretOptions); err != nil {
+				return cli.Exit(fmt.Sprintf("failed to issue secret: %s", err), 7)
+			}
 			return nil
 		},
 	}
@@ -390,6 +401,10 @@ func obtainSecret() *cli.Command {
 				SecretAddress:  secretAddress,
 				GatePrivateKey: gateCreds,
 			}
+
+			var tcancel context.CancelFunc
+			ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
+			defer tcancel()
 
 			if err = agent.ObtainSecret(ctx, os.Stdout, obtainSecretOptions); err != nil {
 				return cli.Exit(fmt.Sprintf("failed to obtain secret: %s", err), 5)
