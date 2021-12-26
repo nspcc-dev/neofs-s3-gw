@@ -384,7 +384,7 @@ func obtainSecret() *cli.Command {
 				return cli.Exit(fmt.Sprintf("failed to create owner's private key: %s", err), 4)
 			}
 
-			secretAddress := strings.Replace(accessKeyIDFlag, "_", "/", 1)
+			secretAddress := strings.Replace(accessKeyIDFlag, "0", "/", 1)
 
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
 				SecretAddress:  secretAddress,
