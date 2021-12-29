@@ -405,7 +405,7 @@ func createSDKClient(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey
 	log.Debug("prepare connection pool")
 
 	pb := new(pool.Builder)
-	pb.AddNode(peerAddress, 1)
+	pb.AddNode(peerAddress, 1, 1)
 
 	opts := &pool.BuilderOptions{
 		Key:                    key,

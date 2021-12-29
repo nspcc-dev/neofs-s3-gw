@@ -6,11 +6,12 @@ require (
 	github.com/aws/aws-sdk-go v1.37.9
 	github.com/bluele/gcache v0.0.2
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
-	github.com/nspcc-dev/neo-go v0.97.3
-	github.com/nspcc-dev/neofs-api-go v1.30.0
-	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20211122074021-02f328a03cfb
+	github.com/nspcc-dev/neo-go v0.98.0
+	github.com/nspcc-dev/neofs-api-go/v2 v2.11.1
+	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20211228125935-3edaf9ecb644
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1

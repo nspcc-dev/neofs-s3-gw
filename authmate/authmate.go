@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -129,9 +130,12 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 func (a *Agent) getEpochDurations(ctx context.Context) (*epochDurations, error) {
 	if conn, _, err := a.pool.Connection(); err != nil {
 		return nil, err
-	} else if networkInfo, err := conn.NetworkInfo(ctx); err != nil {
+	} else if networkInfoRes, err := conn.NetworkInfo(ctx); err != nil {
+		return nil, err
+	} else if err = apistatus.ErrFromStatus(networkInfoRes.Status()); err != nil {
 		return nil, err
 	} else {
+		networkInfo := networkInfoRes.Info()
 		res := &epochDurations{
 			currentEpoch: networkInfo.CurrentEpoch(),
 			msPerBlock:   networkInfo.MsPerBlock(),

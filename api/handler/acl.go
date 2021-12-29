@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neofs-api-go/v2/acl"
+	v2acl "github.com/nspcc-dev/neofs-api-go/v2/acl"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -512,7 +512,7 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 				if filter.Key() == object.AttributeFileName {
 					objectName = filter.Value()
 					resName += "/" + objectName
-				} else if filter.Key() == acl.FilterObjectID {
+				} else if filter.Key() == v2acl.FilterObjectID {
 					version = filter.Value()
 					resName += "/" + version
 				}

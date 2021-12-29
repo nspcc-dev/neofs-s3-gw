@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
+
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -653,10 +655,15 @@ func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error)
 			return nil, err
 		}
 
-		networkInfo, err := conn.NetworkInfo(ctx)
+		networkInfoRes, err := conn.NetworkInfo(ctx)
+		if err == nil {
+			err = apistatus.ErrFromStatus(networkInfoRes.Status())
+		}
 		if err != nil {
 			return nil, err
 		}
+
+		networkInfo := networkInfoRes.Info()
 
 		var domain string
 		networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
