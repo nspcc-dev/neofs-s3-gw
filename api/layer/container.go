@@ -166,11 +166,7 @@ func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *e
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, cid *cid.ID) (*eacl.Table, error) {
-	signedEacl, err := n.pool.GetEACL(ctx, cid)
-	if err != nil {
-		return nil, err
-	}
-	return signedEacl.EACL(), nil
+	return n.pool.GetEACL(ctx, cid)
 }
 
 type waitParams struct {
@@ -204,9 +200,9 @@ func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.T
 		case <-wdone:
 			return wctx.Err()
 		case <-ticker.C:
-			signedEacl, err := n.pool.GetEACL(ctx, cid)
+			eaclTable, err := n.pool.GetEACL(ctx, cid)
 			if err == nil {
-				got, err := signedEacl.EACL().Marshal()
+				got, err := eaclTable.Marshal()
 				if err == nil && bytes.Equal(exp, got) {
 					return nil
 				}

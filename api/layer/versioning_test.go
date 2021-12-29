@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/accounting"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -184,7 +185,11 @@ func (t *testPool) DeleteContainer(ctx context.Context, id *cid.ID, option ...po
 	return nil
 }
 
-func (t *testPool) GetEACL(ctx context.Context, id *cid.ID, option ...pool.CallOption) (*client.EACLWithSignature, error) {
+func (t *testPool) GetEACL(ctx context.Context, id *cid.ID, option ...pool.CallOption) (*eacl.Table, error) {
+	panic("implement me")
+}
+
+func (t *testPool) Balance(ctx context.Context, owner *owner.ID, opts ...pool.CallOption) (*accounting.Decimal, error) {
 	panic("implement me")
 }
 

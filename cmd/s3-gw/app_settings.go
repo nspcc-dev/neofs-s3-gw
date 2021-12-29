@@ -125,6 +125,7 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) *pool.Builder {
 		key := cfgPeers + "." + strconv.Itoa(i) + "."
 		address := v.GetString(key + "address")
 		weight := v.GetFloat64(key + "weight")
+		priority := v.GetInt(key + "priority")
 
 		if address == "" {
 			l.Warn("skip, empty address")
@@ -133,7 +134,11 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) *pool.Builder {
 		if weight <= 0 { // unspecified or wrong
 			weight = 1
 		}
-		pb.AddNode(address, weight)
+		if priority <= 0 { // unspecified or wrong
+			priority = 1
+		}
+
+		pb.AddNode(address, priority, weight)
 
 		l.Info("added connection peer",
 			zap.String("address", address),
