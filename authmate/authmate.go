@@ -115,6 +115,7 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 		container.WithCustomBasicACL(defaultAuthContainerBasicACL),
 		container.WithAttribute(container.AttributeName, friendlyName),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
+	container.SetNativeName(cnr, friendlyName)
 
 	cid, err = a.pool.PutContainer(ctx, cnr)
 	if err != nil {
