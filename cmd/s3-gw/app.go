@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/rpc/client"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
@@ -119,11 +121,32 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("couldn't generate random key", zap.Error(err))
 	}
 
+	resolveCfg := &resolver.Config{
+		Pool: conns,
+	}
+
+	if rpcEndpoint := v.GetString(cfgRPCEndpoint); rpcEndpoint != "" {
+		rpc, err := client.New(ctx, rpcEndpoint, client.Options{})
+		if err != nil {
+			l.Fatal("couldn't create rpc client", zap.String("endpoint", rpcEndpoint), zap.Error(err))
+		} else if err = rpc.Init(); err != nil {
+			l.Fatal("couldn't init rpc client", zap.String("endpoint", rpcEndpoint), zap.Error(err))
+		}
+		resolveCfg.RPC = rpc
+	}
+
+	order := v.GetStringSlice(cfgResolveOrder)
+	bucketResolver, err := resolver.NewResolver(order, resolveCfg)
+	if err != nil {
+		l.Fatal("failed to form resolver", zap.Error(err))
+	}
+
 	layerCfg := &layer.Config{
 		Caches: getCacheOptions(v, l),
 		AnonKey: layer.AnonymousKey{
 			Key: randomKey,
 		},
+		Resolver: bucketResolver,
 	}
 
 	// prepare object layer

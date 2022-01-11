@@ -10,13 +10,12 @@ import (
 	"strings"
 	"time"
 
-	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
@@ -26,7 +25,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
-	"github.com/nspcc-dev/neofs-sdk-go/resolver"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -36,6 +34,7 @@ type (
 		pool        pool.Pool
 		log         *zap.Logger
 		anonKey     AnonymousKey
+		resolver    *resolver.BucketResolver
 		listsCache  *cache.ObjectsListCache
 		objCache    *cache.ObjectsCache
 		namesCache  *cache.ObjectsNameCache
@@ -47,6 +46,7 @@ type (
 		ChainAddress string
 		Caches       *CachesConfig
 		AnonKey      AnonymousKey
+		Resolver     *resolver.BucketResolver
 	}
 
 	// AnonymousKey contains data for anonymous requests.
@@ -236,9 +236,8 @@ type (
 )
 
 const (
-	tagPrefix             = "S3-Tag-"
-	tagEmptyMark          = "\\"
-	networkSystemDNSParam = "SystemDNS"
+	tagPrefix    = "S3-Tag-"
+	tagEmptyMark = "\\"
 )
 
 func (t *VersionedObject) String() string {
@@ -263,6 +262,7 @@ func NewLayer(log *zap.Logger, conns pool.Pool, config *Config) Client {
 		pool:        conns,
 		log:         log,
 		anonKey:     config.AnonKey,
+		resolver:    config.Resolver,
 		listsCache:  cache.NewObjectsListCache(config.Caches.ObjectsList),
 		objCache:    cache.New(config.Caches.Objects),
 		namesCache:  cache.NewObjectsNameCache(config.Caches.Names),
@@ -650,42 +650,7 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.I
 func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error) {
 	cnrID := cid.New()
 	if err := cnrID.Parse(name); err != nil {
-		conn, _, err := n.pool.Connection()
-		if err != nil {
-			return nil, err
-		}
-
-		networkInfoRes, err := conn.NetworkInfo(ctx)
-		if err == nil {
-			err = apistatus.ErrFromStatus(networkInfoRes.Status())
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		networkInfo := networkInfoRes.Info()
-
-		var domain string
-		networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
-			if string(parameter.Key()) == networkSystemDNSParam {
-				domain = string(parameter.Value())
-				return true
-			}
-			return false
-		})
-
-		if domain != "" {
-			domain = name + "." + domain
-			if cnrID, err = resolver.ResolveContainerDomainName(domain); err == nil {
-				return cnrID, nil
-			}
-			n.log.Debug("trying fallback to direct nns since couldn't resolve system dns record",
-				zap.String("domain", domain), zap.Error(err))
-		}
-
-		// todo add fallback to use nns contract directly
-
-		return nil, fmt.Errorf("couldn't resolve container name '%s': not found", name)
+		return n.resolver.Resolve(ctx, name)
 	}
 
 	return cnrID, nil
