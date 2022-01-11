@@ -417,7 +417,7 @@ Compatibility: 11/24/26
 
 ## Bucket
 
-Compatibility:  32/45/59
+Compatibility:  33/45/59
 
 |    | Test                                                                                         | s3-gw | aws s3 |
 |----|----------------------------------------------------------------------------------------------|-------|--------|
@@ -466,7 +466,7 @@ Compatibility:  32/45/59
 | 43 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_dns_dot_dash                      | ok    | ok     |
 | 44 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_dns_dash_dot                      | ok    | ok     |
 | 45 | s3tests_boto3.functional.test_s3.test_bucket_create_exists                                   | ERROR | ok     |
-| 46 | s3tests_boto3.functional.test_s3.test_bucket_get_location                                    | FAIL  | ERROR  |
+| 46 | s3tests_boto3.functional.test_s3.test_bucket_get_location                                    | ok    | ERROR  |
 | 47 | s3tests_boto3.functional.test_s3.test_bucket_create_exists_nonowner                          | FAIL  | ok     |
 | 48 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_starts_alpha                 | ok    | ok     |
 | 49 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_starts_digit                 | ok    | ok     |
