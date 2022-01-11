@@ -549,6 +549,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		for _, placementPolicy := range policies {
 			if placementPolicy.LocationConstraint == createParams.LocationConstraint {
 				p.Policy = placementPolicy.Policy
+				p.LocationConstraint = createParams.LocationConstraint
 				break
 			}
 		}
