@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/pflag"
@@ -89,6 +90,12 @@ const ( // Settings.
 
 	// Peers.
 	cfgPeers = "peers"
+
+	// NeoGo.
+	cfgRPCEndpoint = "rpc-endpoint"
+
+	// Resolving.
+	cfgResolveOrder = "resolve-order"
 
 	// Application.
 	cfgApplicationName      = "app.name"
@@ -203,6 +210,9 @@ func newSettings() *viper.Viper {
 
 	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
 
+	flags.StringP(cfgRPCEndpoint, "r", "", "set RPC endpoint")
+	resolveMethods := flags.StringSlice(cfgResolveOrder, []string{resolver.DNSResolver}, "set bucket name resolve order")
+
 	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
 
 	// set prefers:
@@ -226,6 +236,10 @@ func newSettings() *viper.Viper {
 
 	if err := flags.Parse(os.Args); err != nil {
 		panic(err)
+	}
+
+	if resolveMethods != nil {
+		v.SetDefault(cfgResolveOrder, *resolveMethods)
 	}
 
 	if peers != nil && len(*peers) > 0 {
