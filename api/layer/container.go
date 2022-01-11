@@ -26,6 +26,8 @@ type (
 	}
 )
 
+const locationConstraintAttr = ".s3-location-constraint"
+
 func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInfo, error) {
 	var (
 		err error
@@ -70,6 +72,8 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInf
 			}
 
 			info.Created = time.Unix(unix, 0)
+		case locationConstraintAttr:
+			info.LocationConstraint = val
 		}
 	}
 
@@ -117,16 +121,25 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
 	var err error
 	bktInfo := &data.BucketInfo{
-		Name:     p.Name,
-		Owner:    n.Owner(ctx),
-		Created:  time.Now(),
-		BasicACL: p.ACL,
+		Name:               p.Name,
+		Owner:              n.Owner(ctx),
+		Created:            time.Now(),
+		BasicACL:           p.ACL,
+		LocationConstraint: p.LocationConstraint,
 	}
-	cnr := container.New(
+
+	options := []container.Option{
 		container.WithPolicy(p.Policy),
 		container.WithCustomBasicACL(p.ACL),
 		container.WithAttribute(container.AttributeName, p.Name),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)))
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)),
+	}
+
+	if p.LocationConstraint != "" {
+		options = append(options, container.WithAttribute(locationConstraintAttr, p.LocationConstraint))
+	}
+
+	cnr := container.New(options...)
 	container.SetNativeName(cnr, p.Name)
 
 	cnr.SetSessionToken(p.SessionToken)

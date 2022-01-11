@@ -131,11 +131,12 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name         string
-		ACL          uint32
-		Policy       *netmap.PlacementPolicy
-		EACL         *eacl.Table
-		SessionToken *session.Token
+		Name               string
+		ACL                uint32
+		Policy             *netmap.PlacementPolicy
+		EACL               *eacl.Table
+		SessionToken       *session.Token
+		LocationConstraint string
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {

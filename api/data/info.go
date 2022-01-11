@@ -17,11 +17,12 @@ const (
 type (
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
-		Name     string
-		CID      *cid.ID
-		Owner    *owner.ID
-		Created  time.Time
-		BasicACL uint32
+		Name               string
+		CID                *cid.ID
+		Owner              *owner.ID
+		Created            time.Time
+		BasicACL           uint32
+		LocationConstraint string
 	}
 
 	// ObjectInfo holds S3 object data.

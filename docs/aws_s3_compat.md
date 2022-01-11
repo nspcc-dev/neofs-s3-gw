@@ -87,7 +87,7 @@ See also `GetObject` and other method parameters.
 |----|----------------------|-----------|
 | 🟢 | CreateBucket         | PutBucket |
 | 🟢 | DeleteBucket         |           |
-| 🔵 | GetBucketLocation    |           |
+| 🟢 | GetBucketLocation    |           |
 | 🟢 | HeadBucket           |           |
 | 🟢 | ListBuckets          |           |
 | 🔵 | PutPublicAccessBlock |           |
