@@ -2,9 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"mime/multipart"
+	"net/http"
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/stretchr/testify/require"
 )
 
@@ -85,4 +88,19 @@ func TestCustomJSONMarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expectedPolicy, policy)
+}
+
+func TestEmptyPostPolicy(t *testing.T) {
+	r := &http.Request{
+		MultipartForm: &multipart.Form{
+			Value: map[string][]string{
+				"key": {"some-key"},
+			},
+		},
+	}
+	reqInfo := &api.ReqInfo{}
+	metadata := make(map[string]string)
+
+	_, err := checkPostPolicy(r, reqInfo, metadata)
+	require.NoError(t, err)
 }
