@@ -368,7 +368,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 }
 
 func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]string) (*postPolicy, error) {
-	policy := &postPolicy{}
+	policy := &postPolicy{empty: true}
 	if policyStr := auth.MultipartFormValue(r, "policy"); policyStr != "" {
 		policyData, err := base64.StdEncoding.DecodeString(policyStr)
 		if err != nil {
@@ -380,6 +380,7 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		if policy.Expiration.Before(time.Now()) {
 			return nil, fmt.Errorf("policy is expired: %w", errors.GetAPIError(errors.ErrInvalidArgument))
 		}
+		policy.empty = false
 	}
 
 	for key, v := range r.MultipartForm.Value {
