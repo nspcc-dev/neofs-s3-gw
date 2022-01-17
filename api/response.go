@@ -136,7 +136,7 @@ func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
 	WriteErrorResponse(w, GetReqInfo(r.Context()), errors.Error{
-		Code:           "XMinioUnknownAPIRequest",
+		Code:           "UnknownAPIRequest",
 		Description:    desc,
 		HTTPStatusCode: http.StatusBadRequest,
 	})
@@ -235,12 +235,17 @@ func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
 		desc = e.Description
 	}
 
+	var resource string
+	if info.URL != nil {
+		resource = info.URL.Path
+	}
+
 	return ErrorResponse{
 		Code:       code,
 		Message:    desc,
 		BucketName: info.BucketName,
 		Key:        info.ObjectName,
-		Resource:   info.URL.Path,
+		Resource:   resource,
 		RequestID:  info.RequestID,
 		HostID:     info.DeploymentID,
 	}
