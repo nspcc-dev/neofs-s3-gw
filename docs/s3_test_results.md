@@ -383,7 +383,7 @@ Compatibility: 8/6/8 out of 11
 
 ## Versioning
 
-Compatibility: 14/19/24 out of 26
+Compatibility: 15/19/24 out of 26
 
 |    | Test                                                                                        | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -407,7 +407,7 @@ Compatibility: 14/19/24 out of 26
 | 18 | s3tests_boto3.functional.test_s3.test_versioned_concurrent_object_create_concurrent_remove  | ok    | ok    | ok     |
 | 19 | s3tests_boto3.functional.test_s3.test_versioned_concurrent_object_create_and_remove         | ok    | ok    | ok     |
 | 20 | s3tests_boto3.functional.test_s3.test_versioning_bucket_atomic_upload_return_version_id     | ok    | FAIL  | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_versioning_bucket_multipart_upload_return_version_id  | ERROR | FAIL  | ok     |
+| 21 | s3tests_boto3.functional.test_s3.test_versioning_bucket_multipart_upload_return_version_id  | ok    | FAIL  | ok     |
 | 22 | s3tests_boto3.functional.test_s3.test_bucket_list_return_data_versioning                    | ERROR | ERROR | ok     |
 | 23 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_bucket                          | ok    | ok    | ok     |
 | 24 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_url_encoding                    | ok    | ok    | ok     |
