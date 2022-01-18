@@ -687,6 +687,12 @@ func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *data.Obje
 	}
 }
 
+func getTestUnversionedObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *data.ObjectInfo {
+	objInfo := getTestObjectInfo(id, addAttr, delAttr, delMarkAttr)
+	objInfo.Headers[versionsUnversionedAttr] = "true"
+	return objInfo
+}
+
 func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr string) *data.ObjectInfo {
 	obj := getTestObjectInfo(id, addAttr, delAttr, delMarkAttr)
 	obj.CreationEpoch = epoch
@@ -694,10 +700,13 @@ func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr
 }
 
 func TestUpdateCRDT2PSetHeaders(t *testing.T) {
-	obj1 := getTestObjectInfo(1, "", "", "")
-	obj2 := getTestObjectInfo(2, "", "", "")
+	obj1 := getTestUnversionedObjectInfo(1, "", "", "")
+	obj2 := getTestUnversionedObjectInfo(2, "", "", "")
+	obj3 := getTestObjectInfo(3, "", "", "")
+	obj4 := getTestObjectInfo(4, "", "", "")
 
 	for _, tc := range []struct {
+		name                string
 		header              map[string]string
 		versions            *objectVersions
 		versioningEnabled   bool
@@ -705,53 +714,78 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 		expectedIdsToDelete []*object.ID
 	}{
 		{
-			header:              map[string]string{"someKey": "someValue"},
-			expectedHeader:      map[string]string{"someKey": "someValue"},
-			expectedIdsToDelete: nil,
+			name:           "unversioned save headers",
+			header:         map[string]string{"someKey": "someValue"},
+			expectedHeader: map[string]string{"someKey": "someValue", versionsUnversionedAttr: "true"},
 		},
 		{
+			name:   "unversioned put",
 			header: map[string]string{},
 			versions: &objectVersions{
 				objects: []*data.ObjectInfo{obj1},
 			},
-			expectedHeader:      map[string]string{versionsDelAttr: obj1.Version()},
+			expectedHeader: map[string]string{
+				versionsAddAttr:         obj1.Version(),
+				versionsDelAttr:         obj1.Version(),
+				versionsUnversionedAttr: "true",
+			},
 			expectedIdsToDelete: []*object.ID{obj1.ID},
 		},
 		{
+			name:   "unversioned del header",
 			header: map[string]string{},
 			versions: &objectVersions{
 				objects: []*data.ObjectInfo{obj2},
 				delList: []string{obj1.Version()},
 			},
-			expectedHeader:      map[string]string{versionsDelAttr: joinVers(obj1, obj2)},
+			expectedHeader: map[string]string{
+				versionsAddAttr:         obj2.Version(),
+				versionsDelAttr:         joinVers(obj1, obj2),
+				versionsUnversionedAttr: "true",
+			},
 			expectedIdsToDelete: []*object.ID{obj2.ID},
 		},
 		{
+			name:   "versioned put",
 			header: map[string]string{},
 			versions: &objectVersions{
-				objects: []*data.ObjectInfo{obj1},
+				objects: []*data.ObjectInfo{obj3},
 			},
-			versioningEnabled:   true,
-			expectedHeader:      map[string]string{versionsAddAttr: obj1.Version()},
-			expectedIdsToDelete: nil,
+			versioningEnabled: true,
+			expectedHeader:    map[string]string{versionsAddAttr: obj3.Version()},
 		},
 		{
-			header: map[string]string{versionsDelAttr: obj2.Version()},
+			name:   "versioned del header",
+			header: map[string]string{versionsDelAttr: obj4.Version()},
 			versions: &objectVersions{
-				objects: []*data.ObjectInfo{obj2},
-				delList: []string{obj1.Version()},
+				objects: []*data.ObjectInfo{obj4},
+				delList: []string{obj3.Version()},
 			},
 			versioningEnabled: true,
 			expectedHeader: map[string]string{
-				versionsAddAttr: obj2.Version(),
-				versionsDelAttr: joinVers(obj1, obj2),
+				versionsAddAttr: obj4.Version(),
+				versionsDelAttr: joinVers(obj3, obj4),
 			},
-			expectedIdsToDelete: nil,
+		},
+		{
+			name:   "unversioned put after some version",
+			header: map[string]string{},
+			versions: &objectVersions{
+				objects: []*data.ObjectInfo{obj1, obj3},
+			},
+			expectedHeader: map[string]string{
+				versionsAddAttr:         joinVers(obj1, obj3),
+				versionsDelAttr:         obj1.Version(),
+				versionsUnversionedAttr: "true",
+			},
+			expectedIdsToDelete: []*object.ID{obj1.ID},
 		},
 	} {
-		idsToDelete := updateCRDT2PSetHeaders(tc.header, tc.versions, tc.versioningEnabled)
-		require.Equal(t, tc.expectedHeader, tc.header)
-		require.Equal(t, tc.expectedIdsToDelete, idsToDelete)
+		t.Run(tc.name, func(t *testing.T) {
+			idsToDelete := updateCRDT2PSetHeaders(tc.header, tc.versions, tc.versioningEnabled)
+			require.Equal(t, tc.expectedHeader, tc.header)
+			require.Equal(t, tc.expectedIdsToDelete, idsToDelete)
+		})
 	}
 }
 

@@ -287,7 +287,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 				DisplayName: ver.Object.Owner.String(),
 			},
 			Size:      ver.Object.Size,
-			VersionID: ver.Object.Version(),
+			VersionID: ver.Object.NullableVersion(),
 			ETag:      ver.Object.HashSum,
 		})
 	}
