@@ -152,6 +152,9 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 		return nil, err
 	}
 	idsToDeleteArr := updateCRDT2PSetHeaders(p.Header, versions, versioningEnabled)
+	if !versioningEnabled {
+		p.Header[versionsUnversionedAttr] = "true"
+	}
 
 	r := p.Reader
 	if r != nil {
@@ -358,10 +361,23 @@ func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectNa
 	return versions, nil
 }
 
-func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, versionID string) (*data.ObjectInfo, error) {
+func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ObjectInfo, error) {
+	if p.VersionID == unversionedObjectVersionID {
+		versions, err := n.headVersions(ctx, bkt, p.Object)
+		if err != nil {
+			return nil, err
+		}
+
+		objInfo := versions.getLast(FromUnversioned())
+		if objInfo == nil {
+			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
+		}
+		return objInfo, nil
+	}
+
 	oid := object.NewID()
-	if err := oid.Parse(versionID); err != nil {
-		return nil, err
+	if err := oid.Parse(p.VersionID); err != nil {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidVersion)
 	}
 
 	if headInfo := n.objCache.Get(newAddress(bkt.CID, oid)); headInfo != nil {

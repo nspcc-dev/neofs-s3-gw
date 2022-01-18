@@ -407,7 +407,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.O
 		return n.headLastVersionIfNotDeleted(ctx, bkt, p.Object)
 	}
 
-	return n.headVersion(ctx, bkt, p.VersionID)
+	return n.headVersion(ctx, bkt, p)
 }
 
 // PutObject into storage.
