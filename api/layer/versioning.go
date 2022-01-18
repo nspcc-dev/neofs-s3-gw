@@ -182,6 +182,23 @@ func (v *objectVersions) isEmpty() bool {
 	return v == nil || len(v.objects) == 0
 }
 
+func (v *objectVersions) unversioned() []*data.ObjectInfo {
+	if len(v.objects) == 0 {
+		return nil
+	}
+
+	existedVersions := v.existedVersions()
+	res := make([]*data.ObjectInfo, 0, len(v.objects))
+
+	for _, version := range v.objects {
+		if contains(existedVersions, version.Version()) && version.Headers[versionsUnversionedAttr] == "true" {
+			res = append(res, version)
+		}
+	}
+
+	return res
+}
+
 func (v *objectVersions) getLast(opts ...VersionOption) *data.ObjectInfo {
 	if v.isEmpty() {
 		return nil

@@ -68,6 +68,15 @@ func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject
 // Version returns object version from ObjectInfo.
 func (o *ObjectInfo) Version() string { return o.ID.String() }
 
+// NullableVersion returns object version from ObjectInfo.
+// Return "null" if "S3-Versions-unversioned" header present.
+func (o *ObjectInfo) NullableVersion() string {
+	if _, ok := o.Headers["S3-Versions-unversioned"]; ok {
+		return "null"
+	}
+	return o.Version()
+}
+
 // NiceName returns object name for cache.
 func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 

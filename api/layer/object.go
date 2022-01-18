@@ -158,9 +158,6 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 		return nil, err
 	}
 	idsToDeleteArr := updateCRDT2PSetHeaders(p.Header, versions, versioningEnabled)
-	if !versioningEnabled {
-		p.Header[versionsUnversionedAttr] = "true"
-	}
 
 	r := p.Reader
 	if r != nil {
@@ -259,44 +256,52 @@ func formRawObject(p *PutObjectParams, bktID *cid.ID, own *owner.ID, obj string)
 }
 
 func updateCRDT2PSetHeaders(header map[string]string, versions *objectVersions, versioningEnabled bool) []*object.ID {
+	if !versioningEnabled {
+		header[versionsUnversionedAttr] = "true"
+	}
+
 	var idsToDeleteArr []*object.ID
 	if versions.isEmpty() {
 		return idsToDeleteArr
 	}
 
-	if versioningEnabled {
-		if !versions.isAddListEmpty() {
-			header[versionsAddAttr] = versions.getAddHeader()
-		}
+	if !versions.isAddListEmpty() {
+		header[versionsAddAttr] = versions.getAddHeader()
+	}
 
-		deleted := versions.getDelHeader()
+	if versioningEnabled {
+		versionsDeletedStr := versions.getDelHeader()
 		// header[versionsDelAttr] can be not empty when deleting specific version
 		if delAttr := header[versionsDelAttr]; len(delAttr) != 0 {
-			if len(deleted) != 0 {
-				header[versionsDelAttr] = deleted + "," + delAttr
+			if len(versionsDeletedStr) != 0 {
+				header[versionsDelAttr] = versionsDeletedStr + "," + delAttr
 			} else {
 				header[versionsDelAttr] = delAttr
 			}
-		} else if len(deleted) != 0 {
-			header[versionsDelAttr] = deleted
-		}
-	} else {
-		versionsDeletedStr := versions.getDelHeader()
-		if len(versionsDeletedStr) != 0 {
-			versionsDeletedStr += ","
-		}
-
-		if lastVersion := versions.getLast(); lastVersion != nil {
-			header[versionsDelAttr] = versionsDeletedStr + lastVersion.Version()
-			idsToDeleteArr = append(idsToDeleteArr, lastVersion.ID)
 		} else if len(versionsDeletedStr) != 0 {
 			header[versionsDelAttr] = versionsDeletedStr
 		}
+	} else {
+		versionsDeletedStr := versions.getDelHeader()
 
-		for _, version := range versions.objects {
-			if contains(versions.delList, version.Version()) {
-				idsToDeleteArr = append(idsToDeleteArr, version.ID)
+		var additionalDel string
+		for i, del := range versions.unversioned() {
+			if i != 0 {
+				additionalDel += ","
 			}
+			additionalDel += del.Version()
+			idsToDeleteArr = append(idsToDeleteArr, del.ID)
+		}
+
+		if len(additionalDel) != 0 {
+			if len(versionsDeletedStr) != 0 {
+				versionsDeletedStr += ","
+			}
+			versionsDeletedStr += additionalDel
+		}
+
+		if len(versionsDeletedStr) != 0 {
+			header[versionsDelAttr] = versionsDeletedStr
 		}
 	}
 
