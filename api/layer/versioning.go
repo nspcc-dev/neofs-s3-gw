@@ -20,6 +20,26 @@ type objectVersions struct {
 	isSorted bool
 }
 
+func FromUnversioned() VersionOption {
+	return func(options *versionOptions) {
+		options.unversioned = true
+	}
+}
+
+type VersionOption func(*versionOptions)
+
+type versionOptions struct {
+	unversioned bool
+}
+
+func formVersionOptions(opts ...VersionOption) *versionOptions {
+	options := &versionOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	return options
+}
+
 const (
 	VersionsDeleteMarkAttr = "S3-Versions-delete-mark"
 	DelMarkFullObject      = "*"
@@ -30,6 +50,7 @@ const (
 	attrSettingsVersioningEnabled = "S3-Settings-Versioning-enabled"
 	versionsDelAttr               = "S3-Versions-del"
 	versionsAddAttr               = "S3-Versions-add"
+	versionsUnversionedAttr       = "S3-Versions-unversioned"
 )
 
 func newObjectVersions(name string) *objectVersions {
@@ -161,10 +182,12 @@ func (v *objectVersions) isEmpty() bool {
 	return v == nil || len(v.objects) == 0
 }
 
-func (v *objectVersions) getLast() *data.ObjectInfo {
+func (v *objectVersions) getLast(opts ...VersionOption) *data.ObjectInfo {
 	if v.isEmpty() {
 		return nil
 	}
+
+	options := formVersionOptions(opts...)
 
 	v.sort()
 	existedVersions := v.existedVersions()
@@ -172,6 +195,9 @@ func (v *objectVersions) getLast() *data.ObjectInfo {
 		if contains(existedVersions, v.objects[i].Version()) {
 			delMarkHeader := v.objects[i].Headers[VersionsDeleteMarkAttr]
 			if delMarkHeader == "" {
+				if options.unversioned && v.objects[i].Headers[versionsUnversionedAttr] != "true" {
+					continue
+				}
 				return v.objects[i]
 			}
 			if delMarkHeader == DelMarkFullObject {
@@ -377,16 +403,22 @@ func objectInfoToBucketSettings(info *data.ObjectInfo) *BucketSettings {
 }
 
 func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) (*data.ObjectInfo, error) {
-	id := object.NewID()
-	if err := id.Parse(obj.VersionID); err != nil {
-		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
-	}
-
 	versions, err := n.headVersions(ctx, bkt, obj.Name)
 	if err != nil {
 		return nil, err
 	}
-	version := versions.getVersion(id)
+
+	var version *data.ObjectInfo
+	if obj.VersionID == unversionedObjectVersionID {
+		version = versions.getLast(FromUnversioned())
+	} else {
+		id := object.NewID()
+		if err := id.Parse(obj.VersionID); err != nil {
+			return nil, errors.GetAPIError(errors.ErrInvalidVersion)
+		}
+		version = versions.getVersion(id)
+	}
+
 	if version == nil {
 		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
 	}
