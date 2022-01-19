@@ -171,7 +171,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if err := xml.NewDecoder(r.Body).Decode(list); err != nil {
-		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
+		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
 
@@ -263,7 +263,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if err := xml.NewDecoder(r.Body).Decode(list); err != nil {
-		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
+		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
 
