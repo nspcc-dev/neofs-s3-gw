@@ -612,7 +612,7 @@ func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
 
 	params := new(createBucketParams)
 	if err := xml.NewDecoder(r.Body).Decode(params); err != nil {
-		return nil, err
+		return nil, errors.GetAPIError(errors.ErrMalformedXML)
 	}
 	return params, nil
 }

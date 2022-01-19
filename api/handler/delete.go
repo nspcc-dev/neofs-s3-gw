@@ -106,7 +106,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	// Unmarshal list of keys to be deleted.
 	requested := &DeleteObjectsRequest{}
 	if err := xml.NewDecoder(r.Body).Decode(requested); err != nil {
-		h.logAndSendError(w, "couldn't decode body", reqInfo, err)
+		h.logAndSendError(w, "couldn't decode body", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
 
