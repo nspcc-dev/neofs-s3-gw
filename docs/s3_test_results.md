@@ -383,17 +383,17 @@ Compatibility: 9/6/8 out of 11
 
 ## Versioning
 
-Compatibility: 16/19/24 out of 26
+Compatibility: 22/19/24 out of 26
 
 |    | Test                                                                                        | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------------------------|-------|-------|--------|
 | 1  | s3tests_boto3.functional.test_s3.test_versioning_bucket_create_suspend                      | ok    | ok    | ok     |
 | 2  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove                     | ok    | ok    | ok     |
 | 3  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_read_remove_head                | ok    | ok    | ok     |
-| 4  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_removal             | FAIL  | ok    | ok     |
-| 5  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite           | FAIL  | ok    | ok     |
+| 4  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_removal             | ok    | ok    | ok     |
+| 5  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite           | ok    | ok    | ok     |
 | 6  | s3tests_boto3.functional.test_s3.test_versioning_obj_plain_null_version_overwrite_suspended | ok    | ok    | ok     |
-| 7  | s3tests_boto3.functional.test_s3.test_versioning_obj_suspend_versions                       | FAIL  | ok    | ok     |
+| 7  | s3tests_boto3.functional.test_s3.test_versioning_obj_suspend_versions                       | ok    | ok    | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_all             | ok    | ok    | ok     |
 | 9  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_special_names   | ok    | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_versioning_obj_create_overwrite_multipart             | ERROR | ok    | ok     |
