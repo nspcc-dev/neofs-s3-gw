@@ -570,47 +570,58 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 		ids []*object.ID
 	)
 
-	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
-	if !versioningEnabled && obj.VersionID != unversionedObjectVersionID && obj.VersionID != "" {
-		obj.Error = errors.GetAPIError(errors.ErrInvalidVersion)
-		return obj
+	p := &PutObjectParams{
+		Object: obj.Name,
+		Reader: bytes.NewReader(nil),
+		Header: map[string]string{},
 	}
 
-	if versioningEnabled {
-		p := &PutObjectParams{
-			Object: obj.Name,
-			Reader: bytes.NewReader(nil),
-			Header: map[string]string{VersionsDeleteMarkAttr: obj.VersionID},
-		}
-		if len(obj.VersionID) != 0 {
-			version, err := n.checkVersionsExist(ctx, bkt, obj)
-			if err != nil {
-				obj.Error = err
-				return obj
-			}
-			ids = []*object.ID{version.ID}
-			if version.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
-				obj.DeleteMarkVersion = version.Version()
-			}
+	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
 
-			p.Header[versionsDelAttr] = obj.VersionID
-		} else {
-			p.Header[VersionsDeleteMarkAttr] = DelMarkFullObject
-		}
-		objInfo, err := n.objectPut(ctx, bkt, p)
+	// Current implementation doesn't consider "unversioned" mode (so any deletion creates "delete-mark" object).
+	// The reason is difficulties to determinate whether versioning mode is "unversioned" or "suspended".
+
+	if obj.VersionID == unversionedObjectVersionID || !versioningEnabled && len(obj.VersionID) == 0 {
+		p.Header[versionsUnversionedAttr] = "true"
+		versions, err := n.headVersions(ctx, bkt, obj.Name)
 		if err != nil {
 			obj.Error = err
 			return obj
 		}
-		if len(obj.VersionID) == 0 {
-			obj.DeleteMarkVersion = objInfo.Version()
+		last := versions.getLast(FromUnversioned())
+		if last == nil {
+			obj.Error = errors.GetAPIError(errors.ErrInvalidVersion)
+			return obj
 		}
+		p.Header[VersionsDeleteMarkAttr] = last.Version()
+
+		for _, unversioned := range versions.unversioned() {
+			ids = append(ids, unversioned.ID)
+		}
+	} else if len(obj.VersionID) != 0 {
+		version, err := n.checkVersionsExist(ctx, bkt, obj)
+		if err != nil {
+			obj.Error = err
+			return obj
+		}
+		ids = []*object.ID{version.ID}
+		if version.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
+			obj.DeleteMarkVersion = version.Version()
+		}
+
+		p.Header[versionsDelAttr] = obj.VersionID
+		p.Header[VersionsDeleteMarkAttr] = version.Version()
 	} else {
-		ids, err = n.objectSearchByName(ctx, bkt.CID, obj.Name)
-		if err != nil {
-			obj.Error = err
-			return obj
-		}
+		p.Header[VersionsDeleteMarkAttr] = DelMarkFullObject
+	}
+
+	objInfo, err := n.objectPut(ctx, bkt, p)
+	if err != nil {
+		obj.Error = err
+		return obj
+	}
+	if len(obj.VersionID) == 0 {
+		obj.DeleteMarkVersion = objInfo.Version()
 	}
 
 	for _, id := range ids {
