@@ -7,7 +7,7 @@ To update this file using tests result run:
 
 ## CopyObject
 
-Compatibility: 14/16/17 out of 17
+Compatibility: 15/16/17 out of 17
 
 |    | Test                                                                      | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------|-------|-------|--------|
@@ -19,7 +19,7 @@ Compatibility: 14/16/17 out of 17
 | 6  | s3tests_boto3.functional.test_s3.test_object_copy_same_bucket             | ok    | ok    | ok     |
 | 7  | s3tests_boto3.functional.test_s3.test_object_copy_verify_contenttype      | ok    | ok    | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_object_copy_to_itself               | ok    | ok    | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_object_copy_to_itself_with_metadata | ERROR | ok    | ok     |
+| 9  | s3tests_boto3.functional.test_s3.test_object_copy_to_itself_with_metadata | ok    | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_object_copy_diff_bucket             | ok    | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_bucket        | ERROR | FAIL  | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_object_bucket | ERROR | ok    | ok     |
@@ -71,7 +71,7 @@ Compatibility: 27/25/29 out of 33
 
 ## PutObject
 
-Compatibility: 27/36/37 out of 64
+Compatibility: 28/36/37 out of 64
 
 |    | Test                                                                                           | s3-gw       | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------------|-------------|-------|--------|
@@ -128,7 +128,7 @@ Compatibility: 27/36/37 out of 64
 | 51 | s3tests_boto3.functional.test_s3.test_object_set_get_metadata_empty_to_unreadable_prefix       | ok          | ok    | FAIL   |
 | 52 | s3tests_boto3.functional.test_s3.test_object_set_get_metadata_empty_to_unreadable_suffix       | ok          | ok    | FAIL   |
 | 53 | s3tests_boto3.functional.test_s3.test_object_set_get_metadata_empty_to_unreadable_infix        | ok          | ok    | FAIL   |
-| 54 | s3tests_boto3.functional.test_s3.test_object_metadata_replaced_on_put                          | FAIL        | ok    | ok     |
+| 54 | s3tests_boto3.functional.test_s3.test_object_metadata_replaced_on_put                          | ok          | ok    | ok     |
 | 55 | s3tests_boto3.functional.test_s3.test_object_write_to_nonexist_bucket                          | ok          | ok    | ok     |
 | 56 | s3tests_boto3.functional.test_s3.test_atomic_write_1mb                                         | ok          | ok    | ok     |
 | 57 | s3tests_boto3.functional.test_s3.test_atomic_write_4mb                                         | ok          | ok    | ok     |
@@ -365,7 +365,7 @@ Comments: in [PR](https://github.com/nspcc-dev/s3-tests/pull/5)
 
 ## Tagging
 
-Compatibility: 8/6/8 out of 11
+Compatibility: 9/6/8 out of 11
 
 |    | Test                                                       | s3-gw | minio | aws s3 |
 |----|------------------------------------------------------------|-------|-------|--------|
@@ -377,13 +377,13 @@ Compatibility: 8/6/8 out of 11
 | 6  | s3tests_boto3.functional.test_s3.test_put_max_kvsize_tags  | ok    | ok    | ok     |
 | 7  | s3tests_boto3.functional.test_s3.test_put_excess_key_tags  | ok    | ok    | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_put_excess_val_tags  | ok    | ok    | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_put_modify_tags      | FAIL  | FAIL  | FAIL   |
+| 9  | s3tests_boto3.functional.test_s3.test_put_modify_tags      | ok    | FAIL  | FAIL   |
 | 10 | s3tests_boto3.functional.test_s3.test_put_delete_tags      | ok    | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_put_obj_with_tags    | ok    | FAIL  | ok     |
 
 ## Versioning
 
-Compatibility: 15/19/24 out of 26
+Compatibility: 16/19/24 out of 26
 
 |    | Test                                                                                        | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -411,7 +411,7 @@ Compatibility: 15/19/24 out of 26
 | 22 | s3tests_boto3.functional.test_s3.test_bucket_list_return_data_versioning                    | ERROR | ERROR | ok     |
 | 23 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_bucket                          | ok    | ok    | ok     |
 | 24 | s3tests_boto3.functional.test_s3.test_object_copy_versioned_url_encoding                    | ok    | ok    | ok     |
-| 25 | s3tests_boto3.functional.test_s3.test_object_copy_versioning_multipart_upload               | FAIL  | ok    | ok     |
+| 25 | s3tests_boto3.functional.test_s3.test_object_copy_versioning_multipart_upload               | ok    | ok    | ok     |
 | 26 | s3tests_boto3.functional.test_s3.test_multipart_copy_versioned                              | ok    | ERROR | ok     |
 
 ## Bucket
