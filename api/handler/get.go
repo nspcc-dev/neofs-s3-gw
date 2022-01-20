@@ -77,6 +77,9 @@ func writeHeaders(h http.Header, info *data.ObjectInfo, tagSetLength int) {
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
 	for key, val := range info.Headers {
+		if layer.IsSystemHeader(key) {
+			continue
+		}
 		h[api.MetadataPrefix+key] = []string{val}
 	}
 }

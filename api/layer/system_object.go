@@ -88,7 +88,10 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 
 	for k, v := range p.Metadata {
 		attr := object.NewAttribute()
-		attr.SetKey(p.Prefix + k)
+		if !IsSystemHeader(k) {
+			k = p.Prefix + k
+		}
+		attr.SetKey(k)
 		if p.Prefix == tagPrefix && v == "" {
 			v = tagEmptyMark
 		}
