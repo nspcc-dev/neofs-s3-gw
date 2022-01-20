@@ -23,7 +23,7 @@ var (
 	)
 
 	statsMetrics = &stats{
-		desc: prometheus.NewDesc("neofs_s3_stats", "Statistics exposed by MinIO server", nil, nil),
+		desc: prometheus.NewDesc("neofs_s3_stats", "Statistics exposed by NeoFS S3 Gate instance", nil, nil),
 	}
 )
 
