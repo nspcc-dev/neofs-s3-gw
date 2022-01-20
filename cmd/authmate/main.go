@@ -197,7 +197,6 @@ func issueSecret() *cli.Command {
 				Usage:       "friendly name of auth container to put the secret into",
 				Required:    false,
 				Destination: &containerFriendlyName,
-				Value:       "auth-container",
 			},
 			&cli.BoolFlag{
 				Name:        "create-session-token",

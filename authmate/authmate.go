@@ -110,12 +110,19 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 		return nil, fmt.Errorf("failed to build placement policy: %w", err)
 	}
 
-	cnr := container.New(
+	cnrOptions := []container.Option{
 		container.WithPolicy(pp),
 		container.WithCustomBasicACL(defaultAuthContainerBasicACL),
-		container.WithAttribute(container.AttributeName, friendlyName),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)))
-	container.SetNativeName(cnr, friendlyName)
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
+	}
+	if friendlyName != "" {
+		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, friendlyName))
+	}
+
+	cnr := container.New(cnrOptions...)
+	if friendlyName != "" {
+		container.SetNativeName(cnr, friendlyName)
+	}
 
 	cid, err = a.pool.PutContainer(ctx, cnr)
 	if err != nil {
