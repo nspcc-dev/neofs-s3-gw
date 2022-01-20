@@ -444,7 +444,6 @@ func (n *layer) GetBucketTagging(ctx context.Context, bucketName string) (map[st
 	}
 
 	objInfo, err := n.headSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
-
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}

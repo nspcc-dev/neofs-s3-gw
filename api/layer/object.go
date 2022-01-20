@@ -546,6 +546,10 @@ func isSystem(obj *data.ObjectInfo) bool {
 		len(obj.Headers[attrVersionsIgnore]) > 0
 }
 
+func IsSystemHeader(key string) bool {
+	return strings.HasPrefix(key, "S3-")
+}
+
 func trimAfterObjectName(startAfter string, objects []*data.ObjectInfo) []*data.ObjectInfo {
 	if len(objects) != 0 && objects[len(objects)-1].Name <= startAfter {
 		return nil
