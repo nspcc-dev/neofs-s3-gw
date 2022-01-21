@@ -31,7 +31,7 @@ Compatibility: 15/16/17 out of 17
 
 ## GetObject
 
-Compatibility: 27/25/29 out of 33
+Compatibility: 28/25/29 out of 33
 
 |    | Test                                                                                     | s3-gw | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -67,7 +67,7 @@ Compatibility: 27/25/29 out of 33
 | 30 | s3tests_boto3.functional.test_s3.test_object_raw_get_object_gone                         | ok    | FAIL  | ok     |
 | 31 | s3tests_boto3.functional.test_s3.test_object_raw_get_object_acl                          | ERROR | ok    | ok     |
 | 32 | s3tests_boto3.functional.test_s3.test_object_raw_authenticated                           | ok    | ok    | ok     |
-| 33 | s3tests_boto3.functional.test_s3.test_object_raw_response_headers                        | ERROR | ok    | ok     |
+| 33 | s3tests_boto3.functional.test_s3.test_object_raw_response_headers                        | ok    | ok    | ok     |
 
 ## PutObject
 
