@@ -841,7 +841,12 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 
 	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bkt)
 	require.NoError(t, err)
-	require.Equal(t, tagSet, tagging)
+
+	expectedTagSet := map[string]string{
+		"tag1": "val1",
+		"tag2": "val2",
+	}
+	require.Equal(t, expectedTagSet, tagging)
 
 	err = tc.layer.DeleteBucketTagging(tc.ctx, tc.bkt)
 	require.NoError(t, err)
