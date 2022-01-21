@@ -67,3 +67,13 @@ const (
 const (
 	QueryVersionID = "versionId"
 )
+
+// ResponseModifiers maps response modifies headers to regular headers.
+var ResponseModifiers = map[string]string{
+	"response-content-type":        ContentType,
+	"response-content-language":    ContentLanguage,
+	"response-expires":             Expires,
+	"response-cache-control":       CacheControl,
+	"response-content-disposition": ContentDisposition,
+	"response-content-encoding":    ContentEncoding,
+}
