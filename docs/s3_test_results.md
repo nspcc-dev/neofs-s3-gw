@@ -7,7 +7,7 @@ To update this file using tests result run:
 
 ## CopyObject
 
-Compatibility: 15/16/17 out of 17
+Compatibility: 16/16/17 out of 17
 
 |    | Test                                                                      | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------|-------|-------|--------|
@@ -21,7 +21,7 @@ Compatibility: 15/16/17 out of 17
 | 8  | s3tests_boto3.functional.test_s3.test_object_copy_to_itself               | ok    | ok    | ok     |
 | 9  | s3tests_boto3.functional.test_s3.test_object_copy_to_itself_with_metadata | ok    | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_object_copy_diff_bucket             | ok    | ok    | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_bucket        | ERROR | FAIL  | ok     |
+| 11 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_bucket        | ok    | FAIL  | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_object_bucket | ERROR | ok    | ok     |
 | 13 | s3tests_boto3.functional.test_s3.test_object_copy_canned_acl              | ok    | ok    | ok     |
 | 14 | s3tests_boto3.functional.test_s3.test_object_copy_retaining_metadata      | ok    | ok    | ok     |
@@ -71,7 +71,7 @@ Compatibility: 27/25/29 out of 33
 
 ## PutObject
 
-Compatibility: 28/36/37 out of 64
+Compatibility: 29/36/37 out of 64
 
 |    | Test                                                                                           | s3-gw       | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------------|-------------|-------|--------|
@@ -113,7 +113,7 @@ Compatibility: 28/36/37 out of 64
 | 36 | s3tests_boto3.functional.test_headers.test_object_create_bad_date_before_today_aws2            | FAIL        | ok    | ok     |
 | 37 | s3tests_boto3.functional.test_headers.test_object_create_bad_date_before_epoch_aws2            | FAIL        | FAIL  | ok     |
 | 38 | s3tests_boto3.functional.test_headers.test_object_create_bad_date_after_end_aws2               | FAIL        | ok    | ok     |
-| 39 | s3tests_boto3.functional.test_s3.test_object_anon_put                                          | FAIL        | ok    | ok     |
+| 39 | s3tests_boto3.functional.test_s3.test_object_anon_put                                          | ok          | ok    | ok     |
 | 40 | s3tests_boto3.functional.test_s3.test_object_put_authenticated                                 | ok          | ok    | ok     |
 | 41 | s3tests_boto3.functional.test_s3.test_object_raw_put_authenticated_expired                     | ok          | FAIL  | FAIL   |
 | 42 | s3tests_boto3.functional.test_s3.test_object_write_file                                        | ok          | ok    | ok     |
