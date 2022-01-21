@@ -276,6 +276,12 @@ func (n *layer) EphemeralKey() *keys.PublicKey {
 	return n.anonKey.Key.PublicKey()
 }
 
+// IsAuthenticatedRequest check if access box exists in current request.
+func IsAuthenticatedRequest(ctx context.Context) bool {
+	_, ok := ctx.Value(api.BoxData).(*accessbox.Box)
+	return ok
+}
+
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) *owner.ID {
 	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {

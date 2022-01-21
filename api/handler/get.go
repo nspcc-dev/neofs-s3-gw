@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -66,8 +67,16 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
 
+func overrideResponseHeaders(h http.Header, query url.Values) {
+	for key, value := range query {
+		if hdr, ok := api.ResponseModifiers[strings.ToLower(key)]; ok {
+			h[hdr] = value
+		}
+	}
+}
+
 func writeHeaders(h http.Header, info *data.ObjectInfo, tagSetLength int) {
-	if len(info.ContentType) > 0 {
+	if len(info.ContentType) > 0 && h.Get(api.ContentType) == "" {
 		h.Set(api.ContentType, info.ContentType)
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
@@ -131,6 +140,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if layer.IsAuthenticatedRequest(r.Context()) {
+		overrideResponseHeaders(w.Header(), reqInfo.URL.Query())
+	}
 	writeHeaders(w.Header(), info, len(tagSet))
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
