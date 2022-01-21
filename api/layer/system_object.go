@@ -107,7 +107,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(p.Reader)
 	oid, err := n.pool.PutObject(ctx, ops, n.CallOptions(ctx)...)
 	if err != nil {
-		return nil, err
+		return nil, n.transformNeofsError(ctx, err)
 	}
 
 	meta, err := n.objectHead(ctx, p.BktInfo.CID, oid)
