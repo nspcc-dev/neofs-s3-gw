@@ -101,7 +101,9 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 		opts.AddFilter(object.AttributeFileName, prefix, object.MatchCommonPrefix)
 	}
 	searchParams := new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts)
-	return n.pool.SearchObject(ctx, searchParams, n.CallOptions(ctx)...)
+
+	ids, err := n.pool.SearchObject(ctx, searchParams, n.CallOptions(ctx)...)
+	return ids, n.transformNeofsError(ctx, err)
 }
 
 func newAddress(cid *cid.ID, oid *object.ID) *object.Address {
@@ -114,7 +116,8 @@ func newAddress(cid *cid.ID, oid *object.ID) *object.Address {
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, cid *cid.ID, oid *object.ID) (*object.Object, error) {
 	ops := new(client.ObjectHeaderParams).WithAddress(newAddress(cid, oid)).WithAllFields()
-	return n.pool.GetObjectHeader(ctx, ops, n.CallOptions(ctx)...)
+	obj, err := n.pool.GetObjectHeader(ctx, ops, n.CallOptions(ctx)...)
+	return obj, n.transformNeofsError(ctx, err)
 }
 
 // objectGetWithPayloadWriter and write it into provided io.Reader.
@@ -122,20 +125,23 @@ func (n *layer) objectGetWithPayloadWriter(ctx context.Context, p *getParams) (*
 	// prepare length/offset writer
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.GetObjectParams).WithAddress(newAddress(p.cid, p.oid)).WithPayloadWriter(w)
-	return n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
+	obj, err := n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
+	return obj, n.transformNeofsError(ctx, err)
 }
 
 // objectGet returns an object with payload in the object.
 func (n *layer) objectGet(ctx context.Context, cid *cid.ID, oid *object.ID) (*object.Object, error) {
 	ops := new(client.GetObjectParams).WithAddress(newAddress(cid, oid))
-	return n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
+	obj, err := n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
+	return obj, n.transformNeofsError(ctx, err)
 }
 
 // objectRange gets object range and writes it into provided io.Writer.
 func (n *layer) objectRange(ctx context.Context, p *getParams) ([]byte, error) {
 	w := newWriter(p.Writer, p.offset, p.length)
 	ops := new(client.RangeDataParams).WithAddress(newAddress(p.cid, p.oid)).WithDataWriter(w).WithRange(p.Range)
-	return n.pool.ObjectPayloadRangeData(ctx, ops, n.CallOptions(ctx)...)
+	payload, err := n.pool.ObjectPayloadRangeData(ctx, ops, n.CallOptions(ctx)...)
+	return payload, n.transformNeofsError(ctx, err)
 }
 
 // objectPut into NeoFS, took payload from io.Reader.
@@ -168,7 +174,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 	ops := new(client.PutObjectParams).WithObject(rawObject.Object()).WithPayloadReader(r)
 	oid, err := n.pool.PutObject(ctx, ops, n.CallOptions(ctx)...)
 	if err != nil {
-		return nil, err
+		return nil, n.transformNeofsError(ctx, err)
 	}
 
 	if p.Header[VersionsDeleteMarkAttr] == DelMarkFullObject {
@@ -395,7 +401,8 @@ func (n *layer) objectDelete(ctx context.Context, cid *cid.ID, oid *object.ID) e
 	dop := new(client.DeleteObjectParams)
 	dop.WithAddress(address)
 	n.objCache.Delete(address)
-	return n.pool.DeleteObject(ctx, dop, n.CallOptions(ctx)...)
+	err := n.pool.DeleteObject(ctx, dop, n.CallOptions(ctx)...)
+	return n.transformNeofsError(ctx, err)
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.
@@ -638,4 +645,17 @@ func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, cid *cid.ID, 
 	}
 
 	return meta
+}
+
+func (n *layer) transformNeofsError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
+		n.log.Debug("error was transformed", zap.String("request_id", api.GetRequestID(ctx)), zap.Error(err))
+		return apiErrors.GetAPIError(apiErrors.ErrAccessDenied)
+	}
+
+	return err
 }

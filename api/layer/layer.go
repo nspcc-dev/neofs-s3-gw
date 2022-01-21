@@ -307,7 +307,8 @@ func (n *layer) SessionOpt(ctx context.Context) pool.CallOption {
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
 	ops := new(client.GetObjectParams).WithAddress(address)
-	return n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
+	obj, err := n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
+	return obj, n.transformNeofsError(ctx, err)
 }
 
 // GetBucketInfo returns bucket info by name.
