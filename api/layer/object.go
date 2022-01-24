@@ -3,7 +3,6 @@ package layer
 import (
 	"context"
 	"io"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -88,17 +87,11 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]*object.ID, 
 	opts.AddRootFilter()
 
 	for _, filter := range p.filters {
-		if val, err := url.QueryUnescape(filter.val); err != nil {
-			return nil, err
-		} else if val != "" {
-			opts.AddFilter(filter.attr, val, object.MatchStringEqual)
-		}
+		opts.AddFilter(filter.attr, filter.val, object.MatchStringEqual)
 	}
 
-	if prefix, err := url.QueryUnescape(p.prefix); err != nil {
-		return nil, err
-	} else if prefix != "" {
-		opts.AddFilter(object.AttributeFileName, prefix, object.MatchCommonPrefix)
+	if p.prefix != "" {
+		opts.AddFilter(object.AttributeFileName, p.prefix, object.MatchCommonPrefix)
 	}
 	searchParams := new(client.SearchObjectParams).WithContainerID(p.cid).WithSearchFilters(opts)
 
@@ -147,13 +140,9 @@ func (n *layer) objectRange(ctx context.Context, p *getParams) ([]byte, error) {
 // objectPut into NeoFS, took payload from io.Reader.
 func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjectParams) (*data.ObjectInfo, error) {
 	own := n.Owner(ctx)
-	obj, err := url.QueryUnescape(p.Object)
-	if err != nil {
-		return nil, err
-	}
 
 	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
-	versions, err := n.headVersions(ctx, bkt, obj)
+	versions, err := n.headVersions(ctx, bkt, p.Object)
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -169,7 +158,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 			r = d.MultiReader()
 		}
 	}
-	rawObject := formRawObject(p, bkt.CID, own, obj)
+	rawObject := formRawObject(p, bkt.CID, own, p.Object)
 
 	ops := new(client.PutObjectParams).WithObject(rawObject.Object()).WithPayloadReader(r)
 	oid, err := n.pool.PutObject(ctx, ops, n.CallOptions(ctx)...)
