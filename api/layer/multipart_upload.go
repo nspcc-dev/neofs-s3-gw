@@ -404,7 +404,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 		}
 		parts = append(parts, &Part{
 			ETag:         objInfo.HashSum,
-			LastModified: objInfo.Created.Format(time.RFC3339),
+			LastModified: objInfo.Created.UTC().Format(time.RFC3339),
 			PartNumber:   num,
 			Size:         objInfo.Size,
 		})

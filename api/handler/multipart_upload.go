@@ -342,7 +342,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 
 	response := UploadPartCopyResponse{
 		ETag:         info.HashSum,
-		LastModified: info.Created.Format(time.RFC3339),
+		LastModified: info.Created.UTC().Format(time.RFC3339),
 	}
 
 	if err = api.EncodeToResponse(w, response); err != nil {
@@ -636,7 +636,7 @@ func encodeListMultipartUploadsToResponse(info *layer.ListMultipartUploadsInfo, 
 	uploads := make([]MultipartUpload, 0, len(info.Uploads))
 	for _, u := range info.Uploads {
 		m := MultipartUpload{
-			Initiated: u.Created.Format(time.RFC3339),
+			Initiated: u.Created.UTC().Format(time.RFC3339),
 			Initiator: Initiator{
 				ID:          u.Owner.String(),
 				DisplayName: u.Owner.String(),

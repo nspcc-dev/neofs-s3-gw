@@ -38,7 +38,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	for _, item := range list {
 		res.Buckets.Buckets = append(res.Buckets.Buckets, Bucket{
 			Name:         item.Name,
-			CreationDate: item.Created.Format(time.RFC3339),
+			CreationDate: item.Created.UTC().Format(time.RFC3339),
 		})
 	}
 
