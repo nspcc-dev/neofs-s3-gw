@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -33,7 +34,7 @@ import (
 )
 
 const (
-	defaultAuthContainerBasicACL uint32 = 0b00111100100011001000110011001110
+	defaultAuthContainerBasicACL acl.BasicACL = 0b00111100100011001000110011001110 // 0x3C8C8CCE - private container with only GET allowed to others
 )
 
 // Agent contains client communicating with NeoFS and logger.
@@ -252,10 +253,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	box.ContainerPolicy = policies
 
-	oid, err := OwnerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
-	if err != nil {
-		return err
-	}
+	oid := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
 
 	a.log.Info("store bearer token into NeoFS",
 		zap.Stringer("owner_tkn", oid))
@@ -403,10 +401,7 @@ func buildContext(rules []byte) (*session.ContainerContext, error) {
 }
 
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*token.BearerToken, error) {
-	oid, err := OwnerIDFromNeoFSKey(gateKey)
-	if err != nil {
-		return nil, err
-	}
+	oid := owner.NewIDFromPublicKey((*ecdsa.PublicKey)(gateKey))
 
 	bearerToken := token.NewBearerToken()
 	bearerToken.SetEACLTable(table)
@@ -478,11 +473,8 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
-		oid, err := OwnerIDFromNeoFSKey(options.NeoFSKey.PublicKey())
-		if err != nil {
-			return nil, err
-		}
 
+		oid := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
 		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, lifetime, sessionRules, options.GatesPublicKeys)
 		if err != nil {
 			return nil, err
@@ -493,12 +485,4 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 	}
 
 	return gates, nil
-}
-
-func OwnerIDFromNeoFSKey(key *keys.PublicKey) (*owner.ID, error) {
-	wallet, err := owner.NEO3WalletFromPublicKey((*ecdsa.PublicKey)(key))
-	if err != nil {
-		return nil, err
-	}
-	return owner.NewIDFromNeo3Wallet(wallet), nil
 }

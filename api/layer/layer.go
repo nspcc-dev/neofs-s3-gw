@@ -16,7 +16,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
-	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -288,8 +287,7 @@ func (n *layer) Owner(ctx context.Context) *owner.ID {
 		return data.Gate.BearerToken.Issuer()
 	}
 
-	id, _ := authmate.OwnerIDFromNeoFSKey(n.EphemeralKey())
-	return id
+	return owner.NewIDFromPublicKey((*ecdsa.PublicKey)(n.EphemeralKey()))
 }
 
 // CallOptions returns []pool.CallOption options: client.WithBearer or client.WithKey (if request is anonymous).

@@ -201,7 +201,7 @@ func (t *testPool) AnnounceContainerUsedSpace(ctx context.Context, announcements
 	panic("implement me")
 }
 
-func (t *testPool) Connection() (client.Client, *session.Token, error) {
+func (t *testPool) Connection() (pool.Client, *session.Token, error) {
 	panic("implement me")
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -130,7 +131,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 
 	options := []container.Option{
 		container.WithPolicy(p.Policy),
-		container.WithCustomBasicACL(p.ACL),
+		container.WithCustomBasicACL(acl.BasicACL(p.ACL)),
 		container.WithAttribute(container.AttributeName, p.Name),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)),
 	}
