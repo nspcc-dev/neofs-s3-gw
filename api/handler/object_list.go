@@ -194,7 +194,7 @@ func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) []Obje
 		res := Object{
 			Key:          s3PathEncode(obj.Name, encode),
 			Size:         obj.Size,
-			LastModified: obj.Created.Format(time.RFC3339),
+			LastModified: obj.Created.UTC().Format(time.RFC3339),
 			ETag:         obj.HashSum,
 		}
 
@@ -281,7 +281,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 		res.Version = append(res.Version, ObjectVersionResponse{
 			IsLatest:     ver.IsLatest,
 			Key:          ver.Object.Name,
-			LastModified: ver.Object.Created.Format(time.RFC3339),
+			LastModified: ver.Object.Created.UTC().Format(time.RFC3339),
 			Owner: Owner{
 				ID:          ver.Object.Owner.String(),
 				DisplayName: ver.Object.Owner.String(),
@@ -296,7 +296,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 		res.DeleteMarker = append(res.DeleteMarker, DeleteMarkerEntry{
 			IsLatest:     del.IsLatest,
 			Key:          del.Object.Name,
-			LastModified: del.Object.Created.Format(time.RFC3339),
+			LastModified: del.Object.Created.UTC().Format(time.RFC3339),
 			Owner: Owner{
 				ID:          del.Object.Owner.String(),
 				DisplayName: del.Object.Owner.String(),

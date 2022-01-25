@@ -111,7 +111,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if info, err = h.obj.CopyObject(r.Context(), params); err != nil {
 		h.logAndSendError(w, "couldn't copy object", reqInfo, err, additional...)
 		return
-	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: info.Created.Format(time.RFC3339), ETag: info.HashSum}); err != nil {
+	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: info.Created.UTC().Format(time.RFC3339), ETag: info.HashSum}); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err, additional...)
 		return
 	}
