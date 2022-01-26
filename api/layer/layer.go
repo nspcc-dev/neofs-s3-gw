@@ -299,15 +299,6 @@ func (n *layer) CallOptions(ctx context.Context) []pool.CallOption {
 	return []pool.CallOption{pool.WithKey(&n.anonKey.Key.PrivateKey)}
 }
 
-// SessionOpt returns client.WithSession call option with token from context or with nil token.
-func (n *layer) SessionOpt(ctx context.Context) pool.CallOption {
-	if data, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && data != nil && data.Gate != nil {
-		return pool.WithSession(data.Gate.SessionToken)
-	}
-
-	return pool.WithSession(nil)
-}
-
 // Get NeoFS Object by refs.Address (should be used by auth.Center).
 func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
 	ops := new(client.GetObjectParams).WithAddress(address)

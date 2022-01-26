@@ -94,7 +94,7 @@ func Test_session_token_in_access_box(t *testing.T) {
 	require.NoError(t, tkn.Sign(&sec.PrivateKey))
 
 	gate := NewGateData(cred.PublicKey(), token.NewBearerToken())
-	gate.SessionToken = tkn
+	gate.SessionTokens = []*session.Token{tkn}
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
@@ -107,7 +107,7 @@ func Test_session_token_in_access_box(t *testing.T) {
 	tkns, err := box2.GetTokens(cred)
 	require.NoError(t, err)
 
-	require.Equal(t, tkn, tkns.SessionToken)
+	require.Equal(t, []*session.Token{tkn}, tkns.SessionTokens)
 }
 
 func Test_accessbox_multiple_keys(t *testing.T) {

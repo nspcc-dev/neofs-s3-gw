@@ -484,8 +484,8 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 		if err != nil {
 			return nil, err
 		}
-		for i, sessionToken := range sessionTokens {
-			gates[i].SessionToken = sessionToken[0]
+		for i, sessionTkns := range sessionTokens {
+			gates[i].SessionTokens = sessionTkns
 		}
 	}
 
