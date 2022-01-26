@@ -25,6 +25,6 @@ message AccessBox {
 message Tokens {
     bytes accessKey = 1 [json_name = "accessKey"];
     bytes bearerToken = 2 [json_name = "bearerToken"];
-    bytes sessionToken = 3 [json_name = "sessionToken"];
+    repeated bytes sessionTokens = 3 [json_name = "sessionTokens"];
 }
 
