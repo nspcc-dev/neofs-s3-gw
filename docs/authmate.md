@@ -128,13 +128,15 @@ it will be auto-generated with values:
 }
 ```
 
-Rules for a session token can be set via param `session-rules` (json-string and file path allowed), the default value is:
+Rules for session tokens can be set via param `session-rules` (json-string and file path allowed), the default value is:
 ```
-{
+[
+  {
     "verb": "PUT",
     "wildcard": true,
     "containerID": null
-}
+  }
+]
 ```
 
 If `session-rules` are set, but `create-session-token` is not, no session
