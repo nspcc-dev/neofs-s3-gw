@@ -15,6 +15,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
@@ -169,7 +170,14 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 
 func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table) error {
 	table.SetCID(cid)
-	if err := n.pool.SetEACL(ctx, table, n.SessionOpt(ctx)); err != nil {
+
+	var sessionToken *session.Token
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForSetEACL()
+	}
+
+	if err := n.pool.SetEACL(ctx, table, pool.WithSession(sessionToken)); err != nil {
 		return err
 	}
 
@@ -224,5 +232,10 @@ func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.T
 }
 
 func (n *layer) deleteContainer(ctx context.Context, cid *cid.ID) error {
-	return n.pool.DeleteContainer(ctx, cid, n.SessionOpt(ctx))
+	var sessionToken *session.Token
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForDelete()
+	}
+	return n.pool.DeleteContainer(ctx, cid, pool.WithSession(sessionToken))
 }

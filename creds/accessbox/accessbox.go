@@ -11,6 +11,7 @@ import (
 	"io"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	apisession "github.com/nspcc-dev/neofs-api-go/v2/session"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/token"
@@ -33,15 +34,48 @@ type ContainerPolicy struct {
 
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
-	AccessKey    string
-	BearerToken  *token.BearerToken
-	SessionToken *session.Token
-	GateKey      *keys.PublicKey
+	AccessKey     string
+	BearerToken   *token.BearerToken
+	SessionTokens []*session.Token
+	GateKey       *keys.PublicKey
 }
 
 // NewGateData returns GateData from provided bearer token and public gate key.
 func NewGateData(gateKey *keys.PublicKey, bearerTkn *token.BearerToken) *GateData {
 	return &GateData{GateKey: gateKey, BearerToken: bearerTkn}
+}
+
+// SessionTokenForPut return the first suitable container session context for PUT operation.
+func (g *GateData) SessionTokenForPut() *session.Token {
+	return g.containerSessionToken(apisession.ContainerVerbPut)
+}
+
+// SessionTokenForDelete return the first suitable container session context for DELETE operation.
+func (g *GateData) SessionTokenForDelete() *session.Token {
+	return g.containerSessionToken(apisession.ContainerVerbDelete)
+}
+
+// SessionTokenForSetEACL return the first suitable container session context for SetEACL operation.
+func (g *GateData) SessionTokenForSetEACL() *session.Token {
+	return g.containerSessionToken(apisession.ContainerVerbSetEACL)
+}
+
+func (g *GateData) containerSessionToken(verb apisession.ContainerSessionVerb) *session.Token {
+	for _, sessionToken := range g.SessionTokens {
+		switch ctx := sessionToken.Context().(type) {
+		case *session.ContainerContext:
+			if isAppropriateContainerContext(ctx, verb) {
+				return sessionToken
+			}
+		}
+	}
+	return nil
+}
+
+func isAppropriateContainerContext(ctx *session.ContainerContext, verb apisession.ContainerSessionVerb) bool {
+	return verb == apisession.ContainerVerbPut && ctx.IsForPut() ||
+		verb == apisession.ContainerVerbDelete && ctx.IsForDelete() ||
+		verb == apisession.ContainerVerbSetEACL && ctx.IsForSetEACL()
 }
 
 // Secrets represents AccessKey and key to encrypt gate tokens.
@@ -146,18 +180,20 @@ func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateK
 		if err != nil {
 			return fmt.Errorf("%w, sender = %d", err, i)
 		}
-		var encSession []byte
-		if gate.SessionToken != nil {
-			encSession, err = gate.SessionToken.Marshal()
+
+		encSessions := make([][]byte, len(gate.SessionTokens))
+		for i, sessionToken := range gate.SessionTokens {
+			encSession, err := sessionToken.Marshal()
 			if err != nil {
 				return fmt.Errorf("%w, sender = %d", err, i)
 			}
+			encSessions[i] = encSession
 		}
 
 		tokens := new(Tokens)
 		tokens.AccessKey = secret
 		tokens.BearerToken = encBearer
-		tokens.SessionToken = encSession
+		tokens.SessionTokens = encSessions
 
 		boxGate, err := encodeGate(ephemeralKey, gate.GateKey, tokens)
 		if err != nil {
@@ -199,13 +235,18 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 	if err := bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
 		return nil, err
 	}
-	sessionTkn := session.NewToken()
-	if err := sessionTkn.Unmarshal(tokens.SessionToken); err != nil {
-		return nil, err
+
+	sessionTkns := make([]*session.Token, len(tokens.SessionTokens))
+	for i, encSessionToken := range tokens.SessionTokens {
+		sessionTkn := session.NewToken()
+		if err := sessionTkn.Unmarshal(encSessionToken); err != nil {
+			return nil, err
+		}
+		sessionTkns[i] = sessionTkn
 	}
 
 	gateData := NewGateData(owner.PublicKey(), bearerTkn)
-	gateData.SessionToken = sessionTkn
+	gateData.SessionTokens = sessionTkns
 	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
 	return gateData, nil
 }

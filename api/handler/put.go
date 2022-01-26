@@ -543,7 +543,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	boxData, err := layer.GetBoxData(r.Context())
 	if err == nil {
 		policies = boxData.Policies
-		p.SessionToken = boxData.Gate.SessionToken
+		p.SessionToken = boxData.Gate.SessionTokenForPut()
 	}
 
 	if createParams.LocationConstraint != "" {
