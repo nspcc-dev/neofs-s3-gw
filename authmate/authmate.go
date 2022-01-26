@@ -384,20 +384,21 @@ func buildEACLTable(cid *cid.ID, eaclTable []byte) (*eacl.Table, error) {
 	return table, nil
 }
 
-func buildContext(rules []byte) (*session.ContainerContext, error) {
-	sessionCtx := session.NewContainerContext() // wildcard == true on by default
+func buildContext(rules []byte) ([]*session.ContainerContext, error) {
+	var sessionCtxs []*session.ContainerContext
 
 	if len(rules) != 0 {
 		// cast ToV2 temporary, because there is no method for unmarshalling in ContainerContext in api-go
-		err := sessionCtx.UnmarshalJSON(rules)
+		err := json.Unmarshal(rules, &sessionCtxs)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read rules for session token: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal rules for session token: %w", err)
 		}
-		return sessionCtx, nil
+		return sessionCtxs, nil
 	}
+
+	sessionCtx := session.NewContainerContext()
 	sessionCtx.ForPut()
-	sessionCtx.ApplyTo(nil)
-	return sessionCtx, nil
+	return []*session.ContainerContext{sessionCtx}, nil
 }
 
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*token.BearerToken, error) {
@@ -441,14 +442,18 @@ func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOpt
 	return tok, tok.Sign(&key.PrivateKey)
 }
 
-func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOptions, ctx *session.ContainerContext, gatesKeys []*keys.PublicKey) ([]*session.Token, error) {
-	sessionTokens := make([]*session.Token, 0, len(gatesKeys))
+func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOptions, ctxs []*session.ContainerContext, gatesKeys []*keys.PublicKey) ([][]*session.Token, error) {
+	sessionTokens := make([][]*session.Token, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
-		tkn, err := buildSessionToken(key, oid, lifetime, ctx, gateKey)
-		if err != nil {
-			return nil, err
+		tkns := make([]*session.Token, len(ctxs))
+		for i, ctx := range ctxs {
+			tkn, err := buildSessionToken(key, oid, lifetime, ctx, gateKey)
+			if err != nil {
+				return nil, err
+			}
+			tkns[i] = tkn
 		}
-		sessionTokens = append(sessionTokens, tkn)
+		sessionTokens = append(sessionTokens, tkns)
 	}
 	return sessionTokens, nil
 }
@@ -480,7 +485,7 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 			return nil, err
 		}
 		for i, sessionToken := range sessionTokens {
-			gates[i].SessionToken = sessionToken
+			gates[i].SessionToken = sessionToken[0]
 		}
 	}
 
