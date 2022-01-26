@@ -192,8 +192,8 @@ Compatibility: 74/63/75 out of 84
 | 4  | s3tests_boto3.functional.test_s3.test_bucket_listv2_many                                        | ok    | ok    | ok     |
 | 5  | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_basic                               | ok    | ok    | ok     |
 | 6  | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_basic                             | ok    | ok    | ok     |
-| 7  | s3tests_boto3.functional.test_s3.test_bucket_listv2_encoding_basic                              | FAIL  | FAIL  | FAIL   |
-| 8  | s3tests_boto3.functional.test_s3.test_bucket_list_encoding_basic                                | FAIL  | FAIL  | FAIL   |
+| 7  | s3tests_boto3.functional.test_s3.test_bucket_listv2_encoding_basic                              | ok    | FAIL  | FAIL   |
+| 8  | s3tests_boto3.functional.test_s3.test_bucket_list_encoding_basic                                | ok    | FAIL  | FAIL   |
 | 9  | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_prefix                              | ok    | FAIL  | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_prefix                            | ok    | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_prefix_ends_with_delimiter        | ok    | ok    | ok     |
@@ -202,8 +202,8 @@ Compatibility: 74/63/75 out of 84
 | 14 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_alt                               | ok    | ok    | ok     |
 | 15 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_prefix_underscore                   | ok    | FAIL  | ok     |
 | 16 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_prefix_underscore                 | ok    | ok    | ok     |
-| 17 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_percentage                          | ERROR | ok    | ok     |
-| 18 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_percentage                        | ERROR | ok    | ok     |
+| 17 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_percentage                          | ok    | ok    | ok     |
+| 18 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_percentage                        | ok    | ok    | ok     |
 | 19 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_whitespace                          | ok    | ok    | ok     |
 | 20 | s3tests_boto3.functional.test_s3.test_bucket_listv2_delimiter_whitespace                        | ok    | ok    | ok     |
 | 21 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_dot                                 | ok    | ERROR | ok     |
@@ -249,7 +249,7 @@ Compatibility: 74/63/75 out of 84
 | 62 | s3tests_boto3.functional.test_s3.test_bucket_listv2_maxkeys_none                                | ok    | ok    | ok     |
 | 63 | s3tests_boto3.functional.test_s3.test_bucket_list_unordered                                     | FAIL  | FAIL  | FAIL   |
 | 64 | s3tests_boto3.functional.test_s3.test_bucket_listv2_unordered                                   | FAIL  | FAIL  | FAIL   |
-| 34 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_not_skip_special                    | FAIL  | ok    |        |
+| 34 | s3tests_boto3.functional.test_s3.test_bucket_list_delimiter_not_skip_special                    | ok    | ok    |        |
 | 65 | s3tests_boto3.functional.test_s3.test_bucket_list_maxkeys_invalid                               | ok    | ok    | ok     |
 | 66 | s3tests_boto3.functional.test_s3.test_bucket_list_marker_none                                   | ok    | ok    | ERROR  |
 | 67 | s3tests_boto3.functional.test_s3.test_bucket_list_marker_empty                                  | ok    | ok    | ok     |
