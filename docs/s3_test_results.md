@@ -71,7 +71,7 @@ Compatibility: 28/25/29 out of 33
 
 ## PutObject
 
-Compatibility: 29/36/37 out of 64
+Compatibility: 31/36/37 out of 64
 
 |    | Test                                                                                           | s3-gw       | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------------|-------------|-------|--------|
@@ -118,8 +118,8 @@ Compatibility: 29/36/37 out of 64
 | 41 | s3tests_boto3.functional.test_s3.test_object_raw_put_authenticated_expired                     | ok          | FAIL  | FAIL   |
 | 42 | s3tests_boto3.functional.test_s3.test_object_write_file                                        | ok          | ok    | ok     |
 | 43 | s3tests_boto3.functional.test_s3.test_object_write_check_etag                                  | FAIL        | ok    | ok     |
-| 44 | s3tests_boto3.functional.test_s3.test_object_write_cache_control                               | ERROR       | ok    | ok     |
-| 45 | s3tests_boto3.functional.test_s3.test_object_write_expires                                     | ERROR       | ok    | ok     |
+| 44 | s3tests_boto3.functional.test_s3.test_object_write_cache_control                               | ok          | ok    | ok     |
+| 45 | s3tests_boto3.functional.test_s3.test_object_write_expires                                     | ok          | ok    | ok     |
 | 46 | s3tests_boto3.functional.test_s3.test_object_write_read_update_read_delete                     | ok          | ok    | ok     |
 | 47 | s3tests_boto3.functional.test_s3.test_object_set_get_metadata_none_to_good                     | ok          | ok    | ok     |
 | 48 | s3tests_boto3.functional.test_s3.test_object_set_get_metadata_none_to_empty                    | ERROR       | ok    | ok     |
