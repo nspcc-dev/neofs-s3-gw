@@ -85,6 +85,13 @@ func writeHeaders(h http.Header, info *data.ObjectInfo, tagSetLength int) {
 	h.Set(api.AmzVersionID, info.ID.String())
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
+	if cacheControl := info.Headers[api.CacheControl]; cacheControl != "" {
+		h.Set(api.CacheControl, cacheControl)
+	}
+	if expires := info.Headers[api.Expires]; expires != "" {
+		h.Set(api.Expires, expires)
+	}
+
 	for key, val := range info.Headers {
 		if layer.IsSystemHeader(key) {
 			continue
