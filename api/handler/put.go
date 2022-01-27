@@ -194,6 +194,12 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		metadata[api.ContentType] = contentType
 	}
+	if cacheControl := r.Header.Get(api.CacheControl); len(cacheControl) > 0 {
+		metadata[api.CacheControl] = cacheControl
+	}
+	if expires := r.Header.Get(api.Expires); len(expires) > 0 {
+		metadata[api.Expires] = expires
+	}
 
 	params := &layer.PutObjectParams{
 		Bucket: reqInfo.BucketName,
