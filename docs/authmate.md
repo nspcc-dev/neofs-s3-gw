@@ -87,7 +87,7 @@ NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 To issue a secret means to create a Bearer and (optionally) Session tokens and
 put them as an object into a container on the NeoFS network.
 
-By default, the tool creates a container with a name `auth-container` and ACL 
+By default, the tool creates a container with a name the same as container ID in NeoFS and ACL 
 0x3c8c8cce (all operations are forbidden for `OTHERS` and `BEARER` user groups, 
 except for `GET`). 
 
@@ -128,16 +128,30 @@ it will be auto-generated with values:
 }
 ```
 
-Rules for session tokens can be set via param `session-rules` (json-string and file path allowed), the default value is:
+Rules for session tokens can be set via param `session-rules` (json-string and file path allowed).
+
+If the parameter `session-rules` is not set, `authmate` creates and puts three session tokens: 
 ```
 [
   {
     "verb": "PUT",
     "wildcard": true,
     "containerID": null
-  }
+  },
+  {
+    "verb": "DELETE",
+    "wildcard": true,
+    "containerID": null
+  },
+  {
+    "verb": "SETEACL",
+    "wildcard": true,
+    "containerID": null
+  },
 ]
 ```
+
+If you want to allow the user to create buckets you **must** put two session tokens with `PUT` and `SETEACL` rules.
 
 If `session-rules` are set, but `create-session-token` is not, no session
 token will be created.

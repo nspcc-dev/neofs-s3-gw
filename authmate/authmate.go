@@ -396,9 +396,16 @@ func buildContext(rules []byte) ([]*session.ContainerContext, error) {
 		return sessionCtxs, nil
 	}
 
-	sessionCtx := session.NewContainerContext()
-	sessionCtx.ForPut()
-	return []*session.ContainerContext{sessionCtx}, nil
+	sessionCtxPut := session.NewContainerContext()
+	sessionCtxPut.ForPut()
+
+	sessionCtxDelete := session.NewContainerContext()
+	sessionCtxDelete.ForDelete()
+
+	sessionCtxEACL := session.NewContainerContext()
+	sessionCtxEACL.ForSetEACL()
+
+	return []*session.ContainerContext{sessionCtxPut, sessionCtxDelete, sessionCtxEACL}, nil
 }
 
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*token.BearerToken, error) {
