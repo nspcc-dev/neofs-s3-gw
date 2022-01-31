@@ -97,8 +97,7 @@ parameter, but this way is **not recommended**.
 The tokens are encrypted by a set of gateway keys, so you need to pass them as well.
 
 Creation of the bearer token is mandatory, while creation of the session token is
-optional. If you want to add the session token, you need to add a parameter
-`create-session-token`.
+optional. 
 
 Rules for bearer token can be set via param `bearer-rules` (json-string and file path allowed), if it is not set,
 it will be auto-generated with values:
@@ -128,9 +127,13 @@ it will be auto-generated with values:
 }
 ```
 
-Rules for session tokens can be set via param `session-rules` (json-string and file path allowed).
+With session token, there is 3 options: 
+* append `--session-token` parameter with your custom rules in json format (as a string or file path, see an example below)
 
-If the parameter `session-rules` is not set, `authmate` creates and puts three session tokens: 
+**NB!** If you want to allow the user to create buckets you **must** put two session tokens with `PUT` and `SETEACL` rules.
+
+* append `--session-token` parameter with the value `none` -- no session token will be created
+* skip the parameter and `authmate` will create and put session tokens with default rules:
 ```
 [
   {
@@ -151,11 +154,6 @@ If the parameter `session-rules` is not set, `authmate` creates and puts three s
 ]
 ```
 
-If you want to allow the user to create buckets you **must** put two session tokens with `PUT` and `SETEACL` rules.
-
-If `session-rules` are set, but `create-session-token` is not, no session
-token will be created.
-
 Rules for mapping of `LocationConstraint` ([aws spec](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html#API_CreateBucket_RequestBody)) 
 to `PlacementPolicy` ([neofs spec](https://github.com/nspcc-dev/neofs-spec/blob/master/01-arch/02-policy.md)) 
 can be set via param `container-policy` (json-string and file path allowed):
@@ -174,8 +172,7 @@ $ ./neofs-authmate issue-secret --wallet wallet.json \
 --bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \
 --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
 --gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967 \
---create-session-token \
---session-rules '{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}'
+--session-token '[{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}]'
 --container-policy '{"rep-3": "REP 3"}'
 
 Enter password for wallet.json > 

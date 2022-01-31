@@ -59,8 +59,7 @@ type (
 		NeoFSKey              *keys.PrivateKey
 		GatesPublicKeys       []*keys.PublicKey
 		EACLRules             []byte
-		ContextRules          []byte
-		SessionTkn            bool
+		SessionTokenRules     []byte
 		Lifetime              time.Duration
 		AwsCliCredentialsFile string
 		ContainerPolicies     ContainerPolicies
@@ -257,14 +256,6 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	a.log.Info("store bearer token into NeoFS",
 		zap.Stringer("owner_tkn", oid))
-
-	if !options.SessionTkn && len(options.ContextRules) > 0 {
-		_, err := w.Write([]byte("Warning: rules for session token were set but --create-session flag wasn't, " +
-			"so session token was not created\n"))
-		if err != nil {
-			return err
-		}
-	}
 
 	address, err := tokens.
 		New(a.pool, secrets.EphemeralKey, cache.DefaultAccessBoxConfig()).
@@ -480,8 +471,8 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 		gates[i] = accessbox.NewGateData(gateKey, bearerTokens[i])
 	}
 
-	if options.SessionTkn {
-		sessionRules, err := buildContext(options.ContextRules)
+	if options.SessionTokenRules != nil {
+		sessionRules, err := buildContext(options.SessionTokenRules)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}

@@ -36,7 +36,6 @@ var (
 	accountAddressFlag     string
 	peerAddressFlag        string
 	eaclRulesFlag          string
-	contextRulesFlag       string
 	gateWalletPathFlag     string
 	gateAccountAddressFlag string
 	accessKeyIDFlag        string
@@ -45,7 +44,7 @@ var (
 	gatesPublicKeysFlag    cli.StringSlice
 	logEnabledFlag         bool
 	logDebugEnabledFlag    bool
-	sessionTokenFlag       bool
+	sessionTokenFlag       string
 	lifetimeFlag           time.Duration
 	containerPolicies      string
 	awcCliCredFile         string
@@ -174,12 +173,6 @@ func issueSecret() *cli.Command {
 				Required:    false,
 				Destination: &eaclRulesFlag,
 			},
-			&cli.StringFlag{
-				Name:        "session-rules",
-				Usage:       "rules for session token as plain json string",
-				Required:    false,
-				Destination: &contextRulesFlag,
-			},
 			&cli.StringSliceFlag{
 				Name:        "gate-public-key",
 				Usage:       "public 256r1 key of a gate (use flags repeatedly for multiple gates)",
@@ -198,12 +191,12 @@ func issueSecret() *cli.Command {
 				Required:    false,
 				Destination: &containerFriendlyName,
 			},
-			&cli.BoolFlag{
-				Name:        "create-session-token",
-				Usage:       "create session token",
+			&cli.StringFlag{
+				Name:        "session-token",
+				Usage:       "create session token with rules, if the rules are set as 'none', no session tokens will be created",
 				Required:    false,
 				Destination: &sessionTokenFlag,
-				Value:       false,
+				Value:       "",
 			},
 			&cli.DurationFlag{
 				Name: "lifetime",
@@ -276,9 +269,8 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				NeoFSKey:              key,
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             getJSONRules(eaclRulesFlag),
-				ContextRules:          getJSONRules(contextRulesFlag),
+				SessionTokenRules:     getSessionRules(sessionTokenFlag),
 				ContainerPolicies:     policies,
-				SessionTkn:            sessionTokenFlag,
 				Lifetime:              lifetimeFlag,
 				AwsCliCredentialsFile: awcCliCredFile,
 			}
@@ -318,6 +310,13 @@ func getJSONRules(val string) []byte {
 	}
 
 	return []byte(val)
+}
+
+func getSessionRules(r string) []byte {
+	if r == "none" {
+		return nil
+	}
+	return getJSONRules(r)
 }
 
 func obtainSecret() *cli.Command {
