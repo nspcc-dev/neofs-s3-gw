@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
@@ -35,6 +36,7 @@ type (
 		tls  *tlsConfig
 		obj  layer.Client
 		api  api.Handler
+		nc   *notifications.Controller
 
 		maxClients api.MaxClients
 
@@ -141,6 +143,12 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("failed to form resolver", zap.Error(err))
 	}
 
+	nopts := getNotificationsOptions(v, l)
+	nc, err := notifications.NewController(nopts)
+	if err != nil {
+		l.Fatal("failed to enable notifications", zap.Error(err))
+	}
+
 	layerCfg := &layer.Config{
 		Caches: getCacheOptions(v, l),
 		AnonKey: layer.AnonymousKey{
@@ -169,6 +177,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		obj:  obj,
 		tls:  tls,
 		api:  caller,
+		nc:   nc,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -249,6 +258,28 @@ func (a *App) Server(ctx context.Context) {
 		zap.Error(srv.Shutdown(ctx)))
 
 	close(a.webDone)
+}
+
+func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Options {
+	if enabled := v.GetBool(cfgEnableNATS); !enabled {
+		return nil
+	}
+
+	cfg := notifications.Options{}
+	cfg.URL = v.GetString(cfgNATSEndpoint)
+	cfg.Timeout = v.GetDuration(cfgNATSTimeout)
+	if cfg.Timeout <= 0 {
+		l.Error("invalid lifetime, using default value (in seconds)",
+			zap.String("parameter", cfgNATSTimeout),
+			zap.Duration("value in config", cfg.Timeout),
+			zap.Duration("default", notifications.DefaultTimeout))
+		cfg.Timeout = notifications.DefaultTimeout
+	}
+	cfg.TLSCertFilepath = v.GetString(cfgNATSTLSCertFile)
+	cfg.TLSAuthPrivateKeyFilePath = v.GetString(cfgNATSAuthPrivateKeyFile)
+	cfg.RootCAFiles = v.GetStringSlice(cfgNATSRootCAFiles)
+
+	return &cfg
 }
 
 func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CachesConfig {

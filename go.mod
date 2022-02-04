@@ -9,6 +9,8 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
+	github.com/nats-io/nats-server/v2 v2.7.1 // indirect
+	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/nspcc-dev/neo-go v0.98.0
 	github.com/nspcc-dev/neofs-api-go/v2 v2.11.2-0.20220114101721-227a871a04ac
 	github.com/nspcc-dev/neofs-sdk-go v0.0.0-20220121080144-596774ce5bd3
@@ -18,7 +20,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.18.1
-	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
 	google.golang.org/grpc v1.41.0
 	google.golang.org/protobuf v1.27.1

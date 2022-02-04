@@ -69,6 +69,14 @@ const ( // Settings.
 	cfgAccessBoxCacheLifetime   = "cache.accessbox.lifetime"
 	cfgAccessBoxCacheSize       = "cache.accessbox.size"
 
+	// NATS.
+	cfgEnableNATS             = "nats.enabled"
+	cfgNATSEndpoint           = "nats.endpoint"
+	cfgNATSTimeout            = "nats.timeout"
+	cfgNATSTLSCertFile        = "nats.cert_file"
+	cfgNATSAuthPrivateKeyFile = "nats.key_file"
+	cfgNATSRootCAFiles        = "nats.root_ca"
+
 	// Policy.
 	cfgDefaultPolicy = "default_policy"
 
