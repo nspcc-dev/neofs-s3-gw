@@ -327,13 +327,13 @@ func buildPlacementPolicy(placementRules string) (*netmap.PlacementPolicy, error
 	}
 
 	/*
-		REP 1 IN X 			  // place one copy of object
-		CBF 1
+		REP 2 IN X 			  // place two copies of object
+		CBF 3
 		SELECT 2 From * AS X  // in container of two nodes
 	*/
 	pp := new(netmap.PlacementPolicy)
-	pp.SetContainerBackupFactor(1)
-	pp.SetReplicas([]*netmap.Replica{newReplica("X", 1)}...)
+	pp.SetContainerBackupFactor(3)
+	pp.SetReplicas([]*netmap.Replica{newReplica("X", 2)}...)
 	pp.SetSelectors([]*netmap.Selector{newSimpleSelector("X", 2)}...)
 
 	return pp, nil
