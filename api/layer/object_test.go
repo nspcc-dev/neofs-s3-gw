@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/stretchr/testify/require"
 )
 
-func randID(t *testing.T) *object.ID {
-	id := object.NewID()
+func randID(t *testing.T) *oid.ID {
+	id := oid.NewID()
 	id.SetSHA256(randSHA256Checksum(t))
 
 	return id
@@ -77,7 +77,7 @@ func TestTrimAfterObjectName(t *testing.T) {
 func TestTrimAfterObjectID(t *testing.T) {
 	var (
 		objects     []*data.ObjectInfo
-		ids         []*object.ID
+		ids         []*oid.ID
 		numberOfIDS = 3
 	)
 

@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 var (
@@ -747,11 +748,11 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 		}
 		if len(resource.Object) != 0 {
 			if len(resource.Version) != 0 {
-				oid := object.NewID()
-				if err := oid.Parse(resource.Version); err != nil {
+				id := oid.NewID()
+				if err := id.Parse(resource.Version); err != nil {
 					return nil, err
 				}
-				record.AddObjectIDFilter(eacl.MatchStringEqual, oid)
+				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
 			}
 			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
 		}

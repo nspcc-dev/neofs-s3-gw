@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -109,7 +108,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		NodeConnectionTimeout:   conTimeout,
 		NodeRequestTimeout:      reqTimeout,
 		ClientRebalanceInterval: reBalance,
-		SessionExpirationEpoch:  math.MaxUint64,
 	}
 	conns, err = poolPeers.Build(ctx, opts)
 	if err != nil {

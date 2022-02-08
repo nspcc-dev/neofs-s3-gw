@@ -260,12 +260,15 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		uploadCompleted = true
 		done <- true
 	}(done)
+
+	var prmGet getParams
+	prmGet.w = pw
+	prmGet.cid = p.Info.Bkt.CID
+
 	for _, part := range parts {
-		_, err := n.objectGetWithPayloadWriter(ctx, &getParams{
-			Writer: pw,
-			cid:    p.Info.Bkt.CID,
-			oid:    part.ID,
-		})
+		prmGet.oid = part.ID
+
+		err = n.objectWritePayload(ctx, prmGet)
 		if err != nil {
 			_ = pw.Close()
 			n.log.Error("could not download a part of multipart upload",
@@ -317,11 +320,11 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 	uploads := make([]*UploadInfo, 0, len(ids))
 	uniqDirs := make(map[string]struct{})
 
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, id)
+	for i := range ids {
+		meta, err := n.objectHead(ctx, p.Bkt.CID, &ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", id),
+				zap.Stringer("object id", &ids[i]),
 				zap.Stringer("bucket id", p.Bkt.CID),
 				zap.Error(err))
 			continue
@@ -446,7 +449,7 @@ func (n *layer) GetUploadInitInfo(ctx context.Context, p *UploadInfoParams) (*da
 		return nil, errors.GetAPIError(errors.ErrInternalError)
 	}
 
-	meta, err := n.objectHead(ctx, p.Bkt.CID, ids[0])
+	meta, err := n.objectHead(ctx, p.Bkt.CID, &ids[0])
 	if err != nil {
 		return nil, err
 	}
@@ -470,11 +473,11 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (map[in
 
 	res := make(map[int]*data.ObjectInfo)
 
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, id)
+	for i := range ids {
+		meta, err := n.objectHead(ctx, p.Bkt.CID, &ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head a part of upload",
-				zap.Stringer("object id", id),
+				zap.Stringer("object id", &ids[i]),
 				zap.Stringer("bucket id", p.Bkt.CID),
 				zap.Error(err))
 			continue

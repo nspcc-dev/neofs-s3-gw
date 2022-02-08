@@ -8,8 +8,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"go.uber.org/zap"
 )
 
@@ -53,8 +53,8 @@ func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo
 		return err
 	}
 
-	for _, id := range ids {
-		if err = n.objectDelete(ctx, bktInfo.CID, id); err != nil {
+	for i := range ids {
+		if err = n.objectDelete(ctx, bktInfo.CID, &ids[i]); err != nil {
 			return err
 		}
 	}
@@ -104,8 +104,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	raw.SetContainerID(p.BktInfo.CID)
 	raw.SetAttributes(attributes...)
 
-	ops := new(client.PutObjectParams).WithObject(raw.Object()).WithPayloadReader(p.Reader)
-	oid, err := n.pool.PutObject(ctx, ops, n.CallOptions(ctx)...)
+	oid, err := n.pool.PutObject(ctx, *raw.Object(), p.Reader, n.CallOptions(ctx)...)
 	if err != nil {
 		return nil, n.transformNeofsError(ctx, err)
 	}
@@ -135,7 +134,12 @@ func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketIn
 
 	objInfo := versions.getLast()
 
-	obj, err := n.objectGet(ctx, bkt.CID, objInfo.ID)
+	var addr address.Address
+
+	addr.SetContainerID(bkt.CID)
+	addr.SetObjectID(objInfo.ID)
+
+	obj, err := n.objectGet(ctx, &addr)
 	if err != nil {
 		return nil, err
 	}
@@ -183,11 +187,11 @@ func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sy
 	}
 
 	versions := newObjectVersions(sysName)
-	for _, id := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, id)
+	for i := range ids {
+		meta, err := n.objectHead(ctx, bkt.CID, &ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", id),
+				zap.Stringer("object id", &ids[i]),
 				zap.Stringer("bucket id", bkt.CID),
 				zap.Error(err))
 			continue

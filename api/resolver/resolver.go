@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/nspcc-dev/neo-go/pkg/rpc/client"
+	neofsclient "github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -87,7 +88,7 @@ func NewDNSResolver(p pool.Pool, next *BucketResolver) (*BucketResolver, error) 
 			return nil, err
 		}
 
-		networkInfoRes, err := conn.NetworkInfo(ctx)
+		networkInfoRes, err := conn.NetworkInfo(ctx, neofsclient.PrmNetworkInfo{})
 		if err == nil {
 			err = apistatus.ErrFromStatus(networkInfoRes.Status())
 		}

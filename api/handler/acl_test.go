@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,8 +21,8 @@ func TestTableToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	oid := object.NewID()
-	oid.SetSHA256(sha256.Sum256(b))
+	id := oid.NewID()
+	id.SetSHA256(sha256.Sum256(b))
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -40,7 +41,7 @@ func TestTableToAst(t *testing.T) {
 	eacl.AddFormedTarget(record2, eacl.RoleUser, *(*ecdsa.PublicKey)(key.PublicKey()))
 	eacl.AddFormedTarget(record2, eacl.RoleUser, *(*ecdsa.PublicKey)(key2.PublicKey()))
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
-	record2.AddObjectIDFilter(eacl.MatchStringEqual, oid)
+	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
 	table.AddRecord(record2)
 
 	expectedAst := &ast{
@@ -56,7 +57,7 @@ func TestTableToAst(t *testing.T) {
 				resourceInfo: resourceInfo{
 					Bucket:  "bucketName",
 					Object:  "objectName",
-					Version: oid.String(),
+					Version: id.String(),
 				},
 				Operations: []*astOperation{{
 					Users: []string{
@@ -739,8 +740,8 @@ func TestObjectAclToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	oid := object.NewID()
-	oid.SetSHA256(sha256.Sum256(b))
+	objID := oid.NewID()
+	objID.SetSHA256(sha256.Sum256(b))
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -774,7 +775,7 @@ func TestObjectAclToAst(t *testing.T) {
 	resInfo := &resourceInfo{
 		Bucket:  "bucketName",
 		Object:  "object",
-		Version: oid.String(),
+		Version: objID.String(),
 	}
 
 	var operations []*astOperation
@@ -808,8 +809,8 @@ func TestBucketAclToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	oid := object.NewID()
-	oid.SetSHA256(sha256.Sum256(b))
+	objID := oid.NewID()
+	objID.SetSHA256(sha256.Sum256(b))
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)

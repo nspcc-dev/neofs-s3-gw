@@ -7,7 +7,7 @@ import (
 
 	"github.com/bluele/gcache"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 /*
@@ -55,13 +55,13 @@ func NewObjectsListCache(config *Config) *ObjectsListCache {
 }
 
 // Get return list of ObjectInfo.
-func (l *ObjectsListCache) Get(key ObjectsListKey) []*object.ID {
+func (l *ObjectsListCache) Get(key ObjectsListKey) []oid.ID {
 	entry, err := l.cache.Get(key)
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.([]*object.ID)
+	result, ok := entry.([]oid.ID)
 	if !ok {
 		return nil
 	}
@@ -70,7 +70,7 @@ func (l *ObjectsListCache) Get(key ObjectsListKey) []*object.ID {
 }
 
 // Put puts a list of objects to cache.
-func (l *ObjectsListCache) Put(key ObjectsListKey, oids []*object.ID) error {
+func (l *ObjectsListCache) Put(key ObjectsListKey, oids []oid.ID) error {
 	if len(oids) == 0 {
 		return fmt.Errorf("list is empty, cid: %s, prefix: %s", key.cid, key.prefix)
 	}

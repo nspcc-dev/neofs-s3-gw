@@ -18,11 +18,12 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -77,8 +78,6 @@ type (
 	GetObjectParams struct {
 		Range      *RangeParams
 		ObjectInfo *data.ObjectInfo
-		Offset     int64
-		Length     int64
 		Writer     io.Writer
 		VersionID  string
 	}
@@ -186,7 +185,7 @@ type (
 
 	// NeoFS provides basic NeoFS interface.
 	NeoFS interface {
-		Get(ctx context.Context, address *object.Address) (*object.Object, error)
+		Get(ctx context.Context, address *address.Address) (*object.Object, error)
 	}
 
 	// Client provides S3 API client interface.
@@ -310,11 +309,9 @@ func (n *layer) CallOptions(ctx context.Context) []pool.CallOption {
 	return []pool.CallOption{pool.WithKey(&n.anonKey.Key.PrivateKey)}
 }
 
-// Get NeoFS Object by refs.Address (should be used by auth.Center).
-func (n *layer) Get(ctx context.Context, address *object.Address) (*object.Object, error) {
-	ops := new(client.GetObjectParams).WithAddress(address)
-	obj, err := n.pool.GetObject(ctx, ops, n.CallOptions(ctx)...)
-	return obj, n.transformNeofsError(ctx, err)
+// Get NeoFS Object by address (should be used by auth.Center).
+func (n *layer) Get(ctx context.Context, addr *address.Address) (*object.Object, error) {
+	return n.objectGet(ctx, addr)
 }
 
 // GetBucketInfo returns bucket info by name.
@@ -373,27 +370,22 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 
 // GetObject from storage.
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
-	var err error
+	var params getParams
 
-	params := &getParams{
-		Writer: p.Writer,
-		cid:    p.ObjectInfo.CID,
-		oid:    p.ObjectInfo.ID,
-		offset: p.Offset,
-		length: p.Length,
-	}
+	params.w = p.Writer
+	params.oid = p.ObjectInfo.ID
+	params.cid = p.ObjectInfo.CID
 
 	if p.Range != nil {
-		objRange := object.NewRange()
-		objRange.SetOffset(p.Range.Start)
-		// Range header is inclusive
-		objRange.SetLength(p.Range.End - p.Range.Start + 1)
-		params.Range = objRange
-		_, err = n.objectRange(ctx, params)
-	} else {
-		_, err = n.objectGetWithPayloadWriter(ctx, params)
+		if p.Range.Start > p.Range.End {
+			panic("invalid range")
+		}
+
+		params.off = p.Range.Start
+		params.ln = p.Range.End - p.Range.Start + 1
 	}
 
+	err := n.objectWritePayload(ctx, params)
 	if err != nil {
 		n.objCache.Delete(p.ObjectInfo.Address())
 		return fmt.Errorf("couldn't get object, cid: %s : %w", p.ObjectInfo.CID, err)
@@ -567,7 +559,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) *VersionedObject {
 	var (
 		err error
-		ids []*object.ID
+		ids []*oid.ID
 	)
 
 	p := &PutObjectParams{
@@ -604,7 +596,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 			obj.Error = err
 			return obj
 		}
-		ids = []*object.ID{version.ID}
+		ids = []*oid.ID{version.ID}
 		if version.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
 			obj.DeleteMarkVersion = version.Version()
 		}

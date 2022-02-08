@@ -7,7 +7,7 @@ import (
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,8 +21,8 @@ func getTestObjectsListConfig() *Config {
 	}
 }
 
-func randID(t *testing.T) *object.ID {
-	id := object.NewID()
+func randID(t *testing.T) *oid.ID {
+	id := oid.NewID()
 	id.SetSHA256(randSHA256Checksum(t))
 
 	return id
@@ -38,13 +38,12 @@ func randSHA256Checksum(t *testing.T) (cs [sha256.Size]byte) {
 func TestObjectsListCache(t *testing.T) {
 	var (
 		listSize = 10
-		ids      []*object.ID
+		ids      []oid.ID
 		userKey  = "key"
 	)
 
 	for i := 0; i < listSize; i++ {
-		id := randID(t)
-		ids = append(ids, id)
+		ids = append(ids, *randID(t))
 	}
 
 	t.Run("lifetime", func(t *testing.T) {
@@ -141,13 +140,13 @@ func TestObjectsListCache(t *testing.T) {
 
 func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	var (
-		cid  = cid.New()
-		oids = []*object.ID{randID(t)}
+		id   = cid.New()
+		oids = []oid.ID{*randID(t)}
 		keys []ObjectsListKey
 	)
 
 	for _, p := range []string{"", "dir/", "dir/lol/"} {
-		keys = append(keys, ObjectsListKey{cid: cid.String(), prefix: p})
+		keys = append(keys, ObjectsListKey{cid: id.String(), prefix: p})
 	}
 
 	t.Run("put object to the root of the bucket", func(t *testing.T) {
@@ -158,7 +157,7 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
 		}
-		cache.CleanCacheEntriesContainingObject("obj1", cid)
+		cache.CleanCacheEntriesContainingObject("obj1", id)
 		for _, k := range keys {
 			list := cache.Get(k)
 			if k.prefix == "" {
@@ -177,7 +176,7 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
 		}
-		cache.CleanCacheEntriesContainingObject("dir/obj", cid)
+		cache.CleanCacheEntriesContainingObject("dir/obj", id)
 		for _, k := range keys {
 			list := cache.Get(k)
 			if k.prefix == "" || k.prefix == "dir/" {
@@ -196,7 +195,7 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
 		}
-		cache.CleanCacheEntriesContainingObject("dir/lol/obj", cid)
+		cache.CleanCacheEntriesContainingObject("dir/lol/obj", id)
 		for _, k := range keys {
 			list := cache.Get(k)
 			require.Nil(t, list)

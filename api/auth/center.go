@@ -21,7 +21,7 @@ import (
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"go.uber.org/zap"
 )
@@ -113,12 +113,12 @@ func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 	}, nil
 }
 
-func (a *authHeader) getAddress() (*object.Address, error) {
-	address := object.NewAddress()
-	if err := address.Parse(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
+func (a *authHeader) getAddress() (*address.Address, error) {
+	addr := address.NewAddress()
+	if err := addr.Parse(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
 	}
-	return address, nil
+	return addr, nil
 }
 
 func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
@@ -145,12 +145,12 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
-	address, err := authHeader.getAddress()
+	addr, err := authHeader.getAddress()
 	if err != nil {
 		return nil, err
 	}
 
-	box, err := c.cli.GetBox(r.Context(), address)
+	box, err := c.cli.GetBox(r.Context(), addr)
 	if err != nil {
 		return nil, err
 	}
@@ -187,12 +187,12 @@ func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
 	}
 
-	address := object.NewAddress()
-	if err = address.Parse(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
+	addr := address.NewAddress()
+	if err = addr.Parse(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
 	}
 
-	box, err := c.cli.GetBox(r.Context(), address)
+	box, err := c.cli.GetBox(r.Context(), addr)
 	if err != nil {
 		return nil, err
 	}

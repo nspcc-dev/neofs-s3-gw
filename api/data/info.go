@@ -5,7 +5,8 @@ import (
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 )
 
@@ -28,7 +29,7 @@ type (
 
 	// ObjectInfo holds S3 object data.
 	ObjectInfo struct {
-		ID    *object.ID
+		ID    *oid.ID
 		CID   *cid.ID
 		IsDir bool
 
@@ -86,12 +87,12 @@ func (o *ObjectInfo) NullableVersion() string {
 func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 
 // Address returns object address.
-func (o *ObjectInfo) Address() *object.Address {
-	address := object.NewAddress()
-	address.SetContainerID(o.CID)
-	address.SetObjectID(o.ID)
+func (o *ObjectInfo) Address() *address.Address {
+	addr := address.NewAddress()
+	addr.SetContainerID(o.CID)
+	addr.SetObjectID(o.ID)
 
-	return address
+	return addr
 }
 
 // TagsObject returns name of system object for tags.

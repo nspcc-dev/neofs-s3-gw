@@ -5,7 +5,7 @@ import (
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 )
 
 type (
@@ -41,7 +41,7 @@ func NewAccessBoxCache(config *Config) *AccessBoxCache {
 }
 
 // Get returns cached object.
-func (o *AccessBoxCache) Get(address *object.Address) *accessbox.Box {
+func (o *AccessBoxCache) Get(address *address.Address) *accessbox.Box {
 	entry, err := o.cache.Get(address.String())
 	if err != nil {
 		return nil
@@ -56,6 +56,6 @@ func (o *AccessBoxCache) Get(address *object.Address) *accessbox.Box {
 }
 
 // Put stores an object to cache.
-func (o *AccessBoxCache) Put(address *object.Address, box *accessbox.Box) error {
+func (o *AccessBoxCache) Put(address *address.Address, box *accessbox.Box) error {
 	return o.cache.Set(address.String(), box)
 }
