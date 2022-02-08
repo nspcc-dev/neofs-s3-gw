@@ -9,7 +9,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type objectVersions struct {
@@ -149,9 +149,9 @@ func mergeVersionsConflicts(conflicts [][]string) ([]string, []string, []string)
 		if len(conflicted)-1 < minLength {
 			minLength = len(conflicted) - 1
 		}
-		//last := conflicted[len(conflicted)-1]
-		//conflicts[j] = conflicted[:len(conflicted)-1]
-		//currentVersions = append(currentVersions, last)
+		// last := conflicted[len(conflicted)-1]
+		// conflicts[j] = conflicted[:len(conflicted)-1]
+		// currentVersions = append(currentVersions, last)
 	}
 	var commonAddedVersions []string
 	diffIndex := 0
@@ -271,7 +271,7 @@ func (v *objectVersions) getDelHeader() string {
 	return strings.Join(v.delList, ",")
 }
 
-func (v *objectVersions) getVersion(oid *object.ID) *data.ObjectInfo {
+func (v *objectVersions) getVersion(oid *oid.ID) *data.ObjectInfo {
 	for _, version := range v.objects {
 		if version.Version() == oid.String() {
 			if contains(v.delList, oid.String()) {
@@ -429,7 +429,7 @@ func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, ob
 	if obj.VersionID == unversionedObjectVersionID {
 		version = versions.getLast(FromUnversioned())
 	} else {
-		id := object.NewID()
+		id := oid.NewID()
 		if err := id.Parse(obj.VersionID); err != nil {
 			return nil, errors.GetAPIError(errors.ErrInvalidVersion)
 		}

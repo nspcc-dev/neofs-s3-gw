@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"os/signal"
 	"strings"
@@ -432,10 +431,9 @@ func createSDKClient(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey
 	pb.AddNode(peerAddress, 1, 1)
 
 	opts := &pool.BuilderOptions{
-		Key:                    key,
-		NodeConnectionTimeout:  poolConnectTimeout,
-		NodeRequestTimeout:     poolRequestTimeout,
-		SessionExpirationEpoch: math.MaxUint32,
+		Key:                   key,
+		NodeConnectionTimeout: poolConnectTimeout,
+		NodeRequestTimeout:    poolRequestTimeout,
 	}
 	return pb.Build(ctx, opts)
 }

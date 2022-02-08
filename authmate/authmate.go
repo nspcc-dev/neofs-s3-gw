@@ -19,12 +19,13 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/acl"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -104,7 +105,7 @@ type (
 	}
 )
 
-func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions) (*cid.ID, error) {
+func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner *owner.ID) (*cid.ID, error) {
 	if opts.ID != nil {
 		// check that container exists
 		_, err := a.pool.GetContainer(ctx, opts.ID)
@@ -120,6 +121,7 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions) (*cid
 		container.WithPolicy(pp),
 		container.WithCustomBasicACL(defaultAuthContainerBasicACL),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
+		container.WithOwnerID(idOwner),
 	}
 	if opts.FriendlyName != "" {
 		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, opts.FriendlyName))
@@ -144,7 +146,7 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions) (*cid
 func (a *Agent) getEpochDurations(ctx context.Context) (*epochDurations, error) {
 	if conn, _, err := a.pool.Connection(); err != nil {
 		return nil, err
-	} else if networkInfoRes, err := conn.NetworkInfo(ctx); err != nil {
+	} else if networkInfoRes, err := conn.NetworkInfo(ctx, client.PrmNetworkInfo{}); err != nil {
 		return nil, err
 	} else if err = apistatus.ErrFromStatus(networkInfoRes.Status()); err != nil {
 		return nil, err
@@ -214,7 +216,7 @@ func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPo
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
 		err      error
-		cid      *cid.ID
+		id       *cid.ID
 		box      *accessbox.AccessBox
 		lifetime lifetimeOptions
 	)
@@ -241,14 +243,16 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		lifetime.Exp = lifetime.Iat + epochLifetime
 	}
 
+	idOwner := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
+
 	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
 		zap.String("friendly_name", options.Container.FriendlyName),
 		zap.String("placement_policy", options.Container.PlacementPolicy))
-	if cid, err = a.checkContainer(ctx, options.Container); err != nil {
+	if id, err = a.checkContainer(ctx, options.Container, idOwner); err != nil {
 		return err
 	}
 
-	gatesData, err := createTokens(options, lifetime, cid)
+	gatesData, err := createTokens(options, lifetime, id)
 	if err != nil {
 		return err
 	}
@@ -260,25 +264,23 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	box.ContainerPolicy = policies
 
-	oid := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
-
 	a.log.Info("store bearer token into NeoFS",
-		zap.Stringer("owner_tkn", oid))
+		zap.Stringer("owner_tkn", idOwner))
 
-	address, err := tokens.
+	addr, err := tokens.
 		New(a.pool, secrets.EphemeralKey, cache.DefaultAccessBoxConfig()).
-		Put(ctx, cid, oid, box, lifetime.Exp, options.GatesPublicKeys...)
+		Put(ctx, id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
-	accessKeyID := address.ContainerID().String() + "0" + address.ObjectID().String()
+	accessKeyID := addr.ContainerID().String() + "0" + addr.ObjectID().String()
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secrets.AccessKey,
 		OwnerPrivateKey: hex.EncodeToString(secrets.EphemeralKey.Bytes()),
-		ContainerID:     cid.String(),
+		ContainerID:     id.String(),
 	}
 
 	enc := json.NewEncoder(w)
@@ -288,7 +290,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	}
 
 	if options.AwsCliCredentialsFile != "" {
-		profileName := "authmate_cred_" + address.ObjectID().String()
+		profileName := "authmate_cred_" + addr.ObjectID().String()
 		if _, err = os.Stat(options.AwsCliCredentialsFile); os.IsNotExist(err) {
 			profileName = "default"
 		}
@@ -309,12 +311,12 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
 	bearerCreds := tokens.New(a.pool, options.GatePrivateKey, cache.DefaultAccessBoxConfig())
-	address := object.NewAddress()
-	if err := address.Parse(options.SecretAddress); err != nil {
+	addr := address.NewAddress()
+	if err := addr.Parse(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
-	box, err := bearerCreds.GetBox(ctx, address)
+	box, err := bearerCreds.GetBox(ctx, addr)
 	if err != nil {
 		return fmt.Errorf("failed to get tokens: %w", err)
 	}

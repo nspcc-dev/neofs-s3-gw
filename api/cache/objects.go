@@ -5,6 +5,7 @@ import (
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 )
 
 // ObjectsCache provides lru cache for objects.
@@ -31,7 +32,7 @@ func New(config *Config) *ObjectsCache {
 }
 
 // Get returns cached object.
-func (o *ObjectsCache) Get(address *object.Address) *object.Object {
+func (o *ObjectsCache) Get(address *address.Address) *object.Object {
 	entry, err := o.cache.Get(address.String())
 	if err != nil {
 		return nil
@@ -51,6 +52,6 @@ func (o *ObjectsCache) Put(obj object.Object) error {
 }
 
 // Delete deletes an object from cache.
-func (o *ObjectsCache) Delete(address *object.Address) bool {
+func (o *ObjectsCache) Delete(address *address.Address) bool {
 	return o.cache.Remove(address.String())
 }

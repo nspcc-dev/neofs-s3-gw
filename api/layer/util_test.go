@@ -9,6 +9,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +21,7 @@ var (
 	defaultTestContentType   = http.DetectContentType(defaultTestPayload)
 )
 
-func newTestObject(oid *object.ID, bkt *data.BucketInfo, name string) *object.Object {
+func newTestObject(id *oid.ID, bkt *data.BucketInfo, name string) *object.Object {
 	filename := object.NewAttribute()
 	filename.SetKey(object.AttributeFileName)
 	filename.SetValue(name)
@@ -34,7 +35,7 @@ func newTestObject(oid *object.ID, bkt *data.BucketInfo, name string) *object.Ob
 	contentType.SetValue(defaultTestContentType)
 
 	raw := object.NewRaw()
-	raw.SetID(oid)
+	raw.SetID(id)
 	raw.SetOwnerID(bkt.Owner)
 	raw.SetContainerID(bkt.CID)
 	raw.SetPayload(defaultTestPayload)
@@ -44,7 +45,7 @@ func newTestObject(oid *object.ID, bkt *data.BucketInfo, name string) *object.Ob
 	return raw.Object()
 }
 
-func newTestInfo(oid *object.ID, bkt *data.BucketInfo, name string, isDir bool) *data.ObjectInfo {
+func newTestInfo(oid *oid.ID, bkt *data.BucketInfo, name string, isDir bool) *data.ObjectInfo {
 	info := &data.ObjectInfo{
 		ID:          oid,
 		Name:        name,
@@ -69,7 +70,7 @@ func newTestInfo(oid *object.ID, bkt *data.BucketInfo, name string, isDir bool) 
 
 func Test_objectInfoFromMeta(t *testing.T) {
 	uid := owner.NewID()
-	oid := object.NewID()
+	id := oid.NewID()
 	containerID := cid.New()
 
 	bkt := &data.BucketInfo{
@@ -88,66 +89,66 @@ func Test_objectInfoFromMeta(t *testing.T) {
 	}{
 		{
 			name:   "small.jpg",
-			result: newTestInfo(oid, bkt, "small.jpg", false),
-			object: newTestObject(oid, bkt, "small.jpg"),
+			result: newTestInfo(id, bkt, "small.jpg", false),
+			object: newTestObject(id, bkt, "small.jpg"),
 		},
 		{
 			name:   "small.jpg not matched prefix",
 			prefix: "big",
 			result: nil,
-			object: newTestObject(oid, bkt, "small.jpg"),
+			object: newTestObject(id, bkt, "small.jpg"),
 		},
 		{
 			name:      "small.jpg delimiter",
 			delimiter: "/",
-			result:    newTestInfo(oid, bkt, "small.jpg", false),
-			object:    newTestObject(oid, bkt, "small.jpg"),
+			result:    newTestInfo(id, bkt, "small.jpg", false),
+			object:    newTestObject(id, bkt, "small.jpg"),
 		},
 		{
 			name:   "test/small.jpg",
-			result: newTestInfo(oid, bkt, "test/small.jpg", false),
-			object: newTestObject(oid, bkt, "test/small.jpg"),
+			result: newTestInfo(id, bkt, "test/small.jpg", false),
+			object: newTestObject(id, bkt, "test/small.jpg"),
 		},
 		{
 			name:      "test/small.jpg with prefix and delimiter",
 			prefix:    "test/",
 			delimiter: "/",
-			result:    newTestInfo(oid, bkt, "test/small.jpg", false),
-			object:    newTestObject(oid, bkt, "test/small.jpg"),
+			result:    newTestInfo(id, bkt, "test/small.jpg", false),
+			object:    newTestObject(id, bkt, "test/small.jpg"),
 		},
 		{
 			name:   "a/b/small.jpg",
 			prefix: "a",
-			result: newTestInfo(oid, bkt, "a/b/small.jpg", false),
-			object: newTestObject(oid, bkt, "a/b/small.jpg"),
+			result: newTestInfo(id, bkt, "a/b/small.jpg", false),
+			object: newTestObject(id, bkt, "a/b/small.jpg"),
 		},
 		{
 			name:      "a/b/small.jpg",
 			prefix:    "a/",
 			delimiter: "/",
-			result:    newTestInfo(oid, bkt, "a/b/", true),
-			object:    newTestObject(oid, bkt, "a/b/small.jpg"),
+			result:    newTestInfo(id, bkt, "a/b/", true),
+			object:    newTestObject(id, bkt, "a/b/small.jpg"),
 		},
 		{
 			name:      "a/b/c/small.jpg",
 			prefix:    "a/",
 			delimiter: "/",
-			result:    newTestInfo(oid, bkt, "a/b/", true),
-			object:    newTestObject(oid, bkt, "a/b/c/small.jpg"),
+			result:    newTestInfo(id, bkt, "a/b/", true),
+			object:    newTestObject(id, bkt, "a/b/c/small.jpg"),
 		},
 		{
 			name:      "a/b/c/small.jpg",
 			prefix:    "a/b/c/s",
 			delimiter: "/",
-			result:    newTestInfo(oid, bkt, "a/b/c/small.jpg", false),
-			object:    newTestObject(oid, bkt, "a/b/c/small.jpg"),
+			result:    newTestInfo(id, bkt, "a/b/c/small.jpg", false),
+			object:    newTestObject(id, bkt, "a/b/c/small.jpg"),
 		},
 		{
 			name:      "a/b/c/big.jpg",
 			prefix:    "a/b/",
 			delimiter: "/",
-			result:    newTestInfo(oid, bkt, "a/b/c/", true),
-			object:    newTestObject(oid, bkt, "a/b/c/big.jpg"),
+			result:    newTestInfo(id, bkt, "a/b/c/", true),
+			object:    newTestObject(id, bkt, "a/b/c/big.jpg"),
 		},
 	}
 

@@ -10,7 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 // ListObjectsV1Handler handles objects listing requests for API version 1.
@@ -166,7 +166,7 @@ func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, 
 
 func parseContinuationToken(queryValues url.Values) (string, error) {
 	if val, ok := queryValues["continuation-token"]; ok {
-		if err := object.NewID().Parse(val[0]); err != nil {
+		if err := oid.NewID().Parse(val[0]); err != nil {
 			return "", errors.GetAPIError(errors.ErrIncorrectContinuationToken)
 		}
 		return val[0], nil
