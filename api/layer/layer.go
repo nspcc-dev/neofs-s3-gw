@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
@@ -34,6 +35,7 @@ type (
 		log         *zap.Logger
 		anonKey     AnonymousKey
 		resolver    *resolver.BucketResolver
+		ncontroller *notifications.Controller
 		listsCache  *cache.ObjectsListCache
 		objCache    *cache.ObjectsCache
 		namesCache  *cache.ObjectsNameCache
@@ -42,10 +44,11 @@ type (
 	}
 
 	Config struct {
-		ChainAddress string
-		Caches       *CachesConfig
-		AnonKey      AnonymousKey
-		Resolver     *resolver.BucketResolver
+		ChainAddress           string
+		Caches                 *CachesConfig
+		AnonKey                AnonymousKey
+		Resolver               *resolver.BucketResolver
+		NotificationController *notifications.Controller
 	}
 
 	// AnonymousKey contains data for anonymous requests.
@@ -264,6 +267,7 @@ func NewLayer(log *zap.Logger, conns pool.Pool, config *Config) Client {
 		anonKey:     config.AnonKey,
 		resolver:    config.Resolver,
 		listsCache:  cache.NewObjectsListCache(config.Caches.ObjectsList),
+		ncontroller: config.NotificationController,
 		objCache:    cache.New(config.Caches.Objects),
 		namesCache:  cache.NewObjectsNameCache(config.Caches.Names),
 		bucketCache: cache.NewBucketCache(config.Caches.Buckets),
@@ -273,6 +277,10 @@ func NewLayer(log *zap.Logger, conns pool.Pool, config *Config) Client {
 
 func (n *layer) EphemeralKey() *keys.PublicKey {
 	return n.anonKey.Key.PublicKey()
+}
+
+func (n *layer) IsNotificationEnabled() bool {
+	return n.ncontroller != nil
 }
 
 // IsAuthenticatedRequest check if access box exists in current request.
