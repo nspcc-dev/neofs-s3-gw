@@ -130,7 +130,9 @@ it will be auto-generated with values:
 With session token, there is 3 options: 
 * append `--session-token` parameter with your custom rules in json format (as a string or file path, see an example below)
 
-**NB!** If you want to allow the user to create buckets you **must** put two session tokens with `PUT` and `SETEACL` rules.
+**NB!** To create buckets in NeoFS it's necessary to have session tokens with `PUT` and `SETEACL` permissions, that's why 
+the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 
+forgot about the rule with `SETEACL`. 
 
 * append `--session-token` parameter with the value `none` -- no session token will be created
 * skip the parameter and `authmate` will create and put session tokens with default rules:
