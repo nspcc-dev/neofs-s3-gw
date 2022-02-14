@@ -144,7 +144,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 	cnr := container.New(options...)
 	container.SetNativeName(cnr, p.Name)
 
-	cnr.SetSessionToken(p.SessionToken)
+	cnr.SetSessionToken(p.SessionTokenForPut)
 	cnr.SetOwnerID(bktInfo.Owner)
 
 	if bktInfo.CID, err = n.pool.PutContainer(ctx, cnr); err != nil {
@@ -155,7 +155,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		return nil, err
 	}
 
-	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL); err != nil {
+	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL, p.SessionTokenForSetEACL); err != nil {
 		return nil, err
 	}
 
@@ -169,16 +169,11 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 	return bktInfo.CID, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table) error {
+func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table, sessionToken *session.Token) error {
 	table.SetCID(cid)
+	table.SetSessionToken(sessionToken)
 
-	var sessionToken *session.Token
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForSetEACL()
-	}
-
-	if err := n.pool.SetEACL(ctx, table, pool.WithSession(sessionToken)); err != nil {
+	if err := n.pool.SetEACL(ctx, table); err != nil {
 		return err
 	}
 

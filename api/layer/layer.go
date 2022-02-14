@@ -130,12 +130,13 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name               string
-		ACL                uint32
-		Policy             *netmap.PlacementPolicy
-		EACL               *eacl.Table
-		SessionToken       *session.Token
-		LocationConstraint string
+		Name                   string
+		ACL                    uint32
+		Policy                 *netmap.PlacementPolicy
+		EACL                   *eacl.Table
+		SessionTokenForPut     *session.Token
+		SessionTokenForSetEACL *session.Token
+		LocationConstraint     string
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {
@@ -351,7 +352,13 @@ func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) err
 		return err
 	}
 
-	return n.setContainerEACLTable(ctx, inf.CID, param.EACL)
+	var sessionToken *session.Token
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForSetEACL()
+	}
+
+	return n.setContainerEACLTable(ctx, inf.CID, param.EACL, sessionToken)
 }
 
 // ListBuckets returns all user containers. Name of the bucket is a container

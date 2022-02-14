@@ -549,7 +549,13 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	boxData, err := layer.GetBoxData(r.Context())
 	if err == nil {
 		policies = boxData.Policies
-		p.SessionToken = boxData.Gate.SessionTokenForPut()
+		p.SessionTokenForPut = boxData.Gate.SessionTokenForPut()
+		p.SessionTokenForSetEACL = boxData.Gate.SessionTokenForSetEACL()
+	}
+
+	if p.SessionTokenForPut == nil || p.SessionTokenForSetEACL == nil {
+		h.logAndSendError(w, "couldn't find session token for put or seteacl", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+		return
 	}
 
 	if createParams.LocationConstraint != "" {
