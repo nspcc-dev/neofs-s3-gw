@@ -384,6 +384,24 @@ func buildContext(rules []byte) ([]*session.ContainerContext, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal rules for session token: %w", err)
 		}
+
+		var (
+			containsPut     = false
+			containsSetEACL = false
+		)
+		for _, s := range sessionCtxs {
+			if s.IsForPut() {
+				containsPut = true
+			} else if s.IsForSetEACL() {
+				containsSetEACL = true
+			}
+		}
+		if containsPut && !containsSetEACL {
+			ectx := session.NewContainerContext()
+			ectx.ForSetEACL()
+			sessionCtxs = append(sessionCtxs, ectx)
+		}
+
 		return sessionCtxs, nil
 	}
 
