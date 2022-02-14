@@ -242,7 +242,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	gatesData, err := createTokens(options, lifetime, cid)
 	if err != nil {
-		return fmt.Errorf("failed to build bearer token: %w", err)
+		return err
 	}
 
 	box, secrets, err := accessbox.PackTokens(gatesData)
