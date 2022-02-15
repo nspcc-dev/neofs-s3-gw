@@ -643,12 +643,16 @@ func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []*Ver
 }
 
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
-	_, err := n.GetBucketInfo(ctx, p.Name)
+	bktInfo, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
 		if errors.IsS3Error(err, errors.ErrNoSuchBucket) {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
+	}
+
+	if p.SessionToken != nil && bktInfo.Owner.Equal(p.SessionToken.OwnerID()) {
+		return nil, errors.GetAPIError(errors.ErrBucketAlreadyOwnedByYou)
 	}
 
 	return nil, errors.GetAPIError(errors.ErrBucketAlreadyExists)
