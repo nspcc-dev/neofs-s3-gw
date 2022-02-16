@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 )
 
 var (
@@ -1265,4 +1266,18 @@ func getOthersRecord(op eacl.Operation, action eacl.Action) *eacl.Record {
 	record.SetAction(action)
 	eacl.AddFormedTarget(record, eacl.RoleOthers)
 	return record
+}
+
+func getSessionTokenSetEACL(ctx context.Context) (*session.Token, error) {
+	var sessionToken *session.Token
+	boxData, err := layer.GetBoxData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessionToken = boxData.Gate.SessionTokenForSetEACL()
+	if sessionToken == nil {
+		return nil, errors.GetAPIError(errors.ErrAccessDenied)
+	}
+
+	return sessionToken, nil
 }

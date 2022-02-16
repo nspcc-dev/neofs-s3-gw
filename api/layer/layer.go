@@ -140,8 +140,9 @@ type (
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {
-		Name string
-		EACL *eacl.Table
+		Name         string
+		EACL         *eacl.Table
+		SessionToken *session.Token
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
@@ -352,13 +353,7 @@ func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) err
 		return err
 	}
 
-	var sessionToken *session.Token
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForSetEACL()
-	}
-
-	return n.setContainerEACLTable(ctx, inf.CID, param.EACL, sessionToken)
+	return n.setContainerEACLTable(ctx, inf.CID, param.EACL, param.SessionToken)
 }
 
 // ListBuckets returns all user containers. Name of the bucket is a container

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"io"
 	"net"
 	"net/http"
@@ -172,8 +173,22 @@ type createBucketParams struct {
 }
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
-	var newEaclTable *eacl.Table
-	reqInfo := api.GetReqInfo(r.Context())
+	var (
+		err              error
+		newEaclTable     *eacl.Table
+		sessionTokenEACL *session.Token
+		containsACL      = containsACLHeaders(r)
+		reqInfo          = api.GetReqInfo(r.Context())
+	)
+
+	if containsACL {
+		sessionTokenEACL, err = getSessionTokenSetEACL(r.Context())
+		if err != nil {
+			h.logAndSendError(w, "could not parse tagging header", reqInfo, err)
+			return
+		}
+	}
+
 	tagSet, err := parseTaggingHeader(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse tagging header", reqInfo, err)
@@ -215,7 +230,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACLHeaders(r) {
+	if containsACL {
 		if newEaclTable, err = h.getNewEAclTable(r, info); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
@@ -231,8 +246,9 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if newEaclTable != nil {
 		p := &layer.PutBucketACLParams{
-			Name: reqInfo.BucketName,
-			EACL: newEaclTable,
+			Name:         reqInfo.BucketName,
+			EACL:         newEaclTable,
+			SessionToken: sessionTokenEACL,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
