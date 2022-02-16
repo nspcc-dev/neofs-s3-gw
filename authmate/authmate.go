@@ -480,7 +480,7 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *ci
 		oid := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
 		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, lifetime, sessionRules, options.GatesPublicKeys)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to biuild session token: %w", err)
 		}
 		for i, sessionTkns := range sessionTokens {
 			gates[i].SessionTokens = sessionTkns
