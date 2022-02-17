@@ -235,6 +235,9 @@ type (
 		AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) error
 		ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsInfo, error)
 		GetUploadInitInfo(ctx context.Context, p *UploadInfoParams) (*data.ObjectInfo, error)
+
+		PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error
+		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)
 	}
 )
 
