@@ -61,12 +61,30 @@ func (o *SystemCache) GetCORS(key string) *data.CORSConfiguration {
 	return result
 }
 
+func (o *SystemCache) GetNotificationConfiguration(key string) *data.NotificationConfiguration {
+	entry, err := o.cache.Get(key)
+	if err != nil {
+		return nil
+	}
+
+	result, ok := entry.(*data.NotificationConfiguration)
+	if !ok {
+		return nil
+	}
+
+	return result
+}
+
 // PutObject puts an object to cache.
 func (o *SystemCache) PutObject(key string, obj *data.ObjectInfo) error {
 	return o.cache.Set(key, obj)
 }
 
 func (o *SystemCache) PutCORS(key string, obj *data.CORSConfiguration) error {
+	return o.cache.Set(key, obj)
+}
+
+func (o *SystemCache) PutNotificationConfiguration(key string, obj *data.NotificationConfiguration) error {
 	return o.cache.Set(key, obj)
 }
 

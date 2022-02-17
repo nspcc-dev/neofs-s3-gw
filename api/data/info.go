@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	bktVersionSettingsObject   = ".s3-versioning-settings"
-	bktCORSConfigurationObject = ".s3-cors"
+	bktVersionSettingsObject           = ".s3-versioning-settings"
+	bktCORSConfigurationObject         = ".s3-cors"
+	bktNotificationConfigurationObject = ".s3-notifications"
 )
 
 type (
@@ -64,6 +65,10 @@ func (b *BucketInfo) SettingsObjectName() string { return bktVersionSettingsObje
 
 // CORSObjectName returns system name for bucket CORS configuration file.
 func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject }
+
+func (b *BucketInfo) NotificationConfigurationObjectName() string {
+	return bktNotificationConfigurationObject
+}
 
 // Version returns object version from ObjectInfo.
 func (o *ObjectInfo) Version() string { return o.ID.String() }

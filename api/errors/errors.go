@@ -153,6 +153,7 @@ const (
 	ErrInvalidToken
 
 	// Bucket notification related errors.
+	ErrNotificationNotEnabled
 	ErrEventNotification
 	ErrARNNotification
 	ErrRegionNotification
@@ -162,6 +163,7 @@ const (
 	ErrFilterNameSuffix
 	ErrFilterValueInvalid
 	ErrOverlappingConfigs
+	ErrNotificationTopicNotSupported
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -869,11 +871,23 @@ var errorCodes = errorCodeMap{
 		Description:    "x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrNotificationNotEnabled: {
+		ErrCode:        ErrNotificationNotEnabled,
+		Code:           "InvalidRequest",
+		Description:    "Notifications are not enabled in the gateway. Please connect to the other gateway",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Bucket notification related errors.
 	ErrEventNotification: {
 		ErrCode:        ErrEventNotification,
 		Code:           "InvalidArgument",
 		Description:    "A specified event is not supported for notifications.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNotificationTopicNotSupported: {
+		ErrCode:        ErrNotificationTopicNotSupported,
+		Code:           "InvalidArgument",
+		Description:    "SNS and Lambda configurations are not supported ",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrARNNotification: {
