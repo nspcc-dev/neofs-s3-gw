@@ -29,9 +29,14 @@ func NewController(p *Options) (*Controller, error) {
 	}
 
 	ncopts := []nats.Option{
-		nats.ClientCert(p.TLSCertFilepath, p.TLSAuthPrivateKeyFilePath),
-		nats.RootCAs(p.RootCAFiles...),
 		nats.Timeout(p.Timeout),
+	}
+
+	if len(p.TLSCertFilepath) != 0 && len(p.TLSAuthPrivateKeyFilePath) != 0 {
+		ncopts = append(ncopts, nats.ClientCert(p.TLSCertFilepath, p.TLSAuthPrivateKeyFilePath))
+	}
+	if len(p.RootCAFiles) != 0 {
+		ncopts = append(ncopts, nats.RootCAs(p.RootCAFiles...))
 	}
 
 	nc, err := nats.Connect(p.URL, ncopts...)
