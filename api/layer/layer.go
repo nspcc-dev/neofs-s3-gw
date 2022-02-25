@@ -336,6 +336,7 @@ type (
 		EACL               *eacl.Table
 		SessionToken       *session.Token
 		LocationConstraint string
+		ObjectLockEnabled  bool
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {

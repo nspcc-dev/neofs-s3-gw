@@ -27,13 +27,17 @@ type (
 	}
 )
 
-const locationConstraintAttr = ".s3-location-constraint"
+const (
+	attributeLocationConstraint = ".s3-location-constraint"
+	attributeLockEnabled        = "LockEnabled"
+)
 
 func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketInfo, error) {
 	var (
 		err error
 		res *container.Container
 		rid = api.GetRequestID(ctx)
+		log = n.log.With(zap.Stringer("cid", idCnr), zap.String("request_id", rid))
 
 		info = &data.BucketInfo{
 			CID:  idCnr,
@@ -42,10 +46,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketI
 	)
 	res, err = n.neoFS.Container(ctx, *idCnr)
 	if err != nil {
-		n.log.Error("could not fetch container",
-			zap.Stringer("cid", idCnr),
-			zap.String("request_id", rid),
-			zap.Error(err))
+		log.Error("could not fetch container", zap.Error(err))
 
 		if strings.Contains(err.Error(), "container not found") {
 			return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
@@ -63,26 +64,27 @@ func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketI
 		case container.AttributeTimestamp:
 			unix, err := strconv.ParseInt(attr.Value(), 10, 64)
 			if err != nil {
-				n.log.Error("could not parse container creation time",
-					zap.Stringer("cid", idCnr),
-					zap.String("request_id", rid),
-					zap.String("created_at", val),
-					zap.Error(err))
+				log.Error("could not parse container creation time",
+					zap.String("created_at", val), zap.Error(err))
 
 				continue
 			}
 
 			info.Created = time.Unix(unix, 0)
-		case locationConstraintAttr:
+		case attributeLocationConstraint:
 			info.LocationConstraint = val
+		case attributeLockEnabled:
+			info.ObjectLockEnabled, err = strconv.ParseBool(val)
+			if err != nil {
+				log.Error("could not parse container object lock enabled attribute",
+					zap.String("lock_enabled", val), zap.Error(err))
+			}
 		}
 	}
 
-	if err := n.bucketCache.Put(info); err != nil {
-		n.log.Warn("could not put bucket info into cache",
-			zap.Stringer("cid", idCnr),
-			zap.String("bucket_name", info.Name),
-			zap.Error(err))
+	if err = n.bucketCache.Put(info); err != nil {
+		log.Warn("could not put bucket info into cache",
+			zap.String("bucket_name", info.Name), zap.Error(err))
 	}
 
 	return info, nil
@@ -133,9 +135,10 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 
 	if p.LocationConstraint != "" {
 		locConstAttr = container.NewAttribute()
-		locConstAttr.SetKey(locationConstraintAttr)
+		locConstAttr.SetKey(attributeLocationConstraint)
 		locConstAttr.SetValue(p.LocationConstraint)
 	}
+	//todo add lock enabled attr
 
 	if bktInfo.CID, err = n.neoFS.CreateContainer(ctx, PrmContainerCreate{
 		Creator:                     *bktInfo.Owner,

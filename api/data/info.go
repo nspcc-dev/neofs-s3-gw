@@ -25,6 +25,7 @@ type (
 		Created            time.Time
 		BasicACL           uint32
 		LocationConstraint string
+		ObjectLockEnabled  bool
 	}
 
 	// ObjectInfo holds S3 object data.
