@@ -1,29 +1,37 @@
 package notifications
 
 import (
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
 )
 
 const (
 	DefaultTimeout = 30 * time.Second
 )
 
-type Options struct {
-	URL                       string
-	TLSCertFilepath           string
-	TLSAuthPrivateKeyFilePath string
-	Timeout                   time.Duration
-	RootCAFiles               []string
-}
+type (
+	Options struct {
+		URL                       string
+		TLSCertFilepath           string
+		TLSAuthPrivateKeyFilePath string
+		Timeout                   time.Duration
+		RootCAFiles               []string
+		SubscribeSubjectName      string
+		PublishStreamName         string
+		PublishSubjectName        string
+	}
 
-type Controller struct {
-	taskQueueConnection *nats.Conn
-	jsClient            nats.JetStream
-}
+	Controller struct {
+		taskQueueConnection *nats.Conn
+		jsClient            nats.JetStream
+		logger              *zap.Logger
+	}
+)
 
-func NewController(p *Options) (*Controller, error) {
+func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 	if p == nil {
 		return nil, nil
 	}
@@ -49,8 +57,33 @@ func NewController(p *Options) (*Controller, error) {
 		return nil, err
 	}
 
-	return &Controller{
+	if err := createPublishStream(js, p); err != nil {
+		return nil, err
+	}
+
+	c := &Controller{
 		taskQueueConnection: nc,
 		jsClient:            js,
-	}, nil
+		logger:              l,
+	}
+
+	return c, nil
+}
+
+func createPublishStream(js nats.JetStreamContext, p *Options) error {
+	stream, err := js.StreamInfo(p.PublishStreamName)
+	if err != nil && !strings.Contains(err.Error(), "stream not found") {
+		return err
+	}
+	if stream == nil {
+		_, err = js.AddStream(&nats.StreamConfig{
+			Name:     p.PublishStreamName,
+			Subjects: []string{p.PublishSubjectName},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
