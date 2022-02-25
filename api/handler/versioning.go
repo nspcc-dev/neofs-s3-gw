@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -34,8 +35,14 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if !p.Settings.VersioningEnabled && bktInfo.ObjectLockEnabled {
+		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, fmt.Errorf("object lock is enabled"))
+		return
+	}
+
 	if _, err := h.obj.PutBucketVersioning(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put update versioning settings", reqInfo, err)
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
