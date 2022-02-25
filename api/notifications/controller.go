@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -67,7 +68,31 @@ func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 		logger:              l,
 	}
 
+	go c.Listen(p.SubscribeSubjectName)
+
 	return c, nil
+}
+
+func (c *Controller) Listen(subject string) {
+	sub, err := c.jsClient.PullSubscribe(subject, "default")
+	if err != nil {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			msgs, _ := sub.Fetch(1, nats.Context(ctx))
+			for _, msg := range msgs {
+				_ = msg.Ack()
+			}
+		}
+	}
 }
 
 func createPublishStream(js nats.JetStreamContext, p *Options) error {
