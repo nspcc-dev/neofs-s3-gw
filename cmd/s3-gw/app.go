@@ -143,7 +143,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	nopts := getNotificationsOptions(v, l)
-	nc, err := notifications.NewController(nopts)
+	nc, err := notifications.NewController(nopts, l)
 	if err != nil {
 		l.Fatal("failed to enable notifications", zap.Error(err))
 	}
@@ -277,6 +277,10 @@ func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Optio
 	cfg.TLSCertFilepath = v.GetString(cfgNATSTLSCertFile)
 	cfg.TLSAuthPrivateKeyFilePath = v.GetString(cfgNATSAuthPrivateKeyFile)
 	cfg.RootCAFiles = v.GetStringSlice(cfgNATSRootCAFiles)
+
+	cfg.SubscribeSubjectName = v.GetString(cfgNATSSubscribeSubject)
+	cfg.PublishSubjectName = v.GetString(cfgNATSPublishSubject)
+	cfg.PublishStreamName = v.GetString(cfgNATSPublishStream)
 
 	return &cfg
 }

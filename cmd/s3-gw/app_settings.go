@@ -76,6 +76,9 @@ const ( // Settings.
 	cfgNATSTLSCertFile        = "nats.cert_file"
 	cfgNATSAuthPrivateKeyFile = "nats.key_file"
 	cfgNATSRootCAFiles        = "nats.root_ca"
+	cfgNATSSubscribeSubject   = "nats.subscribe_subject"
+	cfgNATSPublishStream      = "nats.publish_stream"
+	cfgNATSPublishSubject     = "nats.publish_subject"
 
 	// Policy.
 	cfgDefaultPolicy = "default_policy"
