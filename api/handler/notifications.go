@@ -27,8 +27,9 @@ func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	p := &layer.PutBucketNotificationConfigurationParams{
-		BktInfo: bktInfo,
-		Reader:  r.Body,
+		RequestInfo: reqInfo,
+		BktInfo:     bktInfo,
+		Reader:      r.Body,
 	}
 
 	if err := h.obj.PutBucketNotificationConfiguration(r.Context(), p); err != nil {

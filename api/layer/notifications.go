@@ -7,15 +7,18 @@ import (
 	"io"
 
 	"github.com/google/uuid"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"go.uber.org/zap"
 )
 
 type (
 	PutBucketNotificationConfigurationParams struct {
-		BktInfo *data.BucketInfo
-		Reader  io.Reader
+		RequestInfo *api.ReqInfo
+		BktInfo     *data.BucketInfo
+		Reader      io.Reader
 	}
 )
 
@@ -36,7 +39,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return errors.GetAPIError(errors.ErrMalformedXML)
 	}
 
-	if completed, err = n.checkAndCompleteNotificationConfiguration(conf); err != nil {
+	if completed, err = n.checkAndCompleteNotificationConfiguration(conf, p.RequestInfo); err != nil {
 		return err
 	}
 	if completed {
@@ -113,7 +116,7 @@ func (n *layer) getNotificationConf(ctx context.Context, bkt *data.BucketInfo, s
 	return conf, nil
 }
 
-func (n *layer) checkAndCompleteNotificationConfiguration(c *data.NotificationConfiguration) (completed bool, err error) {
+func (n *layer) checkAndCompleteNotificationConfiguration(c *data.NotificationConfiguration, r *api.ReqInfo) (completed bool, err error) {
 	if c == nil {
 		return
 	}
@@ -122,8 +125,14 @@ func (n *layer) checkAndCompleteNotificationConfiguration(c *data.NotificationCo
 		return completed, errors.GetAPIError(errors.ErrNotificationTopicNotSupported)
 	}
 
+	e := prepareTestEvent(r.BucketName, r.RequestID, r.Host)
+
 	for i, q := range c.QueueConfigurations {
 		if err = checkEvents(q.Events); err != nil {
+			return
+		}
+
+		if err = n.ncontroller.SendTestEvent(e, q.QueueArn); err != nil {
 			return
 		}
 		if q.ID == "" {
@@ -143,4 +152,15 @@ func checkEvents(events []string) error {
 	}
 
 	return nil
+}
+
+func prepareTestEvent(bktName, requestID, host string) *notifications.TestEvent {
+	return &notifications.TestEvent{
+		Service: "NeoFS S3",
+		Event:   "s3:TestEvent",
+		// Time field value will be placed later
+		Bucket:    bktName,
+		RequestID: requestID,
+		HostID:    host,
+	}
 }
