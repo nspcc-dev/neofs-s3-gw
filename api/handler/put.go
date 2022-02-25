@@ -565,16 +565,34 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		p.Policy = h.cfg.DefaultPolicy
 	}
 
+	p.ObjectLockEnabled = isLockEnabled(r.Header)
+
 	cid, err := h.obj.CreateBucket(r.Context(), &p)
 	if err != nil {
 		h.logAndSendError(w, "could not create bucket", reqInfo, err)
 		return
 	}
 
+	if p.ObjectLockEnabled {
+		vp := &layer.PutVersioningParams{
+			Bucket:   reqInfo.BucketName,
+			Settings: &layer.BucketSettings{VersioningEnabled: true},
+		}
+		if _, err = h.obj.PutBucketVersioning(r.Context(), vp); err != nil {
+			h.log.Error("couldn't enable bucket versioning", zap.Stringer("container_id", cid), zap.Error(err))
+		}
+	}
+
 	h.log.Info("bucket is created",
 		zap.String("container_id", cid.String()))
 
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func isLockEnabled(header http.Header) bool {
+	lockEnabledStr := header.Get(api.AmzBucketObjectLockEnabled)
+	lockEnabled, _ := strconv.ParseBool(lockEnabledStr)
+	return lockEnabled
 }
 
 func checkBucketName(bucketName string) error {

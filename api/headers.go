@@ -46,6 +46,7 @@ const (
 	AmzGrantWrite                = "X-Amz-Grant-Write"
 	AmzExpectedBucketOwner       = "X-Amz-Expected-Bucket-Owner"
 	AmzSourceExpectedBucketOwner = "X-Amz-Source-Expected-Bucket-Owner"
+	AmzBucketObjectLockEnabled   = "X-Amz-Bucket-Object-Lock-Enabled"
 
 	ContainerID = "X-Container-Id"
 
