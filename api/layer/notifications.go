@@ -131,7 +131,9 @@ func (n *layer) checkAndCompleteNotificationConfiguration(c *data.NotificationCo
 		if err = checkEvents(q.Events); err != nil {
 			return
 		}
-
+		if err = checkRules(q.Filter.Key.FilterRules); err != nil {
+			return
+		}
 		if err = n.ncontroller.SendTestEvent(e, q.QueueArn); err != nil {
 			return
 		}
@@ -149,6 +151,26 @@ func checkEvents(events []string) error {
 		if _, ok := data.ValidEvents[e]; !ok {
 			return errors.GetAPIError(errors.ErrEventNotification)
 		}
+	}
+
+	return nil
+}
+
+func checkRules(rules []data.FilterRule) error {
+	names := make(map[string]struct{})
+
+	for _, r := range rules {
+		if r.Name != "suffix" && r.Name != "prefix" {
+			return errors.GetAPIError(errors.ErrFilterNameInvalid)
+		}
+		if _, ok := names[r.Name]; ok {
+			if r.Name == "suffix" {
+				return errors.GetAPIError(errors.ErrFilterNameSuffix)
+			}
+			return errors.GetAPIError(errors.ErrFilterNamePrefix)
+		}
+
+		names[r.Name] = struct{}{}
 	}
 
 	return nil
