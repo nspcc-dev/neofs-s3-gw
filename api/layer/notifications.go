@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/xml"
 	"io"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -184,5 +185,41 @@ func prepareTestEvent(bktName, requestID, host string) *notifications.TestEvent 
 		Bucket:    bktName,
 		RequestID: requestID,
 		HostID:    host,
+	}
+}
+func prepareEvent(eventName string, inititatorID string, bkt *data.BucketInfo, obj *data.ObjectInfo, reqInfo *api.ReqInfo) *notifications.Event {
+	return &notifications.Event{
+		Records: []notifications.EventRecord{
+			{
+				EventVersion: notifications.EventVersion21,
+				EventSource:  "neofs:s3",
+				AWSRegion:    "",
+				EventTime:    time.Now(),
+				EventName:    eventName,
+				UserIdentity: notifications.UserIdentity{
+					PrincipalID: inititatorID,
+				},
+				RequestParameters: notifications.RequestParameters{
+					SourceIPAddress: reqInfo.RemoteHost,
+				},
+				ResponseElements: nil,
+				S3: notifications.S3Entity{
+					SchemaVersion: "1.0",
+					// ConfigurationID is skipped and will be placed later
+					Bucket: notifications.Bucket{
+						Name:          bkt.Name,
+						OwnerIdentity: notifications.UserIdentity{PrincipalID: bkt.Owner.String()},
+						Arn:           bkt.Name,
+					},
+					Object: notifications.Object{
+						Key:       obj.Name,
+						Size:      obj.Size,
+						VersionID: obj.Version(),
+						ETag:      obj.HashSum,
+						Sequencer: "",
+					},
+				},
+			},
+		},
 	}
 }
