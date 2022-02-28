@@ -215,6 +215,16 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s := &layer.SendNotificationsParams{
+		Event:   "s3:ObjectCreated:Put",
+		ObjInfo: info,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
 	if containsACLHeaders(r) {
 		if newEaclTable, err = h.getNewEAclTable(r, info); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
@@ -265,6 +275,12 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		return
+	}
+
 	if tagging := auth.MultipartFormValue(r, "tagging"); tagging != "" {
 		buffer := bytes.NewBufferString(tagging)
 		tagSet, err = readTagSet(buffer)
@@ -306,6 +322,16 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
+	}
+
+	s := &layer.SendNotificationsParams{
+		Event:   "s3:ObjectCreated:Post",
+		ObjInfo: info,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
 	if acl := auth.MultipartFormValue(r, "acl"); acl != "" {

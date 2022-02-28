@@ -71,6 +71,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		return
+	}
+
 	if err = h.checkBucketOwner(r, srcBucket, r.Header.Get(api.AmzSourceExpectedBucketOwner)); err != nil {
 		h.logAndSendError(w, "source expected owner doesn't match", reqInfo, err)
 		return
@@ -120,6 +126,16 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		zap.String("bucket", info.Bucket),
 		zap.String("object", info.Name),
 		zap.Stringer("object_id", info.ID))
+
+	s := &layer.SendNotificationsParams{
+		Event:   "s3:ObjectCreated:Post",
+		ObjInfo: info,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
 }
 
 func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
