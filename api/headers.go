@@ -47,6 +47,9 @@ const (
 	AmzExpectedBucketOwner       = "X-Amz-Expected-Bucket-Owner"
 	AmzSourceExpectedBucketOwner = "X-Amz-Source-Expected-Bucket-Owner"
 	AmzBucketObjectLockEnabled   = "X-Amz-Bucket-Object-Lock-Enabled"
+	AmzObjectLockLegalHold       = "X-Amz-Object-Lock-Legal-Hold"
+	AmzObjectLockMode            = "X-Amz-Object-Lock-Mode"
+	AmzObjectLockRetainUntilDate = "X-Amz-Object-Lock-Retain-Until-Date"
 
 	ContainerID = "X-Container-Id"
 

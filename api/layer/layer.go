@@ -300,6 +300,7 @@ type (
 		Size   int64
 		Reader io.Reader
 		Header map[string]string
+		Lock   *data.ObjectLock
 	}
 
 	// PutSettingsParams stores object copy request parameters.
@@ -322,6 +323,7 @@ type (
 		SrcSize   int64
 		Header    map[string]string
 		Range     *RangeParams
+		Lock      *data.ObjectLock
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {

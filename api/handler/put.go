@@ -182,7 +182,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket", reqInfo, err)
 		return
 	}
 	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
@@ -207,6 +207,17 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Reader: r.Body,
 		Size:   r.ContentLength,
 		Header: metadata,
+	}
+
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if err = formObjectLock(params.Lock, bktInfo, settings.LockConfiguration, r.Header); err != nil {
+		h.logAndSendError(w, "could not form object lock", reqInfo, err)
+		return
 	}
 
 	info, err := h.obj.PutObject(r.Context(), params)

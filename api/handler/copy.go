@@ -107,6 +107,23 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Header:    metadata,
 	}
 
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket", reqInfo, err)
+		return
+	}
+
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if err = formObjectLock(params.Lock, bktInfo, settings.LockConfiguration, r.Header); err != nil {
+		h.logAndSendError(w, "could not form object lock", reqInfo, err)
+		return
+	}
+
 	additional := []zap.Field{zap.String("src_bucket_name", srcBucket), zap.String("src_object_name", srcObject)}
 	if info, err = h.obj.CopyObject(r.Context(), params); err != nil {
 		h.logAndSendError(w, "couldn't copy object", reqInfo, err, additional...)

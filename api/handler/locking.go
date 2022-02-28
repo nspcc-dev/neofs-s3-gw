@@ -4,11 +4,22 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+)
+
+const (
+	dayDuration  = 24 * time.Hour
+	yearDuration = 365 * dayDuration
+
+	enabledValue   = "Enabled"
+	governanceMode = "GOVERNANCE"
+	complianceMode = "COMPLIANCE"
+	legalHoldOn    = "ON"
 )
 
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +118,7 @@ func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 	}
 
 	retention := conf.Rule.DefaultRetention
-	if retention.Mode != "GOVERNANCE" && retention.Mode != "COMPLIANCE" {
+	if retention.Mode != governanceMode && retention.Mode != complianceMode {
 		return fmt.Errorf("invalid Mode value: %s", retention.Mode)
 	}
 
@@ -120,4 +131,52 @@ func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 	}
 
 	return nil
+}
+
+func formObjectLock(objectLock *data.ObjectLock, bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConfiguration, header http.Header) error {
+	if !bktInfo.ObjectLockEnabled {
+		if existLockHeaders(header) {
+			return apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound)
+		}
+		return nil
+	}
+
+	if defaultConfig == nil {
+		defaultConfig = &data.ObjectLockConfiguration{}
+	}
+
+	if defaultConfig.Rule != nil && defaultConfig.Rule.DefaultRetention != nil {
+		defaultRetention := defaultConfig.Rule.DefaultRetention
+		objectLock.IsCompliance = defaultRetention.Mode == complianceMode
+		now := time.Now()
+		if defaultRetention.Days != 0 {
+			objectLock.Until = now.Add(time.Duration(defaultRetention.Days) * dayDuration)
+		} else {
+			objectLock.Until = now.Add(time.Duration(defaultRetention.Years) * yearDuration)
+		}
+	}
+
+	objectLock.LegalHold = header.Get(api.AmzObjectLockLegalHold) == legalHoldOn
+
+	mode := header.Get(api.AmzObjectLockMode)
+	if mode != "" {
+		objectLock.IsCompliance = mode == complianceMode
+	}
+
+	until := header.Get(api.AmzObjectLockRetainUntilDate)
+	if until != "" {
+		retentionDate, err := time.Parse(time.RFC3339, until)
+		if err != nil {
+			return fmt.Errorf("invalid header %s: '%s'", api.AmzObjectLockRetainUntilDate, until)
+		}
+		objectLock.Until = retentionDate
+	}
+
+	return nil
+}
+
+func existLockHeaders(header http.Header) bool {
+	return header.Get(api.AmzObjectLockMode) != "" ||
+		header.Get(api.AmzObjectLockLegalHold) != "" ||
+		header.Get(api.AmzObjectLockRetainUntilDate) != ""
 }
