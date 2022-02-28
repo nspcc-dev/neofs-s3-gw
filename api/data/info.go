@@ -47,7 +47,8 @@ type (
 
 	// BucketSettings stores settings such as versioning.
 	BucketSettings struct {
-		VersioningEnabled bool `json:"versioning_enabled"`
+		VersioningEnabled bool                     `json:"versioning_enabled"`
+		LockConfiguration *ObjectLockConfiguration `json:"lock_configuration"`
 	}
 
 	// CORSConfiguration stores CORS configuration of a request.
