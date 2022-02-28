@@ -302,21 +302,16 @@ type (
 		Header map[string]string
 	}
 
-	// PutVersioningParams stores object copy request parameters.
-	PutVersioningParams struct {
-		Bucket   string
-		Settings *BucketSettings
+	// PutSettingsParams stores object copy request parameters.
+	PutSettingsParams struct {
+		BktInfo  *data.BucketInfo
+		Settings *data.BucketSettings
 	}
 
 	// PutCORSParams stores PutCORS request parameters.
 	PutCORSParams struct {
 		BktInfo *data.BucketInfo
 		Reader  io.Reader
-	}
-
-	// BucketSettings stores settings such as versioning.
-	BucketSettings struct {
-		VersioningEnabled bool
 	}
 
 	// CopyObjectParams stores object copy request parameters.
@@ -386,8 +381,8 @@ type (
 	Client interface {
 		EphemeralKey() *keys.PublicKey
 
-		PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*data.ObjectInfo, error)
-		GetBucketVersioning(ctx context.Context, name string) (*BucketSettings, error)
+		GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
+		PutBucketSettings(ctx context.Context, p *PutSettingsParams) error
 
 		PutBucketCORS(ctx context.Context, p *PutCORSParams) error
 		GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error)

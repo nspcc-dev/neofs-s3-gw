@@ -1,8 +1,11 @@
 package layer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
+	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -204,4 +207,58 @@ func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sy
 // systemObjectKey is a key to use in SystemCache.
 func systemObjectKey(bktInfo *data.BucketInfo, obj string) string {
 	return bktInfo.Name + obj
+}
+
+func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
+	if settings := n.systemCache.GetSettings(bktInfo.SettingsObjectName()); settings != nil {
+		return settings, nil
+	}
+
+	obj, err := n.getSystemObjectFromNeoFS(ctx, bktInfo, bktInfo.SettingsObjectName())
+	if err != nil {
+		return nil, err
+	}
+
+	settings := &data.BucketSettings{}
+	if err = json.Unmarshal(obj.Payload(), settings); err != nil {
+		return nil, err
+	}
+
+	if err = n.systemCache.PutSettings(bktInfo.SettingsObjectName(), settings); err != nil {
+		n.log.Warn("couldn't put system meta to objects cache",
+			zap.Stringer("object id", obj.ID()),
+			zap.Stringer("bucket id", bktInfo.CID),
+			zap.Error(err))
+	}
+
+	return settings, nil
+}
+
+func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
+	rawSettings, err := json.Marshal(p.Settings)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal bucket settings")
+	}
+
+	s := &PutSystemObjectParams{
+		BktInfo:  p.BktInfo,
+		ObjName:  p.BktInfo.SettingsObjectName(),
+		Metadata: map[string]string{},
+		Reader:   bytes.NewReader(rawSettings),
+	}
+
+	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	if err != nil {
+		return err
+	}
+
+	if obj.Size == 0 {
+		return errors.GetAPIError(errors.ErrInternalError)
+	}
+
+	if err = n.systemCache.PutSettings(p.BktInfo.SettingsObjectName(), p.Settings); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
+	}
+
+	return nil
 }
