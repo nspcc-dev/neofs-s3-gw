@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -20,6 +21,7 @@ const (
 	governanceMode = "GOVERNANCE"
 	complianceMode = "COMPLIANCE"
 	legalHoldOn    = "ON"
+	legalHoldOff   = "OFF"
 )
 
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +110,240 @@ func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 	}
 }
 
+func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
+	if !bktInfo.ObjectLockEnabled {
+		h.logAndSendError(w, "object lock disabled", reqInfo,
+			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+		return
+	}
+
+	legalHold := &data.LegalHold{}
+	if err = xml.NewDecoder(r.Body).Decode(legalHold); err != nil {
+		h.logAndSendError(w, "couldn't parse legal hold configuration", reqInfo, err)
+		return
+	}
+
+	if legalHold.Status != legalHoldOn && legalHold.Status != legalHoldOff {
+		h.logAndSendError(w, "invalid legal hold status", reqInfo,
+			fmt.Errorf("invalid status %s", legalHold.Status))
+		return
+	}
+
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.LegalHoldObject())
+	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
+		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
+		return
+	}
+
+	if lockInfo == nil && legalHold.Status == legalHoldOff ||
+		lockInfo != nil && legalHold.Status == legalHoldOn {
+		return
+	}
+
+	if lockInfo != nil {
+		if err = h.obj.DeleteSystemObject(r.Context(), bktInfo, objInfo.LegalHoldObject()); err != nil {
+			h.logAndSendError(w, "couldn't delete legal hold", reqInfo, err)
+			return
+		}
+	} else {
+		ps := &layer.PutSystemObjectParams{
+			BktInfo: bktInfo,
+			ObjName: objInfo.LegalHoldObject(),
+			Lock:    &data.ObjectLock{LegalHold: true},
+		}
+		if _, err = h.obj.PutSystemObject(r.Context(), ps); err != nil {
+			h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
+			return
+		}
+	}
+}
+
+func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
+	if !bktInfo.ObjectLockEnabled {
+		h.logAndSendError(w, "object lock disabled", reqInfo,
+			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+		return
+	}
+
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.LegalHoldObject())
+	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
+		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
+		return
+	}
+
+	legalHold := &data.LegalHold{Status: legalHoldOff}
+	if lockInfo != nil {
+		legalHold.Status = legalHoldOn
+	}
+
+	if err = api.EncodeToResponse(w, legalHold); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
+	}
+}
+
+func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Request) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
+	if !bktInfo.ObjectLockEnabled {
+		h.logAndSendError(w, "object lock disabled", reqInfo,
+			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+		return
+	}
+
+	retention := &data.Retention{}
+	if err = xml.NewDecoder(r.Body).Decode(retention); err != nil {
+		h.logAndSendError(w, "couldn't parse object retention", reqInfo, err)
+		return
+	}
+
+	lock, err := formObjectLockFromRetention(retention, r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid retention configuration", reqInfo, err)
+		return
+	}
+
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.RetentionObject())
+	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
+		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
+		return
+	}
+
+	if lockInfo != nil && lockInfo.Headers[layer.AttributeComplianceMode] != "" {
+		h.logAndSendError(w, "couldn't change compliance lock mode", reqInfo, err)
+		return
+	}
+
+	ps := &layer.PutSystemObjectParams{
+		BktInfo: bktInfo,
+		ObjName: objInfo.RetentionObject(),
+		Lock:    lock,
+	}
+	if _, err = h.obj.PutSystemObject(r.Context(), ps); err != nil {
+		h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
+		return
+	}
+}
+
+func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Request) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
+		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+		return
+	}
+
+	if !bktInfo.ObjectLockEnabled {
+		h.logAndSendError(w, "object lock disabled", reqInfo,
+			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+		return
+	}
+
+	p := &layer.HeadObjectParams{
+		Bucket:    reqInfo.BucketName,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.RetentionObject())
+	if err != nil {
+		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
+		return
+	}
+
+	retention := &data.Retention{
+		Mode:            governanceMode,
+		RetainUntilDate: lockInfo.Headers[layer.AttributeRetainUntil],
+	}
+	if lockInfo.Headers[layer.AttributeComplianceMode] != "" {
+		retention.Mode = complianceMode
+	}
+
+	if err = api.EncodeToResponse(w, retention); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
+	}
+}
+
 func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 	if conf.ObjectLockEnabled != "" && conf.ObjectLockEnabled != enabledValue {
 		return fmt.Errorf("invalid ObjectLockEnabled value: %s", conf.ObjectLockEnabled)
@@ -179,4 +415,35 @@ func existLockHeaders(header http.Header) bool {
 	return header.Get(api.AmzObjectLockMode) != "" ||
 		header.Get(api.AmzObjectLockLegalHold) != "" ||
 		header.Get(api.AmzObjectLockRetainUntilDate) != ""
+}
+
+func formObjectLockFromRetention(retention *data.Retention, header http.Header) (*data.ObjectLock, error) {
+	var err error
+	var bypassGovernance bool
+	bypass := header.Get(api.AmzBypassGovernanceRetention)
+	if bypass != "" {
+		if bypassGovernance, err = strconv.ParseBool(bypass); err != nil {
+			return nil, fmt.Errorf("couldn't parse '%s' header", api.AmzBypassGovernanceRetention)
+		}
+	}
+
+	if retention.Mode != governanceMode && retention.Mode != complianceMode {
+		return nil, fmt.Errorf("invalid retention mode: %s", retention.Mode)
+	}
+
+	retentionDate, err := time.Parse(time.RFC3339, retention.RetainUntilDate)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't parse retain until date: %s", retention.RetainUntilDate)
+	}
+
+	lock := &data.ObjectLock{
+		Until:        retentionDate,
+		IsCompliance: retention.Mode == complianceMode,
+	}
+
+	if !lock.IsCompliance && !bypassGovernance {
+		return nil, fmt.Errorf("you cannot bypase governance mode")
+	}
+
+	return lock, nil
 }

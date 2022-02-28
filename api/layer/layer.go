@@ -352,6 +352,7 @@ type (
 		Metadata map[string]string
 		Prefix   string
 		Reader   io.Reader
+		Lock     *data.ObjectLock
 	}
 
 	// ListObjectVersionsParams stores list objects versions parameters.
@@ -398,11 +399,13 @@ type (
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
+		HeadSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) (*data.ObjectInfo, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
 		GetObjectTagging(ctx context.Context, p *data.ObjectInfo) (map[string]string, error)
 		GetBucketTagging(ctx context.Context, bucket string) (map[string]string, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error)
+		PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error)
 		PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 		PutBucketTagging(ctx context.Context, bucket string, tagSet map[string]string) error
 
@@ -413,6 +416,7 @@ type (
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
 		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error)
+		DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error
 		DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) error
 		DeleteBucketTagging(ctx context.Context, bucket string) error
 
@@ -631,7 +635,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, oi *data.ObjectInfo) (map[
 		Owner: oi.Owner,
 	}
 
-	objInfo, err := n.headSystemObject(ctx, bktInfo, oi.TagsObject())
+	objInfo, err := n.HeadSystemObject(ctx, bktInfo, oi.TagsObject())
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -646,7 +650,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bucketName string) (map[st
 		return nil, err
 	}
 
-	objInfo, err := n.headSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+	objInfo, err := n.HeadSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -686,11 +690,8 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 		Reader:   nil,
 	}
 
-	if _, err := n.putSystemObject(ctx, s); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := n.PutSystemObject(ctx, s)
+	return err
 }
 
 // PutBucketTagging into storage.
@@ -708,11 +709,8 @@ func (n *layer) PutBucketTagging(ctx context.Context, bucketName string, tagSet 
 		Reader:   nil,
 	}
 
-	if _, err = n.putSystemObject(ctx, s); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = n.PutSystemObject(ctx, s)
+	return err
 }
 
 // DeleteObjectTagging from storage.
@@ -721,7 +719,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) err
 	if err != nil {
 		return err
 	}
-	return n.deleteSystemObject(ctx, bktInfo, p.TagsObject())
+	return n.DeleteSystemObject(ctx, bktInfo, p.TagsObject())
 }
 
 // DeleteBucketTagging from storage.
@@ -731,7 +729,7 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) erro
 		return err
 	}
 
-	return n.deleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+	return n.DeleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
 }
 
 // CopyObject from one bucket into another bucket.

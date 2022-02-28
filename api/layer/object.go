@@ -202,6 +202,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 
 	if p.Lock != nil {
 		// todo form lock system object
+		// attributes = append(attributes, attributesFromLock(p.Lock)...)
 	}
 
 	meta, err := n.objectHead(ctx, bkt.CID, id)

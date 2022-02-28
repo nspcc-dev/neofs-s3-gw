@@ -14,7 +14,12 @@ import (
 	"go.uber.org/zap"
 )
 
-func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
+const (
+	AttributeComplianceMode = ".s3-compliance-mode"
+	AttributeRetainUntil    = ".s3-retain-until"
+)
+
+func (n *layer) PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
 	objInfo, err := n.putSystemObjectIntoNeoFS(ctx, p)
 	if err != nil {
 		return nil, err
@@ -27,7 +32,7 @@ func (n *layer) putSystemObject(ctx context.Context, p *PutSystemObjectParams) (
 	return objInfo, nil
 }
 
-func (n *layer) headSystemObject(ctx context.Context, bkt *data.BucketInfo, objName string) (*data.ObjectInfo, error) {
+func (n *layer) HeadSystemObject(ctx context.Context, bkt *data.BucketInfo, objName string) (*data.ObjectInfo, error) {
 	if objInfo := n.systemCache.GetObject(systemObjectKey(bkt, objName)); objInfo != nil {
 		return objInfo, nil
 	}
@@ -44,7 +49,7 @@ func (n *layer) headSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 	return versions.getLast(), nil
 }
 
-func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
+func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
 	f := &findParams{
 		attr: [2]string{objectSystemAttributeName, name},
 		cid:  bktInfo.CID,
@@ -90,6 +95,12 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 
 		if v == "" && p.Prefix == tagPrefix {
 			v = tagEmptyMark
+		}
+
+		if p.Lock != nil {
+			// todo form lock system object
+
+			prm.Attributes = append(prm.Attributes, attributesFromLock(p.Lock)...)
 		}
 
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
@@ -261,4 +272,22 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 	}
 
 	return nil
+}
+
+func attributesFromLock(lock *data.ObjectLock) []*object.Attribute {
+	var result []*object.Attribute
+	if !lock.LegalHold {
+		attrRetainUntil := object.NewAttribute()
+		attrRetainUntil.SetKey(AttributeRetainUntil)
+		attrRetainUntil.SetValue(lock.Until.Format(time.RFC3339))
+		result = append(result, attrRetainUntil)
+		if lock.IsCompliance {
+			attrCompliance := object.NewAttribute()
+			attrCompliance.SetKey(AttributeComplianceMode)
+			attrCompliance.SetValue(strconv.FormatBool(true))
+			result = append(result, attrCompliance)
+		}
+	}
+
+	return result
 }

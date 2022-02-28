@@ -72,7 +72,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
-	return n.deleteSystemObject(ctx, bktInfo, bktInfo.CORSObjectName())
+	return n.DeleteSystemObject(ctx, bktInfo, bktInfo.CORSObjectName())
 }
 
 func checkCORS(cors *data.CORSConfiguration) error {
