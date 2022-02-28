@@ -50,6 +50,7 @@ const (
 	AmzObjectLockLegalHold       = "X-Amz-Object-Lock-Legal-Hold"
 	AmzObjectLockMode            = "X-Amz-Object-Lock-Mode"
 	AmzObjectLockRetainUntilDate = "X-Amz-Object-Lock-Retain-Until-Date"
+	AmzBypassGovernanceRetention = "X-Amz-Bypass-Governance-Retention"
 
 	ContainerID = "X-Container-Id"
 

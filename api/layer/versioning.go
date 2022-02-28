@@ -399,7 +399,7 @@ func contains(list []string, elem string) bool {
 }
 
 func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	objInfo, err := n.headSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
+	objInfo, err := n.HeadSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
 		return nil, err
 	}

@@ -104,3 +104,9 @@ func (o *ObjectInfo) Address() *address.Address {
 
 // TagsObject returns name of system object for tags.
 func (o *ObjectInfo) TagsObject() string { return ".tagset." + o.Name + "." + o.Version() }
+
+// LegalHoldObject returns name of system object for lock object.
+func (o *ObjectInfo) LegalHoldObject() string { return ".lock." + o.Name + "." + o.Version() }
+
+// RetentionObject returns name of system object for retention lock object.
+func (o *ObjectInfo) RetentionObject() string { return ".retention." + o.Name + "." + o.Version() }
