@@ -282,8 +282,8 @@ func (v *objectVersions) getVersion(oid *oid.ID) *data.ObjectInfo {
 	}
 	return nil
 }
-func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams) (*data.ObjectInfo, error) {
-	bktInfo, err := n.GetBucketInfo(ctx, p.Bucket)
+func (n *layer) PutBucketVersioning(ctx context.Context, p *PutSettingsParams) (*data.ObjectInfo, error) {
+	bktInfo, err := n.GetBucketInfo(ctx, p.BktInfo.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutVersioningParams)
 	return n.putSystemObject(ctx, s)
 }
 
-func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*BucketSettings, error) {
+func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*data.BucketSettings, error) {
 	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
 	if err != nil {
 		return nil, err
@@ -398,7 +398,7 @@ func contains(list []string, elem string) bool {
 	return false
 }
 
-func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*BucketSettings, error) {
+func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
 	objInfo, err := n.headSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
 		return nil, err
@@ -407,8 +407,8 @@ func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 	return objectInfoToBucketSettings(objInfo), nil
 }
 
-func objectInfoToBucketSettings(info *data.ObjectInfo) *BucketSettings {
-	res := &BucketSettings{}
+func objectInfoToBucketSettings(info *data.ObjectInfo) *data.BucketSettings {
+	res := &data.BucketSettings{}
 
 	enabled, ok := info.Headers[attrSettingsVersioningEnabled]
 	if ok {

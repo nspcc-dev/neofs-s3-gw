@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	bktVersionSettingsObject           = ".s3-versioning-settings"
+	bktSettingsObject                  = ".s3-settings"
 	bktCORSConfigurationObject         = ".s3-cors"
 	bktNotificationConfigurationObject = ".s3-notifications"
 )
@@ -45,6 +45,11 @@ type (
 		Headers       map[string]string
 	}
 
+	// BucketSettings stores settings such as versioning.
+	BucketSettings struct {
+		VersioningEnabled bool `json:"versioning_enabled"`
+	}
+
 	// CORSConfiguration stores CORS configuration of a request.
 	CORSConfiguration struct {
 		XMLName   xml.Name   `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CORSConfiguration" json:"-"`
@@ -63,7 +68,7 @@ type (
 )
 
 // SettingsObjectName is system name for bucket settings file.
-func (b *BucketInfo) SettingsObjectName() string { return bktVersionSettingsObject }
+func (b *BucketInfo) SettingsObjectName() string { return bktSettingsObject }
 
 // CORSObjectName returns system name for bucket CORS configuration file.
 func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject }

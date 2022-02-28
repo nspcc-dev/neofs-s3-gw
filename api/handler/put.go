@@ -241,9 +241,9 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if versioning, err := h.obj.GetBucketVersioning(r.Context(), reqInfo.BucketName); err != nil {
+	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
-	} else if versioning.VersioningEnabled {
+	} else if settings.VersioningEnabled {
 		w.Header().Set(api.AmzVersionID, info.Version())
 	}
 
@@ -339,9 +339,15 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if versioning, err := h.obj.GetBucketVersioning(r.Context(), reqInfo.BucketName); err != nil {
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+
+	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
-	} else if versioning.VersioningEnabled {
+	} else if settings.VersioningEnabled {
 		w.Header().Set(api.AmzVersionID, info.Version())
 	}
 
@@ -574,12 +580,20 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if p.ObjectLockEnabled {
-		vp := &layer.PutVersioningParams{
-			Bucket:   reqInfo.BucketName,
-			Settings: &layer.BucketSettings{VersioningEnabled: true},
+		bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+		if err != nil {
+			h.logAndSendError(w, "could get bucket info", reqInfo, err)
+			return
 		}
-		if _, err = h.obj.PutBucketVersioning(r.Context(), vp); err != nil {
-			h.log.Error("couldn't enable bucket versioning", zap.Stringer("container_id", cid), zap.Error(err))
+
+		sp := &layer.PutSettingsParams{
+			BktInfo:  bktInfo,
+			Settings: &data.BucketSettings{VersioningEnabled: true},
+		}
+		if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
+			h.logAndSendError(w, "couldn't enable bucket versioning", reqInfo, err,
+				zap.Stringer("container_id", cid))
+			return
 		}
 	}
 

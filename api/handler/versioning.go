@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
@@ -20,11 +21,6 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := &layer.PutVersioningParams{
-		Bucket:   reqInfo.BucketName,
-		Settings: &layer.BucketSettings{VersioningEnabled: configuration.Status == "Enabled"},
-	}
-
 	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
@@ -35,12 +31,25 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
+		return
+	}
+
+	settings.VersioningEnabled = configuration.Status == "Enabled"
+
+	p := &layer.PutSettingsParams{
+		BktInfo:  bktInfo,
+		Settings: settings,
+	}
+
 	if !p.Settings.VersioningEnabled && bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, fmt.Errorf("object lock is enabled"))
 		return
 	}
 
-	if _, err := h.obj.PutBucketVersioning(r.Context(), p); err != nil {
+	if err = h.obj.PutBucketSettings(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put update versioning settings", reqInfo, err)
 		return
 	}
@@ -61,7 +70,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	settings, err := h.obj.GetBucketVersioning(r.Context(), reqInfo.BucketName)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		if errors.IsS3Error(err, errors.ErrNoSuchBucket) {
 			h.logAndSendError(w, "couldn't get versioning settings", reqInfo, err)
@@ -79,7 +88,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func formVersioningConfiguration(settings *layer.BucketSettings) *VersioningConfiguration {
+func formVersioningConfiguration(settings *data.BucketSettings) *VersioningConfiguration {
 	res := &VersioningConfiguration{}
 	if settings == nil {
 		return res

@@ -458,9 +458,9 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		Key:    objInfo.Name,
 	}
 
-	if versioning, err := h.obj.GetBucketVersioning(r.Context(), reqInfo.BucketName); err != nil {
+	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
-	} else if versioning.VersioningEnabled {
+	} else if settings.VersioningEnabled {
 		w.Header().Set(api.AmzVersionID, objInfo.Version())
 	}
 

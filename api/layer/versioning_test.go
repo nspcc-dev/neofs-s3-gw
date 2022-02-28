@@ -323,6 +323,7 @@ type testContext struct {
 	layer     Client
 	bkt       string
 	bktID     *cid.ID
+	bktInfo   *data.BucketInfo
 	obj       string
 	testNeoFS *testNeoFS
 }
@@ -361,10 +362,14 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	}
 
 	return &testContext{
-		ctx:       ctx,
-		layer:     NewLayer(l, tp, layerCfg),
-		bkt:       bktName,
-		bktID:     bktID,
+		ctx:   ctx,
+		layer: NewLayer(l, tp, layerCfg),
+		bkt:   bktName,
+		bktID: bktID,
+		bktInfo: &data.BucketInfo{
+			Name: bktName,
+			CID:  bktID,
+		},
 		obj:       "obj1",
 		t:         t,
 		testNeoFS: tp,
@@ -373,9 +378,9 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 func TestSimpleVersioning(t *testing.T) {
 	tc := prepareContext(t)
-	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bktID.String(),
-		Settings: &BucketSettings{VersioningEnabled: true},
+	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: &data.BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
 
@@ -414,9 +419,9 @@ func TestSimpleNoVersioning(t *testing.T) {
 
 func TestVersioningDeleteObject(t *testing.T) {
 	tc := prepareContext(t)
-	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bktID.String(),
-		Settings: &BucketSettings{VersioningEnabled: true},
+	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: &data.BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
 
@@ -431,9 +436,9 @@ func TestVersioningDeleteObject(t *testing.T) {
 
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	tc := prepareContext(t)
-	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bktID.String(),
-		Settings: &BucketSettings{VersioningEnabled: true},
+	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: &data.BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
 
@@ -796,25 +801,34 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	cacheConfig.System.Lifetime = 0
 
 	tc := prepareContext(t, cacheConfig)
-	objInfo, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bktID.String(),
-		Settings: &BucketSettings{VersioningEnabled: false},
+	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: &data.BucketSettings{VersioningEnabled: false},
 	})
 	require.NoError(t, err)
 
-	objMeta, ok := tc.testNeoFS.objects[objInfo.Address().String()]
-	require.True(t, ok)
+	objMeta := tc.getSystemObject(tc.bktInfo.SettingsObjectName())
+	require.NotNil(t, objMeta)
 
-	_, err = tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
-		Bucket:   tc.bktID.String(),
-		Settings: &BucketSettings{VersioningEnabled: true},
+	err = tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: &data.BucketSettings{VersioningEnabled: true},
 	})
 	require.NoError(t, err)
+
+	addr := object.NewAddress()
+	addr.SetContainerID(objMeta.ContainerID())
+	addr.SetObjectID(objMeta.ID())
 
 	// simulate failed deletion
-	tc.testNeoFS.objects[objInfo.Address().String()] = objMeta
+	tc.testNeoFS.objects[addr.String()] = objMeta
 
-	versioning, err := tc.layer.GetBucketVersioning(tc.ctx, tc.bkt)
+	bktInfo := &data.BucketInfo{
+		Name: tc.bkt,
+		CID:  tc.bktID,
+	}
+
+	versioning, err := tc.layer.GetBucketSettings(tc.ctx, bktInfo)
 	require.NoError(t, err)
 	require.True(t, versioning.VersioningEnabled)
 }
