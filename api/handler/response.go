@@ -188,10 +188,6 @@ type Tag struct {
 	Value string
 }
 
-const (
-	enabledValue = "Enabled"
-)
-
 // MarshalXML - StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	tokens := []xml.Token{start}

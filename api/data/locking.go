@@ -1,5 +1,7 @@
 package data
 
+import "time"
+
 type (
 	ObjectLockConfiguration struct {
 		ObjectLockEnabled string          `xml:"ObjectLockEnabled" json:"ObjectLockEnabled"`
@@ -14,5 +16,11 @@ type (
 		Days  int64  `xml:"Days" json:"Days"`
 		Mode  string `xml:"Mode" json:"Mode"`
 		Years int64  `xml:"Years" json:"Years"`
+	}
+
+	ObjectLock struct {
+		Until        time.Time
+		LegalHold    bool
+		IsCompliance bool
 	}
 )
