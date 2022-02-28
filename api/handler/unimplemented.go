@@ -59,10 +59,6 @@ func (h *handler) DeleteBucketWebsiteHandler(w http.ResponseWriter, r *http.Requ
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
 
-func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
 func (h *handler) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
@@ -76,9 +72,5 @@ func (h *handler) PutBucketLifecycleHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *handler) PutBucketEncryptionHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
-}
-
-func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), errors.GetAPIError(errors.ErrNotImplemented))
 }
