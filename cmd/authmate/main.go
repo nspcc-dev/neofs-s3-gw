@@ -13,6 +13,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -238,12 +239,12 @@ It will be ceil rounded to the nearest amount of epoch.`,
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			client, err := createSDKClient(ctx, log, &key.PrivateKey, peerAddressFlag)
+			neoFS, err := createNeoFS(ctx, log, &key.PrivateKey, peerAddressFlag)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
+				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
 
-			agent := authmate.New(log, client)
+			agent := authmate.New(log, neoFS)
 			var containerID *cid.ID
 			if len(containerIDFlag) > 0 {
 				containerID = cid.New()
@@ -388,12 +389,12 @@ func obtainSecret() *cli.Command {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			client, err := createSDKClient(ctx, log, &key.PrivateKey, peerAddressFlag)
+			neoFS, err := createNeoFS(ctx, log, &key.PrivateKey, peerAddressFlag)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("failed to create sdk client: %s", err), 2)
+				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
 
-			agent := authmate.New(log, client)
+			agent := authmate.New(log, neoFS)
 
 			var _ = agent
 
@@ -424,7 +425,7 @@ func obtainSecret() *cli.Command {
 	return command
 }
 
-func createSDKClient(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, peerAddress string) (pool.Pool, error) {
+func createNeoFS(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, peerAddress string) (authmate.NeoFS, error) {
 	log.Debug("prepare connection pool")
 
 	pb := new(pool.Builder)
@@ -435,5 +436,13 @@ func createSDKClient(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey
 		NodeConnectionTimeout: poolConnectTimeout,
 		NodeRequestTimeout:    poolRequestTimeout,
 	}
-	return pb.Build(ctx, opts)
+	p, err := pb.Build(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	var neoFS neofs.AuthmateNeoFS
+	neoFS.SetConnectionPool(p)
+
+	return &neoFS, nil
 }

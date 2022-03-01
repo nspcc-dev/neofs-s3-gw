@@ -308,8 +308,8 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 	}
 
 	f := &findParams{
-		filters: []filter{{attr: UploadPartNumberAttributeName, val: "0"}},
-		cid:     p.Bkt.CID,
+		attr: [2]string{UploadPartNumberAttributeName, "0"},
+		cid:  p.Bkt.CID,
 	}
 
 	ids, err := n.objectSearch(ctx, f)

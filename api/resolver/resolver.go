@@ -5,24 +5,27 @@ import (
 	"fmt"
 
 	"github.com/nspcc-dev/neo-go/pkg/rpc/client"
-	neofsclient "github.com/nspcc-dev/neofs-sdk-go/client"
-	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/resolver"
 )
 
 const (
 	NNSResolver = "nns"
 	DNSResolver = "dns"
-
-	networkSystemDNSParam = "SystemDNS"
 )
 
+// NeoFS represents virtual connection to the NeoFS network.
+type NeoFS interface {
+	// SystemDNS reads system DNS network parameters of the NeoFS.
+	//
+	// Returns exactly on non-zero value. Returns any error encountered
+	// which prevented the parameter to be read.
+	SystemDNS(context.Context) (string, error)
+}
+
 type Config struct {
-	Pool pool.Pool
-	RPC  *client.Client
+	NeoFS NeoFS
+	RPC   *client.Client
 }
 
 type BucketResolver struct {
@@ -69,7 +72,7 @@ func NewResolver(order []string, cfg *Config) (*BucketResolver, error) {
 func newResolver(name string, cfg *Config, next *BucketResolver) (*BucketResolver, error) {
 	switch name {
 	case DNSResolver:
-		return NewDNSResolver(cfg.Pool, next)
+		return NewDNSResolver(cfg.NeoFS, next)
 	case NNSResolver:
 		return NewNNSResolver(cfg.RPC, next)
 	default:
@@ -77,38 +80,15 @@ func newResolver(name string, cfg *Config, next *BucketResolver) (*BucketResolve
 	}
 }
 
-func NewDNSResolver(p pool.Pool, next *BucketResolver) (*BucketResolver, error) {
-	if p == nil {
+func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) {
+	if neoFS == nil {
 		return nil, fmt.Errorf("pool must not be nil for DNS resolver")
 	}
 
 	resolveFunc := func(ctx context.Context, name string) (*cid.ID, error) {
-		conn, _, err := p.Connection()
+		domain, err := neoFS.SystemDNS(ctx)
 		if err != nil {
-			return nil, err
-		}
-
-		networkInfoRes, err := conn.NetworkInfo(ctx, neofsclient.PrmNetworkInfo{})
-		if err == nil {
-			err = apistatus.ErrFromStatus(networkInfoRes.Status())
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		networkInfo := networkInfoRes.Info()
-
-		var domain string
-		networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
-			if string(parameter.Key()) == networkSystemDNSParam {
-				domain = string(parameter.Value())
-				return true
-			}
-			return false
-		})
-
-		if domain == "" {
-			return nil, fmt.Errorf("couldn't resolve container '%s': not found", name)
+			return nil, fmt.Errorf("read system DNS parameter of the NeoFS: %w", err)
 		}
 
 		domain = name + "." + domain

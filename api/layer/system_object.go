@@ -3,8 +3,6 @@ package layer
 import (
 	"context"
 	"encoding/xml"
-	"strconv"
-	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -45,8 +43,8 @@ func (n *layer) headSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 
 func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
 	f := &findParams{
-		filters: []filter{{attr: objectSystemAttributeName, val: name}},
-		cid:     bktInfo.CID,
+		attr: [2]string{objectSystemAttributeName, name},
+		cid:  bktInfo.CID,
 	}
 	ids, err := n.objectSearch(ctx, f)
 	if err != nil {
@@ -68,51 +66,40 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
-	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
 
-	attributes := make([]*object.Attribute, 0, 3)
+	prm := PrmObjectCreate{
+		Container:  *p.BktInfo.CID,
+		Creator:    *p.BktInfo.Owner,
+		Attributes: make([][2]string, 2, 2+len(p.Metadata)),
+		Payload:    p.Reader,
+	}
 
-	filename := object.NewAttribute()
-	filename.SetKey(objectSystemAttributeName)
-	filename.SetValue(p.ObjName)
-
-	createdAt := object.NewAttribute()
-	createdAt.SetKey(object.AttributeTimestamp)
-	createdAt.SetValue(strconv.FormatInt(time.Now().UTC().Unix(), 10))
-
-	versioningIgnore := object.NewAttribute()
-	versioningIgnore.SetKey(attrVersionsIgnore)
-	versioningIgnore.SetValue(strconv.FormatBool(true))
-
-	attributes = append(attributes, filename, createdAt, versioningIgnore)
+	prm.Attributes[0][0], prm.Attributes[0][1] = objectSystemAttributeName, p.ObjName
+	prm.Attributes[1][0], prm.Attributes[1][1] = attrVersionsIgnore, "true"
 
 	for k, v := range p.Metadata {
-		attr := object.NewAttribute()
 		if !IsSystemHeader(k) {
 			k = p.Prefix + k
 		}
-		attr.SetKey(k)
-		if p.Prefix == tagPrefix && v == "" {
+
+		if v == "" && p.Prefix == tagPrefix {
 			v = tagEmptyMark
 		}
-		attr.SetValue(v)
-		attributes = append(attributes, attr)
+
+		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 
-	raw := object.NewRaw()
-	raw.SetOwnerID(p.BktInfo.Owner)
-	raw.SetContainerID(p.BktInfo.CID)
-	raw.SetAttributes(attributes...)
-
-	oid, err := n.pool.PutObject(ctx, *raw.Object(), p.Reader, n.CallOptions(ctx)...)
+	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {
 		return nil, n.transformNeofsError(ctx, err)
 	}
 
-	meta, err := n.objectHead(ctx, p.BktInfo.CID, oid)
+	meta, err := n.objectHead(ctx, p.BktInfo.CID, id)
 	if err != nil {
 		return nil, err
 	}
+
+	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
 
 	for _, id := range idsToDeleteArr {
 		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
@@ -178,8 +165,8 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 
 func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
 	f := &findParams{
-		filters: []filter{{attr: objectSystemAttributeName, val: sysName}},
-		cid:     bkt.CID,
+		attr: [2]string{objectSystemAttributeName, sysName},
+		cid:  bkt.CID,
 	}
 	ids, err := n.objectSearch(ctx, f)
 	if err != nil {

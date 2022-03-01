@@ -22,8 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
-	"go.uber.org/zap"
 )
 
 // authorizationFieldRegexp -- is regexp for credentials with Base58 encoded cid and oid and '0' (zero) as delimiter.
@@ -42,12 +40,6 @@ type (
 		reg     *regexpSubmatcher
 		postReg *regexpSubmatcher
 		cli     tokens.Credentials
-	}
-
-	// Params stores node connection parameters.
-	Params struct {
-		Pool   pool.Pool
-		Logger *zap.Logger
 	}
 
 	prs int
@@ -82,9 +74,9 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(conns pool.Pool, key *keys.PrivateKey, config *cache.Config) Center {
+func New(neoFS tokens.NeoFS, key *keys.PrivateKey, config *cache.Config) Center {
 	return &center{
-		cli:     tokens.New(conns, key, config),
+		cli:     tokens.New(neoFS, key, config),
 		reg:     &regexpSubmatcher{re: authorizationFieldRegexp},
 		postReg: &regexpSubmatcher{re: postPolicyCredentialRegexp},
 	}

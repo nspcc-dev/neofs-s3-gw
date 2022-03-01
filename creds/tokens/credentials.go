@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"time"
 
@@ -12,10 +11,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
 )
 
 type (
@@ -27,10 +25,48 @@ type (
 
 	cred struct {
 		key   *keys.PrivateKey
-		pool  pool.Pool
+		neoFS NeoFS
 		cache *cache.AccessBoxCache
 	}
 )
+
+// PrmObjectCreate groups parameters of objects created by credential tool.
+type PrmObjectCreate struct {
+	// NeoFS identifier of the object creator.
+	Creator owner.ID
+
+	// NeoFS container to store the object.
+	Container cid.ID
+
+	// Object creation time.
+	Time time.Time
+
+	// File name.
+	Filename string
+
+	// Last NeoFS epoch of the object lifetime.
+	ExpirationEpoch uint64
+
+	// Object payload.
+	Payload []byte
+}
+
+// NeoFS represents virtual connection to NeoFS network.
+type NeoFS interface {
+	// CreateObject creates and saves a parameterized object in the specified
+	// NeoFS container from a specific user. Returns ID of the saved object.
+	//
+	// Returns exactly one non-nil value. Returns any error encountered which
+	// prevented the object to be created.
+	CreateObject(context.Context, PrmObjectCreate) (*oid.ID, error)
+
+	// ReadObjectPayload reads payload of the object from NeoFS network by address
+	// into memory.
+	//
+	// Returns exactly one non-nil value. Returns any error encountered which
+	// prevented the object payload to be read.
+	ReadObjectPayload(context.Context, address.Address) ([]byte, error)
+}
 
 var (
 	// ErrEmptyPublicKeys is returned when no HCS keys are provided.
@@ -42,8 +78,8 @@ var (
 var _ = New
 
 // New creates new Credentials instance using given cli and key.
-func New(conns pool.Pool, key *keys.PrivateKey, config *cache.Config) Credentials {
-	return &cred{pool: conns, key: key, cache: cache.NewAccessBoxCache(config)}
+func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config) Credentials {
+	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config)}
 }
 
 func (c *cred) GetBox(ctx context.Context, addr *address.Address) (*accessbox.Box, error) {
@@ -70,24 +106,9 @@ func (c *cred) GetBox(ctx context.Context, addr *address.Address) (*accessbox.Bo
 }
 
 func (c *cred) getAccessBox(ctx context.Context, addr *address.Address) (*accessbox.AccessBox, error) {
-	// init payload reader
-	res, err := c.pool.GetObject(ctx, *addr)
+	data, err := c.neoFS.ReadObjectPayload(ctx, *addr)
 	if err != nil {
-		return nil, fmt.Errorf("client pool failure: %w", err)
-	}
-
-	defer res.Payload.Close()
-
-	// read payload
-	var data []byte
-
-	if sz := res.Header.PayloadSize(); sz > 0 {
-		data = make([]byte, sz)
-
-		_, err = io.ReadFull(res.Payload, data)
-		if err != nil {
-			return nil, fmt.Errorf("read payload: %w", err)
-		}
+		return nil, fmt.Errorf("read payload: %w", err)
 	}
 
 	// decode access box
@@ -99,10 +120,10 @@ func (c *cred) getAccessBox(ctx context.Context, addr *address.Address) (*access
 	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*address.Address, error) {
+func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*address.Address, error) {
 	var (
 		err     error
-		created = strconv.FormatInt(time.Now().Unix(), 10)
+		created = time.Now()
 	)
 
 	if len(keys) == 0 {
@@ -115,31 +136,20 @@ func (c *cred) Put(ctx context.Context, cid *cid.ID, issuer *owner.ID, box *acce
 		return nil, err
 	}
 
-	timestamp := object.NewAttribute()
-	timestamp.SetKey(object.AttributeTimestamp)
-	timestamp.SetValue(created)
-
-	filename := object.NewAttribute()
-	filename.SetKey(object.AttributeFileName)
-	filename.SetValue(created + "_access.box")
-
-	expirationAttr := object.NewAttribute()
-	expirationAttr.SetKey("__NEOFS__EXPIRATION_EPOCH")
-	expirationAttr.SetValue(strconv.FormatUint(expiration, 10))
-
-	raw := object.NewRaw()
-	raw.SetContainerID(cid)
-	raw.SetOwnerID(issuer)
-	raw.SetAttributes(filename, timestamp, expirationAttr)
-	raw.SetPayload(data)
-
-	oid, err := c.pool.PutObject(ctx, *raw.Object(), nil)
+	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
+		Creator:         *issuer,
+		Container:       *idCnr,
+		Time:            created,
+		Filename:        strconv.FormatInt(created.Unix(), 10) + "_access.box",
+		ExpirationEpoch: expiration,
+		Payload:         data,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	addr := address.NewAddress()
-	addr.SetObjectID(oid)
-	addr.SetContainerID(cid)
+	addr.SetObjectID(idObj)
+	addr.SetContainerID(idCnr)
 	return addr, nil
 }

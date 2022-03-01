@@ -15,47 +15,168 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/accounting"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/token"
+	tokentest "github.com/nspcc-dev/neofs-sdk-go/token/test"
 	"github.com/stretchr/testify/require"
 )
 
-type testPool struct {
-	pool.Pool
+type testNeoFS struct {
+	NeoFS
 
 	objects      map[string]*object.Object
 	containers   map[string]*container.Container
 	currentEpoch uint64
 }
 
-func newTestPool() *testPool {
-	return &testPool{
-		objects:    make(map[string]*object.Object),
-		containers: make(map[string]*container.Container),
+func (t *testNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (*cid.ID, error) {
+	var opts []container.Option
+
+	opts = append(opts,
+		container.WithOwnerID(&prm.Creator),
+		container.WithPolicy(&prm.Policy),
+		container.WithCustomBasicACL(prm.BasicACL),
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(prm.Time.Unix(), 10)),
+	)
+
+	if prm.Name != "" {
+		opts = append(opts, container.WithAttribute(container.AttributeName, prm.Name))
 	}
+
+	cnr := container.New(opts...)
+	cnr.SetSessionToken(prm.SessionToken)
+
+	if prm.Name != "" {
+		container.SetNativeName(cnr, prm.Name)
+	}
+
+	b := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return nil, err
+	}
+
+	id := cid.New()
+	id.SetSHA256(sha256.Sum256(b))
+	t.containers[id.String()] = cnr
+
+	return id, nil
 }
 
-func (t *testPool) PutObject(_ context.Context, hdr object.Object, payload io.Reader, _ ...pool.CallOption) (*oid.ID, error) {
+func (t *testNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {
+	for k, v := range t.containers {
+		if k == id.String() {
+			return v, nil
+		}
+	}
+
+	return nil, fmt.Errorf("container not found " + id.String())
+}
+
+func (t *testNeoFS) UserContainers(_ context.Context, _ owner.ID) ([]cid.ID, error) {
+	var res []cid.ID
+	for k := range t.containers {
+		var idCnr cid.ID
+		if err := idCnr.Parse(k); err != nil {
+			return nil, err
+		}
+		res = append(res, idCnr)
+	}
+
+	return res, nil
+}
+
+func (t *testNeoFS) SelectObjects(_ context.Context, prm PrmObjectSelect) ([]oid.ID, error) {
+	var filters object.SearchFilters
+	filters.AddRootFilter()
+
+	if prm.FilePrefix != "" {
+		filters.AddFilter(object.AttributeFileName, prm.FilePrefix, object.MatchCommonPrefix)
+	}
+
+	if prm.ExactAttribute[0] != "" {
+		filters.AddFilter(prm.ExactAttribute[0], prm.ExactAttribute[1], object.MatchStringEqual)
+	}
+
+	cidStr := prm.Container.String()
+
+	var res []oid.ID
+
+	if len(filters) == 1 {
+		for k, v := range t.objects {
+			if strings.Contains(k, cidStr) {
+				res = append(res, *v.ID())
+			}
+		}
+		return res, nil
+	}
+
+	filter := filters[1]
+	if len(filters) != 2 || filter.Operation() != object.MatchStringEqual ||
+		(filter.Header() != object.AttributeFileName && filter.Header() != objectSystemAttributeName) {
+		return nil, fmt.Errorf("usupported filters")
+	}
+
+	for k, v := range t.objects {
+		if strings.Contains(k, cidStr) && isMatched(v.Attributes(), filter) {
+			res = append(res, *v.ID())
+		}
+	}
+
+	return res, nil
+}
+
+func (t *testNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPart, error) {
+	var addr address.Address
+	addr.SetContainerID(&prm.Container)
+	addr.SetObjectID(&prm.Object)
+
+	sAddr := addr.String()
+
+	if obj, ok := t.objects[sAddr]; ok {
+		return &ObjectPart{
+			Head:    obj,
+			Payload: io.NopCloser(bytes.NewReader(obj.Payload())),
+		}, nil
+	}
+
+	return nil, fmt.Errorf("object not found " + addr.String())
+}
+
+func (t *testNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.ID, error) {
 	id := test.ID()
 
-	raw := object.NewRawFrom(&hdr)
+	attrs := make([]*object.Attribute, 0)
+
+	if prm.Filename != "" {
+		a := object.NewAttribute()
+		a.SetKey(object.AttributeFileName)
+		a.SetValue(prm.Filename)
+		attrs = append(attrs, a)
+	}
+
+	for i := range prm.Attributes {
+		a := object.NewAttribute()
+		a.SetKey(prm.Attributes[i][0])
+		a.SetValue(prm.Attributes[i][1])
+		attrs = append(attrs, a)
+	}
+
+	raw := object.NewRaw()
+	raw.SetContainerID(&prm.Container)
 	raw.SetID(id)
+	raw.SetPayloadSize(prm.PayloadSize)
+	raw.SetAttributes(attrs...)
 	raw.SetCreationEpoch(t.currentEpoch)
 	t.currentEpoch++
 
-	if payload != nil {
-		all, err := io.ReadAll(payload)
+	if prm.Payload != nil {
+		all, err := io.ReadAll(prm.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -67,60 +188,21 @@ func (t *testPool) PutObject(_ context.Context, hdr object.Object, payload io.Re
 	return raw.ID(), nil
 }
 
-func (t *testPool) DeleteObject(ctx context.Context, addr address.Address, option ...pool.CallOption) error {
+func (t *testNeoFS) DeleteObject(_ context.Context, prm PrmObjectDelete) error {
+	var addr address.Address
+	addr.SetContainerID(&prm.Container)
+	addr.SetObjectID(&prm.Object)
+
 	delete(t.objects, addr.String())
+
 	return nil
 }
 
-func (t *testPool) GetObject(_ context.Context, addr address.Address, _ ...pool.CallOption) (*pool.ResGetObject, error) {
-	sAddr := addr.String()
-
-	if obj, ok := t.objects[sAddr]; ok {
-		return &pool.ResGetObject{
-			Header:  *obj,
-			Payload: io.NopCloser(bytes.NewReader(obj.Payload())),
-		}, nil
+func newTestPool() *testNeoFS {
+	return &testNeoFS{
+		objects:    make(map[string]*object.Object),
+		containers: make(map[string]*container.Container),
 	}
-
-	return nil, fmt.Errorf("object not found " + addr.String())
-}
-
-func (t *testPool) HeadObject(ctx context.Context, addr address.Address, _ ...pool.CallOption) (*object.Object, error) {
-	res, err := t.GetObject(ctx, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &res.Header, nil
-}
-
-func (t *testPool) SearchObjects(_ context.Context, idCnr cid.ID, filters object.SearchFilters, _ ...pool.CallOption) (*pool.ResObjectSearch, error) {
-	cidStr := idCnr.String()
-
-	var res []*oid.ID
-
-	if len(filters) == 1 {
-		for k, v := range t.objects {
-			if strings.Contains(k, cidStr) {
-				res = append(res, v.ID())
-			}
-		}
-		return nil, nil
-	}
-
-	filter := filters[1]
-	if len(filters) != 2 || filter.Operation() != object.MatchStringEqual ||
-		(filter.Header() != object.AttributeFileName && filter.Header() != objectSystemAttributeName) {
-		return nil, fmt.Errorf("usupported filters")
-	}
-
-	for k, v := range t.objects {
-		if strings.Contains(k, cidStr) && isMatched(v.Attributes(), filter) {
-			res = append(res, v.ID())
-		}
-	}
-
-	return nil, nil
 }
 
 func isMatched(attributes []*object.Attribute, filter object.SearchFilter) bool {
@@ -131,79 +213,6 @@ func isMatched(attributes []*object.Attribute, filter object.SearchFilter) bool 
 	}
 
 	return false
-}
-
-func (t *testPool) PutContainer(ctx context.Context, container *container.Container, option ...pool.CallOption) (*cid.ID, error) {
-	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return nil, err
-	}
-
-	id := cid.New()
-	id.SetSHA256(sha256.Sum256(b))
-	t.containers[id.String()] = container
-
-	return id, nil
-}
-
-func (t *testPool) GetContainer(ctx context.Context, id *cid.ID, option ...pool.CallOption) (*container.Container, error) {
-	for k, v := range t.containers {
-		if k == id.String() {
-			return v, nil
-		}
-	}
-
-	return nil, fmt.Errorf("container not found " + id.String())
-}
-
-func (t *testPool) ListContainers(ctx context.Context, id *owner.ID, option ...pool.CallOption) ([]*cid.ID, error) {
-	var res []*cid.ID
-	for k := range t.containers {
-		cID := cid.New()
-		if err := cID.Parse(k); err != nil {
-			return nil, err
-		}
-		res = append(res, cID)
-	}
-
-	return res, nil
-}
-
-func (t *testPool) DeleteContainer(ctx context.Context, id *cid.ID, option ...pool.CallOption) error {
-	delete(t.containers, id.String())
-	return nil
-}
-
-func (t *testPool) GetEACL(ctx context.Context, id *cid.ID, option ...pool.CallOption) (*eacl.Table, error) {
-	panic("implement me")
-}
-
-func (t *testPool) Balance(ctx context.Context, owner *owner.ID, opts ...pool.CallOption) (*accounting.Decimal, error) {
-	panic("implement me")
-}
-
-func (t *testPool) SetEACL(ctx context.Context, table *eacl.Table, option ...pool.CallOption) error {
-	panic("implement me")
-}
-
-func (t *testPool) AnnounceContainerUsedSpace(ctx context.Context, announcements []container.UsedSpaceAnnouncement, option ...pool.CallOption) error {
-	panic("implement me")
-}
-
-func (t *testPool) Connection() (pool.Client, *session.Token, error) {
-	panic("implement me")
-}
-
-func (t *testPool) Close() {
-	panic("implement me")
-}
-
-func (t *testPool) OwnerID() *owner.ID {
-	return nil
-}
-
-func (t *testPool) WaitForContainerPresence(ctx context.Context, id *cid.ID, params *pool.ContainerPollingParams) error {
-	return nil
 }
 
 func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
@@ -298,7 +307,7 @@ func (tc *testContext) checkListObjects(ids ...*oid.ID) {
 }
 
 func (tc *testContext) getSystemObject(objectName string) *object.Object {
-	for _, obj := range tc.testPool.objects {
+	for _, obj := range tc.testNeoFS.objects {
 		for _, attr := range obj.Attributes() {
 			if attr.Key() == objectSystemAttributeName && attr.Value() == objectName {
 				return obj
@@ -309,22 +318,25 @@ func (tc *testContext) getSystemObject(objectName string) *object.Object {
 }
 
 type testContext struct {
-	t        *testing.T
-	ctx      context.Context
-	layer    Client
-	bkt      string
-	bktID    *cid.ID
-	obj      string
-	testPool *testPool
+	t         *testing.T
+	ctx       context.Context
+	layer     Client
+	bkt       string
+	bktID     *cid.ID
+	obj       string
+	testNeoFS *testNeoFS
 }
 
 func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
+	bearerToken := tokentest.BearerToken()
+	require.NoError(t, bearerToken.SignToken(&key.PrivateKey))
+
 	ctx := context.WithValue(context.Background(), api.BoxData, &accessbox.Box{
 		Gate: &accessbox.GateData{
-			BearerToken: token.NewBearerToken(),
+			BearerToken: bearerToken,
 			GateKey:     key.PublicKey(),
 		},
 	})
@@ -333,8 +345,9 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	tp := newTestPool()
 
 	bktName := "testbucket1"
-	cnr := container.New(container.WithAttribute(container.AttributeName, bktName))
-	bktID, err := tp.PutContainer(ctx, cnr)
+	bktID, err := tp.CreateContainer(ctx, PrmContainerCreate{
+		Name: bktName,
+	})
 	require.NoError(t, err)
 
 	config := DefaultCachesConfigs()
@@ -348,19 +361,17 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	}
 
 	return &testContext{
-		ctx:      ctx,
-		layer:    NewLayer(l, tp, layerCfg),
-		bkt:      bktName,
-		bktID:    bktID,
-		obj:      "obj1",
-		t:        t,
-		testPool: tp,
+		ctx:       ctx,
+		layer:     NewLayer(l, tp, layerCfg),
+		bkt:       bktName,
+		bktID:     bktID,
+		obj:       "obj1",
+		t:         t,
+		testNeoFS: tp,
 	}
 }
 
 func TestSimpleVersioning(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	tc := prepareContext(t)
 	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
 		Bucket:   tc.bktID.String(),
@@ -385,8 +396,6 @@ func TestSimpleVersioning(t *testing.T) {
 }
 
 func TestSimpleNoVersioning(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	tc := prepareContext(t)
 
 	obj1Content1 := []byte("content obj1 v1")
@@ -404,8 +413,6 @@ func TestSimpleNoVersioning(t *testing.T) {
 }
 
 func TestVersioningDeleteObject(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	tc := prepareContext(t)
 	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
 		Bucket:   tc.bktID.String(),
@@ -423,8 +430,6 @@ func TestVersioningDeleteObject(t *testing.T) {
 }
 
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	tc := prepareContext(t)
 	_, err := tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
 		Bucket:   tc.bktID.String(),
@@ -532,8 +537,6 @@ func TestGetLastVersion(t *testing.T) {
 }
 
 func TestNoVersioningDeleteObject(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	tc := prepareContext(t)
 
 	tc.putObject([]byte("content obj1 v1"))
@@ -789,8 +792,6 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 }
 
 func TestSystemObjectsVersioning(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	cacheConfig := DefaultCachesConfigs()
 	cacheConfig.System.Lifetime = 0
 
@@ -801,7 +802,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	objMeta, ok := tc.testPool.objects[objInfo.Address().String()]
+	objMeta, ok := tc.testNeoFS.objects[objInfo.Address().String()]
 	require.True(t, ok)
 
 	_, err = tc.layer.PutBucketVersioning(tc.ctx, &PutVersioningParams{
@@ -811,7 +812,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	// simulate failed deletion
-	tc.testPool.objects[objInfo.Address().String()] = objMeta
+	tc.testNeoFS.objects[objInfo.Address().String()] = objMeta
 
 	versioning, err := tc.layer.GetBucketVersioning(tc.ctx, tc.bkt)
 	require.NoError(t, err)
@@ -819,8 +820,6 @@ func TestSystemObjectsVersioning(t *testing.T) {
 }
 
 func TestDeleteSystemObjectsVersioning(t *testing.T) {
-	// https://github.com/nspcc-dev/neofs-s3-gw/issues/349
-	t.Skip("pool.Pool does not support overriding")
 	cacheConfig := DefaultCachesConfigs()
 	cacheConfig.System.Lifetime = 0
 
@@ -840,7 +839,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	// simulate failed deletion
-	tc.testPool.objects[newAddress(objMeta.ContainerID(), objMeta.ID()).String()] = objMeta
+	tc.testNeoFS.objects[newAddress(objMeta.ContainerID(), objMeta.ID()).String()] = objMeta
 
 	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bkt)
 	require.NoError(t, err)
