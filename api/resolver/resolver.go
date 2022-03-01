@@ -35,6 +35,10 @@ type BucketResolver struct {
 	next *BucketResolver
 }
 
+func (r *BucketResolver) SetResolveFunc(fn func(context.Context, string) (*cid.ID, error)) {
+	r.resolve = fn
+}
+
 func (r *BucketResolver) Resolve(ctx context.Context, name string) (*cid.ID, error) {
 	cnrID, err := r.resolve(ctx, name)
 	if err != nil {

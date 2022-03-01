@@ -29,7 +29,7 @@ type (
 
 const (
 	attributeLocationConstraint = ".s3-location-constraint"
-	attributeLockEnabled        = "LockEnabled"
+	AttributeLockEnabled        = "LockEnabled"
 )
 
 func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketInfo, error) {
@@ -73,7 +73,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketI
 			info.Created = time.Unix(unix, 0)
 		case attributeLocationConstraint:
 			info.LocationConstraint = val
-		case attributeLockEnabled:
+		case AttributeLockEnabled:
 			info.ObjectLockEnabled, err = strconv.ParseBool(val)
 			if err != nil {
 				log.Error("could not parse container object lock enabled attribute",

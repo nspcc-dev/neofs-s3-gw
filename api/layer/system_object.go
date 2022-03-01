@@ -221,7 +221,8 @@ func systemObjectKey(bktInfo *data.BucketInfo, obj string) string {
 }
 
 func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	if settings := n.systemCache.GetSettings(bktInfo.SettingsObjectName()); settings != nil {
+	systemKey := systemObjectKey(bktInfo, bktInfo.SettingsObjectName())
+	if settings := n.systemCache.GetSettings(systemKey); settings != nil {
 		return settings, nil
 	}
 
@@ -235,7 +236,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return nil, err
 	}
 
-	if err = n.systemCache.PutSettings(bktInfo.SettingsObjectName(), settings); err != nil {
+	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {
 		n.log.Warn("couldn't put system meta to objects cache",
 			zap.Stringer("object id", obj.ID()),
 			zap.Stringer("bucket id", bktInfo.CID),
@@ -267,7 +268,8 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return errors.GetAPIError(errors.ErrInternalError)
 	}
 
-	if err = n.systemCache.PutSettings(p.BktInfo.SettingsObjectName(), p.Settings); err != nil {
+	systemKey := systemObjectKey(p.BktInfo, p.BktInfo.SettingsObjectName())
+	if err = n.systemCache.PutSettings(systemKey, p.Settings); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
@@ -276,7 +278,7 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 
 func attributesFromLock(lock *data.ObjectLock) []*object.Attribute {
 	var result []*object.Attribute
-	if !lock.LegalHold {
+	if !lock.Until.IsZero() {
 		attrRetainUntil := object.NewAttribute()
 		attrRetainUntil.SetKey(AttributeRetainUntil)
 		attrRetainUntil.SetValue(lock.Until.Format(time.RFC3339))

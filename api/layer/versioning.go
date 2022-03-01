@@ -300,7 +300,7 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutSettingsParams) (
 		Reader:   nil,
 	}
 
-	return n.putSystemObject(ctx, s)
+	return n.PutSystemObject(ctx, s)
 }
 
 func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*data.BucketSettings, error) {
@@ -309,7 +309,7 @@ func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*da
 		return nil, err
 	}
 
-	return n.getBucketSettings(ctx, bktInfo)
+	return n.GetBucketSettings(ctx, bktInfo)
 }
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
@@ -396,15 +396,6 @@ func contains(list []string, elem string) bool {
 		}
 	}
 	return false
-}
-
-func (n *layer) getBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	objInfo, err := n.HeadSystemObject(ctx, bktInfo, bktInfo.SettingsObjectName())
-	if err != nil {
-		return nil, err
-	}
-
-	return objectInfoToBucketSettings(objInfo), nil
 }
 
 func objectInfoToBucketSettings(info *data.ObjectInfo) *data.BucketSettings {

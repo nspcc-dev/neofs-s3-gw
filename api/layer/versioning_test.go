@@ -3,10 +3,6 @@ package layer
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,206 +10,17 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/mock"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/id/test"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	tokentest "github.com/nspcc-dev/neofs-sdk-go/token/test"
 	"github.com/stretchr/testify/require"
 )
-
-type testNeoFS struct {
-	NeoFS
-
-	objects      map[string]*object.Object
-	containers   map[string]*container.Container
-	currentEpoch uint64
-}
-
-func (t *testNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (*cid.ID, error) {
-	var opts []container.Option
-
-	opts = append(opts,
-		container.WithOwnerID(&prm.Creator),
-		container.WithPolicy(&prm.Policy),
-		container.WithCustomBasicACL(prm.BasicACL),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(prm.Time.Unix(), 10)),
-	)
-
-	if prm.Name != "" {
-		opts = append(opts, container.WithAttribute(container.AttributeName, prm.Name))
-	}
-
-	cnr := container.New(opts...)
-	cnr.SetSessionToken(prm.SessionToken)
-
-	if prm.Name != "" {
-		container.SetNativeName(cnr, prm.Name)
-	}
-
-	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return nil, err
-	}
-
-	id := cid.New()
-	id.SetSHA256(sha256.Sum256(b))
-	t.containers[id.String()] = cnr
-
-	return id, nil
-}
-
-func (t *testNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {
-	for k, v := range t.containers {
-		if k == id.String() {
-			return v, nil
-		}
-	}
-
-	return nil, fmt.Errorf("container not found " + id.String())
-}
-
-func (t *testNeoFS) UserContainers(_ context.Context, _ owner.ID) ([]cid.ID, error) {
-	var res []cid.ID
-	for k := range t.containers {
-		var idCnr cid.ID
-		if err := idCnr.Parse(k); err != nil {
-			return nil, err
-		}
-		res = append(res, idCnr)
-	}
-
-	return res, nil
-}
-
-func (t *testNeoFS) SelectObjects(_ context.Context, prm PrmObjectSelect) ([]oid.ID, error) {
-	var filters object.SearchFilters
-	filters.AddRootFilter()
-
-	if prm.FilePrefix != "" {
-		filters.AddFilter(object.AttributeFileName, prm.FilePrefix, object.MatchCommonPrefix)
-	}
-
-	if prm.ExactAttribute[0] != "" {
-		filters.AddFilter(prm.ExactAttribute[0], prm.ExactAttribute[1], object.MatchStringEqual)
-	}
-
-	cidStr := prm.Container.String()
-
-	var res []oid.ID
-
-	if len(filters) == 1 {
-		for k, v := range t.objects {
-			if strings.Contains(k, cidStr) {
-				res = append(res, *v.ID())
-			}
-		}
-		return res, nil
-	}
-
-	filter := filters[1]
-	if len(filters) != 2 || filter.Operation() != object.MatchStringEqual ||
-		(filter.Header() != object.AttributeFileName && filter.Header() != objectSystemAttributeName) {
-		return nil, fmt.Errorf("usupported filters")
-	}
-
-	for k, v := range t.objects {
-		if strings.Contains(k, cidStr) && isMatched(v.Attributes(), filter) {
-			res = append(res, *v.ID())
-		}
-	}
-
-	return res, nil
-}
-
-func (t *testNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPart, error) {
-	var addr address.Address
-	addr.SetContainerID(&prm.Container)
-	addr.SetObjectID(&prm.Object)
-
-	sAddr := addr.String()
-
-	if obj, ok := t.objects[sAddr]; ok {
-		return &ObjectPart{
-			Head:    obj,
-			Payload: io.NopCloser(bytes.NewReader(obj.Payload())),
-		}, nil
-	}
-
-	return nil, fmt.Errorf("object not found " + addr.String())
-}
-
-func (t *testNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.ID, error) {
-	id := test.ID()
-
-	attrs := make([]object.Attribute, 0)
-
-	if prm.Filename != "" {
-		a := object.NewAttribute()
-		a.SetKey(object.AttributeFileName)
-		a.SetValue(prm.Filename)
-		attrs = append(attrs, *a)
-	}
-
-	for i := range prm.Attributes {
-		a := object.NewAttribute()
-		a.SetKey(prm.Attributes[i][0])
-		a.SetValue(prm.Attributes[i][1])
-		attrs = append(attrs, *a)
-	}
-
-	obj := object.New()
-	obj.SetContainerID(&prm.Container)
-	obj.SetID(id)
-	obj.SetPayloadSize(prm.PayloadSize)
-	obj.SetAttributes(attrs...)
-	obj.SetCreationEpoch(t.currentEpoch)
-	t.currentEpoch++
-
-	if prm.Payload != nil {
-		all, err := io.ReadAll(prm.Payload)
-		if err != nil {
-			return nil, err
-		}
-		obj.SetPayload(all)
-	}
-
-	addr := newAddress(obj.ContainerID(), obj.ID())
-	t.objects[addr.String()] = obj
-	return obj.ID(), nil
-}
-
-func (t *testNeoFS) DeleteObject(_ context.Context, prm PrmObjectDelete) error {
-	var addr address.Address
-	addr.SetContainerID(&prm.Container)
-	addr.SetObjectID(&prm.Object)
-
-	delete(t.objects, addr.String())
-
-	return nil
-}
-
-func newTestPool() *testNeoFS {
-	return &testNeoFS{
-		objects:    make(map[string]*object.Object),
-		containers: make(map[string]*container.Container),
-	}
-}
-
-func isMatched(attributes []object.Attribute, filter object.SearchFilter) bool {
-	for _, attr := range attributes {
-		if attr.Key() == filter.Header() && attr.Value() == filter.Value() {
-			return true
-		}
-	}
-
-	return false
-}
 
 func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 	objInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
@@ -307,7 +114,7 @@ func (tc *testContext) checkListObjects(ids ...*oid.ID) {
 }
 
 func (tc *testContext) getSystemObject(objectName string) *object.Object {
-	for _, obj := range tc.testNeoFS.objects {
+	for _, obj := range tc.testNeoFS.Objects {
 		for _, attr := range obj.Attributes() {
 			if attr.Key() == objectSystemAttributeName && attr.Value() == objectName {
 				return obj
@@ -325,7 +132,7 @@ type testContext struct {
 	bktID     *cid.ID
 	bktInfo   *data.BucketInfo
 	obj       string
-	testNeoFS *testNeoFS
+	testNeoFS *mock.TestNeoFS
 }
 
 func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
@@ -343,7 +150,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	})
 	l, err := logger.New(logger.WithTraceLevel("panic"))
 	require.NoError(t, err)
-	tp := newTestPool()
+	tp := mock.NewTestPool()
 
 	bktName := "testbucket1"
 	bktID, err := tp.CreateContainer(ctx, PrmContainerCreate{
@@ -821,7 +628,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	addr.SetObjectID(objMeta.ID())
 
 	// simulate failed deletion
-	tc.testNeoFS.objects[addr.String()] = objMeta
+	tc.testNeoFS.Objects[addr.String()] = objMeta
 
 	bktInfo := &data.BucketInfo{
 		Name: tc.bkt,
@@ -853,7 +660,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	// simulate failed deletion
-	tc.testNeoFS.objects[newAddress(objMeta.ContainerID(), objMeta.ID()).String()] = objMeta
+	tc.testNeoFS.Objects[newAddress(objMeta.ContainerID(), objMeta.ID()).String()] = objMeta
 
 	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bkt)
 	require.NoError(t, err)
