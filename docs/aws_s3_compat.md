@@ -43,12 +43,12 @@ For now there are some limitations:
 
 |    | Method                     | Comments                  |
 |----|----------------------------|---------------------------|
-| 🔵 | GetObjectLegalHold         |                           |
-| 🔵 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
-| 🔵 | GetObjectRetention         |                           |
-| 🔵 | PutObjectLegalHold         |                           |
-| 🔵 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
-| 🔵 | PutObjectRetention         |                           |
+| 🟢 | GetObjectLegalHold         |                           |
+| 🟢 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
+| 🟢 | GetObjectRetention         |                           |
+| 🟢 | PutObjectLegalHold         |                           |
+| 🟢 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
+| 🟢 | PutObjectRetention         |                           |
 
 ## Multipart
 
