@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -30,21 +29,21 @@ type (
 
 const locationConstraintAttr = ".s3-location-constraint"
 
-func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInfo, error) {
+func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketInfo, error) {
 	var (
 		err error
 		res *container.Container
 		rid = api.GetRequestID(ctx)
 
 		info = &data.BucketInfo{
-			CID:  cid,
-			Name: cid.String(),
+			CID:  idCnr,
+			Name: idCnr.String(),
 		}
 	)
-	res, err = n.pool.GetContainer(ctx, cid, n.CallOptions(ctx)...)
+	res, err = n.neoFS.Container(ctx, *idCnr)
 	if err != nil {
 		n.log.Error("could not fetch container",
-			zap.Stringer("cid", cid),
+			zap.Stringer("cid", idCnr),
 			zap.String("request_id", rid),
 			zap.Error(err))
 
@@ -65,7 +64,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInf
 			unix, err := strconv.ParseInt(attr.Value(), 10, 64)
 			if err != nil {
 				n.log.Error("could not parse container creation time",
-					zap.Stringer("cid", cid),
+					zap.Stringer("cid", idCnr),
 					zap.String("request_id", rid),
 					zap.String("created_at", val),
 					zap.Error(err))
@@ -81,7 +80,7 @@ func (n *layer) containerInfo(ctx context.Context, cid *cid.ID) (*data.BucketInf
 
 	if err := n.bucketCache.Put(info); err != nil {
 		n.log.Warn("could not put bucket info into cache",
-			zap.Stringer("cid", cid),
+			zap.Stringer("cid", idCnr),
 			zap.String("bucket_name", info.Name),
 			zap.Error(err))
 	}
@@ -93,20 +92,20 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 	var (
 		err error
 		own = n.Owner(ctx)
-		res []*cid.ID
+		res []cid.ID
 		rid = api.GetRequestID(ctx)
 	)
-	res, err = n.pool.ListContainers(ctx, own, n.CallOptions(ctx)...)
+	res, err = n.neoFS.UserContainers(ctx, *own)
 	if err != nil {
-		n.log.Error("could not fetch container",
+		n.log.Error("could not list user containers",
 			zap.String("request_id", rid),
 			zap.Error(err))
 		return nil, err
 	}
 
 	list := make([]*data.BucketInfo, 0, len(res))
-	for _, cid := range res {
-		info, err := n.containerInfo(ctx, cid)
+	for i := range res {
+		info, err := n.containerInfo(ctx, &res[i])
 		if err != nil {
 			n.log.Error("could not fetch container info",
 				zap.String("request_id", rid),
@@ -130,28 +129,23 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		LocationConstraint: p.LocationConstraint,
 	}
 
-	options := []container.Option{
-		container.WithPolicy(p.Policy),
-		container.WithCustomBasicACL(acl.BasicACL(p.ACL)),
-		container.WithAttribute(container.AttributeName, p.Name),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(bktInfo.Created.Unix(), 10)),
-	}
+	var locConstAttr *container.Attribute
 
 	if p.LocationConstraint != "" {
-		options = append(options, container.WithAttribute(locationConstraintAttr, p.LocationConstraint))
+		locConstAttr = container.NewAttribute()
+		locConstAttr.SetKey(locationConstraintAttr)
+		locConstAttr.SetValue(p.LocationConstraint)
 	}
 
-	cnr := container.New(options...)
-	container.SetNativeName(cnr, p.Name)
-
-	cnr.SetSessionToken(p.SessionToken)
-	cnr.SetOwnerID(bktInfo.Owner)
-
-	if bktInfo.CID, err = n.pool.PutContainer(ctx, cnr); err != nil {
-		return nil, err
-	}
-
-	if err = n.pool.WaitForContainerPresence(ctx, bktInfo.CID, pool.DefaultPollingParams()); err != nil {
+	if bktInfo.CID, err = n.neoFS.CreateContainer(ctx, PrmContainerCreate{
+		Creator:                     *bktInfo.Owner,
+		Policy:                      *p.Policy,
+		Name:                        p.Name,
+		SessionToken:                p.SessionToken,
+		Time:                        bktInfo.Created,
+		BasicACL:                    acl.BasicACL(p.ACL),
+		LocationConstraintAttribute: locConstAttr,
+	}); err != nil {
 		return nil, err
 	}
 
@@ -172,21 +166,20 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table) error {
 	table.SetCID(cid)
 
-	var sessionToken *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForSetEACL()
+		table.SetSessionToken(boxData.Gate.SessionTokenForSetEACL())
 	}
 
-	if err := n.pool.SetEACL(ctx, table, pool.WithSession(sessionToken)); err != nil {
+	if err := n.neoFS.SetContainerEACL(ctx, *table); err != nil {
 		return err
 	}
 
-	return n.waitEACLPresence(ctx, cid, table, defaultWaitParams())
+	return n.waitEACLPresence(ctx, *cid, table, defaultWaitParams())
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, cid *cid.ID) (*eacl.Table, error) {
-	return n.pool.GetEACL(ctx, cid)
+	return n.neoFS.ContainerEACL(ctx, *cid)
 }
 
 type waitParams struct {
@@ -201,7 +194,7 @@ func defaultWaitParams() *waitParams {
 	}
 }
 
-func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.Table, params *waitParams) error {
+func (n *layer) waitEACLPresence(ctx context.Context, cid cid.ID, table *eacl.Table, params *waitParams) error {
 	exp, err := table.Marshal()
 	if err != nil {
 		return fmt.Errorf("couldn't marshal eacl: %w", err)
@@ -213,6 +206,8 @@ func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.T
 	defer ticker.Stop()
 	wdone := wctx.Done()
 	done := ctx.Done()
+	var eaclTable *eacl.Table
+	var got []byte
 	for {
 		select {
 		case <-done:
@@ -220,10 +215,13 @@ func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.T
 		case <-wdone:
 			return wctx.Err()
 		case <-ticker.C:
-			eaclTable, err := n.pool.GetEACL(ctx, cid)
+			eaclTable, err = n.neoFS.ContainerEACL(ctx, cid)
 			if err == nil {
-				got, err := eaclTable.Marshal()
-				if err == nil && bytes.Equal(exp, got) {
+				got, err = eaclTable.Marshal()
+				if err != nil {
+					// not expected, but if occurred - doesn't make sense to continue
+					return fmt.Errorf("marshal received eACL: %w", err)
+				} else if bytes.Equal(exp, got) {
 					return nil
 				}
 			}
@@ -232,11 +230,11 @@ func (n *layer) waitEACLPresence(ctx context.Context, cid *cid.ID, table *eacl.T
 	}
 }
 
-func (n *layer) deleteContainer(ctx context.Context, cid *cid.ID) error {
+func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
 	var sessionToken *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForDelete()
 	}
-	return n.pool.DeleteContainer(ctx, cid, pool.WithSession(sessionToken))
+	return n.neoFS.DeleteContainer(ctx, *idCnr, sessionToken)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
@@ -28,13 +29,13 @@ import (
 type (
 	// App is the main application structure.
 	App struct {
-		pool pool.Pool
-		ctr  auth.Center
-		log  *zap.Logger
-		cfg  *viper.Viper
-		tls  *tlsConfig
-		obj  layer.Client
-		api  api.Handler
+		ctr auth.Center
+		log *zap.Logger
+		cfg *viper.Viper
+		tls *tlsConfig
+		obj layer.Client
+		api api.Handler
+		nc  *notifications.Controller
 
 		maxClients api.MaxClients
 
@@ -50,7 +51,6 @@ type (
 
 func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	var (
-		conns  pool.Pool
 		key    *keys.PrivateKey
 		err    error
 		tls    *tlsConfig
@@ -109,7 +109,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		NodeRequestTimeout:      reqTimeout,
 		ClientRebalanceInterval: reBalance,
 	}
-	conns, err = poolPeers.Build(ctx, opts)
+	conns, err := poolPeers.Build(ctx, opts)
 	if err != nil {
 		l.Fatal("failed to create connection pool", zap.Error(err))
 	}
@@ -120,8 +120,11 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("couldn't generate random key", zap.Error(err))
 	}
 
+	var neoFS neofs.NeoFS
+	neoFS.SetConnectionPool(conns)
+
 	resolveCfg := &resolver.Config{
-		Pool: conns,
+		NeoFS: &neoFS,
 	}
 
 	if rpcEndpoint := v.GetString(cfgRPCEndpoint); rpcEndpoint != "" {
@@ -155,12 +158,16 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		NotificationController: nc,
 	}
 
+	var n neofs.NeoFS
+	n.SetConnectionPool(conns)
+
 	// prepare object layer
-	obj = layer.NewLayer(l, conns, layerCfg)
+	obj = layer.NewLayer(l, &layerNeoFS{&n}, layerCfg)
 
 	// prepare auth center
-	ctr = auth.New(conns, key, getAccessBoxCacheConfig(v, l))
-
+	ctr = auth.New(&neofs.AuthmateNeoFS{
+		NeoFS: n,
+	}, key, getAccessBoxCacheConfig(v, l))
 	handlerOptions := getHandlerOptions(v, l)
 
 	if caller, err = handler.New(l, obj, handlerOptions); err != nil {
@@ -168,13 +175,13 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	return &App{
-		ctr:  ctr,
-		pool: conns,
-		log:  l,
-		cfg:  v,
-		obj:  obj,
-		tls:  tls,
-		api:  caller,
+		ctr: ctr,
+		log: l,
+		cfg: v,
+		obj: obj,
+		tls: tls,
+		api: caller,
+		nc:  nc,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),

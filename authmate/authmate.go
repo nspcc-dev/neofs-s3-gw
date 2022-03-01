@@ -3,14 +3,12 @@ package authmate
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,35 +16,75 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/acl"
-	"github.com/nspcc-dev/neofs-sdk-go/client"
-	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/token"
 	"go.uber.org/zap"
 )
 
-const (
-	defaultAuthContainerBasicACL acl.BasicACL = 0b00111100100011001000110011001110 // 0x3C8C8CCE - private container with only GET allowed to others
-)
+// PrmContainerCreate groups parameters of containers created by authmate.
+type PrmContainerCreate struct {
+	// NeoFS identifier of the container creator.
+	Owner owner.ID
+
+	// Container placement policy.
+	Policy netmap.PlacementPolicy
+
+	// Friendly name for the container (optional).
+	FriendlyName string
+}
+
+// NetworkState represents NeoFS network state which is needed for authmate processing.
+type NetworkState struct {
+	// Current NeoFS time.
+	Epoch uint64
+	// Duration of the Morph chain block in ms.
+	BlockDuration int64
+	// Duration of the NeoFS epoch in Morph chain blocks.
+	EpochDuration uint64
+}
+
+// NeoFS represents virtual connection to NeoFS network.
+type NeoFS interface {
+	// NeoFS interface required by credential tool.
+	tokens.NeoFS
+
+	// ContainerExists checks container presence in NeoFS by identifier.
+	// Returns nil iff container exists.
+	ContainerExists(context.Context, cid.ID) error
+
+	// CreateContainer creates and saves parameterized container in NeoFS.
+	// Returns ID of the saved container.
+	//
+	// The container must be private with GET access of OTHERS group.
+	// Creation time should also be stamped.
+	//
+	// Returns exactly one non-nil value. Returns any error encountered which
+	// prevented the container to be created.
+	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)
+
+	// NetworkState returns current state of the NeoFS network.
+	// Returns any error encountered which prevented state to be read.
+	//
+	// Returns exactly one non-nil value. Returns any error encountered which
+	// prevented the state to be read.
+	NetworkState(context.Context) (*NetworkState, error)
+}
 
 // Agent contains client communicating with NeoFS and logger.
 type Agent struct {
-	pool pool.Pool
-	log  *zap.Logger
+	neoFS NeoFS
+	log   *zap.Logger
 }
 
 // New creates an object of type Agent that consists of Client and logger.
-func New(log *zap.Logger, conns pool.Pool) *Agent {
-	return &Agent{log: log, pool: conns}
+func New(log *zap.Logger, neoFS NeoFS) *Agent {
+	return &Agent{log: log, neoFS: neoFS}
 }
 
 type (
@@ -85,12 +123,6 @@ type lifetimeOptions struct {
 	Exp uint64
 }
 
-type epochDurations struct {
-	currentEpoch  uint64
-	msPerBlock    int64
-	blocksInEpoch uint64
-}
-
 type (
 	issuingResult struct {
 		AccessKeyID     string `json:"access_key_id"`
@@ -108,8 +140,7 @@ type (
 func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner *owner.ID) (*cid.ID, error) {
 	if opts.ID != nil {
 		// check that container exists
-		_, err := a.pool.GetContainer(ctx, opts.ID)
-		return opts.ID, err
+		return opts.ID, a.neoFS.ContainerExists(ctx, *opts.ID)
 	}
 
 	pp, err := policy.Parse(opts.PlacementPolicy)
@@ -117,60 +148,16 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 		return nil, fmt.Errorf("failed to build placement policy: %w", err)
 	}
 
-	cnrOptions := []container.Option{
-		container.WithPolicy(pp),
-		container.WithCustomBasicACL(defaultAuthContainerBasicACL),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
-		container.WithOwnerID(idOwner),
-	}
-	if opts.FriendlyName != "" {
-		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, opts.FriendlyName))
-	}
-
-	cnr := container.New(cnrOptions...)
-	if opts.FriendlyName != "" {
-		container.SetNativeName(cnr, opts.FriendlyName)
-	}
-
-	cnrID, err := a.pool.PutContainer(ctx, cnr)
+	cnrID, err := a.neoFS.CreateContainer(ctx, PrmContainerCreate{
+		Owner:        *idOwner,
+		Policy:       *pp,
+		FriendlyName: opts.FriendlyName,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := a.pool.WaitForContainerPresence(ctx, cnrID, pool.DefaultPollingParams()); err != nil {
-		return nil, err
-	}
 	return cnrID, nil
-}
-
-func (a *Agent) getEpochDurations(ctx context.Context) (*epochDurations, error) {
-	if conn, _, err := a.pool.Connection(); err != nil {
-		return nil, err
-	} else if networkInfoRes, err := conn.NetworkInfo(ctx, client.PrmNetworkInfo{}); err != nil {
-		return nil, err
-	} else if err = apistatus.ErrFromStatus(networkInfoRes.Status()); err != nil {
-		return nil, err
-	} else {
-		networkInfo := networkInfoRes.Info()
-		res := &epochDurations{
-			currentEpoch: networkInfo.CurrentEpoch(),
-			msPerBlock:   networkInfo.MsPerBlock(),
-		}
-
-		networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
-			if string(parameter.Key()) == "EpochDuration" {
-				data := make([]byte, 8)
-				copy(data, parameter.Value())
-				res.blocksInEpoch = binary.LittleEndian.Uint64(data)
-				return true
-			}
-			return false
-		})
-		if res.blocksInEpoch == 0 {
-			return nil, fmt.Errorf("not found param: EpochDuration")
-		}
-		return res, nil
-	}
 }
 
 func checkPolicy(policyString string) (*netmap.PlacementPolicy, error) {
@@ -226,12 +213,12 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
-	durations, err := a.getEpochDurations(ctx)
+	netState, err := a.neoFS.NetworkState(ctx)
 	if err != nil {
 		return err
 	}
-	lifetime.Iat = durations.currentEpoch
-	msPerEpoch := durations.blocksInEpoch * uint64(durations.msPerBlock)
+	lifetime.Iat = netState.Epoch
+	msPerEpoch := netState.EpochDuration * uint64(netState.BlockDuration)
 	epochLifetime := uint64(options.Lifetime.Milliseconds()) / msPerEpoch
 	if uint64(options.Lifetime.Milliseconds())%msPerEpoch != 0 {
 		epochLifetime++
@@ -268,7 +255,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		zap.Stringer("owner_tkn", idOwner))
 
 	addr, err := tokens.
-		New(a.pool, secrets.EphemeralKey, cache.DefaultAccessBoxConfig()).
+		New(a.neoFS, secrets.EphemeralKey, cache.DefaultAccessBoxConfig()).
 		Put(ctx, id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
@@ -310,7 +297,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
-	bearerCreds := tokens.New(a.pool, options.GatePrivateKey, cache.DefaultAccessBoxConfig())
+	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig())
 	addr := address.NewAddress()
 	if err := addr.Parse(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)
