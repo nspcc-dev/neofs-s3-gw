@@ -3,6 +3,7 @@ package layer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 	"strings"
@@ -201,8 +202,17 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 	}
 
 	if p.Lock != nil {
-		// todo form lock system object
-		// attributes = append(attributes, attributesFromLock(p.Lock)...)
+		objInfo := &data.ObjectInfo{ID: oid, Name: p.Object}
+		if p.Lock.LegalHold {
+			if err = n.putLockObject(ctx, bkt, objInfo.LegalHoldObject(), p.Lock); err != nil {
+				return nil, err
+			}
+		}
+		if !p.Lock.Until.IsZero() {
+			if err = n.putLockObject(ctx, bkt, objInfo.RetentionObject(), p.Lock); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	meta, err := n.objectHead(ctx, bkt.CID, id)
@@ -247,6 +257,21 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 		ContentType:   p.Header[api.ContentType],
 		HashSum:       meta.PayloadChecksum().String(),
 	}, nil
+}
+
+func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objName string, lock *data.ObjectLock) error {
+	ps := &PutSystemObjectParams{
+		BktInfo:  bktInfo,
+		ObjName:  objName,
+		Lock:     lock,
+		Metadata: make(map[string]string),
+	}
+
+	if _, err := n.PutSystemObject(ctx, ps); err != nil {
+		return fmt.Errorf("coudln't add lock for '%s': %w", objName, err)
+	}
+
+	return nil
 }
 
 func updateCRDT2PSetHeaders(header map[string]string, versions *objectVersions, versioningEnabled bool) []*oid.ID {
@@ -638,7 +663,7 @@ func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) (
 }
 
 func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInfo) bool {
-	settings, err := n.getBucketSettings(ctx, bktInfo)
+	settings, err := n.GetBucketSettings(ctx, bktInfo)
 	if err != nil {
 		n.log.Warn("couldn't get versioning settings object", zap.Error(err))
 		return false
