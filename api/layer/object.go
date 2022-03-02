@@ -27,8 +27,6 @@ type (
 	}
 
 	getParams struct {
-		w io.Writer
-
 		// payload range
 		off, ln uint64
 
@@ -114,9 +112,9 @@ func (n *layer) objectHead(ctx context.Context, idCnr *cid.ID, idObj *oid.ID) (*
 	return res.Head, nil
 }
 
-// writes payload part of the NeoFS object to the provided io.Writer.
+// initializes payload reader of the NeoFS object.
 // Zero range corresponds to full payload (panics if only offset is set).
-func (n *layer) objectWritePayload(ctx context.Context, p getParams) error {
+func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Reader, error) {
 	prm := PrmObjectRead{
 		Container:    *p.cid,
 		Object:       *p.oid,
@@ -127,21 +125,11 @@ func (n *layer) objectWritePayload(ctx context.Context, p getParams) error {
 	n.prepareAuthParameters(ctx, &prm.PrmAuth)
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
-	if err == nil {
-		defer res.Payload.Close()
-
-		if p.ln == 0 {
-			p.ln = 4096 // configure?
-		}
-
-		// alloc buffer for copying
-		buf := make([]byte, p.ln) // sync-pool it?
-
-		// copy full payload
-		_, err = io.CopyBuffer(p.w, res.Payload, buf)
+	if err != nil {
+		return nil, n.transformNeofsError(ctx, err)
 	}
 
-	return n.transformNeofsError(ctx, err)
+	return res.Payload, nil
 }
 
 // objectGet returns an object with payload in the object.

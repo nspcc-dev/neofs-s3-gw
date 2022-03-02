@@ -2,6 +2,8 @@ package layer
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
 	"io"
 	"sort"
 	"strconv"
@@ -169,6 +171,45 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	return n.CopyObject(ctx, c)
 }
 
+// implements io.Reader of payloads of the object list stored in the NeoFS network.
+type multiObjectReader struct {
+	ctx context.Context
+
+	layer *layer
+
+	prm getParams
+
+	curReader io.Reader
+
+	parts []*data.ObjectInfo
+}
+
+func (x *multiObjectReader) Read(p []byte) (n int, err error) {
+	if x.curReader != nil {
+		n, err = x.curReader.Read(p)
+		if !stderrors.Is(err, io.EOF) {
+			return n, err
+		}
+	}
+
+	if len(x.parts) == 0 {
+		return n, io.EOF
+	}
+
+	x.prm.oid = x.parts[0].ID
+
+	x.curReader, err = x.layer.initObjectPayloadReader(x.ctx, x.prm)
+	if err != nil {
+		return n, fmt.Errorf("init payload reader for the next part: %w", err)
+	}
+
+	x.parts = x.parts[1:]
+
+	next, err := x.Read(p[n:])
+
+	return n + next, err
+}
+
 func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error) {
 	var obj *data.ObjectInfo
 
@@ -231,10 +272,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		initMetadata[api.ContentType] = objects[0].ContentType
 	}
 
-	pr, pw := io.Pipe()
-	done := make(chan bool)
-	uploadCompleted := false
-
 	/* We will keep "S3-Upload-Id" attribute in completed object to determine is it "common" object or completed object.
 	We will need to differ these objects if something goes wrong during completing multipart upload.
 	I.e. we had completed the object but didn't put tagging/acl for some reason */
@@ -242,46 +279,26 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	delete(initMetadata, UploadKeyAttributeName)
 	delete(initMetadata, attrVersionsIgnore)
 
-	go func(done chan bool) {
-		obj, err = n.objectPut(ctx, p.Info.Bkt, &PutObjectParams{
-			Bucket: p.Info.Bkt.Name,
-			Object: p.Info.Key,
-			Reader: pr,
-			Header: initMetadata,
-		})
-		if err != nil {
-			n.log.Error("could not put a completed object (multipart upload)",
-				zap.String("uploadID", p.Info.UploadID),
-				zap.String("uploadKey", p.Info.Key),
-				zap.Error(err))
-			done <- true
-			return
-		}
-		uploadCompleted = true
-		done <- true
-	}(done)
-
-	var prmGet getParams
-	prmGet.w = pw
-	prmGet.cid = p.Info.Bkt.CID
-
-	for _, part := range parts {
-		prmGet.oid = part.ID
-
-		err = n.objectWritePayload(ctx, prmGet)
-		if err != nil {
-			_ = pw.Close()
-			n.log.Error("could not download a part of multipart upload",
-				zap.String("uploadID", p.Info.UploadID),
-				zap.String("part number", part.Headers[UploadPartNumberAttributeName]),
-				zap.Error(err))
-			return nil, err
-		}
+	r := &multiObjectReader{
+		ctx:   ctx,
+		layer: n,
+		parts: parts,
 	}
-	_ = pw.Close()
-	<-done
 
-	if !uploadCompleted {
+	r.prm.cid = p.Info.Bkt.CID
+
+	obj, err = n.objectPut(ctx, p.Info.Bkt, &PutObjectParams{
+		Bucket: p.Info.Bkt.Name,
+		Object: p.Info.Key,
+		Reader: r,
+		Header: initMetadata,
+	})
+	if err != nil {
+		n.log.Error("could not put a completed object (multipart upload)",
+			zap.String("uploadID", p.Info.UploadID),
+			zap.String("uploadKey", p.Info.Key),
+			zap.Error(err))
+
 		return nil, errors.GetAPIError(errors.ErrInternalError)
 	}
 
