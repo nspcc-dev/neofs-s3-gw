@@ -512,7 +512,7 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 
 // AuthmateNeoFS is a mediator which implements authmate.NeoFS through NeoFS.
 type AuthmateNeoFS struct {
-	NeoFS
+	*NeoFS
 }
 
 func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (*cid.ID, error) {

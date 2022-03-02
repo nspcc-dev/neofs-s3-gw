@@ -158,15 +158,12 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		NotificationController: nc,
 	}
 
-	var n neofs.NeoFS
-	n.SetConnectionPool(conns)
-
 	// prepare object layer
-	obj = layer.NewLayer(l, &layerNeoFS{&n}, layerCfg)
+	obj = layer.NewLayer(l, &layerNeoFS{&neoFS}, layerCfg)
 
 	// prepare auth center
 	ctr = auth.New(&neofs.AuthmateNeoFS{
-		NeoFS: n,
+		NeoFS: &neoFS,
 	}, key, getAccessBoxCacheConfig(v, l))
 	handlerOptions := getHandlerOptions(v, l)
 
