@@ -25,7 +25,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -508,11 +507,6 @@ func (n *layer) CallOptions(ctx context.Context) []pool.CallOption {
 	}
 
 	return []pool.CallOption{pool.WithKey(&n.anonKey.Key.PrivateKey)}
-}
-
-// Get NeoFS Object by address (should be used by auth.Center).
-func (n *layer) Get(ctx context.Context, addr *address.Address) (*object.Object, error) {
-	return n.objectGet(ctx, addr)
 }
 
 // GetBucketInfo returns bucket info by name.
