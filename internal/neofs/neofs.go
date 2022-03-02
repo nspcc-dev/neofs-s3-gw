@@ -352,32 +352,22 @@ func (x *NeoFS) SelectObjects(ctx context.Context, prm layer.PrmObjectSelect) ([
 
 	defer res.Close()
 
-	var num, read int
-	buf := make([]oid.ID, 10)
+	var buf []oid.ID
 
-	for {
-		num, err = res.Read(buf[read:])
-		if num > 0 {
-			read += num
-			buf = append(buf, oid.ID{})
-			buf = buf[:cap(buf)]
+	err = res.Iterate(func(id oid.ID) bool {
+		buf = append(buf, id)
+		return false
+	})
+	if err != nil {
+		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
+		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
+			return nil, layer.ErrAccessDenied
 		}
 
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-
-			// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-			if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-				return nil, layer.ErrAccessDenied
-			}
-
-			return nil, fmt.Errorf("read object list: %w", err)
-		}
+		return nil, fmt.Errorf("read object list: %w", err)
 	}
 
-	return buf[:read], nil
+	return buf, nil
 }
 
 // wraps io.ReadCloser and transforms Read errors related to access violation
