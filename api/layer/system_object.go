@@ -67,6 +67,9 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		return nil, err
 	}
 
+	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
+	// note that updateCRDT2PSetHeaders modifies p.Metadata and must be called further processing
+
 	prm := PrmObjectCreate{
 		Container:  *p.BktInfo.CID,
 		Creator:    *p.BktInfo.Owner,
@@ -98,8 +101,6 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	if err != nil {
 		return nil, err
 	}
-
-	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
 
 	for _, id := range idsToDeleteArr {
 		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
