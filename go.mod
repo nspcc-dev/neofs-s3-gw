@@ -12,8 +12,8 @@ require (
 	github.com/nats-io/nats-server/v2 v2.7.1 // indirect
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/nspcc-dev/neo-go v0.98.0
-	github.com/nspcc-dev/neofs-api-go/v2 v2.11.2-0.20220127135316-32dd0bb3f9c5
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.1.0.20220221122137-66bc59da5c02
+	github.com/nspcc-dev/neofs-api-go/v2 v2.12.0
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.1.0.20220228071935-07817fb4032d
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
