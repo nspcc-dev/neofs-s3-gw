@@ -567,7 +567,6 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var params getParams
 
-	params.w = p.Writer
 	params.oid = p.ObjectInfo.ID
 	params.cid = p.ObjectInfo.CID
 
@@ -580,10 +579,22 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 		params.ln = p.Range.End - p.Range.Start + 1
 	}
 
-	err := n.objectWritePayload(ctx, params)
+	payload, err := n.initObjectPayloadReader(ctx, params)
 	if err != nil {
-		n.objCache.Delete(p.ObjectInfo.Address())
-		return fmt.Errorf("couldn't get object, cid: %s : %w", p.ObjectInfo.CID, err)
+		return fmt.Errorf("init object payload reader: %w", err)
+	}
+
+	if params.ln == 0 {
+		params.ln = 4096 // configure?
+	}
+
+	// alloc buffer for copying
+	buf := make([]byte, params.ln) // sync-pool it?
+
+	// copy full payload
+	_, err = io.CopyBuffer(p.Writer, payload, buf)
+	if err != nil {
+		return fmt.Errorf("copy object payload: %w", err)
 	}
 
 	return nil
