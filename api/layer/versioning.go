@@ -398,18 +398,6 @@ func contains(list []string, elem string) bool {
 	return false
 }
 
-func objectInfoToBucketSettings(info *data.ObjectInfo) *data.BucketSettings {
-	res := &data.BucketSettings{}
-
-	enabled, ok := info.Headers[attrSettingsVersioningEnabled]
-	if ok {
-		if parsed, err := strconv.ParseBool(enabled); err == nil {
-			res.VersioningEnabled = parsed
-		}
-	}
-	return res
-}
-
 func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) (*data.ObjectInfo, error) {
 	versions, err := n.headVersions(ctx, bkt, obj.Name)
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const defaultUrl = "http://localhost/"
+const defaultURL = "http://localhost/"
 
 func TestFormObjectLock(t *testing.T) {
 	for _, tc := range []struct {
@@ -63,7 +63,7 @@ func TestFormObjectLock(t *testing.T) {
 			name:    "invalid time format error",
 			bktInfo: &data.BucketInfo{ObjectLockEnabled: true},
 			header: map[string][]string{
-				api.AmzObjectLockRetainUntilDate: {time.Now().Format(time.Layout)},
+				api.AmzObjectLockRetainUntilDate: {time.Now().Format(time.RFC822)},
 			},
 			expectedError: true,
 		},
@@ -351,7 +351,7 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 			require.NoError(t, err)
 
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPut, defaultUrl, bytes.NewReader(body))
+			r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(body))
 			r = r.WithContext(api.SetReqInfo(r.Context(), api.NewReqInfo(w, r, api.ObjectRequest{Bucket: tc.bucket})))
 
 			hc.Handler().PutBucketObjectLockConfigHandler(w, r)
@@ -425,7 +425,7 @@ func TestGetBucketLockConfigurationHandler(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPut, defaultUrl, bytes.NewReader(nil))
+			r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(nil))
 			r = r.WithContext(api.SetReqInfo(r.Context(), api.NewReqInfo(w, r, api.ObjectRequest{Bucket: tc.bucket})))
 
 			hc.Handler().GetBucketObjectLockConfigHandler(w, r)

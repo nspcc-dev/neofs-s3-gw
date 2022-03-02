@@ -130,7 +130,7 @@ func prepareTestRequest(t *testing.T, bktName, objName string, body interface{})
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPut, defaultUrl, bytes.NewReader(rawBody))
+	r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(rawBody))
 
 	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
 	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
