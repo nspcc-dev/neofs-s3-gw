@@ -32,23 +32,24 @@ const (
 )
 
 var (
-	walletPathFlag         string
-	accountAddressFlag     string
-	peerAddressFlag        string
-	eaclRulesFlag          string
-	gateWalletPathFlag     string
-	gateAccountAddressFlag string
-	accessKeyIDFlag        string
-	containerIDFlag        string
-	containerFriendlyName  string
-	gatesPublicKeysFlag    cli.StringSlice
-	logEnabledFlag         bool
-	logDebugEnabledFlag    bool
-	sessionTokenFlag       string
-	lifetimeFlag           time.Duration
-	containerPolicies      string
-	awcCliCredFile         string
-	timeoutFlag            time.Duration
+	walletPathFlag           string
+	accountAddressFlag       string
+	peerAddressFlag          string
+	eaclRulesFlag            string
+	gateWalletPathFlag       string
+	gateAccountAddressFlag   string
+	accessKeyIDFlag          string
+	containerIDFlag          string
+	containerFriendlyName    string
+	containerPlacementPolicy string
+	gatesPublicKeysFlag      cli.StringSlice
+	logEnabledFlag           bool
+	logDebugEnabledFlag      bool
+	sessionTokenFlag         string
+	lifetimeFlag             time.Duration
+	containerPolicies        string
+	awcCliCredFile           string
+	timeoutFlag              time.Duration
 )
 
 const (
@@ -192,6 +193,13 @@ func issueSecret() *cli.Command {
 				Destination: &containerFriendlyName,
 			},
 			&cli.StringFlag{
+				Name:        "container-placement-policy",
+				Usage:       "placement policy of auth container to put the secret into",
+				Required:    false,
+				Destination: &containerPlacementPolicy,
+				Value:       "REP 2 IN X CBF 3 SELECT 2 FROM * AS X",
+			},
+			&cli.StringFlag{
 				Name:        "session-token",
 				Usage:       "create session token with rules, if the rules are set as 'none', no session tokens will be created",
 				Required:    false,
@@ -264,8 +272,11 @@ It will be ceil rounded to the nearest amount of epoch.`,
 			}
 
 			issueSecretOptions := &authmate.IssueSecretOptions{
-				ContainerID:           containerID,
-				ContainerFriendlyName: containerFriendlyName,
+				Container: authmate.ContainerOptions{
+					ID:              containerID,
+					FriendlyName:    containerFriendlyName,
+					PlacementPolicy: containerPlacementPolicy,
+				},
 				NeoFSKey:              key,
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             getJSONRules(eaclRulesFlag),

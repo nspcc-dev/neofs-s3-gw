@@ -54,8 +54,7 @@ type (
 
 	// IssueSecretOptions contains options for passing to Agent.IssueSecret method.
 	IssueSecretOptions struct {
-		ContainerID           *cid.ID
-		ContainerFriendlyName string
+		Container             ContainerOptions
 		NeoFSKey              *keys.PrivateKey
 		GatesPublicKeys       []*keys.PublicKey
 		EACLRules             []byte
@@ -63,6 +62,13 @@ type (
 		Lifetime              time.Duration
 		AwsCliCredentialsFile string
 		ContainerPolicies     ContainerPolicies
+	}
+
+	// ContainerOptions groups parameters of auth container to put the secret into.
+	ContainerOptions struct {
+		ID              *cid.ID
+		FriendlyName    string
+		PlacementPolicy string
 	}
 
 	// ObtainSecretOptions contains options for passing to Agent.ObtainSecret method.
@@ -98,14 +104,14 @@ type (
 	}
 )
 
-func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName string) (*cid.ID, error) {
-	if cid != nil {
+func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions) (*cid.ID, error) {
+	if opts.ID != nil {
 		// check that container exists
-		_, err := a.pool.GetContainer(ctx, cid)
-		return cid, err
+		_, err := a.pool.GetContainer(ctx, opts.ID)
+		return opts.ID, err
 	}
 
-	pp, err := buildPlacementPolicy("")
+	pp, err := policy.Parse(opts.PlacementPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build placement policy: %w", err)
 	}
@@ -115,24 +121,24 @@ func (a *Agent) checkContainer(ctx context.Context, cid *cid.ID, friendlyName st
 		container.WithCustomBasicACL(defaultAuthContainerBasicACL),
 		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
 	}
-	if friendlyName != "" {
-		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, friendlyName))
+	if opts.FriendlyName != "" {
+		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, opts.FriendlyName))
 	}
 
 	cnr := container.New(cnrOptions...)
-	if friendlyName != "" {
-		container.SetNativeName(cnr, friendlyName)
+	if opts.FriendlyName != "" {
+		container.SetNativeName(cnr, opts.FriendlyName)
 	}
 
-	cid, err = a.pool.PutContainer(ctx, cnr)
+	cnrID, err := a.pool.PutContainer(ctx, cnr)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := a.pool.WaitForContainerPresence(ctx, cid, pool.DefaultPollingParams()); err != nil {
+	if err := a.pool.WaitForContainerPresence(ctx, cnrID, pool.DefaultPollingParams()); err != nil {
 		return nil, err
 	}
-	return cid, nil
+	return cnrID, nil
 }
 
 func (a *Agent) getEpochDurations(ctx context.Context) (*epochDurations, error) {
@@ -235,8 +241,10 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		lifetime.Exp = lifetime.Iat + epochLifetime
 	}
 
-	a.log.Info("check container", zap.Stringer("cid", options.ContainerID))
-	if cid, err = a.checkContainer(ctx, options.ContainerID, options.ContainerFriendlyName); err != nil {
+	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
+		zap.String("friendly_name", options.Container.FriendlyName),
+		zap.String("placement_policy", options.Container.PlacementPolicy))
+	if cid, err = a.checkContainer(ctx, options.Container); err != nil {
 		return err
 	}
 
@@ -319,40 +327,6 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(or)
-}
-
-func buildPlacementPolicy(placementRules string) (*netmap.PlacementPolicy, error) {
-	if len(placementRules) != 0 {
-		return policy.Parse(placementRules)
-	}
-
-	/*
-		REP 2 IN X 			  // place two copies of object
-		CBF 3
-		SELECT 2 From * AS X  // in container of two nodes
-	*/
-	pp := new(netmap.PlacementPolicy)
-	pp.SetContainerBackupFactor(3)
-	pp.SetReplicas([]*netmap.Replica{newReplica("X", 2)}...)
-	pp.SetSelectors([]*netmap.Selector{newSimpleSelector("X", 2)}...)
-
-	return pp, nil
-}
-
-// selects <count> nodes in container without any additional attributes.
-func newSimpleSelector(name string, count uint32) (s *netmap.Selector) {
-	s = new(netmap.Selector)
-	s.SetCount(count)
-	s.SetFilter("*")
-	s.SetName(name)
-	return
-}
-
-func newReplica(name string, count uint32) (r *netmap.Replica) {
-	r = new(netmap.Replica)
-	r.SetCount(count)
-	r.SetSelector(name)
-	return
 }
 
 func buildEACLTable(cid *cid.ID, eaclTable []byte) (*eacl.Table, error) {
