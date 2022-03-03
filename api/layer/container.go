@@ -163,8 +163,8 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 	return bktInfo.CID, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *eacl.Table) error {
-	table.SetCID(cid)
+func (n *layer) setContainerEACLTable(ctx context.Context, idCnr *cid.ID, table *eacl.Table) error {
+	table.SetCID(idCnr)
 
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
@@ -175,11 +175,11 @@ func (n *layer) setContainerEACLTable(ctx context.Context, cid *cid.ID, table *e
 		return err
 	}
 
-	return n.waitEACLPresence(ctx, *cid, table, defaultWaitParams())
+	return n.waitEACLPresence(ctx, *idCnr, table, defaultWaitParams())
 }
 
-func (n *layer) GetContainerEACL(ctx context.Context, cid *cid.ID) (*eacl.Table, error) {
-	return n.neoFS.ContainerEACL(ctx, *cid)
+func (n *layer) GetContainerEACL(ctx context.Context, idCnr *cid.ID) (*eacl.Table, error) {
+	return n.neoFS.ContainerEACL(ctx, *idCnr)
 }
 
 type waitParams struct {
@@ -194,40 +194,22 @@ func defaultWaitParams() *waitParams {
 	}
 }
 
-func (n *layer) waitEACLPresence(ctx context.Context, cid cid.ID, table *eacl.Table, params *waitParams) error {
+func (n *layer) waitEACLPresence(ctx context.Context, idCnr cid.ID, table *eacl.Table, params *waitParams) error {
 	exp, err := table.Marshal()
 	if err != nil {
 		return fmt.Errorf("couldn't marshal eacl: %w", err)
 	}
 
-	wctx, cancel := context.WithTimeout(ctx, params.WaitTimeout)
-	defer cancel()
-	ticker := time.NewTimer(params.PollInterval)
-	defer ticker.Stop()
-	wdone := wctx.Done()
-	done := ctx.Done()
-	var eaclTable *eacl.Table
-	var got []byte
-	for {
-		select {
-		case <-done:
-			return ctx.Err()
-		case <-wdone:
-			return wctx.Err()
-		case <-ticker.C:
-			eaclTable, err = n.neoFS.ContainerEACL(ctx, cid)
-			if err == nil {
-				got, err = eaclTable.Marshal()
-				if err != nil {
-					// not expected, but if occurred - doesn't make sense to continue
-					return fmt.Errorf("marshal received eACL: %w", err)
-				} else if bytes.Equal(exp, got) {
-					return nil
-				}
+	return waitFor(ctx, params, func(ctx context.Context) bool {
+		eaclTable, err := n.neoFS.ContainerEACL(ctx, idCnr)
+		if err == nil {
+			got, err := eaclTable.Marshal()
+			if err == nil && bytes.Equal(exp, got) {
+				return true
 			}
-			ticker.Reset(params.PollInterval)
 		}
-	}
+		return false
+	})
 }
 
 func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
@@ -236,5 +218,44 @@ func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForDelete()
 	}
-	return n.neoFS.DeleteContainer(ctx, *idCnr, sessionToken)
+
+	if err = n.neoFS.DeleteContainer(ctx, *idCnr, sessionToken); err != nil {
+		return err
+	}
+
+	return n.waitForContainerRemoved(ctx, idCnr, defaultWaitParams())
+}
+
+func (n *layer) waitForContainerRemoved(ctx context.Context, idCnr *cid.ID, params *waitParams) error {
+	return waitFor(ctx, params, func(ctx context.Context) bool {
+		_, err := n.neoFS.Container(ctx, *idCnr)
+		// TODO: (neofs-s3-gw#367) handle NeoFS API status error
+		if err != nil && strings.Contains(err.Error(), "container not found") {
+			return true
+		}
+		return false
+	})
+}
+
+// waitFor await that given condition will be met in waitParams time.
+func waitFor(ctx context.Context, params *waitParams, condition func(context.Context) bool) error {
+	wctx, cancel := context.WithTimeout(ctx, params.WaitTimeout)
+	defer cancel()
+	ticker := time.NewTimer(params.PollInterval)
+	defer ticker.Stop()
+	wdone := wctx.Done()
+	done := ctx.Done()
+	for {
+		select {
+		case <-done:
+			return ctx.Err()
+		case <-wdone:
+			return wctx.Err()
+		case <-ticker.C:
+			if condition(ctx) {
+				return nil
+			}
+			ticker.Reset(params.PollInterval)
+		}
+	}
 }
