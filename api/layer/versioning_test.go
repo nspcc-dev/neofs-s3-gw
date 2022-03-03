@@ -167,12 +167,12 @@ func (t *testNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.I
 		attrs = append(attrs, a)
 	}
 
-	raw := object.NewRaw()
-	raw.SetContainerID(&prm.Container)
-	raw.SetID(id)
-	raw.SetPayloadSize(prm.PayloadSize)
-	raw.SetAttributes(attrs...)
-	raw.SetCreationEpoch(t.currentEpoch)
+	obj := object.New()
+	obj.SetContainerID(&prm.Container)
+	obj.SetID(id)
+	obj.SetPayloadSize(prm.PayloadSize)
+	obj.SetAttributes(attrs...)
+	obj.SetCreationEpoch(t.currentEpoch)
 	t.currentEpoch++
 
 	if prm.Payload != nil {
@@ -180,12 +180,12 @@ func (t *testNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.I
 		if err != nil {
 			return nil, err
 		}
-		raw.SetPayload(all)
+		obj.SetPayload(all)
 	}
 
-	addr := newAddress(raw.ContainerID(), raw.ID())
-	t.objects[addr.String()] = raw.Object()
-	return raw.ID(), nil
+	addr := newAddress(obj.ContainerID(), obj.ID())
+	t.objects[addr.String()] = obj
+	return obj.ID(), nil
 }
 
 func (t *testNeoFS) DeleteObject(_ context.Context, prm PrmObjectDelete) error {
