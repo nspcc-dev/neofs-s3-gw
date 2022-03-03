@@ -34,15 +34,15 @@ func newTestObject(id *oid.ID, bkt *data.BucketInfo, name string) *object.Object
 	contentType.SetKey(object.AttributeContentType)
 	contentType.SetValue(defaultTestContentType)
 
-	raw := object.NewRaw()
-	raw.SetID(id)
-	raw.SetOwnerID(bkt.Owner)
-	raw.SetContainerID(bkt.CID)
-	raw.SetPayload(defaultTestPayload)
-	raw.SetAttributes(filename, created, contentType)
-	raw.SetPayloadSize(uint64(defaultTestPayloadLength))
+	obj := object.New()
+	obj.SetID(id)
+	obj.SetOwnerID(bkt.Owner)
+	obj.SetContainerID(bkt.CID)
+	obj.SetPayload(defaultTestPayload)
+	obj.SetAttributes(filename, created, contentType)
+	obj.SetPayloadSize(uint64(defaultTestPayloadLength))
 
-	return raw.Object()
+	return obj
 }
 
 func newTestInfo(oid *oid.ID, bkt *data.BucketInfo, name string, isDir bool) *data.ObjectInfo {

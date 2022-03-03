@@ -298,7 +298,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 		attrs = append(attrs, a)
 	}
 
-	raw := object.NewRaw()
+	raw := object.New()
 	raw.SetContainerID(&prm.Container)
 	raw.SetOwnerID(&prm.Creator)
 	raw.SetAttributes(attrs...)
@@ -312,7 +312,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 		callOpt = pool.WithKey(prm.PrivateKey)
 	}
 
-	idObj, err := x.pool.PutObject(ctx, *raw.Object(), prm.Payload, callOpt)
+	idObj, err := x.pool.PutObject(ctx, *raw, prm.Payload, callOpt)
 	if err != nil {
 		return nil, fmt.Errorf("save object via connection pool: %w", err)
 	}
@@ -427,7 +427,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 				return nil, fmt.Errorf("read full object payload: %w", err)
 			}
 
-			object.NewRawFrom(&res.Header).SetPayload(payload)
+			res.Header.SetPayload(payload)
 
 			return &layer.ObjectPart{
 				Head: &res.Header,
