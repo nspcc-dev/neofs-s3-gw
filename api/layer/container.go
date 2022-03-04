@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -131,23 +132,28 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		LocationConstraint: p.LocationConstraint,
 	}
 
-	var locConstAttr *container.Attribute
+	var attributes [][2]string
 
 	if p.LocationConstraint != "" {
-		locConstAttr = container.NewAttribute()
-		locConstAttr.SetKey(attributeLocationConstraint)
-		locConstAttr.SetValue(p.LocationConstraint)
+		attributes = append(attributes, [2]string{
+			attributeLocationConstraint, p.LocationConstraint,
+		})
 	}
-	//todo add lock enabled attr
 
-	if bktInfo.CID, err = n.neoFS.CreateContainer(ctx, PrmContainerCreate{
-		Creator:                     *bktInfo.Owner,
-		Policy:                      *p.Policy,
-		Name:                        p.Name,
-		SessionToken:                p.SessionToken,
-		Time:                        bktInfo.Created,
-		BasicACL:                    acl.BasicACL(p.ACL),
-		LocationConstraintAttribute: locConstAttr,
+	if p.ObjectLockEnabled {
+		attributes = append(attributes, [2]string{
+			AttributeLockEnabled, "true",
+		})
+	}
+
+	if bktInfo.CID, err = n.neoFS.CreateContainer(ctx, neofs.PrmContainerCreate{
+		Creator:              *bktInfo.Owner,
+		Policy:               *p.Policy,
+		Name:                 p.Name,
+		SessionToken:         p.SessionToken,
+		Time:                 bktInfo.Created,
+		BasicACL:             acl.BasicACL(p.ACL),
+		AdditionalAttributes: attributes,
 	}); err != nil {
 		return nil, err
 	}
