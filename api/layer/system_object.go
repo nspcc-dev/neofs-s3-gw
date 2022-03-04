@@ -100,9 +100,8 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 			v = tagEmptyMark
 		}
 
-		if p.Lock != nil {
-			// todo form lock system object
-
+		if p.Lock != nil && len(p.Lock.Objects) > 0 {
+			prm.Locks = p.Lock.Objects
 			prm.Attributes = append(prm.Attributes, attributesFromLock(p.Lock)...)
 		}
 

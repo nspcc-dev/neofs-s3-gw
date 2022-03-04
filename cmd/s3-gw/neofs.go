@@ -38,5 +38,6 @@ func (x *layerNeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate
 		Payload:     prm.Payload,
 		BearerToken: prm.BearerToken,
 		PrivateKey:  prm.PrivateKey,
+		Locks:       prm.Locks,
 	})
 }
