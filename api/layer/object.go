@@ -204,6 +204,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 
 	if p.Lock != nil {
 		objInfo := &data.ObjectInfo{ID: id, Name: p.Object}
+		p.Lock.Objects = append(p.Lock.Objects, *id)
 		if p.Lock.LegalHold {
 			if err = n.putLockObject(ctx, bkt, objInfo.LegalHoldObject(), p.Lock); err != nil {
 				return nil, err

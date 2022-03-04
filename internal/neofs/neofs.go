@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
@@ -235,6 +236,9 @@ type PrmObjectCreate struct {
 	// Key-value object attributes.
 	Attributes [][2]string
 
+	// List of ids to lock (optional).
+	Locks []oid.ID
+
 	// Object payload encapsulated in io.Reader primitive.
 	Payload io.Reader
 
@@ -290,11 +294,17 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 		attrs = append(attrs, *a)
 	}
 
-	raw := object.New()
-	raw.SetContainerID(&prm.Container)
-	raw.SetOwnerID(&prm.Creator)
-	raw.SetAttributes(attrs...)
-	raw.SetPayloadSize(prm.PayloadSize)
+	obj := object.New()
+	obj.SetContainerID(&prm.Container)
+	obj.SetOwnerID(&prm.Creator)
+	obj.SetAttributes(attrs...)
+	obj.SetPayloadSize(prm.PayloadSize)
+
+	if len(prm.Locks) > 0 {
+		lock := new(object.Lock)
+		lock.WriteMembers(prm.Locks)
+		objectv2.WriteLock(obj.ToV2(), (objectv2.Lock)(*lock))
+	}
 
 	var callOpt pool.CallOption
 
@@ -304,7 +314,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 		callOpt = pool.WithKey(prm.PrivateKey)
 	}
 
-	idObj, err := x.pool.PutObject(ctx, *raw, prm.Payload, callOpt)
+	idObj, err := x.pool.PutObject(ctx, *obj, prm.Payload, callOpt)
 	if err != nil {
 		return nil, fmt.Errorf("save object via connection pool: %w", err)
 	}

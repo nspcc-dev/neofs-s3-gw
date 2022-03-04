@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -173,7 +175,7 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		ps := &layer.PutSystemObjectParams{
 			BktInfo:  bktInfo,
 			ObjName:  objInfo.LegalHoldObject(),
-			Lock:     &data.ObjectLock{LegalHold: true},
+			Lock:     &data.ObjectLock{LegalHold: true, Objects: []oid.ID{*objInfo.ID}},
 			Metadata: make(map[string]string),
 		}
 		if _, err = h.obj.PutSystemObject(r.Context(), ps); err != nil {
@@ -272,12 +274,15 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
 	}
+	lock.Objects = append(lock.Objects, *objInfo.ID)
 
 	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.RetentionObject())
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
 		return
 	}
+
+	//objectv2.ReadLock()
 
 	if err = checkLockInfo(lockInfo, r.Header); err != nil {
 		h.logAndSendError(w, "couldn't change lock mode", reqInfo, err)

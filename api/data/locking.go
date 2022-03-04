@@ -3,6 +3,8 @@ package data
 import (
 	"encoding/xml"
 	"time"
+
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type (
@@ -37,5 +39,6 @@ type (
 		Until        time.Time
 		LegalHold    bool
 		IsCompliance bool
+		Objects      []oid.ID
 	}
 )

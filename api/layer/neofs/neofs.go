@@ -113,6 +113,9 @@ type PrmObjectCreate struct {
 	// Key-value object attributes.
 	Attributes [][2]string
 
+	// List of ids to lock (optional).
+	Locks []oid.ID
+
 	// Full payload size (optional).
 	PayloadSize uint64
 
