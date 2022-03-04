@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"go.uber.org/zap"
@@ -78,7 +81,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
 	// note that updateCRDT2PSetHeaders modifies p.Metadata and must be called further processing
 
-	prm := PrmObjectCreate{
+	prm := neofs.PrmObjectCreate{
 		Container:  *p.BktInfo.CID,
 		Creator:    *p.BktInfo.Owner,
 		Attributes: make([][2]string, 2, 2+len(p.Metadata)),
@@ -276,17 +279,19 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 	return nil
 }
 
-func attributesFromLock(lock *data.ObjectLock) []*object.Attribute {
-	var result []*object.Attribute
+func attributesFromLock(lock *data.ObjectLock) [][2]string {
+	var result [][2]string
 	if !lock.Until.IsZero() {
-		attrRetainUntil := object.NewAttribute()
-		attrRetainUntil.SetKey(AttributeRetainUntil)
-		attrRetainUntil.SetValue(lock.Until.Format(time.RFC3339))
+		attrRetainUntil := [2]string{
+			AttributeRetainUntil,
+			lock.Until.Format(time.RFC3339),
+		}
 		result = append(result, attrRetainUntil)
 		if lock.IsCompliance {
-			attrCompliance := object.NewAttribute()
-			attrCompliance.SetKey(AttributeComplianceMode)
-			attrCompliance.SetValue(strconv.FormatBool(true))
+			attrCompliance := [2]string{
+				AttributeComplianceMode,
+				strconv.FormatBool(true),
+			}
 			result = append(result, attrCompliance)
 		}
 	}

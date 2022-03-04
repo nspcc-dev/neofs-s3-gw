@@ -4,38 +4,34 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"fmt"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api"
-
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
-	"github.com/nspcc-dev/neofs-sdk-go/container"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/api/mock"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
+	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/stretchr/testify/require"
 )
 
 type handlerContext struct {
 	h  *handler
-	tp *mock.TestPool
+	tp *neofstest.TestNeoFS
 }
 
 func (hc *handlerContext) Handler() *handler {
 	return hc.h
 }
 
-func (hc *handlerContext) MockedPool() *mock.TestPool {
+func (hc *handlerContext) MockedPool() *neofstest.TestNeoFS {
 	return hc.tp
 }
 
@@ -49,19 +45,11 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 
 	l, err := logger.New(logger.WithTraceLevel("panic"))
 	require.NoError(t, err)
-	tp := mock.NewTestPool()
+	tp := neofstest.NewTestNeoFS()
 
 	testResolver := &resolver.BucketResolver{Name: "test_resolver"}
-	testResolver.SetResolveFunc(func(ctx context.Context, name string) (*cid.ID, error) {
-		for id, cnr := range tp.Containers {
-			for _, attr := range cnr.Attributes() {
-				if attr.Key() == container.AttributeName && attr.Value() == name {
-					cnrID := cid.New()
-					return cnrID, cnrID.Parse(id)
-				}
-			}
-		}
-		return nil, fmt.Errorf("couldn't resolve container name")
+	testResolver.SetResolveFunc(func(_ context.Context, name string) (*cid.ID, error) {
+		return tp.ContainerID(name)
 	})
 
 	layerCfg := &layer.Config{
@@ -83,15 +71,17 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 }
 
 func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktName string) {
-	cnr := container.New(container.WithAttribute(container.AttributeName, bktName))
-	_, err := h.MockedPool().PutContainer(ctx, cnr)
+	_, err := h.MockedPool().CreateContainer(ctx, neofs.PrmContainerCreate{
+		Name: bktName,
+	})
 	require.NoError(t, err)
 }
 
 func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) {
-	cnr := container.New(container.WithAttribute(container.AttributeName, bktName),
-		container.WithAttribute(layer.AttributeLockEnabled, strconv.FormatBool(true)))
-	cnrID, err := h.MockedPool().PutContainer(ctx, cnr)
+	cnrID, err := h.MockedPool().CreateContainer(ctx, neofs.PrmContainerCreate{
+		Name:                 bktName,
+		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
+	})
 	require.NoError(t, err)
 
 	sp := &layer.PutSettingsParams{
@@ -99,6 +89,7 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 			CID:               cnrID,
 			Name:              bktName,
 			ObjectLockEnabled: true,
+			Owner:             owner.NewID(),
 		},
 		Settings: &data.BucketSettings{
 			VersioningEnabled: true,

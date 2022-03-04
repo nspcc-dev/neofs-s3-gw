@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/acl"
@@ -123,8 +123,8 @@ type PrmContainerCreate struct {
 	// Token of the container's creation session (optional, nil means session absence).
 	SessionToken *session.Token
 
-	// Attribute for LocationConstraint parameter (optional).
-	LocationConstraintAttribute *container.Attribute
+	// Attributes for optional parameters.
+	AdditionalAttributes [][2]string
 }
 
 // CreateContainer constructs new container from the parameters and saves it in NeoFS
@@ -143,11 +143,8 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm PrmContainerCreate) (*c
 		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, prm.Name))
 	}
 
-	if prm.LocationConstraintAttribute != nil {
-		cnrOptions = append(cnrOptions, container.WithAttribute(
-			prm.LocationConstraintAttribute.Key(),
-			prm.LocationConstraintAttribute.Value(),
-		))
+	for _, attr := range prm.AdditionalAttributes {
+		cnrOptions = append(cnrOptions, container.WithAttribute(attr[0], attr[1]))
 	}
 
 	cnr := container.New(cnrOptions...)
@@ -319,9 +316,9 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 // using connection pool.
 //
 // Returns any error encountered which prevented the selection to be finished.
-// Returns layer.ErrAccessDenied on access violation.
-func (x *NeoFS) SelectObjects(ctx context.Context, prm layer.PrmObjectSelect) ([]oid.ID, error) {
-	var filters object.SearchFilters
+// Returns neofs.ErrAccessDenied on access violation.
+func (x *NeoFS) SelectObjects(ctx context.Context, prm neofs.PrmObjectSelect) ([]oid.ID, error) {
+	filters := object.NewSearchFilters()
 	filters.AddRootFilter()
 
 	if prm.ExactAttribute[0] != "" {
@@ -356,7 +353,7 @@ func (x *NeoFS) SelectObjects(ctx context.Context, prm layer.PrmObjectSelect) ([
 	if err != nil {
 		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return nil, layer.ErrAccessDenied
+			return nil, neofs.ErrAccessDenied
 		}
 
 		return nil, fmt.Errorf("read object list: %w", err)
@@ -366,7 +363,7 @@ func (x *NeoFS) SelectObjects(ctx context.Context, prm layer.PrmObjectSelect) ([
 }
 
 // wraps io.ReadCloser and transforms Read errors related to access violation
-// to layer.ErrAccessDenied.
+// to neofs.ErrAccessDenied.
 type payloadReader struct {
 	io.ReadCloser
 }
@@ -376,7 +373,7 @@ func (x payloadReader) Read(p []byte) (int, error) {
 	if err != nil {
 		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return n, layer.ErrAccessDenied
+			return n, neofs.ErrAccessDenied
 		}
 	}
 
@@ -389,8 +386,8 @@ func (x payloadReader) Read(p []byte) (int, error) {
 //   * else GetObject is called.
 //
 // Returns any error encountered which prevented the object to be read.
-// Returns layer.ErrAccessDenied on access violation.
-func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer.ObjectPart, error) {
+// Returns neofs.ErrAccessDenied on access violation.
+func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs.ObjectPart, error) {
 	var addr address.Address
 	addr.SetContainerID(&prm.Container)
 	addr.SetObjectID(&prm.Object)
@@ -409,7 +406,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			if err != nil {
 				// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 				if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-					return nil, layer.ErrAccessDenied
+					return nil, neofs.ErrAccessDenied
 				}
 
 				return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
@@ -424,7 +421,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 			res.Header.SetPayload(payload)
 
-			return &layer.ObjectPart{
+			return &neofs.ObjectPart{
 				Head: &res.Header,
 			}, nil
 		}
@@ -433,13 +430,13 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		if err != nil {
 			// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 			if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-				return nil, layer.ErrAccessDenied
+				return nil, neofs.ErrAccessDenied
 			}
 
 			return nil, fmt.Errorf("read object header via connection pool: %w", err)
 		}
 
-		return &layer.ObjectPart{
+		return &neofs.ObjectPart{
 			Head: hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
@@ -447,13 +444,13 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		if err != nil {
 			// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 			if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-				return nil, layer.ErrAccessDenied
+				return nil, neofs.ErrAccessDenied
 			}
 
 			return nil, fmt.Errorf("init full payload range reading via connection pool: %w", err)
 		}
 
-		return &layer.ObjectPart{
+		return &neofs.ObjectPart{
 			Payload: res.Payload,
 		}, nil
 	}
@@ -462,13 +459,13 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	if err != nil {
 		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return nil, layer.ErrAccessDenied
+			return nil, neofs.ErrAccessDenied
 		}
 
 		return nil, fmt.Errorf("init payload range reading via connection pool: %w", err)
 	}
 
-	return &layer.ObjectPart{
+	return &neofs.ObjectPart{
 		Payload: payloadReader{res},
 	}, nil
 }
@@ -479,7 +476,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 // Returns ErrAccessDenied on remove access violation.
 //
 // Returns any error encountered which prevented the removal request to be sent.
-func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) error {
+func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) error {
 	var addr address.Address
 	addr.SetContainerID(&prm.Container)
 	addr.SetObjectID(&prm.Object)
@@ -496,7 +493,7 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 	if err != nil {
 		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
 		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return layer.ErrAccessDenied
+			return neofs.ErrAccessDenied
 		}
 
 		return fmt.Errorf("mark object removal via connection pool: %w", err)
@@ -521,7 +518,7 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 }
 
 func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr address.Address) ([]byte, error) {
-	res, err := x.NeoFS.ReadObject(ctx, layer.PrmObjectRead{
+	res, err := x.NeoFS.ReadObject(ctx, neofs.PrmObjectRead{
 		Container:   *addr.ContainerID(),
 		Object:      *addr.ObjectID(),
 		WithPayload: true,

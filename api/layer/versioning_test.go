@@ -10,14 +10,15 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/mock"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object/id/test"
+	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	tokentest "github.com/nspcc-dev/neofs-sdk-go/token/test"
 	"github.com/stretchr/testify/require"
 )
@@ -114,7 +115,7 @@ func (tc *testContext) checkListObjects(ids ...*oid.ID) {
 }
 
 func (tc *testContext) getSystemObject(objectName string) *object.Object {
-	for _, obj := range tc.testNeoFS.Objects {
+	for _, obj := range tc.testNeoFS.Objects() {
 		for _, attr := range obj.Attributes() {
 			if attr.Key() == objectSystemAttributeName && attr.Value() == objectName {
 				return obj
@@ -132,7 +133,7 @@ type testContext struct {
 	bktID     *cid.ID
 	bktInfo   *data.BucketInfo
 	obj       string
-	testNeoFS *mock.TestNeoFS
+	testNeoFS *neofstest.TestNeoFS
 }
 
 func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
@@ -150,10 +151,10 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	})
 	l, err := logger.New(logger.WithTraceLevel("panic"))
 	require.NoError(t, err)
-	tp := mock.NewTestPool()
+	tp := neofstest.NewTestNeoFS()
 
 	bktName := "testbucket1"
-	bktID, err := tp.CreateContainer(ctx, PrmContainerCreate{
+	bktID, err := tp.CreateContainer(ctx, neofs.PrmContainerCreate{
 		Name: bktName,
 	})
 	require.NoError(t, err)
@@ -174,8 +175,9 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		bkt:   bktName,
 		bktID: bktID,
 		bktInfo: &data.BucketInfo{
-			Name: bktName,
-			CID:  bktID,
+			Name:  bktName,
+			CID:   bktID,
+			Owner: owner.NewID(),
 		},
 		obj:       "obj1",
 		t:         t,
@@ -623,12 +625,12 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	addr := object.NewAddress()
+	addr := address.NewAddress()
 	addr.SetContainerID(objMeta.ContainerID())
 	addr.SetObjectID(objMeta.ID())
 
 	// simulate failed deletion
-	tc.testNeoFS.Objects[addr.String()] = objMeta
+	tc.testNeoFS.AddObject(addr.String(), objMeta)
 
 	bktInfo := &data.BucketInfo{
 		Name: tc.bkt,
@@ -660,7 +662,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	// simulate failed deletion
-	tc.testNeoFS.Objects[newAddress(objMeta.ContainerID(), objMeta.ID()).String()] = objMeta
+	tc.testNeoFS.AddObject(newAddress(objMeta.ContainerID(), objMeta.ID()).String(), objMeta)
 
 	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bkt)
 	require.NoError(t, err)
