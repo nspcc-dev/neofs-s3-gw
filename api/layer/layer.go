@@ -9,18 +9,19 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
-	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
+	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -29,12 +30,23 @@ import (
 )
 
 type (
+	Notificator interface {
+		Subscribe(context.Context, string, MsgHandler) error
+		Listen(context.Context)
+	}
+
+	MsgHandler interface {
+		HandleMessage(context.Context, *nats.Msg) error
+	}
+
+	MsgHandlerFunc func(context.Context, *nats.Msg) error
+
 	layer struct {
 		neoFS       neofs.NeoFS
 		log         *zap.Logger
 		anonKey     AnonymousKey
 		resolver    *resolver.BucketResolver
-		ncontroller *notifications.Controller
+		ncontroller Notificator
 		listsCache  *cache.ObjectsListCache
 		objCache    *cache.ObjectsCache
 		namesCache  *cache.ObjectsNameCache
@@ -43,11 +55,10 @@ type (
 	}
 
 	Config struct {
-		ChainAddress           string
-		Caches                 *CachesConfig
-		AnonKey                AnonymousKey
-		Resolver               *resolver.BucketResolver
-		NotificationController *notifications.Controller
+		ChainAddress string
+		Caches       *CachesConfig
+		AnonKey      AnonymousKey
+		Resolver     *resolver.BucketResolver
 	}
 
 	// AnonymousKey contains data for anonymous requests.
@@ -174,6 +185,7 @@ type (
 
 	// Client provides S3 API client interface.
 	Client interface {
+		Initialize(ctx context.Context, c Notificator) error
 		EphemeralKey() *keys.PublicKey
 
 		GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
@@ -234,6 +246,10 @@ func (t *VersionedObject) String() string {
 	return t.Name + ":" + t.VersionID
 }
 
+func (f MsgHandlerFunc) HandleMessage(ctx context.Context, msg *nats.Msg) error {
+	return f(ctx, msg)
+}
+
 // DefaultCachesConfigs returns filled configs.
 func DefaultCachesConfigs() *CachesConfig {
 	return &CachesConfig{
@@ -254,7 +270,6 @@ func NewLayer(log *zap.Logger, neoFS neofs.NeoFS, config *Config) Client {
 		anonKey:     config.AnonKey,
 		resolver:    config.Resolver,
 		listsCache:  cache.NewObjectsListCache(config.Caches.ObjectsList),
-		ncontroller: config.NotificationController,
 		objCache:    cache.New(config.Caches.Objects),
 		namesCache:  cache.NewObjectsNameCache(config.Caches.Names),
 		bucketCache: cache.NewBucketCache(config.Caches.Buckets),
@@ -266,8 +281,38 @@ func (n *layer) EphemeralKey() *keys.PublicKey {
 	return n.anonKey.Key.PublicKey()
 }
 
+func (n *layer) Initialize(ctx context.Context, c Notificator) error {
+	if c == nil {
+		return nil
+	}
+
+	if n.IsNotificationEnabled() {
+		return fmt.Errorf("already initialized")
+	}
+
+	if err := c.Subscribe(ctx, "lock", MsgHandlerFunc(n.handleLockTick)); err != nil {
+		return fmt.Errorf("couldn't initialize layer: %w", err)
+	}
+
+	c.Listen(ctx)
+
+	n.ncontroller = c
+	return nil
+}
+
 func (n *layer) IsNotificationEnabled() bool {
 	return n.ncontroller != nil
+}
+
+func (n *layer) handleLockTick(ctx context.Context, msg *nats.Msg) error {
+	addr := address.NewAddress()
+	if err := addr.Parse(string(msg.Data)); err != nil {
+		return fmt.Errorf("invalid msg, address expected: %w", err)
+	}
+
+	// todo clear cache
+	// and make sure having right access
+	return n.objectDelete(ctx, addr.ContainerID(), addr.ObjectID())
 }
 
 // IsAuthenticatedRequest check if access box exists in current request.
