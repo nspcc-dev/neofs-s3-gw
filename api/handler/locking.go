@@ -7,12 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 const (
@@ -281,8 +280,6 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
 		return
 	}
-
-	//objectv2.ReadLock()
 
 	if err = checkLockInfo(lockInfo, r.Header); err != nil {
 		h.logAndSendError(w, "couldn't change lock mode", reqInfo, err)

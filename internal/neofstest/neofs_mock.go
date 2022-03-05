@@ -9,6 +9,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
@@ -238,6 +239,10 @@ func (t *TestNeoFS) DeleteObject(_ context.Context, prm neofs.PrmObjectDelete) e
 	delete(t.objects, addr.String())
 
 	return nil
+}
+
+func (t *TestNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
+	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Second()), nil
 }
 
 func isMatched(attributes []*object.Attribute, filter object.SearchFilter) bool {

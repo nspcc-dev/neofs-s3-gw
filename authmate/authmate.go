@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"time"
 
@@ -68,12 +67,13 @@ type NeoFS interface {
 	// prevented the container to be created.
 	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)
 
-	// NetworkState returns current state of the NeoFS network.
-	// Returns any error encountered which prevented state to be read.
+	// TimeToEpoch compute current epoch and epoch that corresponds provided time.
+	// Note:
+	// * time must be in the future
+	// * time will be ceil rounded to match epoch
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the state to be read.
-	NetworkState(context.Context) (*NetworkState, error)
+	// Returns any error encountered which prevented computing epochs.
+	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
 }
 
 // Agent contains client communicating with NeoFS and logger.
@@ -213,21 +213,9 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return err
 	}
 
-	netState, err := a.neoFS.NetworkState(ctx)
+	lifetime.Iat, lifetime.Exp, err = a.neoFS.TimeToEpoch(ctx, time.Now().Add(options.Lifetime))
 	if err != nil {
 		return err
-	}
-	lifetime.Iat = netState.Epoch
-	msPerEpoch := netState.EpochDuration * uint64(netState.BlockDuration)
-	epochLifetime := uint64(options.Lifetime.Milliseconds()) / msPerEpoch
-	if uint64(options.Lifetime.Milliseconds())%msPerEpoch != 0 {
-		epochLifetime++
-	}
-
-	if epochLifetime >= math.MaxUint64-lifetime.Iat {
-		lifetime.Exp = math.MaxUint64
-	} else {
-		lifetime.Exp = lifetime.Iat + epochLifetime
 	}
 
 	gatesData, err := createTokens(options, lifetime)

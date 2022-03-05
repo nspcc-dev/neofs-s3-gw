@@ -290,7 +290,7 @@ func (n *layer) Initialize(ctx context.Context, c Notificator) error {
 		return fmt.Errorf("already initialized")
 	}
 
-	if err := c.Subscribe(ctx, "lock", MsgHandlerFunc(n.handleLockTick)); err != nil {
+	if err := c.Subscribe(ctx, LockTopic, MsgHandlerFunc(n.handleLockTick)); err != nil {
 		return fmt.Errorf("couldn't initialize layer: %w", err)
 	}
 
