@@ -154,12 +154,15 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		AnonKey: layer.AnonymousKey{
 			Key: randomKey,
 		},
-		Resolver:               bucketResolver,
-		NotificationController: nc,
+		Resolver: bucketResolver,
 	}
 
 	// prepare object layer
 	obj = layer.NewLayer(l, &layerNeoFS{&neoFS}, layerCfg)
+
+	if err = obj.Initialize(ctx, nc); err != nil {
+		l.Fatal("couldn't initialize layer", zap.Error(err))
+	}
 
 	// prepare auth center
 	ctr = auth.New(&neofs.AuthmateNeoFS{
