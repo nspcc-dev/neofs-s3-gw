@@ -223,4 +223,12 @@ type NeoFS interface {
 	//
 	// Returns any error encountered which prevented the removal request to be sent.
 	DeleteObject(context.Context, PrmObjectDelete) error
+
+	// TimeToEpoch compute current epoch and epoch that corresponds provided time.
+	// Note:
+	// * time must be in the future
+	// * time will be ceil rounded to match epoch
+	//
+	// Returns any error encountered which prevented computing epochs.
+	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
 }

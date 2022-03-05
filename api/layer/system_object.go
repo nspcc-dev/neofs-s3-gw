@@ -20,6 +20,9 @@ import (
 const (
 	AttributeComplianceMode = ".s3-compliance-mode"
 	AttributeRetainUntil    = ".s3-retain-until"
+	AttributeSysTickEpoch   = "__NEOFS__TICK_EPOCH"
+	AttributeSysTickTopic   = "__NEOFS__TICK_TOPIC"
+	LockTopic               = "lock"
 )
 
 func (n *layer) PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
@@ -102,7 +105,13 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 
 		if p.Lock != nil && len(p.Lock.Objects) > 0 {
 			prm.Locks = p.Lock.Objects
-			prm.Attributes = append(prm.Attributes, attributesFromLock(p.Lock)...)
+
+			attrs, err := n.attributesFromLock(ctx, p.Lock)
+			if err != nil {
+				return nil, err
+			}
+
+			prm.Attributes = append(prm.Attributes, attrs...)
 		}
 
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
@@ -278,22 +287,28 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 	return nil
 }
 
-func attributesFromLock(lock *data.ObjectLock) [][2]string {
+func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) ([][2]string, error) {
 	var result [][2]string
 	if !lock.Until.IsZero() {
-		attrRetainUntil := [2]string{
-			AttributeRetainUntil,
-			lock.Until.Format(time.RFC3339),
+		_, exp, err := n.neoFS.TimeToEpoch(ctx, lock.Until)
+		if err != nil {
+			return nil, err
 		}
-		result = append(result, attrRetainUntil)
+
+		attrs := [][2]string{
+			{AttributeSysTickEpoch, strconv.FormatUint(exp, 10)},
+			{AttributeSysTickTopic, LockTopic},
+			{AttributeRetainUntil, lock.Until.Format(time.RFC3339)},
+		}
+
+		result = append(result, attrs...)
 		if lock.IsCompliance {
 			attrCompliance := [2]string{
-				AttributeComplianceMode,
-				strconv.FormatBool(true),
+				AttributeComplianceMode, strconv.FormatBool(true),
 			}
 			result = append(result, attrCompliance)
 		}
 	}
 
-	return result
+	return result, nil
 }

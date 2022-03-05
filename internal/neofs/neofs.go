@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -44,16 +45,23 @@ func (x *NeoFS) SetConnectionPool(p *pool.Pool) {
 	x.pool = p
 }
 
-// NetworkState implements authmate.NeoFS interface method.
-func (x *NeoFS) NetworkState(ctx context.Context) (*authmate.NetworkState, error) {
+// TimeToEpoch implements authmate.NeoFS interface method.
+func (x *NeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
+	now := time.Now()
+	dur := futureTime.Sub(now)
+	if dur < 0 {
+		return 0, 0, fmt.Errorf("time '%s' must be in the future (after %s)",
+			futureTime.Format(time.RFC3339), now.Format(time.RFC3339))
+	}
+
 	conn, _, err := x.pool.Connection()
 	if err != nil {
-		return nil, fmt.Errorf("get connection from pool: %w", err)
+		return 0, 0, fmt.Errorf("get connection from pool: %w", err)
 	}
 
 	res, err := conn.NetworkInfo(ctx, client.PrmNetworkInfo{})
 	if err != nil {
-		return nil, fmt.Errorf("get network info via client: %w", err)
+		return 0, 0, fmt.Errorf("get network info via client: %w", err)
 	}
 
 	networkInfo := res.Info()
@@ -74,14 +82,25 @@ func (x *NeoFS) NetworkState(ctx context.Context) (*authmate.NetworkState, error
 	})
 
 	if durEpoch == 0 {
-		return nil, errors.New("epoch duration is missing or zero")
+		return 0, 0, errors.New("epoch duration is missing or zero")
 	}
 
-	return &authmate.NetworkState{
-		Epoch:         networkInfo.CurrentEpoch(),
-		BlockDuration: networkInfo.MsPerBlock(),
-		EpochDuration: durEpoch,
-	}, nil
+	curr := networkInfo.CurrentEpoch()
+	msPerEpoch := durEpoch * uint64(networkInfo.MsPerBlock())
+
+	epochLifetime := uint64(dur.Milliseconds()) / msPerEpoch
+	if uint64(dur.Milliseconds())%msPerEpoch != 0 {
+		epochLifetime++
+	}
+
+	var epoch uint64
+	if epochLifetime >= math.MaxUint64-curr {
+		epoch = math.MaxUint64
+	} else {
+		epoch = curr + epochLifetime
+	}
+
+	return curr, epoch, nil
 }
 
 // Container reads container by ID using connection pool. Returns exact one non-nil value.
