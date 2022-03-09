@@ -310,6 +310,8 @@ func (n *layer) handleLockTick(ctx context.Context, msg *nats.Msg) error {
 		return fmt.Errorf("invalid msg, address expected: %w", err)
 	}
 
+	n.log.Debug("handling lock tick", zap.String("address", string(msg.Data)))
+
 	// todo clear cache
 	// and make sure having right access
 	return n.objectDelete(ctx, addr.ContainerID(), addr.ObjectID())
@@ -646,15 +648,6 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 		p.Header[VersionsDeleteMarkAttr] = DelMarkFullObject
 	}
 
-	objInfo, err := n.objectPut(ctx, bkt, p)
-	if err != nil {
-		obj.Error = err
-		return obj
-	}
-	if len(obj.VersionID) == 0 {
-		obj.DeleteMarkVersion = objInfo.Version()
-	}
-
 	for _, id := range ids {
 		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
 			obj.Error = err
@@ -666,6 +659,15 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 		}
 	}
 	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
+
+	objInfo, err := n.objectPut(ctx, bkt, p)
+	if err != nil {
+		obj.Error = err
+		return obj
+	}
+	if len(obj.VersionID) == 0 {
+		obj.DeleteMarkVersion = objInfo.Version()
+	}
 
 	return obj
 }
