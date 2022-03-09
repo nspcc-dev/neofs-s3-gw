@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -33,7 +34,12 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		reqInfo = api.GetReqInfo(r.Context())
 	)
 
-	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
 		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
@@ -69,6 +75,11 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		info.ContentType = http.DetectContentType(buffer.Bytes())
 	}
 
+	if err = h.setLockingHeaders(r.Context(), bktInfo, info, w.Header()); err != nil {
+		h.logAndSendError(w, "could not get locking info", reqInfo, err)
+		return
+	}
+
 	writeHeaders(w.Header(), info, len(tagSet))
 	w.WriteHeader(http.StatusOK)
 }
@@ -88,4 +99,45 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(api.ContainerID, bktInfo.CID.String())
 	api.WriteResponse(w, http.StatusOK, nil, api.MimeNone)
+}
+
+func (h *handler) setLockingHeaders(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo, header http.Header) error {
+	if !bktInfo.ObjectLockEnabled {
+		return nil
+	}
+
+	legalHold := &data.LegalHold{Status: legalHoldOff}
+	legalHoldInfo, err := h.obj.HeadSystemObject(ctx, bktInfo, objInfo.LegalHoldObject())
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		return err
+	}
+
+	if legalHoldInfo != nil {
+		legalHold.Status = legalHoldOn
+	}
+
+	retention := &data.Retention{Mode: governanceMode}
+	retentionInfo, err := h.obj.HeadSystemObject(ctx, bktInfo, objInfo.RetentionObject())
+	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		return err
+	}
+
+	if retentionInfo != nil {
+		retention.RetainUntilDate = retentionInfo.Headers[layer.AttributeRetainUntil]
+		if retentionInfo.Headers[layer.AttributeComplianceMode] != "" {
+			retention.Mode = complianceMode
+		}
+	}
+
+	writeLockHeaders(header, legalHold, retention)
+	return nil
+}
+
+func writeLockHeaders(h http.Header, legalHold *data.LegalHold, retention *data.Retention) {
+	h.Set(api.AmzObjectLockLegalHold, legalHold.Status)
+
+	if retention.RetainUntilDate != "" {
+		h.Set(api.AmzObjectLockRetainUntilDate, retention.RetainUntilDate)
+		h.Set(api.AmzObjectLockMode, retention.Mode)
+	}
 }

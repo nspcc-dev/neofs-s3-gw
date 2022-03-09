@@ -115,7 +115,12 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
 		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
@@ -150,6 +155,12 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if layer.IsAuthenticatedRequest(r.Context()) {
 		overrideResponseHeaders(w.Header(), reqInfo.URL.Query())
 	}
+
+	if err = h.setLockingHeaders(r.Context(), bktInfo, info, w.Header()); err != nil {
+		h.logAndSendError(w, "could not get locking info", reqInfo, err)
+		return
+	}
+
 	writeHeaders(w.Header(), info, len(tagSet))
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
