@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
@@ -70,6 +71,10 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		err = deletedObject.Error
 	}
 	if err != nil {
+		if strings.Contains(err.Error(), "object is locked") {
+			h.logAndSendError(w, "object is locked", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+			return
+		}
 		h.log.Error("could not delete object",
 			zap.String("request_id", reqInfo.RequestID),
 			zap.String("bucket_name", reqInfo.BucketName),
