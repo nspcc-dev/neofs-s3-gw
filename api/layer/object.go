@@ -271,8 +271,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
-
 	objInfo := &data.ObjectInfo{
 		ID:  id,
 		CID: p.BktInfo.CID,
@@ -291,6 +289,13 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		ObjectInfo:  objInfo,
 		NodeVersion: newVersion,
 	}
+
+	// todo filling api.AmzExpiration header
+	if err = n.putLifecycleObjects(ctx, p.BktInfo, objInfo, bktSettings.LifecycleConfig); err != nil {
+		return nil, fmt.Errorf("couldn't put expiration system objects: %w", err)
+	}
+
+	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	if err = n.objCache.PutObject(extendedObjInfo); err != nil {
 		n.log.Warn("couldn't add object to cache", zap.Error(err),
