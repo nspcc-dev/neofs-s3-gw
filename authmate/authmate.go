@@ -230,16 +230,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		lifetime.Exp = lifetime.Iat + epochLifetime
 	}
 
-	idOwner := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
-
-	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
-		zap.String("friendly_name", options.Container.FriendlyName),
-		zap.String("placement_policy", options.Container.PlacementPolicy))
-	if id, err = a.checkContainer(ctx, options.Container, idOwner); err != nil {
-		return err
-	}
-
-	gatesData, err := createTokens(options, lifetime, id)
+	gatesData, err := createTokens(options, lifetime)
 	if err != nil {
 		return err
 	}
@@ -250,6 +241,15 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	}
 
 	box.ContainerPolicy = policies
+
+	idOwner := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
+
+	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
+		zap.String("friendly_name", options.Container.FriendlyName),
+		zap.String("placement_policy", options.Container.PlacementPolicy))
+	if id, err = a.checkContainer(ctx, options.Container, idOwner); err != nil {
+		return err
+	}
 
 	a.log.Info("store bearer token into NeoFS",
 		zap.Stringer("owner_tkn", idOwner))
@@ -318,7 +318,7 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 	return enc.Encode(or)
 }
 
-func buildEACLTable(cid *cid.ID, eaclTable []byte) (*eacl.Table, error) {
+func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
 	table := eacl.NewTable()
 	if len(eaclTable) != 0 {
 		return table, table.UnmarshalJSON(eaclTable)
@@ -332,7 +332,6 @@ func buildEACLTable(cid *cid.ID, eaclTable []byte) (*eacl.Table, error) {
 	// matcher := eacl.MatchStringEqual
 	// record.AddFilter(from eacl.FilterHeaderType, matcher eacl.Match, name string, value string)
 	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	table.SetCID(cid)
 	table.AddRecord(record)
 
 	return table, nil
@@ -437,10 +436,10 @@ func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOp
 	return sessionTokens, nil
 }
 
-func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, cid *cid.ID) ([]*accessbox.GateData, error) {
+func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*accessbox.GateData, error) {
 	gates := make([]*accessbox.GateData, len(options.GatesPublicKeys))
 
-	table, err := buildEACLTable(cid, options.EACLRules)
+	table, err := buildEACLTable(options.EACLRules)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build eacl table: %w", err)
 	}

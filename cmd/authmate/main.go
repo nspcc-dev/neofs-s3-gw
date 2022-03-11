@@ -271,6 +271,16 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				return cli.Exit(fmt.Sprintf("couldn't parse container policy: %s", err.Error()), 6)
 			}
 
+			bearerRules, err := getJSONRules(eaclRulesFlag)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("couldn't parse 'bearer-rules' flag: %s", err.Error()), 7)
+			}
+
+			sessionRules, err := getSessionRules(sessionTokenFlag)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("couldn't parse 'session-token' flag: %s", err.Error()), 8)
+			}
+
 			issueSecretOptions := &authmate.IssueSecretOptions{
 				Container: authmate.ContainerOptions{
 					ID:              containerID,
@@ -279,8 +289,8 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				},
 				NeoFSKey:              key,
 				GatesPublicKeys:       gatesPublicKeys,
-				EACLRules:             getJSONRules(eaclRulesFlag),
-				SessionTokenRules:     getSessionRules(sessionTokenFlag),
+				EACLRules:             bearerRules,
+				SessionTokenRules:     sessionRules,
 				ContainerPolicies:     policies,
 				Lifetime:              lifetimeFlag,
 				AwsCliCredentialsFile: awcCliCredFile,
@@ -315,17 +325,27 @@ func parsePolicies(val string) (authmate.ContainerPolicies, error) {
 	return policies, nil
 }
 
-func getJSONRules(val string) []byte {
-	if data, err := os.ReadFile(val); err == nil {
-		return data
+func getJSONRules(val string) ([]byte, error) {
+	if val == "" {
+		return nil, nil
+	}
+	data := []byte(val)
+	if json.Valid(data) {
+		return data, nil
 	}
 
-	return []byte(val)
+	if data, err := os.ReadFile(val); err == nil {
+		if json.Valid(data) {
+			return data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("coudln't read json file or its content is invalid")
 }
 
-func getSessionRules(r string) []byte {
+func getSessionRules(r string) ([]byte, error) {
 	if r == "none" {
-		return nil
+		return nil, nil
 	}
 	return getJSONRules(r)
 }
