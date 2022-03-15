@@ -14,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"go.uber.org/zap"
 )
 
@@ -444,6 +445,16 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 				return
 			}
 		}
+	}
+
+	s := &layer.SendNotificationsParams{
+		Event:   notifications.EventObjectCreatedCompleteMultipartUpload,
+		ObjInfo: objInfo,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
 	_, err = h.obj.DeleteObjects(r.Context(), bktInfo.Name, []*layer.VersionedObject{{Name: initPart.Name}})
