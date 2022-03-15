@@ -189,15 +189,15 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth)
 
-	id, err := n.neoFS.CreateObject(ctx, prm)
-	if err != nil {
-		return nil, n.transformNeofsError(ctx, err)
-	}
-
 	if p.Header[VersionsDeleteMarkAttr] == DelMarkFullObject {
 		if last := versions.getLast(); last != nil {
 			n.objCache.Delete(last.Address())
 		}
+	}
+
+	id, err := n.neoFS.CreateObject(ctx, prm)
+	if err != nil {
+		return nil, n.transformNeofsError(ctx, err)
 	}
 
 	meta, err := n.objectHead(ctx, bkt.CID, id)
