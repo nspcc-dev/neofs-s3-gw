@@ -890,9 +890,9 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return errors.GetAPIError(errors.ErrBucketNotEmpty)
 	}
 
+	n.bucketCache.Delete(bucketInfo.Name)
 	if err = n.deleteContainer(ctx, bucketInfo.CID); err != nil {
 		return err
 	}
-	n.bucketCache.Delete(bucketInfo.Name)
 	return nil
 }

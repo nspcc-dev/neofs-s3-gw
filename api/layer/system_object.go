@@ -51,13 +51,13 @@ func (n *layer) deleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo
 		return err
 	}
 
+	n.systemCache.Delete(systemObjectKey(bktInfo, name))
 	for i := range ids {
 		if err = n.objectDelete(ctx, bktInfo.CID, &ids[i]); err != nil {
 			return err
 		}
 	}
 
-	n.systemCache.Delete(systemObjectKey(bktInfo, name))
 	return nil
 }
 
