@@ -21,6 +21,12 @@ type (
 		BktInfo     *data.BucketInfo
 		Reader      io.Reader
 	}
+	SendNotificationsParams struct {
+		Event   string
+		ObjInfo *data.ObjectInfo
+		BktInfo *data.BucketInfo
+		ReqInfo *api.ReqInfo
+	}
 )
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
@@ -222,4 +228,36 @@ func prepareEvent(eventName string, inititatorID string, bkt *data.BucketInfo, o
 			},
 		},
 	}
+}
+
+func (n *layer) SendNotifications(ctx context.Context, p *SendNotificationsParams) error {
+	if n.IsNotificationEnabled() {
+		var user string
+		box, err := GetBoxData(ctx)
+		if err == nil {
+			user = box.Gate.SessionTokens[0].OwnerID().String()
+		}
+
+		conf, err := n.getNotificationConf(ctx, p.BktInfo, p.BktInfo.NotificationConfigurationObjectName())
+		if err != nil {
+			return err
+		}
+		if conf.IsEmpty() {
+			return nil
+		}
+
+		topics := conf.FilterTopics(p.Event, p.ObjInfo.Name)
+
+		if len(topics) != 0 {
+			event := prepareEvent(p.Event, user, p.BktInfo, p.ObjInfo, p.ReqInfo)
+
+			for id, topic := range topics {
+				if err := n.ncontroller.SendEvent(event, id, topic); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

@@ -428,6 +428,8 @@ type (
 
 		PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error
 		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)
+
+		SendNotifications(ctx context.Context, p *SendNotificationsParams) error
 	}
 )
 
