@@ -13,7 +13,65 @@ const (
 	EventVersion22 = "2.2"
 	// EventVersion21 is used for all other notification types.
 	EventVersion21 = "2.1"
+
+	EventObjectCreated                                = "s3:ObjectCreated:*"
+	EventObjectCreatedPut                             = "s3:ObjectCreated:Put"
+	EventObjectCreatedPost                            = "s3:ObjectCreated:Post"
+	EventObjectCreatedCopy                            = "s3:ObjectCreated:Copy"
+	EventReducedRedundancyLostObject                  = "s3:ReducedRedundancyLostObject"
+	EventObjectCreatedCompleteMultipartUpload         = "s3:ObjectCreated:CompleteMultipartUpload"
+	EventObjectRemoved                                = "s3:ObjectRemoved:*"
+	EventObjectRemovedDelete                          = "s3:ObjectRemoved:Delete"
+	EventObjectRemovedDeleteMarkerCreated             = "s3:ObjectRemoved:DeleteMarkerCreated"
+	EventObjectRestore                                = "s3:ObjectRestore:*"
+	EventObjectRestorePost                            = "s3:ObjectRestore:Post"
+	EventObjectRestoreCompleted                       = "s3:ObjectRestore:Completed"
+	EventReplication                                  = "s3:Replication:*"
+	EventReplicationOperationFailedReplication        = "s3:Replication:OperationFailedReplication"
+	EventReplicationOperationNotTracked               = "s3:Replication:OperationNotTracked"
+	EventReplicationOperationMissedThreshold          = "s3:Replication:OperationMissedThreshold"
+	EventReplicationOperationReplicatedAfterThreshold = "s3:Replication:OperationReplicatedAfterThreshold"
+	EventObjectRestoreDelete                          = "s3:ObjectRestore:Delete"
+	EventLifecycleTransition                          = "s3:LifecycleTransition"
+	EventIntelligentTiering                           = "s3:IntelligentTiering"
+	EventObjectACLPut                                 = "s3:ObjectAcl:Put"
+	EventLifecycleExpiration                          = "s3:LifecycleExpiration:*"
+	EventLifecycleExpirationDelete                    = "s3:LifecycleExpiration:Delete"
+	EventLifecycleExpirationDeleteMarkerCreated       = "s3:LifecycleExpiration:DeleteMarkerCreated"
+	EventObjectTagging                                = "s3:ObjectTagging:*"
+	EventObjectTaggingPut                             = "s3:ObjectTagging:Put"
+	EventObjectTaggingDelete                          = "s3:ObjectTagging:Delete"
 )
+
+var ValidEvents = map[string]struct{}{
+	EventReducedRedundancyLostObject:                  {},
+	EventObjectCreated:                                {},
+	EventObjectCreatedPut:                             {},
+	EventObjectCreatedPost:                            {},
+	EventObjectCreatedCopy:                            {},
+	EventObjectCreatedCompleteMultipartUpload:         {},
+	EventObjectRemoved:                                {},
+	EventObjectRemovedDelete:                          {},
+	EventObjectRemovedDeleteMarkerCreated:             {},
+	EventObjectRestore:                                {},
+	EventObjectRestorePost:                            {},
+	EventObjectRestoreCompleted:                       {},
+	EventReplication:                                  {},
+	EventReplicationOperationFailedReplication:        {},
+	EventReplicationOperationNotTracked:               {},
+	EventReplicationOperationMissedThreshold:          {},
+	EventReplicationOperationReplicatedAfterThreshold: {},
+	EventObjectRestoreDelete:                          {},
+	EventLifecycleTransition:                          {},
+	EventIntelligentTiering:                           {},
+	EventObjectACLPut:                                 {},
+	EventLifecycleExpiration:                          {},
+	EventLifecycleExpirationDelete:                    {},
+	EventLifecycleExpirationDeleteMarkerCreated:       {},
+	EventObjectTagging:                                {},
+	EventObjectTaggingPut:                             {},
+	EventObjectTaggingDelete:                          {},
+}
 
 type (
 	TestEvent struct {

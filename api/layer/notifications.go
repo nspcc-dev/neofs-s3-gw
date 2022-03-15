@@ -149,7 +149,7 @@ func (n *layer) checkAndCompleteNotificationConfiguration(c *data.NotificationCo
 
 func checkEvents(events []string) error {
 	for _, e := range events {
-		if _, ok := data.ValidEvents[e]; !ok {
+		if _, ok := notifications.ValidEvents[e]; !ok {
 			return errors.GetAPIError(errors.ErrEventNotification)
 		}
 	}
