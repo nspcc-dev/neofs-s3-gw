@@ -56,7 +56,7 @@ type (
 // PathSeparator is a path components separator string.
 const PathSeparator = string(os.PathSeparator)
 
-func userHeaders(attrs []*object.Attribute) map[string]string {
+func userHeaders(attrs []object.Attribute) map[string]string {
 	result := make(map[string]string, len(attrs))
 
 	for _, attr := range attrs {
