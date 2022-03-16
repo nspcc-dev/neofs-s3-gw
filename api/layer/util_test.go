@@ -39,7 +39,7 @@ func newTestObject(id *oid.ID, bkt *data.BucketInfo, name string) *object.Object
 	obj.SetOwnerID(bkt.Owner)
 	obj.SetContainerID(bkt.CID)
 	obj.SetPayload(defaultTestPayload)
-	obj.SetAttributes(filename, created, contentType)
+	obj.SetAttributes(*filename, *created, *contentType)
 	obj.SetPayloadSize(uint64(defaultTestPayloadLength))
 
 	return obj

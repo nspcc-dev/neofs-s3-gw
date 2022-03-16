@@ -34,12 +34,12 @@ import (
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool pool.Pool
+	pool *pool.Pool
 }
 
 // SetConnectionPool binds underlying pool.Pool. Must be
 // called on initialization stage before any usage.
-func (x *NeoFS) SetConnectionPool(p pool.Pool) {
+func (x *NeoFS) SetConnectionPool(p *pool.Pool) {
 	x.pool = p
 }
 
@@ -180,12 +180,7 @@ func (x *NeoFS) UserContainers(ctx context.Context, id owner.ID) ([]cid.ID, erro
 		return nil, fmt.Errorf("list user containers via connection pool: %w", err)
 	}
 
-	res := make([]cid.ID, len(r))
-	for i := range r {
-		res[i] = *r[i]
-	}
-
-	return res, nil
+	return r, nil
 }
 
 // SetContainerEACL saves eACL table of the container in NeoFS using connection pool.
@@ -269,33 +264,33 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 		attrNum++
 	}
 
-	attrs := make([]*object.Attribute, 0, attrNum)
+	attrs := make([]object.Attribute, 0, attrNum)
 	var a *object.Attribute
 
 	a = object.NewAttribute()
 	a.SetKey(object.AttributeTimestamp)
 	a.SetValue(strconv.FormatInt(prm.Time.Unix(), 10))
-	attrs = append(attrs, a)
+	attrs = append(attrs, *a)
 
 	for i := range prm.Attributes {
 		a = object.NewAttribute()
 		a.SetKey(prm.Attributes[i][0])
 		a.SetValue(prm.Attributes[i][1])
-		attrs = append(attrs, a)
+		attrs = append(attrs, *a)
 	}
 
 	if prm.Filename != "" {
 		a = object.NewAttribute()
 		a.SetKey(object.AttributeFileName)
 		a.SetValue(prm.Filename)
-		attrs = append(attrs, a)
+		attrs = append(attrs, *a)
 	}
 
 	if prm.ExpirationEpoch > 0 {
 		a = object.NewAttribute()
 		a.SetKey("__NEOFS__EXPIRATION_EPOCH")
 		a.SetValue(strconv.FormatUint(prm.ExpirationEpoch, 10))
-		attrs = append(attrs, a)
+		attrs = append(attrs, *a)
 	}
 
 	raw := object.New()

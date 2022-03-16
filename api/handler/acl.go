@@ -762,7 +762,7 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 	return res, nil
 }
 
-func addToList(operations []*astOperation, rec *eacl.Record, target *eacl.Target) []*astOperation {
+func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) []*astOperation {
 	var found *astOperation
 	for _, astOp := range operations {
 		if astOp.Op == rec.Operation() && astOp.Role == target.Role() {
