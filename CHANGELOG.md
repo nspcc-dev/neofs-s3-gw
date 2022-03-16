@@ -2,6 +2,44 @@
 
 This document outlines major changes between releases.
 
+## [0.19.0] - 2022-03-16
+
+### Added
+- Authmate: support placement policy overriding (#343, #364)
+- Managing bucket notification configuration (#340)
+- Unit tests in go1.17 (#265)
+- NATS settings in application config (#341)
+- Support `Expires` and `Cache-Control` headers (#312)
+- Support `%` as delimiter (#313)
+- Support `null` version deletion (#319)
+- Bucket name resolving order (#285)
+- Authmate: added `timeout` flag (#290)
+- MinIO results in s3 compatibility tables (#304)
+- Support overriding response headers (#310)
+
+### Changed
+- Authmate: check parameters before container creation (#372)
+- Unify cache invalidation on deletion (#368)
+- Updated NeoFS SDK to v1.0.0-rc.3 (#297, #333, #346, #376)
+- Authmate: changed session token rules handling (#329, #336, #338, #352)
+- Changed status code for some failed requests (#308)
+- GetBucketLocation returns policy name used at bucket creation (#301) 
+
+### Fixed
+- Waiting for bucket to be deleted (#366)
+- Authmate: changed error message for session context building (#348)
+- Authmate: fixed access key parsing in `obtain-secret` command (#295)
+- Distinguishing `BucketAlreadyExists` errors (#354)
+- Incorrect panic if handler not found (#305)
+- Authmate: use container friendly name as system name (#299, #324)
+- Use UTC `Last-Modified` timestamps (#331)
+- Don't return object system metadata (#307)
+- Handling empty post policy (#306)
+- Use `X-Amz-Verion-Id` in `CompleteMulipartUpload` (#318)
+
+### Removed
+- Drop MinIO related errors (#316)
+
 ## [0.18.0] - 2021-12-16
 
 ### Added
@@ -123,3 +161,4 @@ releases](https://github.com/nspcc-dev/neofs-s3-gw/releases/) for older
 releases.
 
 [0.18.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.17.0...v0.18.0
+[0.19.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.18.0...v0.19.0
