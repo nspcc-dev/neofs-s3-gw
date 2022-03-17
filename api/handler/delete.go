@@ -6,8 +6,11 @@ import (
 	"strconv"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -54,10 +57,17 @@ type DeleteObjectsResponse struct {
 
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
 	versionedObject := []*layer.VersionedObject{{
 		Name:      reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+		VersionID: versionID,
 	}}
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
 
 	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
@@ -75,6 +85,41 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			zap.String("bucket_name", reqInfo.BucketName),
 			zap.String("object_name", reqInfo.ObjectName),
 			zap.Error(err))
+	}
+
+	m := &layer.SendNotificationsParams{
+		Event: notifications.EventObjectRemovedDeleteMarkerCreated,
+		ObjInfo: &data.ObjectInfo{
+			Name:    reqInfo.ObjectName,
+			HashSum: deletedObject.DeleteMarkerEtag,
+		},
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+
+	if err := h.obj.SendNotifications(r.Context(), m); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
+	oid := oid.NewID()
+	if len(versionID) != 0 {
+		if err := oid.Parse(versionID); err != nil {
+			h.log.Error("couldn't send notification: %w", zap.Error(err))
+		}
+	}
+
+	d := &layer.SendNotificationsParams{
+		Event: notifications.EventObjectRemovedDelete,
+		ObjInfo: &data.ObjectInfo{
+			Name: reqInfo.ObjectName,
+			ID:   oid,
+		},
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+
+	if err := h.obj.SendNotifications(r.Context(), d); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
 	if deletedObject.DeleteMarkVersion != "" {

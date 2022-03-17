@@ -372,6 +372,7 @@ type (
 		Name              string
 		VersionID         string
 		DeleteMarkVersion string
+		DeleteMarkerEtag  string
 		Error             error
 	}
 
@@ -823,6 +824,8 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 	if len(obj.VersionID) == 0 {
 		obj.DeleteMarkVersion = objInfo.Version()
 	}
+
+	obj.DeleteMarkerEtag = objInfo.HashSum
 
 	for _, id := range ids {
 		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
