@@ -33,15 +33,12 @@ func TestObjectLockAttributes(t *testing.T) {
 	lockObj := tc.getSystemObject(obj.RetentionObject())
 	require.NotNil(t, lockObj)
 
-	tickTopic, tickEpoch := false, false
+	expEpoch := false
 	for _, attr := range lockObj.Attributes() {
-		if attr.Key() == AttributeSysTickEpoch {
-			tickEpoch = true
-		} else if attr.Key() == AttributeSysTickTopic {
-			tickTopic = true
+		if attr.Key() == AttributeExpirationEpoch {
+			expEpoch = true
 		}
 	}
 
-	require.Truef(t, tickTopic, "system header __NEOFS__TICK_TOPIC presence")
-	require.Truef(t, tickEpoch, "system header __NEOFS__TICK_EPOCH presence")
+	require.Truef(t, expEpoch, "system header __NEOFS__EXPIRATION_EPOCH presence")
 }

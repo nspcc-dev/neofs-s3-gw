@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	AttributeComplianceMode = ".s3-compliance-mode"
-	AttributeRetainUntil    = ".s3-retain-until"
-	AttributeSysTickEpoch   = "__NEOFS__TICK_EPOCH"
-	AttributeSysTickTopic   = "__NEOFS__TICK_TOPIC"
-	LockTopic               = "lock"
+	AttributeComplianceMode  = ".s3-compliance-mode"
+	AttributeRetainUntil     = ".s3-retain-until"
+	AttributeExpirationEpoch = "__NEOFS__EXPIRATION_EPOCH"
+	AttributeSysTickEpoch    = "__NEOFS__TICK_EPOCH"
+	AttributeSysTickTopic    = "__NEOFS__TICK_TOPIC"
 )
 
 func (n *layer) PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
@@ -296,8 +296,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 		}
 
 		attrs := [][2]string{
-			{AttributeSysTickEpoch, strconv.FormatUint(exp, 10)},
-			{AttributeSysTickTopic, LockTopic},
+			{AttributeExpirationEpoch, strconv.FormatUint(exp, 10)},
 			{AttributeRetainUntil, lock.Until.Format(time.RFC3339)},
 		}
 
