@@ -21,7 +21,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -290,9 +289,7 @@ func (n *layer) Initialize(ctx context.Context, c Notificator) error {
 		return fmt.Errorf("already initialized")
 	}
 
-	if err := c.Subscribe(ctx, LockTopic, MsgHandlerFunc(n.handleLockTick)); err != nil {
-		return fmt.Errorf("couldn't initialize layer: %w", err)
-	}
+	// todo add notification handlers (e.g. for lifecycles)
 
 	c.Listen(ctx)
 
@@ -302,19 +299,6 @@ func (n *layer) Initialize(ctx context.Context, c Notificator) error {
 
 func (n *layer) IsNotificationEnabled() bool {
 	return n.ncontroller != nil
-}
-
-func (n *layer) handleLockTick(ctx context.Context, msg *nats.Msg) error {
-	addr := address.NewAddress()
-	if err := addr.Parse(string(msg.Data)); err != nil {
-		return fmt.Errorf("invalid msg, address expected: %w", err)
-	}
-
-	n.log.Debug("handling lock tick", zap.String("address", string(msg.Data)))
-
-	// todo clear cache
-	// and make sure having right access
-	return n.objectDelete(ctx, addr.ContainerID(), addr.ObjectID())
 }
 
 // IsAuthenticatedRequest check if access box exists in current request.

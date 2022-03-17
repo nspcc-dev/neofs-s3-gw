@@ -187,20 +187,20 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm neofs.PrmObjectRead) (*neo
 func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (*oid.ID, error) {
 	id := test.ID()
 
-	attrs := make([]*object.Attribute, 0)
+	attrs := make([]object.Attribute, 0)
 
 	if prm.Filename != "" {
 		a := object.NewAttribute()
 		a.SetKey(object.AttributeFileName)
 		a.SetValue(prm.Filename)
-		attrs = append(attrs, a)
+		attrs = append(attrs, *a)
 	}
 
 	for i := range prm.Attributes {
 		a := object.NewAttribute()
 		a.SetKey(prm.Attributes[i][0])
 		a.SetValue(prm.Attributes[i][1])
-		attrs = append(attrs, a)
+		attrs = append(attrs, *a)
 	}
 
 	obj := object.New()
@@ -245,7 +245,7 @@ func (t *TestNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint
 	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Second()), nil
 }
 
-func isMatched(attributes []*object.Attribute, filter object.SearchFilter) bool {
+func isMatched(attributes []object.Attribute, filter object.SearchFilter) bool {
 	for _, attr := range attributes {
 		if attr.Key() == filter.Header() && attr.Value() == filter.Value() {
 			return true
