@@ -21,13 +21,9 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -51,22 +47,16 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 	if err = h.obj.PutBucketSettings(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put update versioning settings", reqInfo, err)
-		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 // GetBucketVersioningHandler implements bucket versioning getter handler.
 func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 

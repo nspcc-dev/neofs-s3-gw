@@ -128,14 +128,14 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.Obje
 	appendUploadHeaders(p.Header, p.Info.UploadID, p.Info.Key, p.PartNumber)
 
 	params := &PutObjectParams{
-		Bucket: p.Info.Bkt.Name,
-		Object: createUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
-		Size:   p.Size,
-		Reader: p.Reader,
-		Header: p.Header,
+		BktInfo: p.Info.Bkt,
+		Object:  createUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
+		Size:    p.Size,
+		Reader:  p.Reader,
+		Header:  p.Header,
 	}
 
-	return n.objectPut(ctx, p.Info.Bkt, params)
+	return n.PutObject(ctx, params)
 }
 
 func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error) {
@@ -160,12 +160,12 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	appendUploadHeaders(metadata, p.Info.UploadID, p.Info.Key, p.PartNumber)
 
 	c := &CopyObjectParams{
-		SrcObject: p.SrcObjInfo,
-		DstBucket: p.Info.Bkt.Name,
-		DstObject: createUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
-		SrcSize:   p.SrcObjInfo.Size,
-		Header:    metadata,
-		Range:     p.Range,
+		SrcObject:  p.SrcObjInfo,
+		DstBktInfo: p.Info.Bkt,
+		DstObject:  createUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
+		SrcSize:    p.SrcObjInfo.Size,
+		Header:     metadata,
+		Range:      p.Range,
 	}
 
 	return n.CopyObject(ctx, c)
@@ -287,11 +287,11 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	r.prm.cid = p.Info.Bkt.CID
 
-	obj, err = n.objectPut(ctx, p.Info.Bkt, &PutObjectParams{
-		Bucket: p.Info.Bkt.Name,
-		Object: p.Info.Key,
-		Reader: r,
-		Header: initMetadata,
+	obj, err = n.PutObject(ctx, &PutObjectParams{
+		BktInfo: p.Info.Bkt,
+		Object:  p.Info.Key,
+		Reader:  r,
+		Header:  initMetadata,
 	})
 	if err != nil {
 		n.log.Error("could not put a completed object (multipart upload)",

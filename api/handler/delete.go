@@ -60,12 +60,13 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}}
 
-	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
-	deletedObjects, err := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, versionedObject)
+	deletedObjects, err := h.obj.DeleteObjects(r.Context(), bktInfo, versionedObject)
 	deletedObject := deletedObjects[0]
 	if err == nil {
 		err = deletedObject.Error
@@ -131,8 +132,9 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		DeletedObjects: make([]DeletedObject, 0, len(toRemove)),
 	}
 
-	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
@@ -143,7 +145,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return nil
 	})
 
-	deletedObjects, err := h.obj.DeleteObjects(r.Context(), reqInfo.BucketName, toRemove)
+	deletedObjects, err := h.obj.DeleteObjects(r.Context(), bktInfo, toRemove)
 	if !requested.Quiet && err != nil {
 		h.logAndSendError(w, "couldn't delete objects", reqInfo, err)
 		return
@@ -194,11 +196,13 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 
 func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	if err := h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
-	if err := h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{Name: reqInfo.BucketName}); err != nil {
+
+	if err = h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{BktInfo: bktInfo}); err != nil {
 		h.logAndSendError(w, "couldn't delete bucket", reqInfo, err)
 	}
 	w.WriteHeader(http.StatusNoContent)

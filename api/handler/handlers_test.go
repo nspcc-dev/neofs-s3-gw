@@ -77,20 +77,22 @@ func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktN
 	require.NoError(t, err)
 }
 
-func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) {
+func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
 	cnrID, err := h.MockedPool().CreateContainer(ctx, neofs.PrmContainerCreate{
 		Name:                 bktName,
 		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
 	})
 	require.NoError(t, err)
 
+	bktInfo := &data.BucketInfo{
+		CID:               cnrID,
+		Name:              bktName,
+		ObjectLockEnabled: true,
+		Owner:             owner.NewID(),
+	}
+
 	sp := &layer.PutSettingsParams{
-		BktInfo: &data.BucketInfo{
-			CID:               cnrID,
-			Name:              bktName,
-			ObjectLockEnabled: true,
-			Owner:             owner.NewID(),
-		},
+		BktInfo: bktInfo,
 		Settings: &data.BucketSettings{
 			VersioningEnabled: true,
 			LockConfiguration: conf,
@@ -99,19 +101,21 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 
 	err = h.Layer().PutBucketSettings(ctx, sp)
 	require.NoError(t, err)
+
+	return bktInfo
 }
 
-func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktName, objName string) {
+func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktInfo *data.BucketInfo, objName string) {
 	content := make([]byte, 1024)
 	_, err := rand.Read(content)
 	require.NoError(t, err)
 
 	_, err = h.Layer().PutObject(ctx, &layer.PutObjectParams{
-		Bucket: bktName,
-		Object: objName,
-		Size:   int64(len(content)),
-		Reader: bytes.NewReader(content),
-		Header: make(map[string]string),
+		BktInfo: bktInfo,
+		Object:  objName,
+		Size:    int64(len(content)),
+		Reader:  bytes.NewReader(content),
+		Header:  make(map[string]string),
 	})
 	require.NoError(t, err)
 }

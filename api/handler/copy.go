@@ -59,7 +59,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := &layer.HeadObjectParams{
-		Bucket:    srcBucket,
 		Object:    srcObject,
 		VersionID: versionID,
 	}
@@ -71,12 +70,14 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.checkBucketOwner(r, srcBucket, r.Header.Get(api.AmzSourceExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "source expected owner doesn't match", reqInfo, err)
+	if p.BktInfo, err = h.getBucketAndCheckOwner(r, srcBucket, api.AmzSourceExpectedBucketOwner); err != nil {
+		h.logAndSendError(w, "couldn't get source bucket", reqInfo, err)
 		return
 	}
-	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+
+	dstBktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "couldn't get target bucket", reqInfo, err)
 		return
 	}
 
@@ -100,26 +101,20 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := &layer.CopyObjectParams{
-		SrcObject: info,
-		DstBucket: reqInfo.BucketName,
-		DstObject: reqInfo.ObjectName,
-		SrcSize:   info.Size,
-		Header:    metadata,
+		SrcObject:  info,
+		DstBktInfo: dstBktInfo,
+		DstObject:  reqInfo.ObjectName,
+		SrcSize:    info.Size,
+		Header:     metadata,
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket", reqInfo, err)
-		return
-	}
-
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	params.Lock, err = formObjectLock(bktInfo, settings.LockConfiguration, r.Header)
+	params.Lock, err = formObjectLock(dstBktInfo, settings.LockConfiguration, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not form object lock", reqInfo, err)
 		return

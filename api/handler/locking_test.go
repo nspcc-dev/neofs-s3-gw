@@ -463,10 +463,10 @@ func TestObjectLegalHold(t *testing.T) {
 	hc := prepareHandlerContext(t)
 
 	bktName := "bucket-lock-enabled"
-	createTestBucketWithLock(ctx, t, hc, bktName, nil)
+	bktInfo := createTestBucketWithLock(ctx, t, hc, bktName, nil)
 
 	objName := "obj-for-legal-hold"
-	createTestObject(ctx, t, hc, bktName, objName)
+	createTestObject(ctx, t, hc, bktInfo, objName)
 
 	w, r := prepareTestRequest(t, bktName, objName, nil)
 	hc.Handler().GetObjectLegalHoldHandler(w, r)
@@ -512,10 +512,10 @@ func TestObjectRetention(t *testing.T) {
 	hc := prepareHandlerContext(t)
 
 	bktName := "bucket-lock-enabled"
-	createTestBucketWithLock(ctx, t, hc, bktName, nil)
+	bktInfo := createTestBucketWithLock(ctx, t, hc, bktName, nil)
 
 	objName := "obj-for-retention"
-	createTestObject(ctx, t, hc, bktName, objName)
+	createTestObject(ctx, t, hc, bktInfo, objName)
 
 	w, r := prepareTestRequest(t, bktName, objName, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
