@@ -13,7 +13,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
@@ -25,11 +24,11 @@ import (
 
 func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 	objInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
-		Bucket: tc.bktID.String(),
-		Object: tc.obj,
-		Size:   int64(len(content)),
-		Reader: bytes.NewReader(content),
-		Header: make(map[string]string),
+		BktInfo: tc.bktInfo,
+		Object:  tc.obj,
+		Size:    int64(len(content)),
+		Reader:  bytes.NewReader(content),
+		Header:  make(map[string]string),
 	})
 	require.NoError(tc.t, err)
 
@@ -38,7 +37,7 @@ func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 
 func (tc *testContext) getObject(objectName, versionID string, needError bool) (*data.ObjectInfo, []byte) {
 	objInfo, err := tc.layer.GetObjectInfo(tc.ctx, &HeadObjectParams{
-		Bucket:    tc.bkt,
+		BktInfo:   tc.bktInfo,
 		Object:    objectName,
 		VersionID: versionID,
 	})
@@ -60,7 +59,7 @@ func (tc *testContext) getObject(objectName, versionID string, needError bool) (
 }
 
 func (tc *testContext) deleteObject(objectName, versionID string) {
-	deletedObjects, err := tc.layer.DeleteObjects(tc.ctx, tc.bkt, []*VersionedObject{
+	deletedObjects, err := tc.layer.DeleteObjects(tc.ctx, tc.bktInfo, []*VersionedObject{
 		{Name: objectName, VersionID: versionID},
 	})
 	require.NoError(tc.t, err)
@@ -72,7 +71,7 @@ func (tc *testContext) deleteObject(objectName, versionID string) {
 func (tc *testContext) listObjectsV1() []*data.ObjectInfo {
 	res, err := tc.layer.ListObjectsV1(tc.ctx, &ListObjectsParamsV1{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
-			Bucket:  tc.bkt,
+			BktInfo: tc.bktInfo,
 			MaxKeys: 1000,
 		},
 	})
@@ -83,7 +82,7 @@ func (tc *testContext) listObjectsV1() []*data.ObjectInfo {
 func (tc *testContext) listObjectsV2() []*data.ObjectInfo {
 	res, err := tc.layer.ListObjectsV2(tc.ctx, &ListObjectsParamsV2{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
-			Bucket:  tc.bkt,
+			BktInfo: tc.bktInfo,
 			MaxKeys: 1000,
 		},
 	})
@@ -93,7 +92,7 @@ func (tc *testContext) listObjectsV2() []*data.ObjectInfo {
 
 func (tc *testContext) listVersions() *ListObjectVersionsInfo {
 	res, err := tc.layer.ListObjectVersions(tc.ctx, &ListObjectVersionsParams{
-		Bucket:  tc.bkt,
+		BktInfo: tc.bktInfo,
 		MaxKeys: 1000,
 	})
 	require.NoError(tc.t, err)
@@ -129,8 +128,6 @@ type testContext struct {
 	t         *testing.T
 	ctx       context.Context
 	layer     Client
-	bkt       string
-	bktID     *cid.ID
 	bktInfo   *data.BucketInfo
 	obj       string
 	testNeoFS *neofstest.TestNeoFS
@@ -172,12 +169,10 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	return &testContext{
 		ctx:   ctx,
 		layer: NewLayer(l, tp, layerCfg),
-		bkt:   bktName,
-		bktID: bktID,
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
-			CID:   bktID,
 			Owner: owner.NewID(),
+			CID:   bktID,
 		},
 		obj:       "obj1",
 		t:         t,
@@ -632,12 +627,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	// simulate failed deletion
 	tc.testNeoFS.AddObject(addr.String(), objMeta)
 
-	bktInfo := &data.BucketInfo{
-		Name: tc.bkt,
-		CID:  tc.bktID,
-	}
-
-	versioning, err := tc.layer.GetBucketSettings(tc.ctx, bktInfo)
+	versioning, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
 	require.NoError(t, err)
 	require.True(t, versioning.VersioningEnabled)
 }
@@ -652,19 +642,19 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 		"tag1": "val1",
 	}
 
-	err := tc.layer.PutBucketTagging(tc.ctx, tc.bktID.String(), tagSet)
+	err := tc.layer.PutBucketTagging(tc.ctx, tc.bktInfo, tagSet)
 	require.NoError(t, err)
 
-	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktID.String()))
+	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.CID.String()))
 
 	tagSet["tag2"] = "val2"
-	err = tc.layer.PutBucketTagging(tc.ctx, tc.bkt, tagSet)
+	err = tc.layer.PutBucketTagging(tc.ctx, tc.bktInfo, tagSet)
 	require.NoError(t, err)
 
 	// simulate failed deletion
 	tc.testNeoFS.AddObject(newAddress(objMeta.ContainerID(), objMeta.ID()).String(), objMeta)
 
-	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bkt)
+	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bktInfo)
 	require.NoError(t, err)
 
 	expectedTagSet := map[string]string{
@@ -673,8 +663,8 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	}
 	require.Equal(t, expectedTagSet, tagging)
 
-	err = tc.layer.DeleteBucketTagging(tc.ctx, tc.bkt)
+	err = tc.layer.DeleteBucketTagging(tc.ctx, tc.bktInfo)
 	require.NoError(t, err)
 
-	require.Nil(t, tc.getSystemObject(formBucketTagObjectName(tc.bkt)))
+	require.Nil(t, tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.Name)))
 }

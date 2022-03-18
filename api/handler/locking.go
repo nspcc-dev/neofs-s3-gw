@@ -28,13 +28,9 @@ const (
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -77,13 +73,9 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -114,13 +106,9 @@ func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -143,7 +131,7 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	p := &layer.HeadObjectParams{
-		Bucket:    reqInfo.BucketName,
+		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
@@ -187,13 +175,9 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -204,7 +188,7 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	p := &layer.HeadObjectParams{
-		Bucket:    reqInfo.BucketName,
+		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
@@ -234,16 +218,11 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
-		return
-	}
-
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "object lock disabled", reqInfo,
 			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
@@ -263,7 +242,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	p := &layer.HeadObjectParams{
-		Bucket:    reqInfo.BucketName,
+		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
@@ -317,13 +296,9 @@ func checkLockInfo(lock *data.ObjectInfo, header http.Header) error {
 func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -334,7 +309,7 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	p := &layer.HeadObjectParams{
-		Bucket:    reqInfo.BucketName,
+		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}

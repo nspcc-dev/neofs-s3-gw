@@ -103,14 +103,9 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	(min value of partNumber of a common part is 1) and holding data: metadata, acl, tagging */
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -195,16 +190,12 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
-		return
-	}
 	var (
 		queryValues = r.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
@@ -239,22 +230,9 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
-	reqInfo := api.GetReqInfo(r.Context())
-
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
-		return
-	}
-
 	var (
-		versionID string
-
+		versionID   string
+		reqInfo     = api.GetReqInfo(r.Context())
 		queryValues = reqInfo.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
 		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
@@ -280,8 +258,20 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	srcBktInfo, err := h.getBucketAndCheckOwner(r, srcBucket, api.AmzSourceExpectedBucketOwner)
+	if err != nil {
+		h.logAndSendError(w, "could not get source bucket info", reqInfo, err)
+		return
+	}
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get target bucket info", reqInfo, err)
+		return
+	}
+
 	srcInfo, err := h.obj.GetObjectInfo(r.Context(), &layer.HeadObjectParams{
-		Bucket:    srcBucket,
+		BktInfo:   srcBktInfo,
 		Object:    srcObject,
 		VersionID: versionID,
 	})
@@ -318,11 +308,6 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.checkBucketOwner(r, srcBucket, r.Header.Get(api.AmzSourceExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "source expected owner doesn't match", reqInfo, err)
-		return
-	}
-
 	p := &layer.UploadCopyParams{
 		Info: &layer.UploadInfoParams{
 			UploadID: uploadID,
@@ -353,14 +338,9 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -439,15 +419,14 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 				h.logAndSendError(w, "could not translate acl of completed multipart upload to ast", reqInfo, err, additional...)
 				return
 			}
-			if err = h.updateBucketACL(r, astObject, reqInfo.BucketName); err != nil {
+			if err = h.updateBucketACL(r, astObject, bktInfo); err != nil {
 				h.logAndSendError(w, "could not update bucket acl while completing multipart upload", reqInfo, err, additional...)
 				return
 			}
 		}
 	}
 
-	_, err = h.obj.DeleteObjects(r.Context(), bktInfo.Name, []*layer.VersionedObject{{Name: initPart.Name}})
-	if err != nil {
+	if _, err = h.obj.DeleteObjects(r.Context(), bktInfo, []*layer.VersionedObject{{Name: initPart.Name}}); err != nil {
 		h.logAndSendError(w, "could not delete init file of multipart upload", reqInfo, err, additional...)
 		return
 	}
@@ -472,14 +451,9 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -525,14 +499,9 @@ func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Req
 func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -587,14 +556,9 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if err := checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 

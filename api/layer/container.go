@@ -122,7 +122,7 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 	return list, nil
 }
 
-func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
 	var err error
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
@@ -130,6 +130,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 		Created:            time.Now(),
 		BasicACL:           p.ACL,
 		LocationConstraint: p.LocationConstraint,
+		ObjectLockEnabled:  p.ObjectLockEnabled,
 	}
 
 	var attributes [][2]string
@@ -169,7 +170,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*ci
 			zap.Error(err))
 	}
 
-	return bktInfo.CID, nil
+	return bktInfo, nil
 }
 
 func (n *layer) setContainerEACLTable(ctx context.Context, idCnr *cid.ID, table *eacl.Table) error {

@@ -84,7 +84,7 @@ type (
 
 	// HeadObjectParams stores object head request parameters.
 	HeadObjectParams struct {
-		Bucket    string
+		BktInfo   *data.BucketInfo
 		Object    string
 		VersionID string
 	}
@@ -97,12 +97,12 @@ type (
 
 	// PutObjectParams stores object put request parameters.
 	PutObjectParams struct {
-		Bucket string
-		Object string
-		Size   int64
-		Reader io.Reader
-		Header map[string]string
-		Lock   *data.ObjectLock
+		BktInfo *data.BucketInfo
+		Object  string
+		Size    int64
+		Reader  io.Reader
+		Header  map[string]string
+		Lock    *data.ObjectLock
 	}
 
 	// PutSettingsParams stores object copy request parameters.
@@ -119,13 +119,13 @@ type (
 
 	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
-		SrcObject *data.ObjectInfo
-		DstBucket string
-		DstObject string
-		SrcSize   int64
-		Header    map[string]string
-		Range     *RangeParams
-		Lock      *data.ObjectLock
+		SrcObject  *data.ObjectInfo
+		DstBktInfo *data.BucketInfo
+		DstObject  string
+		SrcSize    int64
+		Header     map[string]string
+		Range      *RangeParams
+		Lock       *data.ObjectLock
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
@@ -139,12 +139,12 @@ type (
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {
-		Name string
-		EACL *eacl.Table
+		BktInfo *data.BucketInfo
+		EACL    *eacl.Table
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
-		Name string
+		BktInfo *data.BucketInfo
 	}
 
 	// PutSystemObjectParams stores putSystemObject parameters.
@@ -159,7 +159,7 @@ type (
 
 	// ListObjectVersionsParams stores list objects versions parameters.
 	ListObjectVersionsParams struct {
-		Bucket          string
+		BktInfo         *data.BucketInfo
 		Delimiter       string
 		KeyMarker       string
 		MaxKeys         int
@@ -196,21 +196,21 @@ type (
 
 		ListBuckets(ctx context.Context) ([]*data.BucketInfo, error)
 		GetBucketInfo(ctx context.Context, name string) (*data.BucketInfo, error)
-		GetBucketACL(ctx context.Context, name string) (*BucketACL, error)
+		GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*BucketACL, error)
 		PutBucketACL(ctx context.Context, p *PutBucketACLParams) error
-		CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error)
+		CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error)
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		HeadSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) (*data.ObjectInfo, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
 		GetObjectTagging(ctx context.Context, p *data.ObjectInfo) (map[string]string, error)
-		GetBucketTagging(ctx context.Context, bucket string) (map[string]string, error)
+		GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error)
 		PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error)
 		PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
-		PutBucketTagging(ctx context.Context, bucket string, tagSet map[string]string) error
+		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
 
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ObjectInfo, error)
 
@@ -218,10 +218,10 @@ type (
 		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
-		DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error)
+		DeleteObjects(ctx context.Context, bktInfo *data.BucketInfo, objects []*VersionedObject) ([]*VersionedObject, error)
 		DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error
-		DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) error
-		DeleteBucketTagging(ctx context.Context, bucket string) error
+		DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) error
+		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error)
 		UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error)
@@ -355,31 +355,21 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 }
 
 // GetBucketACL returns bucket acl info by name.
-func (n *layer) GetBucketACL(ctx context.Context, name string) (*BucketACL, error) {
-	inf, err := n.GetBucketInfo(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-
-	eACL, err := n.GetContainerEACL(ctx, inf.CID)
+func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*BucketACL, error) {
+	eACL, err := n.GetContainerEACL(ctx, bktInfo.CID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &BucketACL{
-		Info: inf,
+		Info: bktInfo,
 		EACL: eACL,
 	}, nil
 }
 
 // PutBucketACL put bucket acl by name.
 func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) error {
-	inf, err := n.GetBucketInfo(ctx, param.Name)
-	if err != nil {
-		return err
-	}
-
-	return n.setContainerEACLTable(ctx, inf.CID, param.EACL)
+	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL)
 }
 
 // ListBuckets returns all user containers. Name of the bucket is a container
@@ -427,27 +417,11 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 
 // GetObjectInfo returns meta information about the object.
 func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error) {
-	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
-	if err != nil {
-		n.log.Error("could not fetch bucket info", zap.Error(err))
-		return nil, err
-	}
-
 	if len(p.VersionID) == 0 {
-		return n.headLastVersionIfNotDeleted(ctx, bkt, p.Object)
+		return n.headLastVersionIfNotDeleted(ctx, p.BktInfo, p.Object)
 	}
 
-	return n.headVersion(ctx, bkt, p)
-}
-
-// PutObject into storage.
-func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
-	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
-	if err != nil {
-		return nil, err
-	}
-
-	return n.objectPut(ctx, bkt, p)
+	return n.headVersion(ctx, p.BktInfo, p)
 }
 
 // GetObjectTagging from storage.
@@ -467,13 +441,8 @@ func (n *layer) GetObjectTagging(ctx context.Context, oi *data.ObjectInfo) (map[
 }
 
 // GetBucketTagging from storage.
-func (n *layer) GetBucketTagging(ctx context.Context, bucketName string) (map[string]string, error) {
-	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
-	if err != nil {
-		return nil, err
-	}
-
-	objInfo, err := n.HeadSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
+	objInfo, err := n.HeadSystemObject(ctx, bktInfo, formBucketTagObjectName(bktInfo.Name))
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -518,41 +487,27 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
 }
 
 // PutBucketTagging into storage.
-func (n *layer) PutBucketTagging(ctx context.Context, bucketName string, tagSet map[string]string) error {
-	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
-	if err != nil {
-		return err
-	}
-
+func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
 	s := &PutSystemObjectParams{
 		BktInfo:  bktInfo,
-		ObjName:  formBucketTagObjectName(bucketName),
+		ObjName:  formBucketTagObjectName(bktInfo.Name),
 		Metadata: tagSet,
 		Prefix:   tagPrefix,
 		Reader:   nil,
 	}
 
-	_, err = n.PutSystemObject(ctx, s)
+	_, err := n.PutSystemObject(ctx, s)
 	return err
 }
 
 // DeleteObjectTagging from storage.
-func (n *layer) DeleteObjectTagging(ctx context.Context, p *data.ObjectInfo) error {
-	bktInfo, err := n.GetBucketInfo(ctx, p.Bucket)
-	if err != nil {
-		return err
-	}
-	return n.DeleteSystemObject(ctx, bktInfo, p.TagsObject())
+func (n *layer) DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) error {
+	return n.DeleteSystemObject(ctx, bktInfo, objInfo.TagsObject())
 }
 
 // DeleteBucketTagging from storage.
-func (n *layer) DeleteBucketTagging(ctx context.Context, bucketName string) error {
-	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
-	if err != nil {
-		return err
-	}
-
-	return n.DeleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bucketName))
+func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
+	return n.DeleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bktInfo.Name))
 }
 
 // CopyObject from one bucket into another bucket.
@@ -572,11 +527,11 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 	}()
 
 	return n.PutObject(ctx, &PutObjectParams{
-		Bucket: p.DstBucket,
-		Object: p.DstObject,
-		Size:   p.SrcSize,
-		Reader: pr,
-		Header: p.Header,
+		BktInfo: p.DstBktInfo,
+		Object:  p.DstObject,
+		Size:    p.SrcSize,
+		Reader:  pr,
+		Header:  p.Header,
 	})
 }
 
@@ -588,9 +543,10 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 	)
 
 	p := &PutObjectParams{
-		Object: obj.Name,
-		Reader: bytes.NewReader(nil),
-		Header: map[string]string{},
+		BktInfo: bkt,
+		Object:  obj.Name,
+		Reader:  bytes.NewReader(nil),
+		Header:  map[string]string{},
 	}
 
 	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
@@ -637,14 +593,14 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 			obj.Error = err
 			return obj
 		}
-		if err = n.DeleteObjectTagging(ctx, &data.ObjectInfo{ID: id, Bucket: bkt.Name, Name: obj.Name}); err != nil {
+		if err = n.DeleteObjectTagging(ctx, bkt, &data.ObjectInfo{ID: id, Bucket: bkt.Name, Name: obj.Name}); err != nil {
 			obj.Error = err
 			return obj
 		}
 	}
 	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 
-	objInfo, err := n.objectPut(ctx, bkt, p)
+	objInfo, err := n.PutObject(ctx, p)
 	if err != nil {
 		obj.Error = err
 		return obj
@@ -657,20 +613,15 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 }
 
 // DeleteObjects from the storage.
-func (n *layer) DeleteObjects(ctx context.Context, bucket string, objects []*VersionedObject) ([]*VersionedObject, error) {
-	bkt, err := n.GetBucketInfo(ctx, bucket)
-	if err != nil {
-		return nil, err
-	}
-
+func (n *layer) DeleteObjects(ctx context.Context, bktInfo *data.BucketInfo, objects []*VersionedObject) ([]*VersionedObject, error) {
 	for i, obj := range objects {
-		objects[i] = n.deleteObject(ctx, bkt, obj)
+		objects[i] = n.deleteObject(ctx, bktInfo, obj)
 	}
 
 	return objects, nil
 }
 
-func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*cid.ID, error) {
+func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
 	bktInfo, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
 		if errors.IsS3Error(err, errors.ErrNoSuchBucket) {
@@ -696,12 +647,7 @@ func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error)
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
-	bucketInfo, err := n.GetBucketInfo(ctx, p.Name)
-	if err != nil {
-		return err
-	}
-
-	objects, err := n.listSortedObjects(ctx, allObjectParams{Bucket: bucketInfo})
+	objects, err := n.listSortedObjects(ctx, allObjectParams{Bucket: p.BktInfo})
 	if err != nil {
 		return err
 	}
@@ -709,9 +655,6 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return errors.GetAPIError(errors.ErrBucketNotEmpty)
 	}
 
-	n.bucketCache.Delete(bucketInfo.Name)
-	if err = n.deleteContainer(ctx, bucketInfo.CID); err != nil {
-		return err
-	}
-	return nil
+	n.bucketCache.Delete(p.BktInfo.Name)
+	return n.deleteContainer(ctx, p.BktInfo.CID)
 }

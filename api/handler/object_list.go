@@ -22,8 +22,8 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	if params.BktInfo, err = h.getBucketAndCheckOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
@@ -40,7 +40,7 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 
 func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *ListObjectsV1Response {
 	res := &ListObjectsV1Response{
-		Name:         p.Bucket,
+		Name:         p.BktInfo.Name,
 		EncodingType: p.Encode,
 		Marker:       p.Marker,
 		Prefix:       p.Prefix,
@@ -66,8 +66,8 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.checkBucketOwner(r, reqInfo.BucketName); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	if params.BktInfo, err = h.getBucketAndCheckOwner(r, reqInfo.BucketName); err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 
 func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *ListObjectsV2Response {
 	res := &ListObjectsV2Response{
-		Name:                  p.Bucket,
+		Name:                  p.BktInfo.Name,
 		EncodingType:          p.Encode,
 		Prefix:                s3PathEncode(p.Prefix, p.Encode),
 		KeyCount:              len(list.Objects) + len(list.Prefixes),
@@ -149,7 +149,6 @@ func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, 
 		queryValues = reqInfo.URL.Query()
 	)
 
-	res.Bucket = reqInfo.BucketName
 	res.Delimiter = queryValues.Get("delimiter")
 	res.Encode = queryValues.Get("encoding-type")
 
@@ -218,13 +217,8 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
-	if err != nil {
+	if p.BktInfo, err = h.getBucketAndCheckOwner(r, reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
 		return
 	}
 
@@ -234,7 +228,7 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := encodeListObjectVersionsToResponse(info, p.Bucket)
+	response := encodeListObjectVersionsToResponse(info, p.BktInfo.Name)
 	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
@@ -258,7 +252,6 @@ func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVers
 	res.Delimiter = queryValues.Get("delimiter")
 	res.Encode = queryValues.Get("encoding-type")
 	res.VersionIDMarker = queryValues.Get("version-id-marker")
-	res.Bucket = reqInfo.BucketName
 
 	return &res, nil
 }

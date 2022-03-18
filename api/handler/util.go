@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -23,24 +25,24 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 	api.WriteErrorResponse(w, reqInfo, err)
 }
 
-func (h *handler) checkBucketOwner(r *http.Request, bucket string, header ...string) error {
+func (h *handler) getBucketAndCheckOwner(r *http.Request, bucket string, header ...string) (*data.BucketInfo, error) {
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), bucket)
+	if err != nil {
+		return nil, err
+	}
+
 	var expected string
 	if len(header) == 0 {
 		expected = r.Header.Get(api.AmzExpectedBucketOwner)
 	} else {
-		expected = header[0]
+		expected = r.Header.Get(header[0])
 	}
 
 	if len(expected) == 0 {
-		return nil
+		return bktInfo, nil
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), bucket)
-	if err != nil {
-		return err
-	}
-
-	return checkOwner(bktInfo, expected)
+	return bktInfo, checkOwner(bktInfo, expected)
 }
 
 func parseRange(s string) (*layer.RangeParams, error) {

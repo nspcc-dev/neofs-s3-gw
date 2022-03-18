@@ -127,19 +127,21 @@ type astOperation struct {
 func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+
+	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
 		return
 	}
 
-	if err := checkOwner(bucketACL.Info, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
-		return
-	}
-
 	if err = api.EncodeToResponse(w, h.encodeBucketACL(bucketACL)); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
+		return
 	}
 }
 
@@ -183,27 +185,29 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.updateBucketACL(r, astBucket, reqInfo.BucketName); err != nil {
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+
+	if err = h.updateBucketACL(r, astBucket, bktInfo); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bkt string) error {
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bkt)
+func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo) error {
+	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return fmt.Errorf("could not get bucket eacl: %w", err)
 	}
 
-	if err = checkOwner(bucketACL.Info, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		return fmt.Errorf("expected owner doesn't match: %w", err)
-	}
-
-	parentAst := tableToAst(bucketACL.EACL, bkt)
+	parentAst := tableToAst(bucketACL.EACL, bktInfo.Name)
 	for _, resource := range parentAst.Resources {
 		if resource.Bucket == bucketACL.Info.CID.String() {
-			resource.Bucket = bkt
+			resource.Bucket = bktInfo.Name
 		}
 	}
 
@@ -218,8 +222,8 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bkt string) er
 	}
 
 	p := &layer.PutBucketACLParams{
-		Name: bkt,
-		EACL: table,
+		BktInfo: bktInfo,
+		EACL:    table,
 	}
 
 	if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
@@ -231,14 +235,16 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bkt string) er
 
 func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
-		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
-	if err := checkOwner(bucketACL.Info, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
 		return
 	}
 
@@ -280,8 +286,14 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+
 	p := &layer.HeadObjectParams{
-		Bucket:    reqInfo.BucketName,
+		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: versionID,
 	}
@@ -291,7 +303,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.updateBucketACL(r, astObject, reqInfo.BucketName); err != nil {
+	if err = h.updateBucketACL(r, astObject, bktInfo); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
@@ -300,14 +312,16 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), reqInfo.BucketName)
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
-		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
-	if err = checkOwner(bucketACL.Info, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
+	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
 		return
 	}
 
@@ -336,6 +350,13 @@ func checkOwner(info *data.BucketInfo, owner string) error {
 
 func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return
+	}
+
 	bktPolicy := &bucketPolicy{Bucket: reqInfo.BucketName}
 	if err := json.NewDecoder(r.Body).Decode(bktPolicy); err != nil {
 		h.logAndSendError(w, "could not parse bucket policy", reqInfo, err)
@@ -348,11 +369,10 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err = h.updateBucketACL(r, astPolicy, reqInfo.BucketName); err != nil {
+	if err = h.updateBucketACL(r, astPolicy, bktInfo); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 func parseACLHeaders(header http.Header, gateKey *keys.PublicKey) (*AccessControlPolicy, error) {

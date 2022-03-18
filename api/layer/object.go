@@ -38,7 +38,7 @@ type (
 
 	// ListObjectsParamsCommon contains common parameters for ListObjectsV1 and ListObjectsV2.
 	ListObjectsParamsCommon struct {
-		Bucket    string
+		BktInfo   *data.BucketInfo
 		Delimiter string
 		Encode    string
 		MaxKeys   int
@@ -153,12 +153,12 @@ func (n *layer) objectGet(ctx context.Context, addr *address.Address) (*object.O
 	return res.Head, nil
 }
 
-// objectPut into NeoFS, took payload from io.Reader.
-func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjectParams) (*data.ObjectInfo, error) {
+// PutObject stores object into NeoFS, took payload from io.Reader.
+func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
 	own := n.Owner(ctx)
 
-	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
-	versions, err := n.headVersions(ctx, bkt, p.Object)
+	versioningEnabled := n.isVersioningEnabled(ctx, p.BktInfo)
+	versions, err := n.headVersions(ctx, p.BktInfo, p.Object)
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 	}
 
 	prm := neofs.PrmObjectCreate{
-		Container:   *bkt.CID,
+		Container:   *p.BktInfo.CID,
 		Creator:     *own,
 		PayloadSize: uint64(p.Size),
 		Filename:    p.Object,
@@ -206,18 +206,18 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 		objInfo := &data.ObjectInfo{ID: id, Name: p.Object}
 		p.Lock.Objects = append(p.Lock.Objects, *id)
 		if p.Lock.LegalHold {
-			if err = n.putLockObject(ctx, bkt, objInfo.LegalHoldObject(), p.Lock); err != nil {
+			if err = n.putLockObject(ctx, p.BktInfo, objInfo.LegalHoldObject(), p.Lock); err != nil {
 				return nil, err
 			}
 		}
 		if !p.Lock.Until.IsZero() {
-			if err = n.putLockObject(ctx, bkt, objInfo.RetentionObject(), p.Lock); err != nil {
+			if err = n.putLockObject(ctx, p.BktInfo, objInfo.RetentionObject(), p.Lock); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	meta, err := n.objectHead(ctx, bkt.CID, id)
+	meta, err := n.objectHead(ctx, p.BktInfo.CID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -226,17 +226,17 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 		n.log.Error("couldn't cache an object", zap.Error(err))
 	}
 
-	n.listsCache.CleanCacheEntriesContainingObject(p.Object, bkt.CID)
+	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
+		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
 			n.log.Warn("couldn't delete object",
 				zap.Stringer("version id", id),
 				zap.Error(err))
 		}
 		if !versioningEnabled {
 			if objVersion := versions.getVersion(id); objVersion != nil {
-				if err = n.DeleteObjectTagging(ctx, objVersion); err != nil {
+				if err = n.DeleteObjectTagging(ctx, p.BktInfo, objVersion); err != nil {
 					n.log.Warn("couldn't delete object tagging",
 						zap.Stringer("version id", id),
 						zap.Error(err))
@@ -247,10 +247,10 @@ func (n *layer) objectPut(ctx context.Context, bkt *data.BucketInfo, p *PutObjec
 
 	return &data.ObjectInfo{
 		ID:  id,
-		CID: bkt.CID,
+		CID: p.BktInfo.CID,
 
 		Owner:         own,
-		Bucket:        p.Bucket,
+		Bucket:        p.BktInfo.Name,
 		Name:          p.Object,
 		Size:          p.Size,
 		Created:       time.Now(),
@@ -644,16 +644,11 @@ func triageObjects(allObjects []*data.ObjectInfo) (prefixes []string, objects []
 func (n *layer) listAllObjects(ctx context.Context, p ListObjectsParamsCommon) ([]*data.ObjectInfo, error) {
 	var (
 		err        error
-		bkt        *data.BucketInfo
 		allObjects []*data.ObjectInfo
 	)
 
-	if bkt, err = n.GetBucketInfo(ctx, p.Bucket); err != nil {
-		return nil, err
-	}
-
 	allObjects, err = n.listSortedObjects(ctx, allObjectParams{
-		Bucket:    bkt,
+		Bucket:    p.BktInfo,
 		Prefix:    p.Prefix,
 		Delimiter: p.Delimiter,
 	})

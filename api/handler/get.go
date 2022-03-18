@@ -115,18 +115,14 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
-	if err = checkOwner(bktInfo, r.Header.Get(api.AmzExpectedBucketOwner)); err != nil {
-		h.logAndSendError(w, "expected owner doesn't match", reqInfo, err)
-		return
-	}
 
 	p := &layer.HeadObjectParams{
-		Bucket:    reqInfo.BucketName,
+		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}

@@ -283,18 +283,13 @@ func (v *objectVersions) getVersion(oid *oid.ID) *data.ObjectInfo {
 	return nil
 }
 func (n *layer) PutBucketVersioning(ctx context.Context, p *PutSettingsParams) (*data.ObjectInfo, error) {
-	bktInfo, err := n.GetBucketInfo(ctx, p.BktInfo.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	metadata := map[string]string{
 		attrSettingsVersioningEnabled: strconv.FormatBool(p.Settings.VersioningEnabled),
 	}
 
 	s := &PutSystemObjectParams{
-		BktInfo:  bktInfo,
-		ObjName:  bktInfo.SettingsObjectName(),
+		BktInfo:  p.BktInfo,
+		ObjName:  p.BktInfo.SettingsObjectName(),
 		Metadata: metadata,
 		Prefix:   "",
 		Reader:   nil,
@@ -303,29 +298,19 @@ func (n *layer) PutBucketVersioning(ctx context.Context, p *PutSettingsParams) (
 	return n.PutSystemObject(ctx, s)
 }
 
-func (n *layer) GetBucketVersioning(ctx context.Context, bucketName string) (*data.BucketSettings, error) {
-	bktInfo, err := n.GetBucketInfo(ctx, bucketName)
-	if err != nil {
-		return nil, err
-	}
-
+func (n *layer) GetBucketVersioning(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
 	return n.GetBucketSettings(ctx, bktInfo)
 }
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
 	var (
-		versions   map[string]*objectVersions
 		allObjects = make([]*data.ObjectInfo, 0, p.MaxKeys)
 		res        = &ListObjectVersionsInfo{}
 		reverse    = true
 	)
 
-	bkt, err := n.GetBucketInfo(ctx, p.Bucket)
+	versions, err := n.getAllObjectsVersions(ctx, p.BktInfo, p.Prefix, p.Delimiter)
 	if err != nil {
-		return nil, err
-	}
-
-	if versions, err = n.getAllObjectsVersions(ctx, bkt, p.Prefix, p.Delimiter); err != nil {
 		return nil, err
 	}
 
