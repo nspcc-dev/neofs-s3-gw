@@ -281,8 +281,14 @@ func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Optio
 	cfg.RootCAFiles = v.GetStringSlice(cfgNATSRootCAFiles)
 
 	cfg.SubscribeSubjectName = v.GetString(cfgNATSSubscribeSubject)
-	cfg.PublishSubjectName = v.GetString(cfgNATSPublishSubject)
+	if len(cfg.SubscribeSubjectName) == 0 {
+		l.Fatal("empty subscribe subject name")
+	}
+
 	cfg.PublishStreamName = v.GetString(cfgNATSPublishStream)
+	if len(cfg.PublishStreamName) == 0 {
+		l.Fatal("empty publish stream name")
+	}
 
 	return &cfg
 }

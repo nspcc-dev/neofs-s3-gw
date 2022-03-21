@@ -21,7 +21,6 @@ type (
 		RootCAFiles               []string
 		SubscribeSubjectName      string
 		PublishStreamName         string
-		PublishSubjectName        string
 	}
 
 	Controller struct {
@@ -77,8 +76,7 @@ func createPublishStream(js nats.JetStreamContext, p *Options) error {
 	}
 	if stream == nil {
 		_, err = js.AddStream(&nats.StreamConfig{
-			Name:     p.PublishStreamName,
-			Subjects: []string{p.PublishSubjectName},
+			Name: p.PublishStreamName,
 		})
 		if err != nil {
 			return err

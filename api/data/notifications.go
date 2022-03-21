@@ -40,7 +40,7 @@ func (n NotificationConfiguration) IsEmpty() bool {
 	return len(n.QueueConfigurations) == 0 && len(n.TopicConfigurations) == 0 && len(n.LambdaFunctionConfigurations) == 0
 }
 
-func (n NotificationConfiguration) FilterTopics(eventType, name string) map[string]string {
+func (n NotificationConfiguration) FilterSubjects(eventType, name string) map[string]string {
 	topics := make(map[string]string)
 
 	for _, t := range n.QueueConfigurations {
@@ -60,10 +60,8 @@ func (n NotificationConfiguration) FilterTopics(eventType, name string) map[stri
 
 		filter := true
 		for _, f := range t.Filter.Key.FilterRules {
-			if f.Name == "prefix" && !strings.HasPrefix(name, f.Value) {
-				filter = false
-				break
-			} else if f.Name == "suffix" && !strings.HasSuffix(name, f.Value) {
+			if f.Name == "prefix" && !strings.HasPrefix(name, f.Value) ||
+				f.Name == "suffix" && !strings.HasSuffix(name, f.Value) {
 				filter = false
 				break
 			}

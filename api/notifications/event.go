@@ -82,6 +82,7 @@ type (
 		RequestID string
 		HostID    string
 	}
+
 	Event struct {
 		Records []EventRecord `json:"Records"`
 	}
@@ -139,9 +140,7 @@ func (c *Controller) SendTestEvent(event *TestEvent, topic string) error {
 	return c.publish(topic, msg)
 }
 
-func (c *Controller) SendEvent(e *Event, id string, topic string) error {
-	e.Records[0].S3.ConfigurationID = id
-
+func (c *Controller) SendEvent(e *Event, topic string) error {
 	msg, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Errorf("couldn't marshal %s event: %w", topic, err)

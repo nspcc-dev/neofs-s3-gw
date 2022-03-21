@@ -29,6 +29,11 @@ type (
 	}
 )
 
+const (
+	filterRuleSuffixName = "suffix"
+	filterRulePrefixName = "prefix"
+)
+
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
 	if !n.IsNotificationEnabled() {
 		return errors.GetAPIError(errors.ErrNotificationNotEnabled)
@@ -167,11 +172,11 @@ func checkRules(rules []data.FilterRule) error {
 	names := make(map[string]struct{})
 
 	for _, r := range rules {
-		if r.Name != "suffix" && r.Name != "prefix" {
+		if r.Name != filterRuleSuffixName && r.Name != filterRulePrefixName {
 			return errors.GetAPIError(errors.ErrFilterNameInvalid)
 		}
 		if _, ok := names[r.Name]; ok {
-			if r.Name == "suffix" {
+			if r.Name == filterRuleSuffixName {
 				return errors.GetAPIError(errors.ErrFilterNameSuffix)
 			}
 			return errors.GetAPIError(errors.ErrFilterNamePrefix)
@@ -231,30 +236,33 @@ func prepareEvent(eventName string, inititatorID string, bkt *data.BucketInfo, o
 }
 
 func (n *layer) SendNotifications(ctx context.Context, p *SendNotificationsParams) error {
-	if n.IsNotificationEnabled() {
-		var user string
-		box, err := GetBoxData(ctx)
-		if err == nil {
-			user = box.Gate.SessionTokens[0].OwnerID().String()
-		}
+	if !n.IsNotificationEnabled() {
+		return nil
+	}
 
-		conf, err := n.getNotificationConf(ctx, p.BktInfo, p.BktInfo.NotificationConfigurationObjectName())
-		if err != nil {
-			return err
-		}
-		if conf.IsEmpty() {
-			return nil
-		}
+	var user string
+	box, err := GetBoxData(ctx)
+	if err == nil {
+		user = box.Gate.SessionTokens[0].OwnerID().String()
+	}
 
-		topics := conf.FilterTopics(p.Event, p.ObjInfo.Name)
+	conf, err := n.getNotificationConf(ctx, p.BktInfo, p.BktInfo.NotificationConfigurationObjectName())
+	if err != nil {
+		return err
+	}
+	if conf.IsEmpty() {
+		return nil
+	}
 
-		if len(topics) != 0 {
-			event := prepareEvent(p.Event, user, p.BktInfo, p.ObjInfo, p.ReqInfo)
+	topics := conf.FilterSubjects(p.Event, p.ObjInfo.Name)
 
-			for id, topic := range topics {
-				if err := n.ncontroller.SendEvent(event, id, topic); err != nil {
-					return err
-				}
+	if len(topics) != 0 {
+		event := prepareEvent(p.Event, user, p.BktInfo, p.ObjInfo, p.ReqInfo)
+
+		for id, topic := range topics {
+			event.Records[0].S3.ConfigurationID = id
+			if err := n.ncontroller.SendEvent(event, topic); err != nil {
+				return err
 			}
 		}
 	}

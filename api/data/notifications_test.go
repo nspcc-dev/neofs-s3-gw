@@ -28,29 +28,29 @@ func TestFilterTopics(t *testing.T) {
 	}
 
 	t.Run("no topics because suitable events not found", func(t *testing.T) {
-		topics := config.FilterTopics(notifications.EventObjectACLPut, "dir/a.png")
+		topics := config.FilterSubjects(notifications.EventObjectACLPut, "dir/a.png")
 		require.Empty(t, topics)
 	})
 
 	t.Run("no topics because of not suitable prefix", func(t *testing.T) {
-		topics := config.FilterTopics(notifications.EventObjectTaggingPut, "dirw/cat.png")
+		topics := config.FilterSubjects(notifications.EventObjectTaggingPut, "dirw/cat.png")
 		require.Empty(t, topics)
 	})
 
 	t.Run("no topics because of not suitable suffix", func(t *testing.T) {
-		topics := config.FilterTopics(notifications.EventObjectTaggingPut, "a.jpg")
+		topics := config.FilterSubjects(notifications.EventObjectTaggingPut, "a.jpg")
 		require.Empty(t, topics)
 	})
 
 	t.Run("filter topics from queue configs without prefix suffix filter and exact event", func(t *testing.T) {
-		topics := config.FilterTopics(notifications.EventObjectCreatedPut, "dir/a.png")
+		topics := config.FilterSubjects(notifications.EventObjectCreatedPut, "dir/a.png")
 		require.Contains(t, topics, "test1")
 		require.Len(t, topics, 1)
 		require.Equal(t, topics["test1"], "test1")
 	})
 
 	t.Run("filter topics from queue configs with prefix suffix filter and '*' ending event", func(t *testing.T) {
-		topics := config.FilterTopics(notifications.EventObjectTaggingPut, "dir/a.png")
+		topics := config.FilterSubjects(notifications.EventObjectTaggingPut, "dir/a.png")
 		require.Contains(t, topics, "test2")
 		require.Len(t, topics, 1)
 		require.Equal(t, topics["test2"], "test2")
