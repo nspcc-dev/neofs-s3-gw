@@ -32,13 +32,7 @@ const (
 
 const ( // Settings.
 	// Logger.
-	cfgLoggerLevel              = "logger.level"
-	cfgLoggerFormat             = "logger.format"
-	cfgLoggerTraceLevel         = "logger.trace_level"
-	cfgLoggerNoCaller           = "logger.no_caller"
-	cfgLoggerNoDisclaimer       = "logger.no_disclaimer"
-	cfgLoggerSamplingInitial    = "logger.sampling.initial"
-	cfgLoggerSamplingThereafter = "logger.sampling.thereafter"
+	cfgLoggerLevel = "logger.level"
 
 	// Wallet.
 	cfgWallet           = "wallet"
@@ -106,8 +100,6 @@ const ( // Settings.
 	cfgResolveOrder = "resolve-order"
 
 	// Application.
-	cfgApplicationName      = "app.name"
-	cfgApplicationVersion   = "app.version"
 	cfgApplicationBuildTime = "app.build_time"
 
 	// Command line args.
@@ -115,16 +107,11 @@ const ( // Settings.
 	cmdVersion = "version"
 	cmdConfig  = "config"
 
-	// applicationName is gateway name.
-	applicationName = "neofs-s3-gw"
-
 	// envPrefix is environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
 )
 
 var ignore = map[string]struct{}{
-	cfgApplicationName:      {},
-	cfgApplicationVersion:   {},
 	cfgApplicationBuildTime: {},
 
 	cfgPeers: {},
@@ -223,20 +210,10 @@ func newSettings() *viper.Viper {
 
 	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
 
-	// set prefers:
-	v.Set(cfgApplicationName, applicationName)
-	v.Set(cfgApplicationVersion, version.Version)
-
 	// set defaults:
 
 	// logger:
 	v.SetDefault(cfgLoggerLevel, "debug")
-	v.SetDefault(cfgLoggerFormat, "console")
-	v.SetDefault(cfgLoggerTraceLevel, "panic")
-	v.SetDefault(cfgLoggerNoCaller, false)
-	v.SetDefault(cfgLoggerNoDisclaimer, true)
-	v.SetDefault(cfgLoggerSamplingInitial, 1000)
-	v.SetDefault(cfgLoggerSamplingThereafter, 1000)
 
 	if err := v.BindPFlags(flags); err != nil {
 		panic(err)

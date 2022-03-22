@@ -13,13 +13,13 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
-	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	tokentest "github.com/nspcc-dev/neofs-sdk-go/token/test"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
@@ -151,8 +151,6 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 			GateKey:     key.PublicKey(),
 		},
 	})
-	l, err := logger.New(logger.WithTraceLevel("panic"))
-	require.NoError(t, err)
 	tp := neofstest.NewTestNeoFS()
 
 	bktName := "testbucket1"
@@ -173,7 +171,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 	return &testContext{
 		ctx:   ctx,
-		layer: NewLayer(l, tp, layerCfg),
+		layer: NewLayer(zap.NewNop(), tp, layerCfg),
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
 			Owner: owner.NewID(),
