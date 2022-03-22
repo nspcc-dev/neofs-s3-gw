@@ -2,42 +2,63 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/signal"
 	"syscall"
 
-	"github.com/nspcc-dev/neofs-sdk-go/logger"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
+// newLogger constructs a zap.Logger instance for current application.
+// Panics on failure.
+//
+// Logger is built from zap's production logging configuration with:
+//  * parameterized level (debug by default)
+//  * console encoding
+//  * ISO8601 time encoding
+//  * app_name field set to neofs-s3-gw
+//  * app_version field set to version.Version
+//
+// Logger records a stack trace for all messages at or above fatal level.
+//
+// See also zapcore.Level, zap.NewProductionConfig, zap.AddStacktrace.
 func newLogger(v *viper.Viper) *zap.Logger {
-	options := []logger.Option{
-		logger.WithLevel(v.GetString(cfgLoggerLevel)),
-		logger.WithTraceLevel(v.GetString(cfgLoggerTraceLevel)),
+	var lvl zapcore.Level
+	lvlStr := v.GetString(cfgLoggerLevel)
 
-		logger.WithFormat(v.GetString(cfgLoggerFormat)),
-
-		logger.WithSamplingInitial(v.GetInt(cfgLoggerSamplingInitial)),
-		logger.WithSamplingThereafter(v.GetInt(cfgLoggerSamplingThereafter)),
-
-		logger.WithAppName(v.GetString(cfgApplicationName)),
-		logger.WithAppVersion(v.GetString(cfgApplicationVersion)),
-	}
-
-	if v.GetBool(cfgLoggerNoCaller) {
-		options = append(options, logger.WithoutCaller())
-	}
-
-	if v.GetBool(cfgLoggerNoDisclaimer) {
-		options = append(options, logger.WithoutDisclaimer())
-	}
-
-	l, err := logger.New(options...)
+	err := lvl.UnmarshalText([]byte(lvlStr))
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("incorrect logger level configuration %s (%v), "+
+			"value should be one of %v", lvlStr, err, [...]zapcore.Level{
+			zapcore.DebugLevel,
+			zapcore.InfoLevel,
+			zapcore.WarnLevel,
+			zapcore.ErrorLevel,
+			zapcore.DPanicLevel,
+			zapcore.PanicLevel,
+			zapcore.FatalLevel,
+		}))
 	}
 
-	return l
+	c := zap.NewProductionConfig()
+	c.Level = zap.NewAtomicLevelAt(lvl)
+	c.Encoding = "console"
+	c.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	l, err := c.Build(
+		zap.AddStacktrace(zap.NewAtomicLevelAt(zap.FatalLevel)),
+	)
+	if err != nil {
+		panic(fmt.Sprintf("build zap logger instance: %v", err))
+	}
+
+	return l.With(
+		zap.String("app_name", "neofs-s3-gw"),
+		zap.String("app_version", version.Version),
+	)
 }
 
 func main() {
