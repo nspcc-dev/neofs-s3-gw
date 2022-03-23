@@ -8,6 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"go.uber.org/zap"
 )
 
 const (
@@ -23,6 +24,7 @@ type Options struct {
 }
 
 type Controller struct {
+	logger              *zap.Logger
 	taskQueueConnection *nats.Conn
 	jsClient            nats.JetStreamContext
 	handlers            map[string]Stream
@@ -34,7 +36,7 @@ type Stream struct {
 	ch chan *nats.Msg
 }
 
-func NewController(p *Options) (*Controller, error) {
+func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 	if p == nil {
 		return nil, nil
 	}
@@ -61,6 +63,7 @@ func NewController(p *Options) (*Controller, error) {
 	}
 
 	return &Controller{
+		logger:              l,
 		taskQueueConnection: nc,
 		jsClient:            js,
 		handlers:            make(map[string]Stream),
@@ -103,11 +106,10 @@ func (c *Controller) Listen(ctx context.Context) {
 			for {
 				select {
 				case msg := <-stream.ch:
-					fmt.Printf("got message: %s\n", msg.Data)
 					if err := stream.h.HandleMessage(ctx, msg); err != nil {
-						fmt.Printf("could not handle message: %s", err)
+						c.logger.Error("could not handle message", zap.Error(err))
 					} else if err = msg.Ack(); err != nil {
-						fmt.Printf("could not ACK message: %s", err)
+						c.logger.Error("could not ACK message", zap.Error(err))
 					}
 				case <-ctx.Done():
 					return
