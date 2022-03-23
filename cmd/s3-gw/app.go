@@ -144,7 +144,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	nopts := getNotificationsOptions(v, l)
-	nc, err := notifications.NewController(nopts)
+	nc, err := notifications.NewController(nopts, l)
 	if err != nil {
 		l.Fatal("failed to enable notifications", zap.Error(err))
 	}
