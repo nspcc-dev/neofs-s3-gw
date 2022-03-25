@@ -57,6 +57,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		caller api.Handler
 		ctr    auth.Center
 		obj    layer.Client
+		nc     *notifications.Controller
 
 		poolPeers = fetchPeers(l, v)
 
@@ -143,12 +144,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("failed to form resolver", zap.Error(err))
 	}
 
-	nopts := getNotificationsOptions(v, l)
-	nc, err := notifications.NewController(nopts, l)
-	if err != nil {
-		l.Fatal("failed to enable notifications", zap.Error(err))
-	}
-
 	layerCfg := &layer.Config{
 		Caches: getCacheOptions(v, l),
 		AnonKey: layer.AnonymousKey{
@@ -160,8 +155,16 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	// prepare object layer
 	obj = layer.NewLayer(l, &layerNeoFS{&neoFS}, layerCfg)
 
-	if err = obj.Initialize(ctx, nc); err != nil {
-		l.Fatal("couldn't initialize layer", zap.Error(err))
+	if v.GetBool(cfgEnableNATS) {
+		nopts := getNotificationsOptions(v, l)
+		nc, err = notifications.NewController(nopts, l)
+		if err != nil {
+			l.Fatal("failed to enable notifications", zap.Error(err))
+		}
+
+		if err = obj.Initialize(ctx, nc); err != nil {
+			l.Fatal("couldn't initialize layer", zap.Error(err))
+		}
 	}
 
 	// prepare auth center
@@ -265,10 +268,6 @@ func (a *App) Server(ctx context.Context) {
 }
 
 func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Options {
-	if enabled := v.GetBool(cfgEnableNATS); !enabled {
-		return nil
-	}
-
 	cfg := notifications.Options{}
 	cfg.URL = v.GetString(cfgNATSEndpoint)
 	cfg.Timeout = v.GetDuration(cfgNATSTimeout)

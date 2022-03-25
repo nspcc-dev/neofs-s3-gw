@@ -37,10 +37,6 @@ type Stream struct {
 }
 
 func NewController(p *Options, l *zap.Logger) (*Controller, error) {
-	if p == nil {
-		return nil, nil
-	}
-
 	ncopts := []nats.Option{
 		nats.Timeout(p.Timeout),
 	}
