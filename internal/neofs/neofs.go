@@ -3,7 +3,6 @@ package neofs
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -29,7 +27,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/token"
 )
 
 // NeoFS represents virtual connection to the NeoFS network.
@@ -39,13 +36,12 @@ type NeoFS struct {
 	pool *pool.Pool
 }
 
-// SetConnectionPool binds underlying pool.Pool. Must be
-// called on initialization stage before any usage.
-func (x *NeoFS) SetConnectionPool(p *pool.Pool) {
-	x.pool = p
+// NewNeoFS creates new NeoFS using provided pool.Pool.
+func NewNeoFS(p *pool.Pool) *NeoFS {
+	return &NeoFS{pool: p}
 }
 
-// TimeToEpoch implements authmate.NeoFS interface method.
+// TimeToEpoch implements neofs.NeoFS interface method.
 func (x *NeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
 	now := time.Now()
 	dur := futureTime.Sub(now)
@@ -103,7 +99,7 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, 
 	return curr, epoch, nil
 }
 
-// Container reads container by ID using connection pool. Returns exact one non-nil value.
+// Container implements neofs.NeoFS interface method.
 func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Container, error) {
 	res, err := x.pool.GetContainer(ctx, &idCnr)
 	if err != nil {
@@ -113,44 +109,8 @@ func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Contain
 	return res, nil
 }
 
-// ContainerExists implements authmate.NeoFS interface method.
-func (x *NeoFS) ContainerExists(ctx context.Context, idCnr cid.ID) error {
-	_, err := x.pool.GetContainer(ctx, &idCnr)
-	if err != nil {
-		return fmt.Errorf("get container via connection pool: %w", err)
-	}
-
-	return nil
-}
-
-// PrmContainerCreate groups parameters of CreateContainer operation.
-type PrmContainerCreate struct {
-	// NeoFS identifier of the container creator.
-	Creator owner.ID
-
-	// Container placement policy.
-	Policy netmap.PlacementPolicy
-
-	// Name for the container.
-	Name string
-
-	// Time when container is created.
-	Time time.Time
-
-	// Basic ACL of the container.
-	BasicACL acl.BasicACL
-
-	// Token of the container's creation session (optional, nil means session absence).
-	SessionToken *session.Token
-
-	// Attributes for optional parameters.
-	AdditionalAttributes [][2]string
-}
-
-// CreateContainer constructs new container from the parameters and saves it in NeoFS
-// using connection pool. Returns any error encountered which prevent the container
-// to be saved.
-func (x *NeoFS) CreateContainer(ctx context.Context, prm PrmContainerCreate) (*cid.ID, error) {
+// CreateContainer implements neofs.NeoFS interface method.
+func (x *NeoFS) CreateContainer(ctx context.Context, prm neofs.PrmContainerCreate) (*cid.ID, error) {
 	// fill container structure
 	cnrOptions := []container.Option{
 		container.WithPolicy(&prm.Policy),
@@ -189,8 +149,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm PrmContainerCreate) (*c
 	return idCnr, nil
 }
 
-// UserContainers reads list of user containers from NeoFS using connection pool.
-// Returns any error encountered which prevent the containers to be listed.
+// UserContainers implements neofs.NeoFS interface method.
 func (x *NeoFS) UserContainers(ctx context.Context, id owner.ID) ([]cid.ID, error) {
 	r, err := x.pool.ListContainers(ctx, &id)
 	if err != nil {
@@ -200,8 +159,7 @@ func (x *NeoFS) UserContainers(ctx context.Context, id owner.ID) ([]cid.ID, erro
 	return r, nil
 }
 
-// SetContainerEACL saves eACL table of the container in NeoFS using connection pool.
-// Returns any error encountered which prevented the eACL to be saved.
+// SetContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table) error {
 	err := x.pool.SetEACL(ctx, &table)
 	if err != nil {
@@ -211,8 +169,7 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table) error {
 	return err
 }
 
-// ContainerEACL reads eACL table of the container from NeoFS using connection pool.
-// Returns any error encountered which prevented the eACL to be read.
+// ContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, error) {
 	res, err := x.pool.GetEACL(ctx, &id)
 	if err != nil {
@@ -222,8 +179,7 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 	return res, nil
 }
 
-// DeleteContainer marks container to be removed from NeoFS using connection pool.
-// Returns any error encountered which prevented removal request to be sent.
+// DeleteContainer implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Token) error {
 	err := x.pool.DeleteContainer(ctx, &id, pool.WithSession(token))
 	if err != nil {
@@ -233,54 +189,11 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.T
 	return nil
 }
 
-type PrmObjectCreate struct {
-	// NeoFS identifier of the object creator.
-	Creator owner.ID
-
-	// NeoFS container to store the object.
-	Container cid.ID
-
-	// Object creation time.
-	Time time.Time
-
-	// Associated filename (optional).
-	Filename string
-
-	// Last NeoFS epoch of the object lifetime (optional).
-	ExpirationEpoch uint64
-
-	// Full payload size (optional).
-	PayloadSize uint64
-
-	// Key-value object attributes.
-	Attributes [][2]string
-
-	// List of ids to lock (optional).
-	Locks []oid.ID
-
-	// Object payload encapsulated in io.Reader primitive.
-	Payload io.Reader
-
-	// Bearer token to be used for the operation. Overlaps PrivateKey. Optional.
-	BearerToken *token.BearerToken
-
-	// Private key used for the operation if BearerToken is missing (in this case non-nil).
-	PrivateKey *ecdsa.PrivateKey
-}
-
-// CreateObject creates and saves a parameterized object in the specified
-// NeoFS container from a specific user. Returns ID of the saved object.
-//
-// Returns exactly one non-nil value. Returns any error encountered which
-// prevented the object to be created.
-func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID, error) {
+// CreateObject implements neofs.NeoFS interface method.
+func (x *NeoFS) CreateObject(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.ID, error) {
 	attrNum := len(prm.Attributes) + 1 // + creation time
 
 	if prm.Filename != "" {
-		attrNum++
-	}
-
-	if prm.ExpirationEpoch > 0 {
 		attrNum++
 	}
 
@@ -289,7 +202,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 
 	a = object.NewAttribute()
 	a.SetKey(object.AttributeTimestamp)
-	a.SetValue(strconv.FormatInt(prm.Time.Unix(), 10))
+	a.SetValue(strconv.FormatInt(time.Now().Unix(), 10))
 	attrs = append(attrs, *a)
 
 	for i := range prm.Attributes {
@@ -303,13 +216,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 		a = object.NewAttribute()
 		a.SetKey(object.AttributeFileName)
 		a.SetValue(prm.Filename)
-		attrs = append(attrs, *a)
-	}
-
-	if prm.ExpirationEpoch > 0 {
-		a = object.NewAttribute()
-		a.SetKey("__NEOFS__EXPIRATION_EPOCH")
-		a.SetValue(strconv.FormatUint(prm.ExpirationEpoch, 10))
 		attrs = append(attrs, *a)
 	}
 
@@ -341,11 +247,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (*oid.ID,
 	return idObj, nil
 }
 
-// SelectObjects selects user objects which match specified filters from the NeoFS container
-// using connection pool.
-//
-// Returns any error encountered which prevented the selection to be finished.
-// Returns neofs.ErrAccessDenied on access violation.
+// SelectObjects implements neofs.NeoFS interface method.
 func (x *NeoFS) SelectObjects(ctx context.Context, prm neofs.PrmObjectSelect) ([]oid.ID, error) {
 	filters := object.NewSearchFilters()
 	filters.AddRootFilter()
@@ -409,13 +311,7 @@ func (x payloadReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// ReadObject reads object part from the NeoFS container by identifier using connection pool:
-//   * if with header only, then HeadObject is called;
-//   * if with non-zero payload range only, then ObjectRange is called;
-//   * else GetObject is called.
-//
-// Returns any error encountered which prevented the object to be read.
-// Returns neofs.ErrAccessDenied on access violation.
+// ReadObject implements neofs.NeoFS interface method.
 func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs.ObjectPart, error) {
 	var addr address.Address
 	addr.SetContainerID(&prm.Container)
@@ -499,12 +395,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 	}, nil
 }
 
-// DeleteObject marks the object to be removed from the NeoFS container by identifier.
-// Successful return does not guarantee the actual removal.
-//
-// Returns ErrAccessDenied on remove access violation.
-//
-// Returns any error encountered which prevented the removal request to be sent.
+// DeleteObject implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) error {
 	var addr address.Address
 	addr.SetContainerID(&prm.Container)
@@ -531,52 +422,19 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) err
 	return nil
 }
 
-// AuthmateNeoFS is a mediator which implements authmate.NeoFS through NeoFS.
-type AuthmateNeoFS struct {
-	*NeoFS
+// ResolverNeoFS represents virtual connection to the NeoFS network.
+// It implements resolver.NeoFS.
+type ResolverNeoFS struct {
+	pool *pool.Pool
 }
 
-func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (*cid.ID, error) {
-	return x.NeoFS.CreateContainer(ctx, PrmContainerCreate{
-		Creator:  prm.Owner,
-		Policy:   prm.Policy,
-		Name:     prm.FriendlyName,
-		Time:     time.Now(),
-		BasicACL: 0b0011_1100_1000_1100_1000_1100_1100_1110, // 0x3C8C8CCE
-	})
+// NewResolverNeoFS creates new ResolverNeoFS using provided pool.Pool.
+func NewResolverNeoFS(p *pool.Pool) *ResolverNeoFS {
+	return &ResolverNeoFS{pool: p}
 }
 
-func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr address.Address) ([]byte, error) {
-	res, err := x.NeoFS.ReadObject(ctx, neofs.PrmObjectRead{
-		Container:   *addr.ContainerID(),
-		Object:      *addr.ObjectID(),
-		WithPayload: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Payload.Close()
-
-	return io.ReadAll(res.Payload)
-}
-
-func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (*oid.ID, error) {
-	return x.NeoFS.CreateObject(ctx, PrmObjectCreate{
-		Creator:         prm.Creator,
-		Container:       prm.Container,
-		Time:            prm.Time,
-		Filename:        prm.Filename,
-		ExpirationEpoch: prm.ExpirationEpoch,
-		Payload:         bytes.NewReader(prm.Payload),
-	})
-}
-
-// SystemDNS reads "SystemDNS" network parameter of the NeoFS.
-//
-// Returns exactly on non-zero value. Returns any error encountered
-// which prevented the parameter to be read.
-func (x *NeoFS) SystemDNS(ctx context.Context) (string, error) {
+// SystemDNS implements resolver.NeoFS interface method.
+func (x *ResolverNeoFS) SystemDNS(ctx context.Context) (string, error) {
 	conn, _, err := x.pool.Connection()
 	if err != nil {
 		return "", fmt.Errorf("get connection from the pool: %w", err)
@@ -605,4 +463,67 @@ func (x *NeoFS) SystemDNS(ctx context.Context) (string, error) {
 	}
 
 	return domain, nil
+}
+
+// AuthmateNeoFS is a mediator which implements authmate.NeoFS through pool.Pool.
+type AuthmateNeoFS struct {
+	neoFS *NeoFS
+}
+
+// NewAuthmateNeoFS creates new AuthmateNeoFS using provided pool.Pool.
+func NewAuthmateNeoFS(p *pool.Pool) *AuthmateNeoFS {
+	return &AuthmateNeoFS{neoFS: NewNeoFS(p)}
+}
+
+// ContainerExists implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) ContainerExists(ctx context.Context, idCnr cid.ID) error {
+	_, err := x.neoFS.Container(ctx, idCnr)
+	if err != nil {
+		return fmt.Errorf("get container via connection pool: %w", err)
+	}
+
+	return nil
+}
+
+// TimeToEpoch implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
+	return x.neoFS.TimeToEpoch(ctx, futureTime)
+}
+
+// CreateContainer implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (*cid.ID, error) {
+	return x.neoFS.CreateContainer(ctx, neofs.PrmContainerCreate{
+		Creator:  prm.Owner,
+		Policy:   prm.Policy,
+		Name:     prm.FriendlyName,
+		BasicACL: 0b0011_1100_1000_1100_1000_1100_1100_1110, // 0x3C8C8CCE
+	})
+}
+
+// ReadObjectPayload implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr address.Address) ([]byte, error) {
+	res, err := x.neoFS.ReadObject(ctx, neofs.PrmObjectRead{
+		Container:   *addr.ContainerID(),
+		Object:      *addr.ObjectID(),
+		WithPayload: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Payload.Close()
+
+	return io.ReadAll(res.Payload)
+}
+
+// CreateObject implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (*oid.ID, error) {
+	return x.neoFS.CreateObject(ctx, neofs.PrmObjectCreate{
+		Creator:   prm.Creator,
+		Container: prm.Container,
+		Filename:  prm.Filename,
+		Attributes: [][2]string{
+			{"__NEOFS__EXPIRATION_EPOCH", strconv.FormatUint(prm.ExpirationEpoch, 10)}},
+		Payload: bytes.NewReader(prm.Payload),
+	})
 }

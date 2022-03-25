@@ -38,9 +38,6 @@ type PrmObjectCreate struct {
 	// NeoFS container to store the object.
 	Container cid.ID
 
-	// Object creation time.
-	Time time.Time
-
 	// File name.
 	Filename string
 
@@ -54,7 +51,8 @@ type PrmObjectCreate struct {
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateObject creates and saves a parameterized object in the specified
-	// NeoFS container from a specific user. Returns ID of the saved object.
+	// NeoFS container from a specific user. It sets 'Timestamp' attribute to current time.
+	// Returns ID of the saved object.
 	//
 	// Returns exactly one non-nil value. Returns any error encountered which
 	// prevented the object to be created.
@@ -121,11 +119,6 @@ func (c *cred) getAccessBox(ctx context.Context, addr *address.Address) (*access
 }
 
 func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*address.Address, error) {
-	var (
-		err     error
-		created = time.Now()
-	)
-
 	if len(keys) == 0 {
 		return nil, ErrEmptyPublicKeys
 	} else if box == nil {
@@ -139,8 +132,7 @@ func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer *owner.ID, box *ac
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
 		Creator:         *issuer,
 		Container:       *idCnr,
-		Time:            created,
-		Filename:        strconv.FormatInt(created.Unix(), 10) + "_access.box",
+		Filename:        strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
 		ExpirationEpoch: expiration,
 		Payload:         data,
 	})

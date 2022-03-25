@@ -58,6 +58,7 @@ type NeoFS interface {
 	ContainerExists(context.Context, cid.ID) error
 
 	// CreateContainer creates and saves parameterized container in NeoFS.
+	// It sets 'Timestamp' attribute to current time.
 	// Returns ID of the saved container.
 	//
 	// The container must be private with GET access of OTHERS group.
