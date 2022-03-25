@@ -74,7 +74,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm neofs.PrmContainerCre
 		container.WithOwnerID(&prm.Creator),
 		container.WithPolicy(&prm.Policy),
 		container.WithCustomBasicACL(prm.BasicACL),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(prm.Time.Unix(), 10)),
+		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
 	}
 
 	if prm.Name != "" {

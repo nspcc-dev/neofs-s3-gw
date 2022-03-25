@@ -466,10 +466,5 @@ func createNeoFS(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, pe
 		return nil, err
 	}
 
-	var neoFS neofs.NeoFS
-	neoFS.SetConnectionPool(p)
-
-	return &neofs.AuthmateNeoFS{
-		NeoFS: &neoFS,
-	}, nil
+	return neofs.NewAuthmateNeoFS(p), nil
 }

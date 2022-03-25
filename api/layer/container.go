@@ -127,7 +127,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
 		Owner:              n.Owner(ctx),
-		Created:            time.Now(),
+		Created:            time.Now(), // this can be a little incorrect since the real time is set later
 		BasicACL:           p.ACL,
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
@@ -152,7 +152,6 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Policy:               *p.Policy,
 		Name:                 p.Name,
 		SessionToken:         p.SessionToken,
-		Time:                 bktInfo.Created,
 		BasicACL:             acl.BasicACL(p.ACL),
 		AdditionalAttributes: attributes,
 	}); err != nil {

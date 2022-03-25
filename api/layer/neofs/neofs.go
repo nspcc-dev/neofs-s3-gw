@@ -33,9 +33,6 @@ type PrmContainerCreate struct {
 	// Token of the container's creation session. Nil means session absence.
 	SessionToken *session.Token
 
-	// Time when container is created.
-	Time time.Time
-
 	// Basic ACL of the container.
 	BasicACL acl.BasicACL
 
@@ -144,6 +141,7 @@ var ErrAccessDenied = errors.New("access denied")
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateContainer creates and saves parameterized container in NeoFS.
+	// It sets 'Timestamp' attribute to current time.
 	// Returns ID of the saved container.
 	//
 	// Returns exactly one non-nil value. Returns any error encountered which
@@ -206,6 +204,7 @@ type NeoFS interface {
 	ReadObject(context.Context, PrmObjectRead) (*ObjectPart, error)
 
 	// CreateObject creates and saves parameterized object in the NeoFS container.
+	// It sets 'Timestamp' attribute to current time.
 	// Returns ID of the saved object.
 	//
 	// Creation time should be written into object (UTC).

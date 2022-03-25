@@ -121,11 +121,8 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("couldn't generate random key", zap.Error(err))
 	}
 
-	var neoFS neofs.NeoFS
-	neoFS.SetConnectionPool(conns)
-
 	resolveCfg := &resolver.Config{
-		NeoFS: &neoFS,
+		NeoFS: neofs.NewResolverNeoFS(conns),
 	}
 
 	if rpcEndpoint := v.GetString(cfgRPCEndpoint); rpcEndpoint != "" {
@@ -153,7 +150,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	// prepare object layer
-	obj = layer.NewLayer(l, &layerNeoFS{&neoFS}, layerCfg)
+	obj = layer.NewLayer(l, neofs.NewNeoFS(conns), layerCfg)
 
 	if v.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(v, l)
@@ -168,9 +165,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	// prepare auth center
-	ctr = auth.New(&neofs.AuthmateNeoFS{
-		NeoFS: &neoFS,
-	}, key, getAccessBoxCacheConfig(v, l))
+	ctr = auth.New(neofs.NewAuthmateNeoFS(conns), key, getAccessBoxCacheConfig(v, l))
 	handlerOptions := getHandlerOptions(v, l)
 
 	if caller, err = handler.New(l, obj, handlerOptions); err != nil {
