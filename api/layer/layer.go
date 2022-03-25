@@ -281,10 +281,6 @@ func (n *layer) EphemeralKey() *keys.PublicKey {
 }
 
 func (n *layer) Initialize(ctx context.Context, c Notificator) error {
-	if c == nil {
-		return nil
-	}
-
 	if n.IsNotificationEnabled() {
 		return fmt.Errorf("already initialized")
 	}
