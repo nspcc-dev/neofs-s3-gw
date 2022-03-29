@@ -6,7 +6,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -19,8 +18,6 @@ import (
 //  * parameterized level (debug by default)
 //  * console encoding
 //  * ISO8601 time encoding
-//  * app_name field set to neofs-s3-gw
-//  * app_version field set to version.Version
 //
 // Logger records a stack trace for all messages at or above fatal level.
 //
@@ -55,10 +52,7 @@ func newLogger(v *viper.Viper) *zap.Logger {
 		panic(fmt.Sprintf("build zap logger instance: %v", err))
 	}
 
-	return l.With(
-		zap.String("app_name", "neofs-s3-gw"),
-		zap.String("app_version", version.Version),
-	)
+	return l
 }
 
 func main() {
