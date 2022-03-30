@@ -276,7 +276,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				return cli.Exit(fmt.Sprintf("couldn't parse 'bearer-rules' flag: %s", err.Error()), 7)
 			}
 
-			sessionRules, err := getSessionRules(sessionTokenFlag)
+			sessionRules, skipSessionRules, err := getSessionRules(sessionTokenFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("couldn't parse 'session-token' flag: %s", err.Error()), 8)
 			}
@@ -291,6 +291,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				GatesPublicKeys:       gatesPublicKeys,
 				EACLRules:             bearerRules,
 				SessionTokenRules:     sessionRules,
+				SkipSessionRules:      skipSessionRules,
 				ContainerPolicies:     policies,
 				Lifetime:              lifetimeFlag,
 				AwsCliCredentialsFile: awcCliCredFile,
@@ -343,11 +344,15 @@ func getJSONRules(val string) ([]byte, error) {
 	return nil, fmt.Errorf("coudln't read json file or its content is invalid")
 }
 
-func getSessionRules(r string) ([]byte, error) {
+// getSessionRules reads json session rules.
+// Returns true if rules must be skipped.
+func getSessionRules(r string) ([]byte, bool, error) {
 	if r == "none" {
-		return nil, nil
+		return nil, true, nil
 	}
-	return getJSONRules(r)
+
+	data, err := getJSONRules(r)
+	return data, false, err
 }
 
 func obtainSecret() *cli.Command {

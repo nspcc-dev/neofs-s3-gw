@@ -98,6 +98,7 @@ type (
 		GatesPublicKeys       []*keys.PublicKey
 		EACLRules             []byte
 		SessionTokenRules     []byte
+		SkipSessionRules      bool
 		Lifetime              time.Duration
 		AwsCliCredentialsFile string
 		ContainerPolicies     ContainerPolicies
@@ -439,7 +440,7 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*acc
 		gates[i] = accessbox.NewGateData(gateKey, bearerTokens[i])
 	}
 
-	if options.SessionTokenRules != nil {
+	if !options.SkipSessionRules {
 		sessionRules, err := buildContext(options.SessionTokenRules)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
