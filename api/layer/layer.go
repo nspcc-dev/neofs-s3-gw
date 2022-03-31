@@ -107,6 +107,12 @@ type (
 		Lock    *data.ObjectLock
 	}
 
+	DeleteObjectParams struct {
+		BktInfo     *data.BucketInfo
+		BktSettings *data.BucketSettings
+		Objects     []*VersionedObject
+	}
+
 	// PutSettingsParams stores object copy request parameters.
 	PutSettingsParams struct {
 		BktInfo  *data.BucketInfo
@@ -220,7 +226,7 @@ type (
 		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
-		DeleteObjects(ctx context.Context, bktInfo *data.BucketInfo, objects []*VersionedObject) ([]*VersionedObject, error)
+		DeleteObjects(ctx context.Context, p *DeleteObjectParams) ([]*VersionedObject, error)
 		DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error
 		DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) error
 		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
@@ -536,11 +542,17 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 }
 
 // DeleteObject removes all objects with passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) *VersionedObject {
+func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
 	var (
 		err error
 		ids []*oid.ID
+
+		versioningEnabled = false
 	)
+
+	if settings != nil {
+		versioningEnabled = settings.VersioningEnabled
+	}
 
 	p := &PutObjectParams{
 		BktInfo: bkt,
@@ -548,8 +560,6 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 		Reader:  bytes.NewReader(nil),
 		Header:  map[string]string{},
 	}
-
-	versioningEnabled := n.isVersioningEnabled(ctx, bkt)
 
 	// Current implementation doesn't consider "unversioned" mode (so any deletion creates "delete-mark" object).
 	// The reason is difficulties to determinate whether versioning mode is "unversioned" or "suspended".
@@ -613,12 +623,12 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 }
 
 // DeleteObjects from the storage.
-func (n *layer) DeleteObjects(ctx context.Context, bktInfo *data.BucketInfo, objects []*VersionedObject) ([]*VersionedObject, error) {
-	for i, obj := range objects {
-		objects[i] = n.deleteObject(ctx, bktInfo, obj)
+func (n *layer) DeleteObjects(ctx context.Context, p *DeleteObjectParams) ([]*VersionedObject, error) {
+	for i, obj := range p.Objects {
+		p.Objects[i] = n.deleteObject(ctx, p.BktInfo, p.BktSettings, obj)
 	}
 
-	return objects, nil
+	return p.Objects, nil
 }
 
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {

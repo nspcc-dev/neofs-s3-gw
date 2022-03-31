@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
@@ -58,10 +59,15 @@ func (tc *testContext) getObject(objectName, versionID string, needError bool) (
 	return objInfo, content.Bytes()
 }
 
-func (tc *testContext) deleteObject(objectName, versionID string) {
-	deletedObjects, err := tc.layer.DeleteObjects(tc.ctx, tc.bktInfo, []*VersionedObject{
-		{Name: objectName, VersionID: versionID},
-	})
+func (tc *testContext) deleteObject(objectName, versionID string, settings *data.BucketSettings) {
+	p := &DeleteObjectParams{
+		BktInfo:     tc.bktInfo,
+		BktSettings: settings,
+		Objects: []*VersionedObject{
+			{Name: objectName, VersionID: versionID},
+		},
+	}
+	deletedObjects, err := tc.layer.DeleteObjects(tc.ctx, p)
 	require.NoError(tc.t, err)
 	for _, obj := range deletedObjects {
 		require.NoError(tc.t, obj.Error)
@@ -223,16 +229,17 @@ func TestSimpleNoVersioning(t *testing.T) {
 
 func TestVersioningDeleteObject(t *testing.T) {
 	tc := prepareContext(t)
+	settings := &data.BucketSettings{VersioningEnabled: true}
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{VersioningEnabled: true},
+		Settings: settings,
 	})
 	require.NoError(t, err)
 
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
 
-	tc.deleteObject(tc.obj, "")
+	tc.deleteObject(tc.obj, "", settings)
 	tc.getObject(tc.obj, "", true)
 
 	tc.checkListObjects()
@@ -240,9 +247,10 @@ func TestVersioningDeleteObject(t *testing.T) {
 
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	tc := prepareContext(t)
+	settings := &data.BucketSettings{VersioningEnabled: true}
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{VersioningEnabled: true},
+		Settings: settings,
 	})
 	require.NoError(t, err)
 
@@ -251,18 +259,18 @@ func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	objV3Content := []byte("content obj1 v3")
 	objV3Info := tc.putObject(objV3Content)
 
-	tc.deleteObject(tc.obj, objV2Info.Version())
+	tc.deleteObject(tc.obj, objV2Info.Version(), settings)
 	tc.getObject(tc.obj, objV2Info.Version(), true)
 
 	_, buffer3 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, objV3Content, buffer3)
 
-	tc.deleteObject(tc.obj, "")
+	tc.deleteObject(tc.obj, "", settings)
 	tc.getObject(tc.obj, "", true)
 
 	for _, ver := range tc.listVersions().DeleteMarker {
 		if ver.IsLatest {
-			tc.deleteObject(tc.obj, ver.Object.Version())
+			tc.deleteObject(tc.obj, ver.Object.Version(), settings)
 		}
 	}
 
@@ -351,7 +359,10 @@ func TestNoVersioningDeleteObject(t *testing.T) {
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
 
-	tc.deleteObject(tc.obj, "")
+	versioning, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
+	require.Error(t, err, errors.GetAPIError(errors.ErrNoSuchKey))
+
+	tc.deleteObject(tc.obj, "", versioning)
 	tc.getObject(tc.obj, "", true)
 	tc.checkListObjects()
 }
