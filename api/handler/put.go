@@ -223,6 +223,16 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s := &layer.SendNotificationParams{
+		Event:   layer.EventObjectCreatedPut,
+		ObjInfo: info,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
 	if containsACLHeaders(r) {
 		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, info); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
@@ -318,6 +328,16 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
+	}
+
+	s := &layer.SendNotificationParams{
+		Event:   layer.EventObjectCreatedPost,
+		ObjInfo: info,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
 	if acl := auth.MultipartFormValue(r, "acl"); acl != "" {
