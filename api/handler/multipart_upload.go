@@ -436,7 +436,17 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	if _, err = h.obj.DeleteObjects(r.Context(), bktInfo, []*layer.VersionedObject{{Name: initPart.Name}}); err != nil {
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+	}
+
+	p := &layer.DeleteObjectParams{
+		BktInfo:     bktInfo,
+		BktSettings: bktSettings,
+		Objects:     []*layer.VersionedObject{{Name: initPart.Name}},
+	}
+	if _, err = h.obj.DeleteObjects(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not delete init file of multipart upload", reqInfo, err, additional...)
 		return
 	}
@@ -447,9 +457,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		Key:    objInfo.Name,
 	}
 
-	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
-		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
-	} else if settings.VersioningEnabled {
+	if bktSettings != nil && bktSettings.VersioningEnabled {
 		w.Header().Set(api.AmzVersionID, objInfo.Version())
 	}
 

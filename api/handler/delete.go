@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -66,7 +68,18 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deletedObjects, err := h.obj.DeleteObjects(r.Context(), bktInfo, versionedObject)
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	p := &layer.DeleteObjectParams{
+		BktInfo:     bktInfo,
+		BktSettings: bktSettings,
+		Objects:     versionedObject,
+	}
+	deletedObjects, err := h.obj.DeleteObjects(r.Context(), p)
 	deletedObject := deletedObjects[0]
 	if err == nil {
 		err = deletedObject.Error
@@ -145,7 +158,18 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return nil
 	})
 
-	deletedObjects, err := h.obj.DeleteObjects(r.Context(), bktInfo, toRemove)
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	p := &layer.DeleteObjectParams{
+		BktInfo:     bktInfo,
+		BktSettings: bktSettings,
+		Objects:     toRemove,
+	}
+	deletedObjects, err := h.obj.DeleteObjects(r.Context(), p)
 	if !requested.Quiet && err != nil {
 		h.logAndSendError(w, "couldn't delete objects", reqInfo, err)
 		return
