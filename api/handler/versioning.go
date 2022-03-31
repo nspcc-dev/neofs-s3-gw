@@ -62,10 +62,6 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchBucket) {
-			h.logAndSendError(w, "couldn't get versioning settings", reqInfo, err)
-			return
-		}
 		h.log.Warn("couldn't get version settings object: default version settings will be used",
 			zap.String("request_id", reqInfo.RequestID),
 			zap.String("method", reqInfo.API),
