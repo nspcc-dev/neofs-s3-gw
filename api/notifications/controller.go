@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -15,26 +16,37 @@ const (
 	DefaultTimeout = 30 * time.Second
 )
 
-type Options struct {
-	URL                       string
-	TLSCertFilepath           string
-	TLSAuthPrivateKeyFilePath string
-	Timeout                   time.Duration
-	RootCAFiles               []string
-}
+type (
+	Options struct {
+		URL                       string
+		TLSCertFilepath           string
+		TLSAuthPrivateKeyFilePath string
+		Timeout                   time.Duration
+		RootCAFiles               []string
+	}
 
-type Controller struct {
-	logger              *zap.Logger
-	taskQueueConnection *nats.Conn
-	jsClient            nats.JetStreamContext
-	handlers            map[string]Stream
-	mu                  sync.RWMutex
-}
+	Controller struct {
+		logger              *zap.Logger
+		taskQueueConnection *nats.Conn
+		jsClient            nats.JetStreamContext
+		handlers            map[string]Stream
+		mu                  sync.RWMutex
+	}
 
-type Stream struct {
-	h  layer.MsgHandler
-	ch chan *nats.Msg
-}
+	Stream struct {
+		h  layer.MsgHandler
+		ch chan *nats.Msg
+	}
+
+	TestEvent struct {
+		Service   string
+		Event     string
+		Time      time.Time
+		Bucket    string
+		RequestID string
+		HostID    string
+	}
+)
 
 func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 	ncopts := []nats.Option{
@@ -113,4 +125,22 @@ func (c *Controller) Listen(ctx context.Context) {
 			}
 		}(stream)
 	}
+}
+
+func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID string) error {
+	event := &TestEvent{
+		Service:   "NeoFS S3",
+		Event:     "s3:TestEvent",
+		Time:      time.Now(),
+		Bucket:    bucketName,
+		RequestID: requestID,
+		HostID:    HostID,
+	}
+
+	msg, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal test event: %w", err)
+	}
+
+	return c.publish(topic, msg)
 }

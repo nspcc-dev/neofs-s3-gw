@@ -32,6 +32,7 @@ type (
 	Notificator interface {
 		Subscribe(context.Context, string, MsgHandler) error
 		Listen(context.Context)
+		SendTestNotification(topic, bucketName, requestID, HostID string) error
 	}
 
 	MsgHandler interface {

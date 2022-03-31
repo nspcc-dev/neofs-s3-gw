@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/xml"
 	"io"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
@@ -14,10 +16,74 @@ import (
 
 type (
 	PutBucketNotificationConfigurationParams struct {
-		BktInfo *data.BucketInfo
-		Reader  io.Reader
+		RequestInfo *api.ReqInfo
+		BktInfo     *data.BucketInfo
+		Reader      io.Reader
 	}
 )
+
+const (
+	filterRuleSuffixName = "suffix"
+	filterRulePrefixName = "prefix"
+
+	EventObjectCreated                                = "s3:ObjectCreated:*"
+	EventObjectCreatedPut                             = "s3:ObjectCreated:Put"
+	EventObjectCreatedPost                            = "s3:ObjectCreated:Post"
+	EventObjectCreatedCopy                            = "s3:ObjectCreated:Copy"
+	EventReducedRedundancyLostObject                  = "s3:ReducedRedundancyLostObject"
+	EventObjectCreatedCompleteMultipartUpload         = "s3:ObjectCreated:CompleteMultipartUpload"
+	EventObjectRemoved                                = "s3:ObjectRemoved:*"
+	EventObjectRemovedDelete                          = "s3:ObjectRemoved:Delete"
+	EventObjectRemovedDeleteMarkerCreated             = "s3:ObjectRemoved:DeleteMarkerCreated"
+	EventObjectRestore                                = "s3:ObjectRestore:*"
+	EventObjectRestorePost                            = "s3:ObjectRestore:Post"
+	EventObjectRestoreCompleted                       = "s3:ObjectRestore:Completed"
+	EventReplication                                  = "s3:Replication:*"
+	EventReplicationOperationFailedReplication        = "s3:Replication:OperationFailedReplication"
+	EventReplicationOperationNotTracked               = "s3:Replication:OperationNotTracked"
+	EventReplicationOperationMissedThreshold          = "s3:Replication:OperationMissedThreshold"
+	EventReplicationOperationReplicatedAfterThreshold = "s3:Replication:OperationReplicatedAfterThreshold"
+	EventObjectRestoreDelete                          = "s3:ObjectRestore:Delete"
+	EventLifecycleTransition                          = "s3:LifecycleTransition"
+	EventIntelligentTiering                           = "s3:IntelligentTiering"
+	EventObjectACLPut                                 = "s3:ObjectAcl:Put"
+	EventLifecycleExpiration                          = "s3:LifecycleExpiration:*"
+	EventLifecycleExpirationDelete                    = "s3:LifecycleExpiration:Delete"
+	EventLifecycleExpirationDeleteMarkerCreated       = "s3:LifecycleExpiration:DeleteMarkerCreated"
+	EventObjectTagging                                = "s3:ObjectTagging:*"
+	EventObjectTaggingPut                             = "s3:ObjectTagging:Put"
+	EventObjectTaggingDelete                          = "s3:ObjectTagging:Delete"
+)
+
+var validEvents = map[string]struct{}{
+	EventReducedRedundancyLostObject:                  {},
+	EventObjectCreated:                                {},
+	EventObjectCreatedPut:                             {},
+	EventObjectCreatedPost:                            {},
+	EventObjectCreatedCopy:                            {},
+	EventObjectCreatedCompleteMultipartUpload:         {},
+	EventObjectRemoved:                                {},
+	EventObjectRemovedDelete:                          {},
+	EventObjectRemovedDeleteMarkerCreated:             {},
+	EventObjectRestore:                                {},
+	EventObjectRestorePost:                            {},
+	EventObjectRestoreCompleted:                       {},
+	EventReplication:                                  {},
+	EventReplicationOperationFailedReplication:        {},
+	EventReplicationOperationNotTracked:               {},
+	EventReplicationOperationMissedThreshold:          {},
+	EventReplicationOperationReplicatedAfterThreshold: {},
+	EventObjectRestoreDelete:                          {},
+	EventLifecycleTransition:                          {},
+	EventIntelligentTiering:                           {},
+	EventObjectACLPut:                                 {},
+	EventLifecycleExpiration:                          {},
+	EventLifecycleExpirationDelete:                    {},
+	EventLifecycleExpirationDeleteMarkerCreated:       {},
+	EventObjectTagging:                                {},
+	EventObjectTaggingPut:                             {},
+	EventObjectTaggingDelete:                          {},
+}
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
 	if !n.IsNotificationEnabled() {
@@ -36,7 +102,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return errors.GetAPIError(errors.ErrMalformedXML)
 	}
 
-	if completed, err = n.checkAndCompleteNotificationConfiguration(conf); err != nil {
+	if completed, err = n.checkBucketConfiguration(conf, p.RequestInfo); err != nil {
 		return err
 	}
 	if completed {
@@ -113,31 +179,61 @@ func (n *layer) getNotificationConf(ctx context.Context, bkt *data.BucketInfo, s
 	return conf, nil
 }
 
-func (n *layer) checkAndCompleteNotificationConfiguration(c *data.NotificationConfiguration) (completed bool, err error) {
-	if c == nil {
+// checkBucketConfiguration checks notification configuration and generates ID for configurations with empty ids.
+func (n *layer) checkBucketConfiguration(conf *data.NotificationConfiguration, r *api.ReqInfo) (completed bool, err error) {
+	if conf == nil {
 		return
 	}
 
-	if c.TopicConfigurations != nil || c.LambdaFunctionConfigurations != nil {
+	if conf.TopicConfigurations != nil || conf.LambdaFunctionConfigurations != nil {
 		return completed, errors.GetAPIError(errors.ErrNotificationTopicNotSupported)
 	}
 
-	for i, q := range c.QueueConfigurations {
+	for i, q := range conf.QueueConfigurations {
 		if err = checkEvents(q.Events); err != nil {
 			return
 		}
+
+		if err = checkRules(q.Filter.Key.FilterRules); err != nil {
+			return
+		}
+
+		if err = n.ncontroller.SendTestNotification(q.QueueArn, r.BucketName, r.RequestID, r.Host); err != nil {
+			return
+		}
+
 		if q.ID == "" {
 			completed = true
-			c.QueueConfigurations[i].ID = uuid.NewString()
+			conf.QueueConfigurations[i].ID = uuid.NewString()
 		}
 	}
 
 	return
 }
 
+func checkRules(rules []data.FilterRule) error {
+	names := make(map[string]struct{})
+
+	for _, r := range rules {
+		if r.Name != filterRuleSuffixName && r.Name != filterRulePrefixName {
+			return errors.GetAPIError(errors.ErrFilterNameInvalid)
+		}
+		if _, ok := names[r.Name]; ok {
+			if r.Name == filterRuleSuffixName {
+				return errors.GetAPIError(errors.ErrFilterNameSuffix)
+			}
+			return errors.GetAPIError(errors.ErrFilterNamePrefix)
+		}
+
+		names[r.Name] = struct{}{}
+	}
+
+	return nil
+}
+
 func checkEvents(events []string) error {
 	for _, e := range events {
-		if _, ok := data.ValidEvents[e]; !ok {
+		if _, ok := validEvents[e]; !ok {
 			return errors.GetAPIError(errors.ErrEventNotification)
 		}
 	}
