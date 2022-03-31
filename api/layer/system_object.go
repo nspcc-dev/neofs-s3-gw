@@ -239,6 +239,9 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	obj, err := n.getSystemObjectFromNeoFS(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
+		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
+			return &data.BucketSettings{}, nil
+		}
 		return nil, err
 	}
 
