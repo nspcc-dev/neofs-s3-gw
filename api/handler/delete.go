@@ -57,9 +57,10 @@ type DeleteObjectsResponse struct {
 
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
 	versionedObject := []*layer.VersionedObject{{
 		Name:      reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+		VersionID: versionID,
 	}}
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
@@ -94,6 +95,41 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			zap.String("bucket_name", reqInfo.BucketName),
 			zap.String("object_name", reqInfo.ObjectName),
 			zap.Error(err))
+	}
+
+	var m *layer.SendNotificationParams
+
+	if bktSettings.VersioningEnabled && len(versionID) == 0 {
+		m = &layer.SendNotificationParams{
+			Event: layer.EventObjectRemovedDeleteMarkerCreated,
+			ObjInfo: &data.ObjectInfo{
+				Name:    reqInfo.ObjectName,
+				HashSum: deletedObject.DeleteMarkerEtag,
+			},
+			BktInfo: bktInfo,
+			ReqInfo: reqInfo,
+		}
+	} else {
+		oid := oid.NewID()
+		if len(versionID) != 0 {
+			if err := oid.Parse(versionID); err != nil {
+				h.log.Error("couldn't send notification: %w", zap.Error(err))
+			}
+		}
+
+		m = &layer.SendNotificationParams{
+			Event: layer.EventObjectRemovedDelete,
+			ObjInfo: &data.ObjectInfo{
+				Name: reqInfo.ObjectName,
+				ID:   oid,
+			},
+			BktInfo: bktInfo,
+			ReqInfo: reqInfo,
+		}
+	}
+
+	if err := h.obj.SendNotifications(r.Context(), m); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
 	if deletedObject.DeleteMarkVersion != "" {

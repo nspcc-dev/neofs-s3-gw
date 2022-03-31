@@ -181,6 +181,7 @@ type (
 		Name              string
 		VersionID         string
 		DeleteMarkVersion string
+		DeleteMarkerEtag  string
 		Error             error
 	}
 
@@ -617,6 +618,9 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	}
 	if len(obj.VersionID) == 0 {
 		obj.DeleteMarkVersion = objInfo.Version()
+		if versioningEnabled {
+			obj.DeleteMarkerEtag = objInfo.HashSum
+		}
 	}
 
 	return obj
