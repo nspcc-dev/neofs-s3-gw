@@ -426,6 +426,16 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
+	s := &layer.SendNotificationParams{
+		Event:   layer.EventObjectCreatedCompleteMultipartUpload,
+		ObjInfo: objInfo,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
 	if _, err = h.obj.DeleteObjects(r.Context(), bktInfo, []*layer.VersionedObject{{Name: initPart.Name}}); err != nil {
 		h.logAndSendError(w, "could not delete init file of multipart upload", reqInfo, err, additional...)
 		return
