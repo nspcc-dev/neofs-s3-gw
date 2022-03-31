@@ -20,6 +20,14 @@ type (
 		BktInfo     *data.BucketInfo
 		Reader      io.Reader
 	}
+
+	SendNotificationParams struct {
+		Event   string
+		ObjInfo *data.ObjectInfo
+		BktInfo *data.BucketInfo
+		ReqInfo *api.ReqInfo
+		User    string
+	}
 )
 
 const (
@@ -179,6 +187,29 @@ func (n *layer) getNotificationConf(ctx context.Context, bkt *data.BucketInfo, s
 	return conf, nil
 }
 
+func (n *layer) SendNotifications(ctx context.Context, p *SendNotificationParams) error {
+	if !n.IsNotificationEnabled() {
+		return nil
+	}
+
+	conf, err := n.getNotificationConf(ctx, p.BktInfo, p.BktInfo.NotificationConfigurationObjectName())
+	if err != nil {
+		return err
+	}
+	if conf.IsEmpty() {
+		return nil
+	}
+
+	box, err := GetBoxData(ctx)
+	if err == nil {
+		p.User = box.Gate.BearerToken.OwnerID().String()
+	}
+
+	topics := filterSubjects(conf, p.Event, p.ObjInfo.Name)
+
+	return n.ncontroller.SendNotifications(topics, p)
+}
+
 // checkBucketConfiguration checks notification configuration and generates ID for configurations with empty ids.
 func (n *layer) checkBucketConfiguration(conf *data.NotificationConfiguration, r *api.ReqInfo) (completed bool, err error) {
 	if conf == nil {
@@ -209,6 +240,40 @@ func (n *layer) checkBucketConfiguration(conf *data.NotificationConfiguration, r
 	}
 
 	return
+}
+
+func filterSubjects(conf *data.NotificationConfiguration, eventType, objName string) map[string]string {
+	topics := make(map[string]string)
+
+	for _, t := range conf.QueueConfigurations {
+		event := false
+		for _, e := range t.Events {
+			// the second condition is comparison with events ending with *:
+			// s3:ObjectCreated:*, s3:ObjectRemoved:* etc without the last char
+			if eventType == e || strings.HasPrefix(eventType, e[:len(e)-1]) {
+				event = true
+				break
+			}
+		}
+
+		if !event {
+			continue
+		}
+
+		filter := true
+		for _, f := range t.Filter.Key.FilterRules {
+			if f.Name == filterRulePrefixName && !strings.HasPrefix(objName, f.Value) ||
+				f.Name == filterRuleSuffixName && !strings.HasSuffix(objName, f.Value) {
+				filter = false
+				break
+			}
+		}
+		if filter {
+			topics[t.ID] = t.QueueArn
+		}
+	}
+
+	return topics
 }
 
 func checkRules(rules []data.FilterRule) error {
