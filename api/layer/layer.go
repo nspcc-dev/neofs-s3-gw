@@ -32,6 +32,7 @@ type (
 	Notificator interface {
 		Subscribe(context.Context, string, MsgHandler) error
 		Listen(context.Context)
+		SendNotifications(topics map[string]string, p *SendNotificationParams) error
 		SendTestNotification(topic, bucketName, requestID, HostID string) error
 	}
 
@@ -234,6 +235,8 @@ type (
 
 		PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error
 		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)
+
+		SendNotifications(ctx context.Context, p *SendNotificationParams) error
 	}
 )
 

@@ -8,12 +8,21 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
 const (
 	DefaultTimeout = 30 * time.Second
+
+	// EventVersion23 is used for lifecycle, tiering, objectACL, objectTagging, object restoration notifications.
+	EventVersion23 = "2.3"
+	// EventVersion22 is used for replication notifications.
+	EventVersion22 = "2.2"
+	// EventVersion21 is used for all other notification types.
+	EventVersion21 = "2.1"
 )
 
 type (
@@ -45,6 +54,51 @@ type (
 		Bucket    string
 		RequestID string
 		HostID    string
+	}
+
+	Event struct {
+		Records []EventRecord `json:"Records"`
+	}
+
+	EventRecord struct {
+		EventVersion      string            `json:"eventVersion"`
+		EventSource       string            `json:"eventSource"`         // neofs:s3
+		AWSRegion         string            `json:"awsRegion,omitempty"` // empty
+		EventTime         time.Time         `json:"eventTime"`
+		EventName         string            `json:"eventName"`
+		UserIdentity      UserIdentity      `json:"userIdentity"`
+		RequestParameters RequestParameters `json:"requestParameters"`
+		ResponseElements  map[string]string `json:"responseElements"`
+		S3                S3Entity          `json:"s3"`
+	}
+
+	UserIdentity struct {
+		PrincipalID string `json:"principalId"`
+	}
+
+	RequestParameters struct {
+		SourceIPAddress string `json:"sourceIPAddress"`
+	}
+
+	S3Entity struct {
+		SchemaVersion   string `json:"s3SchemaVersion"`
+		ConfigurationID string `json:"configurationId,omitempty"`
+		Bucket          Bucket `json:"bucket"`
+		Object          Object `json:"object"`
+	}
+
+	Bucket struct {
+		Name          string       `json:"name"`
+		OwnerIdentity UserIdentity `json:"ownerIdentity,omitempty"`
+		Arn           string       `json:"arn,omitempty"`
+	}
+
+	Object struct {
+		Key       string `json:"key"`
+		Size      int64  `json:"size,omitempty"`
+		VersionID string `json:"versionId,omitempty"`
+		ETag      string `json:"eTag,omitempty"`
+		Sequencer string `json:"sequencer,omitempty"`
 	}
 )
 
@@ -127,6 +181,23 @@ func (c *Controller) Listen(ctx context.Context) {
 	}
 }
 
+func (c *Controller) SendNotifications(topics map[string]string, p *layer.SendNotificationParams) error {
+	event := prepareEvent(p.Event, p.User, p.BktInfo, p.ObjInfo, p.ReqInfo)
+
+	for id, topic := range topics {
+		event.Records[0].S3.ConfigurationID = id
+		msg, err := json.Marshal(event)
+		if err != nil {
+			c.logger.Error("couldn't marshal an event", zap.String("subject", topic), zap.Error(err))
+		}
+		if err = c.publish(topic, msg); err != nil {
+			c.logger.Error("couldn't send an event to topic", zap.String("subject", topic), zap.Error(err))
+		}
+	}
+
+	return nil
+}
+
 func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID string) error {
 	event := &TestEvent{
 		Service:   "NeoFS S3",
@@ -143,4 +214,49 @@ func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID s
 	}
 
 	return c.publish(topic, msg)
+}
+
+func prepareEvent(eventName string, initiatorID string, bkt *data.BucketInfo, obj *data.ObjectInfo, reqInfo *api.ReqInfo) *Event {
+	return &Event{
+		Records: []EventRecord{
+			{
+				EventVersion: EventVersion21,
+				EventSource:  "neofs:s3",
+				AWSRegion:    "",
+				EventTime:    time.Now(),
+				EventName:    eventName,
+				UserIdentity: UserIdentity{
+					PrincipalID: initiatorID,
+				},
+				RequestParameters: RequestParameters{
+					SourceIPAddress: reqInfo.RemoteHost,
+				},
+				ResponseElements: nil,
+				S3: S3Entity{
+					SchemaVersion: "1.0",
+					// ConfigurationID is skipped and will be placed later
+					Bucket: Bucket{
+						Name:          bkt.Name,
+						OwnerIdentity: UserIdentity{PrincipalID: bkt.Owner.String()},
+						Arn:           bkt.Name,
+					},
+					Object: Object{
+						Key:       obj.Name,
+						Size:      obj.Size,
+						VersionID: obj.Version(),
+						ETag:      obj.HashSum,
+						Sequencer: "",
+					},
+				},
+			},
+		},
+	}
+}
+
+func (c *Controller) publish(topic string, msg []byte) error {
+	if _, err := c.jsClient.Publish(topic, msg); err != nil {
+		return fmt.Errorf("couldn't send  event: %w", err)
+	}
+
+	return nil
 }
