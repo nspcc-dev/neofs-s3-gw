@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
@@ -182,7 +180,7 @@ func (c *Controller) Listen(ctx context.Context) {
 }
 
 func (c *Controller) SendNotifications(topics map[string]string, p *layer.SendNotificationParams) error {
-	event := prepareEvent(p.Event, p.User, p.BktInfo, p.ObjInfo, p.ReqInfo)
+	event := prepareEvent(p)
 
 	for id, topic := range topics {
 		event.Records[0].S3.ConfigurationID = id
@@ -216,7 +214,7 @@ func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID s
 	return c.publish(topic, msg)
 }
 
-func prepareEvent(eventName string, initiatorID string, bkt *data.BucketInfo, obj *data.ObjectInfo, reqInfo *api.ReqInfo) *Event {
+func prepareEvent(p *layer.SendNotificationParams) *Event {
 	return &Event{
 		Records: []EventRecord{
 			{
@@ -224,27 +222,27 @@ func prepareEvent(eventName string, initiatorID string, bkt *data.BucketInfo, ob
 				EventSource:  "neofs:s3",
 				AWSRegion:    "",
 				EventTime:    time.Now(),
-				EventName:    eventName,
+				EventName:    p.Event,
 				UserIdentity: UserIdentity{
-					PrincipalID: initiatorID,
+					PrincipalID: p.User,
 				},
 				RequestParameters: RequestParameters{
-					SourceIPAddress: reqInfo.RemoteHost,
+					SourceIPAddress: p.ReqInfo.RemoteHost,
 				},
 				ResponseElements: nil,
 				S3: S3Entity{
 					SchemaVersion: "1.0",
 					// ConfigurationID is skipped and will be placed later
 					Bucket: Bucket{
-						Name:          bkt.Name,
-						OwnerIdentity: UserIdentity{PrincipalID: bkt.Owner.String()},
-						Arn:           bkt.Name,
+						Name:          p.BktInfo.Name,
+						OwnerIdentity: UserIdentity{PrincipalID: p.BktInfo.Owner.String()},
+						Arn:           p.BktInfo.Name,
 					},
 					Object: Object{
-						Key:       obj.Name,
-						Size:      obj.Size,
-						VersionID: obj.Version(),
-						ETag:      obj.HashSum,
+						Key:       p.ObjInfo.Name,
+						Size:      p.ObjInfo.Size,
+						VersionID: p.ObjInfo.Version(),
+						ETag:      p.ObjInfo.HashSum,
 						Sequencer: "",
 					},
 				},
