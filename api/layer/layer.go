@@ -547,13 +547,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	var (
 		err error
 		ids []*oid.ID
-
-		versioningEnabled = false
 	)
-
-	if settings != nil {
-		versioningEnabled = settings.VersioningEnabled
-	}
 
 	p := &PutObjectParams{
 		BktInfo: bkt,
@@ -565,7 +559,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	// Current implementation doesn't consider "unversioned" mode (so any deletion creates "delete-mark" object).
 	// The reason is difficulties to determinate whether versioning mode is "unversioned" or "suspended".
 
-	if obj.VersionID == unversionedObjectVersionID || !versioningEnabled && len(obj.VersionID) == 0 {
+	if obj.VersionID == unversionedObjectVersionID || !settings.VersioningEnabled && len(obj.VersionID) == 0 {
 		p.Header[versionsUnversionedAttr] = "true"
 		versions, err := n.headVersions(ctx, bkt, obj.Name)
 		if err != nil {
@@ -618,7 +612,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	}
 	if len(obj.VersionID) == 0 {
 		obj.DeleteMarkVersion = objInfo.Version()
-		if versioningEnabled {
+		if settings.VersioningEnabled {
 			obj.DeleteMarkerEtag = objInfo.HashSum
 		}
 	}

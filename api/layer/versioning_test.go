@@ -10,7 +10,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
@@ -360,7 +359,7 @@ func TestNoVersioningDeleteObject(t *testing.T) {
 	tc.putObject([]byte("content obj1 v2"))
 
 	versioning, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
-	require.Error(t, err, errors.GetAPIError(errors.ErrNoSuchKey))
+	require.NoError(t, err)
 
 	tc.deleteObject(tc.obj, "", versioning)
 	tc.getObject(tc.obj, "", true)
