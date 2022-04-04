@@ -213,19 +213,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 
 	var errs []error
 	for _, obj := range deletedObjects {
-		if obj.Error == nil {
-			deletedObj := DeletedObject{
-				ObjectIdentifier: ObjectIdentifier{
-					ObjectName: obj.Name,
-					VersionID:  obj.VersionID,
-				},
-				DeleteMarkerVersionID: obj.DeleteMarkVersion,
-			}
-			if deletedObj.DeleteMarkerVersionID != "" {
-				deletedObj.DeleteMarker = true
-			}
-			response.DeletedObjects = append(response.DeletedObjects, deletedObj)
-		} else if !requested.Quiet {
+		if obj.Error != nil {
 			code := "BadRequest"
 			if s3err, ok := obj.Error.(errors.Error); ok {
 				code = s3err.Code
@@ -237,15 +225,26 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 				VersionID: obj.VersionID,
 			})
 			errs = append(errs, obj.Error)
+		} else if !requested.Quiet {
+			deletedObj := DeletedObject{
+				ObjectIdentifier: ObjectIdentifier{
+					ObjectName: obj.Name,
+					VersionID:  obj.VersionID,
+				},
+				DeleteMarkerVersionID: obj.DeleteMarkVersion,
+			}
+			if deletedObj.DeleteMarkerVersionID != "" {
+				deletedObj.DeleteMarker = true
+			}
+			response.DeletedObjects = append(response.DeletedObjects, deletedObj)
 		}
 	}
-
-	if !requested.Quiet && len(errs) != 0 {
-		additional := []zap.Field{
+	if len(errs) != 0 {
+		fields := []zap.Field{
 			zap.Array("objects", marshaler),
 			zap.Errors("errors", errs),
 		}
-		h.logAndSendError(w, "could not delete objects", reqInfo, nil, additional...)
+		h.log.Error("couldn't delete objects", fields...)
 	}
 
 	if err := api.EncodeToResponse(w, response); err != nil {
