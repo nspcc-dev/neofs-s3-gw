@@ -568,7 +568,6 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 		last := versions.getLast(FromUnversioned())
 		if last == nil {
-			obj.Error = errors.GetAPIError(errors.ErrInvalidVersion)
 			return obj
 		}
 		p.Header[VersionsDeleteMarkAttr] = last.Version()
