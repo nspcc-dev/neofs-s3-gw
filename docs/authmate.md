@@ -18,22 +18,18 @@ token, the object needs to be stored in a container available for the gateway
 to read, and it needs to be encrypted with this gateway's key (among others
 potentially).
 
-## Variables
-Authmate supports the following variables to decrypt wallets provided by `--wallet` and `--gate-wallet`
-parameters respectevely:
-* `AUTHMATE_WALLET_PASSPHRASE`
-* `AUTHMATE_WALLET_GATE_PASSPHRASE`
-  
-If the passphrase is not specified, you will be asked to enter the password interactively:
-```
-Enter password for wallet.json > 
-```
-
+1. [Generation of wallet](#Generation of wallet)
+2. [Issuance of a secret](#Issuance of a secret)
+   1. [CLI parameters](#CLI parameters)
+   2. [Bearer tokens](#Bearer tokens)
+   3. [Session tokens](#Session tokens)
+   4. [Containers policy](#Containers policy)
+3. [Obtainment of a secret](#Obtainment of a secret access key)
 ## Generation of wallet
 
-To generate wallets for gateways, run the following command:
+To generate a wallet for a gateway, run the following command:
 
-```
+```shell
 $ ./neo-go wallet init -a -w wallet.json
 
 Enter the name of the account > AccountTestName
@@ -74,8 +70,8 @@ Confirm passphrase >
 wallet successfully created, file location is wallet.json
 ```
 
-To get public key from wallet run:
-```
+To get public key from the wallet:
+```shell
 $ ./bin/neo-go wallet dump-keys -w wallet.json
 
 NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
@@ -84,32 +80,93 @@ NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 
 ## Issuance of a secret
 
-To issue a secret means to create a Bearer and (optionally) Session tokens and
+To issue a secret means to create a Bearer and, optionally, Session tokens and
 put them as an object into a container on the NeoFS network.
 
-By default, the tool creates a container with a name the same as container ID in NeoFS and ACL 
-0x3c8c8cce (all operations are forbidden for `OTHERS` and `BEARER` user groups, 
-except for `GET`). 
+### CLI parameters
 
-Also, you can put the tokens into an existing container via `--container-id` 
-parameter, but this way is **not recommended**.
+**Required parameters:**
+* `--wallet` - a path to a wallet `.json` file. You can provide a passphrase to decrypt
+a wallet via environment variable `AUTHMATE_WALLET_PASSPHRASE`, or you will be asked to enter a passphrase 
+interactively. You can also specify an account address to use from a wallet using the `--address` parameter.
+* `--peer` - address of a NeoFS peer to connect to
+* `--gate-public-key` --  public `secp256r1` 33-byte short key of a gate (use flags repeatedly for multiple gates). The tokens are encrypted
+by a set of gateway keys, so you need to pass them as well.
 
-The tokens are encrypted by a set of gateway keys, so you need to pass them as well.
+You can issue a secret using the parameters above only. The tool will 
+1. create a new container  
+   1. without a friendly name
+   2. with ACL `0x3c8c8cce` - all operations are forbidden for `OTHERS` and `BEARER` user groups, except for `GET` 
+   3. with policy `REP 2 IN X CBF 3 SELECT 2 FROM * AS X` 
+2. put bearer and session tokens with default rules (details in [Bearer tokens](#Bearer tokens) and 
+[Session tokens](#Session tokens))
 
-Creation of the bearer token is mandatory, while creation of the session token is
-optional. 
-
-Rules for bearer token can be set via param `bearer-rules` (json-string and file path allowed), if it is not set,
-it will be auto-generated with values:
-
+E.g.:
+```shell
+$ neofs-authmate issue-secret --wallet wallet.json \
+ --peer 192.168.130.71:8080 \
+ --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf\
+ --gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967
+ 
+ Enter password for wallet.json > 
+ 
+{
+  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
+  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
+  "owner_private_key": "274fdd6e71fc6a6b8fe77bec500254115d66d6d17347d7db0880d2eb80afc72a",
+  "container_id":"5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT"
+}
 ```
+
+`access_key_id` and `secret_access_key` are AWS credentials that you can use with any S3 client.
+
+`access_key_id` consists of Base58 encoded containerID(cid) and objectID(oid) stored on the NeoFS network and containing
+the secret. Format of `access_key_id`: `%cid0%oid`, where 0(zero) is a delimiter.
+
+**Optional parameters:**
+* `--container-id` - you can put the tokens into an existing container, but this way is ***not recommended***.
+* `--container-friendly-name` -- name of a container with tokens, by default container will not have a friendly name
+* `--container-placement-policy` -  placement policy of auth container to put the secret into. Default value is
+`REP 2 IN X CBF 3 SELECT 2 FROM * AS X`
+* `--lifetime`-- lifetime of tokens.  For example 50h30m (note: max time unit is an hour so to set a day you should use 
+24h). Default value is `720h` (30 days). It will be ceil rounded to the nearest amount of epoch
+* `--aws-cli-credentials` - path to the aws cli credentials file, where authmate will write `access_key_id` and 
+`secret_access_key` to
+
+### Bearer tokens
+
+Creation of the bearer tokens is mandatory.
+
+Rules for bearer token can be set via parameter `--bearer-rules` (json-string and file path allowed):
+```shell
+$ neofs-authmate issue-secret --wallet wallet.json \
+--peer 192.168.130.71:8080 \
+--gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
+--bearer-rules bearer-rules.json  
+```
+where content of `bearer-rules.json`:
+```json
+{
+  "records": [
+    {"operation": "PUT", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+    {"operation": "GET", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+    {"operation": "HEAD", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+    {"operation": "DELETE", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+    {"operation": "SEARCH", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+    {"operation": "GETRANGE", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+    {"operation": "GETRANGEHASH", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]}
+  ]
+}
+```
+If bearer rules are not set, a token will be auto-generated with a value:
+```json
 {
     "version": {
         "major": 2,
-        "minor": 6
+        "minor": 11
     },
     "containerID": {
-        "value": "%CID"
+        "value": null
     },
     "records": [
         {
@@ -127,16 +184,18 @@ it will be auto-generated with values:
 }
 ```
 
-With session token, there is 3 options: 
-* append `--session-token` parameter with your custom rules in json format (as a string or file path, see an example below)
+### Session tokens
 
-**NB!** To create buckets in NeoFS it's necessary to have session tokens with `PUT` and `SETEACL` permissions, that's why 
-the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 
-forgot about the rule with `SETEACL`. 
-
-* append `--session-token` parameter with the value `none` -- no session token will be created
-* skip the parameter and `authmate` will create and put session tokens with default rules:
+With session token, there are 3 options: 
+1. append `--session-token` parameter with your custom rules in json format (as a string or file path). E.g.:
+```shell
+$ neofs-authmate issue-secret --wallet wallet.json \
+--peer 192.168.130.71:8080 \
+--gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
+--session-token session.json
 ```
+where content of `session.json`:
+```json
 [
   {
     "verb": "PUT",
@@ -152,14 +211,24 @@ forgot about the rule with `SETEACL`.
     "verb": "SETEACL",
     "wildcard": true,
     "containerID": null
-  },
+  }
 ]
 ```
 
+> **_NB!_** To create buckets in NeoFS it's necessary to have session tokens with `PUT` and `SETEACL` permissions, that's why 
+the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 
+forgot about the rule with `SETEACL`.
+
+2. append `--session-token` parameter with the value `none` -- no session token will be created
+3. skip the parameter, and `authmate` will create session tokens with default rules (the same as in `session.json`
+in example above)
+
+### Containers policy
+
 Rules for mapping of `LocationConstraint` ([aws spec](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html#API_CreateBucket_RequestBody)) 
 to `PlacementPolicy` ([neofs spec](https://github.com/nspcc-dev/neofs-spec/blob/master/01-arch/02-policy.md)) 
-can be set via param `container-policy` (json-string and file path allowed):
-```
+can be set via parameter `--container-policy` (json-string and file path allowed):
+```json
 {
   "rep-3": "REP 3",
   "complex": "REP 1 IN X CBF 1 SELECT 1 FROM * AS X",
@@ -167,43 +236,18 @@ can be set via param `container-policy` (json-string and file path allowed):
 }
 ```
 
-Example of a command to issue a secret with custom rules for multiple gates:
-```
-$ ./neofs-authmate issue-secret --wallet wallet.json \
---peer 192.168.130.71:8080 \
---bearer-rules '{"records":[{"operation":"PUT","action":"ALLOW","filters":[],"targets":[{"role":"OTHERS","keys":[]}]}]}' \
---gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
---gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967 \
---session-token '[{"verb":"DELETE","wildcard":false,"containerID":{"value":"%CID"}}]'
---container-policy '{"rep-3": "REP 3"}'
-
-Enter password for wallet.json > 
-{
-  "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
-  "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c",
-  "owner_private_key": "274fdd6e71fc6a6b8fe77bec500254115d66d6d17347d7db0880d2eb80afc72a",
-  "container_id":"5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT"
-}
-```
-
-Access key ID and secret access key are AWS credentials that you can use with
-any S3 client.
-
-Access key ID consists of Base58 encoded containerID(cid) and objectID(oid) stored on the NeoFS network and containing 
-the secret. Format of access_key_id: `%cid0%oid`, where 0(zero) is a delimiter.
-
 ## Obtainment of a secret access key
 
 You can get a secret access key associated with an access key ID by obtaining a
 secret stored on the NeoFS network. Here is an example of providing one password (for `wallet.json`) via env variable 
 and the other (for `gate-wallet.json`) interactively:
 
-```
- $ AUTHMATE_WALLET_PASSPHRASE=some-pwd \
-  ./neofs-authmate obtain-secret --wallet wallet.json \
- --peer 192.168.130.71:8080 \
- --gate-wallet gate-wallet.json \
- --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
+```shell
+$ AUTHMATE_WALLET_PASSPHRASE=some-pwd \
+neofs-authmate obtain-secret --wallet wallet.json \
+--peer 192.168.130.71:8080 \
+--gate-wallet gate-wallet.json \
+--access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
 
 Enter password for gate-wallet.json >
 {
