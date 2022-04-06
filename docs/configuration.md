@@ -1,37 +1,51 @@
 # Configuration
 
-Actually, everything available as a CLI parameter can also be specified via
-environment variables, so they're not specifically mentioned in most cases
-(see `--help` also). If you prefer a config file you can use it in yaml format.
+There are three ways to configure the S3 GW:
+1. CLI parameters
+2. YAML file 
+3. Environment variables
 
-## Nodes and weights
+Everything available as a CLI parameter can also be specified via environment variables and almost everything can be 
+specified via `.yaml` configuration file. 
+
+But **not vice versa**, some parameters can be configured only with environment variables/configuration file. 
+Most of these parameters have default values, therefore, these ways to configure the gateway are optional and 
+basic configuration can be completed with CLI parameters only.
+
+1. [CLI parameters](#CLI parameters)
+    1. [Nodes and weights](#Nodes and weights)
+    2. [Wallet](#Wallet)
+    3. [Binding and TLS](#Listening on address and TLS)
+    4. [RPC endpoint and resolving of bucket names](#RPC endpoint and resolving of bucket names)
+    5. [Processing of requests](#Processing of requests)
+    6. [Connection to NeoFS](#Connection to NeoFS)
+    7. [Monitoring and metrics](#Monitoring and metrics)
+2. [YAML file and environment variables](#YAML file and environment variables)
+   1. [Notifications](#Notifications)
+
+
+## CLI parameters
+
+### Nodes and weights
 
 You can specify multiple `-p` options to add more NeoFS nodes; this will make
 a gateway spread requests equally among them (using weight 1 for every node):
 
-```
+```shell
 $ neofs-s3-gw -p 192.168.130.72:8080 -p 192.168.130.71:8080
 ```
-If you want some specific load distribution proportions, use weights, but keep it in mind that they
-can only be specified via environment variables:
+If you want some specific load distribution proportions, use weights and priorities, they
+can only be specified via environment variables or configuration file.
 
-```
-$ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 S3_GW_PEERS_0_WEIGHT=9 \
-  S3_GW_PEERS_1_ADDRESS=192.168.130.71:8080 S3_GW_PEERS_1_WEIGHT=1 neofs-s3-gw
-```
-This command will make gateway use 192.168.130.72 for 90% of the requests and
-192.168.130.71 for the remaining 10%.
+### Wallet
 
-## Key
+Wallet (`--wallet`) is a mandatory parameter. It is a path to a wallet file. You can provide a passphrase to decrypt 
+a wallet via env variable or conf file, or you will be asked to enter a password interactively.
+You can also specify an account address to use from a wallet using the `--address` parameter.
 
-Wallet (`--wallet`) is a mandatory parameter. It is a path to a wallet file. You can provide password to decrypt a wallet
-via `S3_GW_WALLET_PASSPHRASE` variable or you will be asked to enter a password interactively. 
-You can also specify an account address to use from a wallet using `--address` parameter.
+### Listening on address and TLS
 
-## Binding and TLS
-
-Gateway binds to `0.0.0.0:8080` by default, and you can change that with
-`--listen_address` option.
+Gateway listens on `0.0.0.0:8080` by default, and you can change that with the `--listen_address` option.
 
 It can also provide TLS interface for its users, just specify paths to the key and
 certificate files via `--tls.key_file` and `--tls.cert_file` parameters. Note
@@ -39,92 +53,77 @@ that using these options makes gateway TLS-only, if you need to serve both TLS
 and plain text you either have to run two gateway instances or use some
 external redirecting solution.
 
-Example to bind to `192.168.130.130:443` and serve TLS there (keys and nodes
+Example to bind to `192.168.130.130:443` and serve TLS there (keys and nodes are
 omitted):
 
-```
+```shell
 $ neofs-s3-gw --listen_address 192.168.130.130:443 \
   --tls.key_file=key.pem --tls.cert_file=cert.pem
 ```
 
-## Monitoring and metrics
+### RPC endpoint and resolving of bucket names
+
+To set RPC endpoint specify a value of parameter `-r` or `--rpc-endpoint`. The parameter is **required if** another 
+parameter's `--resolve-order` value contains `nns`.
+
+```shell
+$ neofs-s3-gw --rpc-endpoint http://morph-chain.neofs.devenv:30333/ --resolve-order nns,dns
+```
+
+### Processing of requests
+
+Maximum number of clients whose requests can be handled by the gateway can be specified by the value of 
+`--max_clients_count` parameter, the default value is 100. 
+`--max_clients_deadline` defines deadline after which the gate sends error `RequestTimeout` to a client, default value 
+is 30 seconds.
+
+```shell
+$ neofs-s3-gw --max_clients_count 150 --max_clients_deadline 1m
+```
+
+### Connection to NeoFS
+
+Timeout to connect to NeoFS nodes can be set with `--connect_timeout` (default 30s)
+and timeout to check node health during rebalance`--request_timeout` (default 15s).
+
+Also, interval to check node health can be specified by `--rebalance_timer` value, default value is 15s.
+
+```shell
+$ neofs-s3-gw --request_timeout 15s --connect_timeout 1m --rebalance_timer 1h
+```
+
+### Monitoring and metrics
 
 Pprof and Prometheus are integrated into the gateway, but not enabled by
 default. To enable them, use `--pprof` and `--metrics` flags or
 `S3_GW_PPROF`/`S3_GW_METRICS` environment variables.
 
-## Yaml file
-Configuration file is optional and can be used instead of environment variables/other parameters. 
-It can be specified with `--config` parameter:
-```
+## YAML file and environment variables
+
+Example of YAML configuration file: [.yaml-example](/config/config.yaml)
+Examples of environment variables: [.env-example](/config/config.env).
+
+A path to a configuration file can be specified with `--config` parameter:
+
+```shell
 $ neofs-s3-gw --config your-config.yaml
 ```
 
-Configuration file example:
-```
-listen_address: 0.0.0.0:8084
+Parameters of the following groups can be configured via `.yaml` file or environment variables only:
+1. logging -- logging level
+2. caching -- lifetime and size for each cache
+3. notifications
+4. CORS
+5. default policy of placing containers in NeoFS
 
-wallet:
-  passphrase: 123456
+### Notifications
 
-logger:
-  level: debug
+You can turn on notifications about successful completions of basic operations, and the gateway will send notifications 
+via NATS JetStream.
 
-peers:
-  0:
-    address: s01.neofs.devenv:8080
-    weight: 1
-```
+To enable notifications you need:
+1. to configure the NATS server with JetStream
+2. to specify NATS parameters for the S3 GW. It's ***necessary*** to define a values of `nats.enable` or 
+`S3_GW_NATS_ENABLED` as `True` 
+3. to configure notifications in a bucket
 
-To know the nesting level of the variable, you need to cut off the prefix `S3_GW` from the variable and split the rest parts by `_`.
-For example, variable `S3_GW_PEERS_0_WEIGHT=1` will be transformed to:
-```
-peers:
-  0:
-    weight: 1
-```
-
-If a parameter doesn't support environment variable (e.g. `--listen_address 0.0.0.0:8084`) form, it is used as:
-```
-listen_address: 0.0.0.0:8084
-```
-
-### Default policy of placing containers in NeoFS
-
-If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway 
-will put the container with default policy. It can be specified via environment variable, e.g.: 
-```
-S3_GW_DEFAULT_POLICY=REP 1 CBF 1 SELECT 1 FROM *
-```
-or via `.yaml` config file, e.g.:
-```
-default_policy: REP 1
-```
-
-If the value is not set at all it will be set as `REP 3`.
-
-### Cache parameters
-
-Parameters for caches in s3-gw can be specified in a .yaml config file. E.g.:
-```
-cache:
-  objects:
-    lifetime: 300s
-    size: 150
-  list:
-    lifetime: 1m
-    size: 100
-  names:
-    lifetime: 1m
-    size: 1000
-  buckets:
-    lifetime: 1m
-    size: 500
-  system:
-    lifetime: 2m
-    size: 1000
-  accessbox:
-    lifetime: 5m
-    size: 10
-```
-If invalid values are set, the gateway will use default values instead.
