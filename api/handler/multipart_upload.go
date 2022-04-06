@@ -127,12 +127,12 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	)
 
 	if containsACLHeaders(r) {
-		gateKey, err := h.gateKey(r.Context())
+		key, err := h.bearerTokenIssuerKey(r.Context())
 		if err != nil {
 			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
 			return
 		}
-		data.ACL, err = parseACLHeaders(r.Header, gateKey)
+		data.ACL, err = parseACLHeaders(r.Header, key)
 		if err != nil {
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return
