@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -145,30 +146,31 @@ func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) gateKey(ctx context.Context) (*keys.PublicKey, error) {
-	gateKey := h.obj.EphemeralKey()
+func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, error) {
 	box, err := layer.GetBoxData(ctx)
-	if err == nil {
-		if box.Gate.GateKey == nil {
-			return nil, fmt.Errorf("gate key must not be nil")
-		}
-		gateKey = box.Gate.GateKey
+	if err != nil {
+		return nil, err
 	}
 
-	return gateKey, nil
+	key, err := keys.NewPublicKeyFromBytes(box.Gate.BearerToken.Signature().Key(), elliptic.P256())
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }
 
 func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	gateKey, err := h.gateKey(r.Context())
+	key, err := h.bearerTokenIssuerKey(r.Context())
 	if err != nil {
-		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+		h.logAndSendError(w, "couldn't get bearer token issuer key", reqInfo, err)
 		return
 	}
 
 	list := &AccessControlPolicy{}
 	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r.Header, gateKey)
+		list, err = parseACLHeaders(r.Header, key)
 		if err != nil {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
@@ -256,7 +258,7 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
-	gateKey, err := h.gateKey(r.Context())
+	key, err := h.bearerTokenIssuerKey(r.Context())
 	if err != nil {
 		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
 		return
@@ -264,7 +266,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 
 	list := &AccessControlPolicy{}
 	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r.Header, gateKey)
+		list, err = parseACLHeaders(r.Header, key)
 		if err != nil {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
@@ -375,16 +377,16 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func parseACLHeaders(header http.Header, gateKey *keys.PublicKey) (*AccessControlPolicy, error) {
+func parseACLHeaders(header http.Header, key *keys.PublicKey) (*AccessControlPolicy, error) {
 	var err error
 	acp := &AccessControlPolicy{Owner: Owner{
-		ID:          hex.EncodeToString(gateKey.Bytes()),
-		DisplayName: gateKey.Address(),
+		ID:          hex.EncodeToString(key.Bytes()),
+		DisplayName: key.Address(),
 	}}
 	acp.AccessControlList = []*Grant{{
 		Grantee: &Grantee{
-			ID:          hex.EncodeToString(gateKey.Bytes()),
-			DisplayName: gateKey.Address(),
+			ID:          hex.EncodeToString(key.Bytes()),
+			DisplayName: key.Address(),
 			Type:        acpCanonicalUser,
 		},
 		Permission: aclFullControl,
