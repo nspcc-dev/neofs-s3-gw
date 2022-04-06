@@ -462,11 +462,11 @@ func containsACLHeaders(r *http.Request) bool {
 
 func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) (*eacl.Table, error) {
 	var newEaclTable *eacl.Table
-	gateKey, err := h.gateKey(r.Context())
+	key, err := h.bearerTokenIssuerKey(r.Context())
 	if err != nil {
 		return nil, err
 	}
-	objectACL, err := parseACLHeaders(r.Header, gateKey)
+	objectACL, err := parseACLHeaders(r.Header, key)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse object acl: %w", err)
 	}
@@ -552,13 +552,13 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateKey, err := h.gateKey(r.Context())
+	key, err := h.bearerTokenIssuerKey(r.Context())
 	if err != nil {
-		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+		h.logAndSendError(w, "couldn't get bearer token signature key", reqInfo, err)
 		return
 	}
 
-	bktACL, err := parseACLHeaders(r.Header, gateKey)
+	bktACL, err := parseACLHeaders(r.Header, key)
 	if err != nil {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
