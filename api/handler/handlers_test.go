@@ -17,9 +17,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/logger"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type handlerContext struct {
@@ -43,8 +43,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	l, err := logger.New(logger.WithTraceLevel("panic"))
-	require.NoError(t, err)
+	l := zap.NewNop()
 	tp := neofstest.NewTestNeoFS()
 
 	testResolver := &resolver.BucketResolver{Name: "test_resolver"}

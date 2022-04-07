@@ -453,16 +453,18 @@ func obtainSecret() *cli.Command {
 func createNeoFS(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, peerAddress string) (authmate.NeoFS, error) {
 	log.Debug("prepare connection pool")
 
-	pb := new(pool.Builder)
-	pb.AddNode(peerAddress, 1, 1)
+	var prm pool.InitParameters
+	prm.SetKey(key)
+	prm.SetNodeDialTimeout(poolConnectTimeout)
+	prm.SetHealthcheckTimeout(poolRequestTimeout)
+	prm.AddNode(pool.NewNodeParam(1, peerAddress, 1))
 
-	opts := &pool.BuilderOptions{
-		Key:                   key,
-		NodeConnectionTimeout: poolConnectTimeout,
-		NodeRequestTimeout:    poolRequestTimeout,
-	}
-	p, err := pb.Build(ctx, opts)
+	p, err := pool.NewPool(prm)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = p.Dial(ctx); err != nil {
 		return nil, err
 	}
 

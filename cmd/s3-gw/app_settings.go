@@ -120,9 +120,8 @@ var ignore = map[string]struct{}{
 	cmdVersion: {},
 }
 
-func fetchPeers(l *zap.Logger, v *viper.Viper) *pool.Builder {
-	pb := new(pool.Builder)
-
+func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.NodeParam {
+	var nodes []pool.NodeParam
 	for i := 0; ; i++ {
 		key := cfgPeers + "." + strconv.Itoa(i) + "."
 		address := v.GetString(key + "address")
@@ -140,14 +139,14 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) *pool.Builder {
 			priority = 1
 		}
 
-		pb.AddNode(address, priority, weight)
+		nodes = append(nodes, pool.NewNodeParam(priority, address, weight))
 
 		l.Info("added connection peer",
 			zap.String("address", address),
 			zap.Float64("weight", weight))
 	}
 
-	return pb
+	return nodes
 }
 
 func fetchDomains(v *viper.Viper) []string {

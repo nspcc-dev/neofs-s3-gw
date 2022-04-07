@@ -59,7 +59,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		obj    layer.Client
 		nc     *notifications.Controller
 
-		poolPeers = fetchPeers(l, v)
+		prmPool pool.InitParameters
 
 		reBalance  = defaultRebalanceTimer
 		conTimeout = defaultConnectTimeout
@@ -104,15 +104,21 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	l.Info("using credentials",
 		zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
 
-	opts := &pool.BuilderOptions{
-		Key:                     &key.PrivateKey,
-		NodeConnectionTimeout:   conTimeout,
-		NodeRequestTimeout:      reqTimeout,
-		ClientRebalanceInterval: reBalance,
+	prmPool.SetKey(&key.PrivateKey)
+	prmPool.SetNodeDialTimeout(conTimeout)
+	prmPool.SetHealthcheckTimeout(reqTimeout)
+	prmPool.SetClientRebalanceInterval(reBalance)
+	for _, peer := range fetchPeers(l, v) {
+		prmPool.AddNode(peer)
 	}
-	conns, err := poolPeers.Build(ctx, opts)
+
+	conns, err := pool.NewPool(prmPool)
 	if err != nil {
 		l.Fatal("failed to create connection pool", zap.Error(err))
+	}
+
+	if err = conns.Dial(ctx); err != nil {
+		l.Fatal("failed to dial connection pool", zap.Error(err))
 	}
 
 	// prepare random key for anonymous requests

@@ -1,9 +1,7 @@
 package layer
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -180,45 +178,11 @@ func (n *layer) setContainerEACLTable(ctx context.Context, idCnr *cid.ID, table 
 		table.SetSessionToken(boxData.Gate.SessionTokenForSetEACL())
 	}
 
-	if err := n.neoFS.SetContainerEACL(ctx, *table); err != nil {
-		return err
-	}
-
-	return n.waitEACLPresence(ctx, *idCnr, table, defaultWaitParams())
+	return n.neoFS.SetContainerEACL(ctx, *table)
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, idCnr *cid.ID) (*eacl.Table, error) {
 	return n.neoFS.ContainerEACL(ctx, *idCnr)
-}
-
-type waitParams struct {
-	WaitTimeout  time.Duration
-	PollInterval time.Duration
-}
-
-func defaultWaitParams() *waitParams {
-	return &waitParams{
-		WaitTimeout:  60 * time.Second,
-		PollInterval: 3 * time.Second,
-	}
-}
-
-func (n *layer) waitEACLPresence(ctx context.Context, idCnr cid.ID, table *eacl.Table, params *waitParams) error {
-	exp, err := table.Marshal()
-	if err != nil {
-		return fmt.Errorf("couldn't marshal eacl: %w", err)
-	}
-
-	return waitFor(ctx, params, func(ctx context.Context) bool {
-		eaclTable, err := n.neoFS.ContainerEACL(ctx, idCnr)
-		if err == nil {
-			got, err := eaclTable.Marshal()
-			if err == nil && bytes.Equal(exp, got) {
-				return true
-			}
-		}
-		return false
-	})
 }
 
 func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
@@ -228,43 +192,5 @@ func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
 		sessionToken = boxData.Gate.SessionTokenForDelete()
 	}
 
-	if err = n.neoFS.DeleteContainer(ctx, *idCnr, sessionToken); err != nil {
-		return err
-	}
-
-	return n.waitForContainerRemoved(ctx, idCnr, defaultWaitParams())
-}
-
-func (n *layer) waitForContainerRemoved(ctx context.Context, idCnr *cid.ID, params *waitParams) error {
-	return waitFor(ctx, params, func(ctx context.Context) bool {
-		_, err := n.neoFS.Container(ctx, *idCnr)
-		// TODO: (neofs-s3-gw#367) handle NeoFS API status error
-		if err != nil && strings.Contains(err.Error(), "container not found") {
-			return true
-		}
-		return false
-	})
-}
-
-// waitFor await that given condition will be met in waitParams time.
-func waitFor(ctx context.Context, params *waitParams, condition func(context.Context) bool) error {
-	wctx, cancel := context.WithTimeout(ctx, params.WaitTimeout)
-	defer cancel()
-	ticker := time.NewTimer(params.PollInterval)
-	defer ticker.Stop()
-	wdone := wctx.Done()
-	done := ctx.Done()
-	for {
-		select {
-		case <-done:
-			return ctx.Err()
-		case <-wdone:
-			return wctx.Err()
-		case <-ticker.C:
-			if condition(ctx) {
-				return nil
-			}
-			ticker.Reset(params.PollInterval)
-		}
-	}
+	return n.neoFS.DeleteContainer(ctx, *idCnr, sessionToken)
 }
