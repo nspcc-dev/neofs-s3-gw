@@ -23,7 +23,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/owner"
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -330,15 +329,6 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *neofs.PrmAuth) {
 	}
 
 	prm.PrivateKey = &n.anonKey.Key.PrivateKey
-}
-
-// CallOptions returns []pool.CallOption options: client.WithBearer or client.WithKey (if request is anonymous).
-func (n *layer) CallOptions(ctx context.Context) []pool.CallOption {
-	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
-		return []pool.CallOption{pool.WithBearer(bd.Gate.BearerToken)}
-	}
-
-	return []pool.CallOption{pool.WithKey(&n.anonKey.Key.PrivateKey)}
 }
 
 // GetBucketInfo returns bucket info by name.
