@@ -189,17 +189,15 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
-
 	if p.Header[VersionsDeleteMarkAttr] == DelMarkFullObject {
 		if last := versions.getLast(); last != nil {
 			n.objCache.Delete(last.Address())
 		}
 	}
 
-	id, err := n.neoFS.CreateObject(ctx, prm)
+	id, err := n.objectPut(ctx, prm)
 	if err != nil {
-		return nil, n.transformNeofsError(ctx, err)
+		return nil, err
 	}
 
 	if p.Lock != nil {
@@ -449,6 +447,14 @@ func (n *layer) objectDelete(ctx context.Context, idCnr *cid.ID, idObj *oid.ID) 
 	n.objCache.Delete(newAddress(idCnr, idObj))
 
 	return n.transformNeofsError(ctx, n.neoFS.DeleteObject(ctx, prm))
+}
+
+// objectPut prepare auth parameters and invoke neofs.CreateObject.
+func (n *layer) objectPut(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.ID, error) {
+	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+
+	id, err := n.neoFS.CreateObject(ctx, prm)
+	return id, n.transformNeofsError(ctx, err)
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.

@@ -117,9 +117,9 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 
-	id, err := n.neoFS.CreateObject(ctx, prm)
+	id, err := n.objectPut(ctx, prm)
 	if err != nil {
-		return nil, n.transformNeofsError(ctx, err)
+		return nil, err
 	}
 
 	meta, err := n.objectHead(ctx, p.BktInfo.CID, id)
