@@ -17,10 +17,6 @@ import (
 )
 
 const (
-	minimumTTLInMinutes = 5
-
-	defaultTTL = minimumTTLInMinutes * time.Minute
-
 	defaultRebalanceTimer  = 15 * time.Second
 	defaultRequestTimeout  = 15 * time.Second
 	defaultConnectTimeout  = 30 * time.Second
@@ -44,7 +40,6 @@ const ( // Settings.
 	cfgTLSCertFile = "tls.cert_file"
 
 	// Timeouts.
-	cfgConnectionTTL  = "con_ttl"
 	cfgConnectTimeout = "connect_timeout"
 	cfgRequestTimeout = "request_timeout"
 	cfgRebalanceTimer = "rebalance_timer"
@@ -80,9 +75,6 @@ const ( // Settings.
 	// MaxClients.
 	cfgMaxClientsCount    = "max_clients_count"
 	cfgMaxClientsDeadline = "max_clients_deadline"
-
-	// gRPC.
-	cfgGRPCVerbose = "verbose"
 
 	// Metrics / Profiler / Web.
 	cfgEnableMetrics  = "metrics"
@@ -188,15 +180,12 @@ func newSettings() *viper.Viper {
 	flags.String(cfgAddress, "", `address of wallet account`)
 	config := flags.String(cmdConfig, "", "config path")
 
-	flags.Bool(cfgGRPCVerbose, false, "set debug mode of gRPC connections")
 	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")
 	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "set gRPC connect timeout")
 	flags.Duration(cfgRebalanceTimer, defaultRebalanceTimer, "set gRPC connection rebalance timer")
 
 	flags.Int(cfgMaxClientsCount, defaultMaxClientsCount, "set max-clients count")
 	flags.Duration(cfgMaxClientsDeadline, defaultMaxClientsDeadline, "set max-clients deadline")
-
-	ttl := flags.DurationP(cfgConnectionTTL, "t", defaultTTL, "set gRPC connection time to live")
 
 	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
 	flags.String(cfgTLSCertFile, "", "TLS certificate file to use")
@@ -272,8 +261,6 @@ func newSettings() *viper.Viper {
 	case versionFlag != nil && *versionFlag:
 		fmt.Printf("NeoFS S3 gateway %s\n", version.Version)
 		os.Exit(0)
-	case ttl != nil && ttl.Minutes() < minimumTTLInMinutes:
-		fmt.Printf("connection ttl should not be less than %s", defaultTTL)
 	}
 
 	if v.IsSet(cmdConfig) {
