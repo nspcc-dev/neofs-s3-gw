@@ -1,0 +1,102 @@
+# Wallet address, path to the wallet must be set as cli parameter or environment variable
+wallet:
+  passphrase: "" # Passphrase to decrypt wallet.
+
+# Account address. If omitted default one will be used.
+address: NfgHwwTi3wHAS8aFAN243C5vGbkYDpqLHP
+
+# Nodes configuration
+# This configuration makes the gateway use the first node (grpc://s01.neofs.devenv:8080)
+# while it's healthy. Otherwise, gateway uses the second node (grpc://s01.neofs.devenv:8080)
+# for 10% of requests and the third node (grpc://s03.neofs.devenv:8080) for 90% of requests.
+# Until nodes with the same priority level are healthy
+# nodes with other priority are not used.
+# The lower the value, the higher the priority.
+peers:
+  0:
+    address: node1.neofs:8080
+    priority: 1
+    weight: 1
+  1:
+    address: node2.neofs:8080
+    priority: 2
+    weight: 0.1
+  2:
+    address: node3.neofs:8080
+    priority: 2
+    weight: 0.9
+
+# Address to listen and TLS
+listen_address: 0.0.0.0:8084
+tls:
+  cert_file: /path/to/cert
+  key_file: /path/to/key
+
+logger:
+  level: debug
+
+# RPC endpoint and order of resolving of bucket names
+rpc-endpoint: http://node4.neofs:40332
+resolve-order:
+  - nns
+
+# Metrics
+metrics: false
+pprof: false
+
+# Timeout to connect to a node
+connect_timeout: 30s
+# Timeout to check node health during rebalance.
+request_timeout: 15s
+# Interval to check node health
+rebalance_timer: 15s
+
+# Limits for processing of clients' requests
+max_clients_count: 100
+# Deadline after which the gate sends error `RequestTimeout` to a client
+max_clients_deadline: 30s
+
+# Caching
+cache:
+  # Cache for objects
+  objects:
+    lifetime: 300s
+    size: 150
+  # Cache which keeps lists of objects in buckets
+  list:
+    lifetime: 1m
+    size: 100
+  # Cache which contains mapping of nice name to object addresses
+  names:
+    lifetime: 1m
+    size: 1000
+  # Cache which contains mapping of bucket name to bucket info
+  buckets:
+    lifetime: 1m
+    size: 500
+    # Cache for system objects in a bucket: bucket settings, notification configuration etc
+  system:
+    lifetime: 2m
+    size: 1000
+    # Cache which stores access box with tokens by its address
+  accessbox:
+    lifetime: 5m
+    size: 10
+
+nats:
+  enabled: true
+  endpoint: nats://127.0.0.1:4222
+  timeout: 30s
+  cert_file: /path/to/cert
+  key_file: /path/to/key
+  root_ca: /path/to/ca
+
+# Default policy of placing containers in NeoFS
+# If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway
+# will put the container with default policy. It can be specified via environment variable, e.g.:
+default_policy: REP 3
+
+# CORS
+# value of Access-Control-Max-Age header if this value is not set in a rule. Has an int type.
+cors:
+  default_max_age: 600
