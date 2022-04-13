@@ -7,7 +7,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 )
 
-// BucketCache contains cache with objects and lifetime of cache entries.
+// BucketCache contains cache with objects and the lifetime of cache entries.
 type BucketCache struct {
 	cache gcache.Cache
 }
@@ -15,11 +15,11 @@ type BucketCache struct {
 const (
 	// DefaultBucketCacheSize is a default maximum number of entries in cache.
 	DefaultBucketCacheSize = 1e3
-	// DefaultBucketCacheLifetime is a default lifetime of entries in  cache.
+	// DefaultBucketCacheLifetime is a default lifetime of entries in cache.
 	DefaultBucketCacheLifetime = time.Minute
 )
 
-// DefaultBucketConfig return new default cache expiration values.
+// DefaultBucketConfig returns new default cache expiration values.
 func DefaultBucketConfig() *Config {
 	return &Config{Size: DefaultBucketCacheSize, Lifetime: DefaultBucketCacheLifetime}
 }
@@ -30,7 +30,7 @@ func NewBucketCache(config *Config) *BucketCache {
 	return &BucketCache{cache: gc}
 }
 
-// Get returns cached object.
+// Get returns a cached object.
 func (o *BucketCache) Get(key string) *data.BucketInfo {
 	entry, err := o.cache.Get(key)
 	if err != nil {

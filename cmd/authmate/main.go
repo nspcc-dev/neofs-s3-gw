@@ -345,7 +345,7 @@ func getJSONRules(val string) ([]byte, error) {
 }
 
 // getSessionRules reads json session rules.
-// Returns true if rules must be skipped.
+// It returns true if rules must be skipped.
 func getSessionRules(r string) ([]byte, bool, error) {
 	if r == "none" {
 		return nil, true, nil

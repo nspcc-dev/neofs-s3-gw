@@ -13,7 +13,7 @@ import (
 
 type (
 	// HTTPAPIStats holds statistics information about
-	// a given API in the requests.
+	// the API given in the requests.
 	HTTPAPIStats struct {
 		apiStats map[string]int
 		sync.RWMutex
@@ -64,7 +64,7 @@ var (
 )
 
 // Collects HTTP metrics for NeoFS S3 Gate in Prometheus specific format
-// and sends to given channel.
+// and sends to the given channel.
 func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	for api, value := range httpStatsMetric.currentS3Requests.Load() {
 		ch <- prometheus.MustNewConstMetric(
@@ -122,7 +122,7 @@ func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		f.ServeHTTP(statsWriter, r)
 
 		// Time duration in secs since the call started.
-		// We don't need to do nanosecond precision in this
+		// We don't need to do nanosecond precision here
 		// simply for the fact that it is not human readable.
 		durationSecs := time.Since(statsWriter.startTime).Seconds()
 
@@ -201,7 +201,7 @@ func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// WriteHeader - writes http status code.
+// WriteHeader -- writes http status code.
 func (w *responseWrapper) WriteHeader(code int) {
 	w.Do(func() {
 		w.statusCode = code
@@ -209,7 +209,7 @@ func (w *responseWrapper) WriteHeader(code int) {
 	})
 }
 
-// Flush - Calls the underlying Flush.
+// Flush -- calls the underlying Flush.
 func (w *responseWrapper) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

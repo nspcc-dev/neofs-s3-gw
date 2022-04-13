@@ -57,7 +57,7 @@ type PrmObjectSelect struct {
 	// Container to select the objects from.
 	Container cid.ID
 
-	// Key-value object attribute which should exactly be
+	// Key-value object attribute which should be
 	// presented in selected objects. Optional, empty key means any.
 	ExactAttribute [2]string
 
@@ -141,53 +141,53 @@ var ErrAccessDenied = errors.New("access denied")
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateContainer creates and saves parameterized container in NeoFS.
-	// It sets 'Timestamp' attribute to current time.
-	// Returns ID of the saved container.
+	// It sets 'Timestamp' attribute to the current time.
+	// It returns the ID of the saved container.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the container to be created.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the container from being created.
 	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)
 
-	// Container reads container from NeoFS by ID.
+	// Container reads a container from NeoFS by ID.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the container to be read.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the container from being read.
 	Container(context.Context, cid.ID) (*container.Container, error)
 
-	// UserContainers reads list of the containers owned by specified user.
+	// UserContainers reads a list of the containers owned by the specified user.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the containers to be listed.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the containers from being listed.
 	UserContainers(context.Context, owner.ID) ([]cid.ID, error)
 
-	// SetContainerEACL saves eACL table of the container in NeoFS.
+	// SetContainerEACL saves the eACL table of the container in NeoFS.
 	//
-	// Returns any error encountered which prevented the eACL to be saved.
+	// It returns any error encountered which prevented the eACL from being saved.
 	SetContainerEACL(context.Context, eacl.Table) error
 
-	// ContainerEACL reads container eACL from NeoFS by container ID.
+	// ContainerEACL reads the container eACL from NeoFS by the container ID.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the eACL to be read.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the eACL from being read.
 	ContainerEACL(context.Context, cid.ID) (*eacl.Table, error)
 
 	// DeleteContainer marks the container to be removed from NeoFS by ID.
 	// Request is sent within session if the session token is specified.
-	// Successful return does not guarantee the actual removal.
+	// Successful return does not guarantee actual removal.
 	//
-	// Returns any error encountered which prevented the removal request to be sent.
+	// It returns any error encountered which prevented the removal request from being sent.
 	DeleteContainer(context.Context, cid.ID, *session.Token) error
 
-	// SelectObjects perform object selection from the NeoFS container according
-	// to specified parameters. Selects user objects only.
+	// SelectObjects performs object selection from the NeoFS container according
+	// to the specified parameters. It selects user's objects only.
 	//
-	// Returns ErrAccessDenied on selection access violation.
+	// It returns ErrAccessDenied on selection access violation.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the objects to be selected.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the objects from being selected.
 	SelectObjects(context.Context, PrmObjectSelect) ([]oid.ID, error)
 
-	// ReadObject reads part of the object from the NeoFS container by identifier.
+	// ReadObject reads a part of the object from the NeoFS container by identifier.
 	// Exact part is returned according to the parameters:
 	//   * with header only: empty payload (both in-mem and reader parts are nil);
 	//   * with payload only: header is nil (zero range means full payload);
@@ -197,37 +197,37 @@ type NeoFS interface {
 	//
 	// Payload reader should be closed if it is no longer needed.
 	//
-	// Returns ErrAccessDenied on read access violation.
+	// It returns ErrAccessDenied on read access violation.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the object header to be read.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the object header from being read.
 	ReadObject(context.Context, PrmObjectRead) (*ObjectPart, error)
 
-	// CreateObject creates and saves parameterized object in the NeoFS container.
-	// It sets 'Timestamp' attribute to current time.
-	// Returns ID of the saved object.
+	// CreateObject creates and saves a parameterized object in the NeoFS container.
+	// It sets 'Timestamp' attribute to the current time.
+	// It returns the ID of the saved object.
 	//
-	// Creation time should be written into object (UTC).
+	// Creation time should be written into the object (UTC).
 	//
-	// Returns ErrAccessDenied on write access violation.
+	// It returns ErrAccessDenied on write access violation.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the container to be created.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the container from being created.
 	CreateObject(context.Context, PrmObjectCreate) (*oid.ID, error)
 
 	// DeleteObject marks the object to be removed from the NeoFS container by identifier.
-	// Successful return does not guarantee the actual removal.
+	// Successful return does not guarantee actual removal.
 	//
-	// Returns ErrAccessDenied on remove access violation.
+	// It returns ErrAccessDenied on remove access violation.
 	//
-	// Returns any error encountered which prevented the removal request to be sent.
+	// It returns any error encountered which prevented the removal request from being sent.
 	DeleteObject(context.Context, PrmObjectDelete) error
 
-	// TimeToEpoch compute current epoch and epoch that corresponds provided time.
+	// TimeToEpoch computes current epoch and the epoch that corresponds to the provided time.
 	// Note:
 	// * time must be in the future
 	// * time will be ceil rounded to match epoch
 	//
-	// Returns any error encountered which prevented computing epochs.
+	// It returns any error encountered which prevented computing epochs.
 	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
 }

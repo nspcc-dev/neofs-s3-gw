@@ -54,26 +54,26 @@ type NeoFS interface {
 	tokens.NeoFS
 
 	// ContainerExists checks container presence in NeoFS by identifier.
-	// Returns nil iff container exists.
+	// Returns nil if container exists.
 	ContainerExists(context.Context, cid.ID) error
 
 	// CreateContainer creates and saves parameterized container in NeoFS.
-	// It sets 'Timestamp' attribute to current time.
-	// Returns ID of the saved container.
+	// It sets 'Timestamp' attribute to the current time.
+	// It returns the ID of the saved container.
 	//
-	// The container must be private with GET access of OTHERS group.
+	// The container must be private with GET access for OTHERS group.
 	// Creation time should also be stamped.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the container to be created.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the container from being created.
 	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)
 
-	// TimeToEpoch compute current epoch and epoch that corresponds provided time.
+	// TimeToEpoch computes the current epoch and the epoch that corresponds to the provided time.
 	// Note:
 	// * time must be in the future
 	// * time will be ceil rounded to match epoch
 	//
-	// Returns any error encountered which prevented computing epochs.
+	// It returns any error encountered which prevented computing epochs.
 	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
 }
 
@@ -119,7 +119,7 @@ type (
 	}
 )
 
-// lifetimeOptions holds NeoFS epochs, iat -- epoch, which a token was issued at, exp -- epoch, when the token expires.
+// lifetimeOptions holds NeoFS epochs, iat -- epoch which the token was issued at, exp -- epoch when the token expires.
 type lifetimeOptions struct {
 	Iat uint64
 	Exp uint64
@@ -141,7 +141,7 @@ type (
 
 func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner *owner.ID) (*cid.ID, error) {
 	if opts.ID != nil {
-		// check that container exists
+		// check that the container exists
 		return opts.ID, a.neoFS.ContainerExists(ctx, *opts.ID)
 	}
 

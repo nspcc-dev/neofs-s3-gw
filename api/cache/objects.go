@@ -16,11 +16,11 @@ type ObjectsCache struct {
 const (
 	// DefaultObjectsCacheLifetime is a default lifetime of entries in objects' cache.
 	DefaultObjectsCacheLifetime = time.Minute * 5
-	// DefaultObjectsCacheSize is a default maximum number of entries in objects' in cache.
+	// DefaultObjectsCacheSize is a default maximum number of entries in objects' cache.
 	DefaultObjectsCacheSize = 1e6
 )
 
-// DefaultObjectsConfig return new default cache expiration values.
+// DefaultObjectsConfig returns new default cache expiration values.
 func DefaultObjectsConfig() *Config {
 	return &Config{Size: DefaultObjectsCacheSize, Lifetime: DefaultObjectsCacheLifetime}
 }
@@ -31,7 +31,7 @@ func New(config *Config) *ObjectsCache {
 	return &ObjectsCache{cache: gc}
 }
 
-// Get returns cached object.
+// Get returns a cached object.
 func (o *ObjectsCache) Get(address *address.Address) *object.Object {
 	entry, err := o.cache.Get(address.String())
 	if err != nil {

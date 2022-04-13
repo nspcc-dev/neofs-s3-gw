@@ -13,7 +13,7 @@ import (
 )
 
 type (
-	// KeyVal - appended to ReqInfo.Tags.
+	// KeyVal -- appended to ReqInfo.Tags.
 	KeyVal struct {
 		Key string
 		Val string
@@ -27,7 +27,7 @@ type (
 		UserAgent    string   // User Agent
 		DeploymentID string   // random generated s3-deployment-id
 		RequestID    string   // x-amz-request-id
-		API          string   // API name - GetObject PutObject NewMultipartUpload etc.
+		API          string   // API name -- GetObject PutObject NewMultipartUpload etc.
 		BucketName   string   // Bucket name
 		ObjectName   string   // Object name
 		URL          *url.URL // Request url
@@ -64,15 +64,15 @@ var (
 )
 
 // GetSourceIP retrieves the IP from the X-Forwarded-For, X-Real-IP and RFC7239
-// Forwarded headers (in that order), falls back to r.RemoteAddr when all
+// Forwarded headers (in that order), falls back to r.RemoteAddr when everything
 // else fails.
 func GetSourceIP(r *http.Request) string {
 	var addr string
 
 	if fwd := r.Header.Get(xForwardedFor); fwd != "" {
-		// Only grab the first (client) address. Note that '192.168.0.1,
+		// Only grabs the first (client) address. Note that '192.168.0.1,
 		// 10.1.1.1' is a valid key for X-Forwarded-For where addresses after
-		// the first may represent forwarding proxies earlier in the chain.
+		// the first one may represent forwarding proxies earlier in the chain.
 		s := strings.Index(fwd, ", ")
 		if s == -1 {
 			s = len(fwd)
@@ -141,7 +141,7 @@ func NewReqInfo(w http.ResponseWriter, r *http.Request, req ObjectRequest) *ReqI
 	}
 }
 
-// AppendTags - appends key/val to ReqInfo.tags.
+// AppendTags -- appends key/val to ReqInfo.tags.
 func (r *ReqInfo) AppendTags(key string, val string) *ReqInfo {
 	if r == nil {
 		return nil
@@ -152,14 +152,14 @@ func (r *ReqInfo) AppendTags(key string, val string) *ReqInfo {
 	return r
 }
 
-// SetTags - sets key/val to ReqInfo.tags.
+// SetTags -- sets key/val to ReqInfo.tags.
 func (r *ReqInfo) SetTags(key string, val string) *ReqInfo {
 	if r == nil {
 		return nil
 	}
 	r.Lock()
 	defer r.Unlock()
-	// Search of tag key already exists in tags
+	// Search for a tag key already existing in tags
 	var updated bool
 	for _, tag := range r.tags {
 		if tag.Key == key {
@@ -175,7 +175,7 @@ func (r *ReqInfo) SetTags(key string, val string) *ReqInfo {
 	return r
 }
 
-// GetTags - returns the user defined tags.
+// GetTags -- returns the user defined tags.
 func (r *ReqInfo) GetTags() []KeyVal {
 	if r == nil {
 		return nil

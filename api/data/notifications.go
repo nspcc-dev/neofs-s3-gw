@@ -28,7 +28,7 @@ type (
 		Value string `xml:"Value" json:"Value"`
 	}
 
-	// TopicConfiguration and LambdaFunctionConfiguration -- we don't support these configurations
+	// TopicConfiguration and LambdaFunctionConfiguration -- we don't support these configurations,
 	// but we need them to detect in notification configurations in requests.
 	TopicConfiguration          struct{}
 	LambdaFunctionConfiguration struct{}

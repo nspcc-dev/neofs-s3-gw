@@ -99,7 +99,7 @@ const ( // Settings.
 	cmdVersion = "version"
 	cmdConfig  = "config"
 
-	// envPrefix is environment variables prefix used for configuration.
+	// envPrefix is an environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
 )
 

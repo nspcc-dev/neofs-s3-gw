@@ -7,8 +7,8 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 )
 
-// ObjectsNameCache provides for lru cache for objects.
-// This cache contains mapping nice name to object addresses.
+// ObjectsNameCache provides lru cache for objects.
+// This cache contains mapping nice names to object addresses.
 // Key is bucketName+objectName.
 type ObjectsNameCache struct {
 	cache gcache.Cache
@@ -17,11 +17,11 @@ type ObjectsNameCache struct {
 const (
 	// DefaultObjectsNameCacheSize is a default maximum number of entries in cache.
 	DefaultObjectsNameCacheSize = 1e4
-	// DefaultObjectsNameCacheLifetime is a default lifetime of entries in  cache.
+	// DefaultObjectsNameCacheLifetime is a default lifetime of entries in cache.
 	DefaultObjectsNameCacheLifetime = time.Minute
 )
 
-// DefaultObjectsNameConfig return new default cache expiration values.
+// DefaultObjectsNameConfig returns new default cache expiration values.
 func DefaultObjectsNameConfig() *Config {
 	return &Config{Size: DefaultObjectsNameCacheSize, Lifetime: DefaultObjectsNameCacheLifetime}
 }
@@ -32,7 +32,7 @@ func NewObjectsNameCache(config *Config) *ObjectsNameCache {
 	return &ObjectsNameCache{cache: gc}
 }
 
-// Get returns cached object.
+// Get returns a cached object.
 func (o *ObjectsNameCache) Get(key string) *address.Address {
 	entry, err := o.cache.Get(key)
 	if err != nil {

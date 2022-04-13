@@ -9,7 +9,7 @@ import (
 )
 
 type (
-	// AccessBoxCache stores access box by its address.
+	// AccessBoxCache stores an access box by its address.
 	AccessBoxCache struct {
 		cache gcache.Cache
 	}
@@ -24,11 +24,11 @@ type (
 const (
 	// DefaultAccessBoxCacheSize is a default maximum number of entries in cache.
 	DefaultAccessBoxCacheSize = 100
-	// DefaultAccessBoxCacheLifetime is a default lifetime of entries in  cache.
+	// DefaultAccessBoxCacheLifetime is a default lifetime of entries in cache.
 	DefaultAccessBoxCacheLifetime = 10 * time.Minute
 )
 
-// DefaultAccessBoxConfig return new default cache expiration values.
+// DefaultAccessBoxConfig returns new default cache expiration values.
 func DefaultAccessBoxConfig() *Config {
 	return &Config{Size: DefaultAccessBoxCacheSize, Lifetime: DefaultAccessBoxCacheLifetime}
 }
@@ -40,7 +40,7 @@ func NewAccessBoxCache(config *Config) *AccessBoxCache {
 	return &AccessBoxCache{cache: gc}
 }
 
-// Get returns cached object.
+// Get returns a cached object.
 func (o *AccessBoxCache) Get(address *address.Address) *accessbox.Box {
 	entry, err := o.cache.Get(address.String())
 	if err != nil {

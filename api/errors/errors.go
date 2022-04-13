@@ -6,7 +6,7 @@ import (
 )
 
 type (
-	// ErrorCode type of error status.
+	// ErrorCode type of an error status.
 	ErrorCode int
 
 	errorCodeMap map[ErrorCode]Error
@@ -20,7 +20,7 @@ type (
 	}
 )
 
-// Error codes, non exhaustive list - http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+// Error codes, non exhaustive list -- http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 const (
 	_ ErrorCode = iota
 	ErrAccessDenied
@@ -273,7 +273,7 @@ const (
 )
 
 // error code to Error structure, these fields carry respective
-// descriptions for all the error responses.
+// descriptions for all error responses.
 var errorCodes = errorCodeMap{
 	ErrInvalidCopyDest: {
 		ErrCode:        ErrInvalidCopyDest,
@@ -768,7 +768,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
-	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
+	// FIXME: Actual XML error response also contains the header which is missed in the list of signed header parameters.
 	ErrUnsignedHeaders: {
 		ErrCode:        ErrUnsignedHeaders,
 		Code:           "AccessDenied",
@@ -1663,7 +1663,7 @@ var errorCodes = errorCodeMap{
 	// Add your error structure here.
 }
 
-// IsS3Error check if the provided error is a specific s3 error.
+// IsS3Error checks if the provided error is a specific s3 error.
 func IsS3Error(err error, code ErrorCode) bool {
 	e, ok := err.(Error)
 	return ok && e.ErrCode == code
@@ -1688,7 +1688,7 @@ func (e Error) Error() string {
 	return fmt.Sprintf("%s: %d => %s", e.Code, e.HTTPStatusCode, e.Description)
 }
 
-// GetAPIError provides API Error for input API error code.
+// GetAPIError provides API Error for an input API error code.
 func GetAPIError(code ErrorCode) Error {
 	if apiErr, ok := errorCodes[code]; ok {
 		return apiErr
@@ -1696,12 +1696,12 @@ func GetAPIError(code ErrorCode) Error {
 	return errorCodes.toAPIErr(ErrInternalError)
 }
 
-// GetAPIErrorWithError provides API Error with additional error message for input API error code.
+// GetAPIErrorWithError provides API Error with additional error message for an input API error code.
 func GetAPIErrorWithError(code ErrorCode, err error) Error {
 	return errorCodes.toAPIErrWithErr(code, err)
 }
 
-// ObjectError - error that linked to specific object.
+// ObjectError -- error that is linked to a specific object.
 type ObjectError struct {
 	Err     error
 	Object  string
@@ -1712,7 +1712,7 @@ func (e ObjectError) Error() string {
 	return fmt.Sprintf("%s (%s:%s)", e.Err, e.Object, e.Version)
 }
 
-// ObjectVersion get "object:version" string.
+// ObjectVersion gets "object:version" string.
 func (e ObjectError) ObjectVersion() string {
 	return e.Object + ":" + e.Version
 }

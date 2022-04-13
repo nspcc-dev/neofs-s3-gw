@@ -357,7 +357,7 @@ func checkOwner(info *data.BucketInfo, owner string) error {
 		return nil
 	}
 
-	// maybe need to convert owner to appropriate format
+	// may need to convert owner to appropriate format
 	if info.Owner.String() != owner {
 		return errors.GetAPIError(errors.ErrAccessDenied)
 	}

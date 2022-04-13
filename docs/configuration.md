@@ -35,7 +35,7 @@ a gateway spread requests equally among them (using weight 1 for every node):
 $ neofs-s3-gw -p 192.168.130.72:8080 -p 192.168.130.71:8080
 ```
 If you want some specific load distribution proportions, use weights and priorities, they
-can only be specified via environment variables or configuration file.
+can only be specified via environment variables or a configuration file.
 
 ### Wallet
 
@@ -49,8 +49,8 @@ Gateway listens on `0.0.0.0:8080` by default, and you can change that with the `
 
 It can also provide TLS interface for its users, just specify paths to the key and
 certificate files via `--tls.key_file` and `--tls.cert_file` parameters. Note
-that using these options makes gateway TLS-only, if you need to serve both TLS
-and plain text you either have to run two gateway instances or use some
+that using these options makes gateway TLS-only. If you need to serve both TLS
+and plain text, you either have to run two gateway instances or use some
 external redirecting solution.
 
 Example to bind to `192.168.130.130:443` and serve TLS there (keys and nodes are
@@ -100,7 +100,7 @@ default. To enable them, use `--pprof` and `--metrics` flags or
 
 ## YAML file and environment variables
 
-Example of YAML configuration file: [.yaml-example](/config/config.yaml)
+Example of a YAML configuration file: [.yaml-example](/config/config.yaml)
 Examples of environment variables: [.env-example](/config/config.env).
 
 A path to a configuration file can be specified with `--config` parameter:
@@ -109,7 +109,7 @@ A path to a configuration file can be specified with `--config` parameter:
 $ neofs-s3-gw --config your-config.yaml
 ```
 
-Parameters of the following groups can be configured via `.yaml` file or environment variables only:
+Parameters of the following groups can be configured via a `.yaml` file or environment variables only:
 1. logging -- logging level
 2. caching -- lifetime and size for each cache
 3. notifications

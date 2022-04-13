@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// DeleteObjectsRequest - xml carrying the object key names which needs to be deleted.
+// DeleteObjectsRequest -- xml carrying the object key names which should be deleted.
 type DeleteObjectsRequest struct {
 	// Element to enable quiet mode for the request
 	Quiet bool
@@ -23,13 +23,13 @@ type DeleteObjectsRequest struct {
 	Objects []ObjectIdentifier `xml:"Object"`
 }
 
-// ObjectIdentifier carries key name for the object to delete.
+// ObjectIdentifier carries the key name for the object to delete.
 type ObjectIdentifier struct {
 	ObjectName string `xml:"Key"`
 	VersionID  string `xml:"VersionId,omitempty"`
 }
 
-// DeletedObject carries key name for the object to delete.
+// DeletedObject carries the key name for the object to delete.
 type DeletedObject struct {
 	ObjectIdentifier
 	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
@@ -144,7 +144,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	// Content-Md5 is requied should be set
+	// Content-Md5 is required and should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header[api.ContentMD5]; !ok {
 		h.logAndSendError(w, "missing Content-MD5", reqInfo, errors.GetAPIError(errors.ErrMissingContentMD5))

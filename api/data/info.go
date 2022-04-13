@@ -68,10 +68,10 @@ type (
 	}
 )
 
-// SettingsObjectName is system name for bucket settings file.
+// SettingsObjectName is a system name for a bucket settings file.
 func (b *BucketInfo) SettingsObjectName() string { return bktSettingsObject }
 
-// CORSObjectName returns system name for bucket CORS configuration file.
+// CORSObjectName returns a system name for a bucket CORS configuration file.
 func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject }
 
 func (b *BucketInfo) NotificationConfigurationObjectName() string {
@@ -82,7 +82,7 @@ func (b *BucketInfo) NotificationConfigurationObjectName() string {
 func (o *ObjectInfo) Version() string { return o.ID.String() }
 
 // NullableVersion returns object version from ObjectInfo.
-// Return "null" if "S3-Versions-unversioned" header present.
+// Return "null" if "S3-Versions-unversioned" header is present.
 func (o *ObjectInfo) NullableVersion() string {
 	if _, ok := o.Headers["S3-Versions-unversioned"]; ok {
 		return "null"
@@ -102,11 +102,11 @@ func (o *ObjectInfo) Address() *address.Address {
 	return addr
 }
 
-// TagsObject returns name of system object for tags.
+// TagsObject returns the name of a system object for tags.
 func (o *ObjectInfo) TagsObject() string { return ".tagset." + o.Name + "." + o.Version() }
 
-// LegalHoldObject returns name of system object for lock object.
+// LegalHoldObject returns the name of a system object for a lock object.
 func (o *ObjectInfo) LegalHoldObject() string { return ".lock." + o.Name + "." + o.Version() }
 
-// RetentionObject returns name of system object for retention lock object.
+// RetentionObject returns the name of a system object for a retention lock object.
 func (o *ObjectInfo) RetentionObject() string { return ".retention." + o.Name + "." + o.Version() }

@@ -40,7 +40,7 @@ type (
 		IsLatest bool
 	}
 
-	// ListObjectVersionsInfo stores info and list of objects' versions.
+	// ListObjectVersionsInfo stores info and list of objects versions.
 	ListObjectVersionsInfo struct {
 		CommonPrefixes      []string
 		IsTruncated         bool
@@ -138,7 +138,7 @@ func filenameFromObject(o *object.Object) string {
 	return name
 }
 
-// NameFromString splits name into base file name and directory path.
+// NameFromString splits name into a base file name and a directory path.
 func NameFromString(name string) (string, string) {
 	ind := strings.LastIndex(name, PathSeparator)
 	return name[ind+1:], name[:ind+1]

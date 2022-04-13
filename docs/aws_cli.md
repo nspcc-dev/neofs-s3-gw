@@ -4,7 +4,7 @@
 
 ### Credentials
 
-To configure basic settings that the AWS CLI uses to interact with the Gateway, follow steps below:
+To configure basic settings that the AWS CLI uses to interact with the Gateway, follow the steps below:
 
 1. issue a secret with neofs-authmate tool (see [NeoFS Authmate] (#neofs-authmate))
 2. execute the command

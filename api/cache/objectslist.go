@@ -11,16 +11,16 @@ import (
 )
 
 /*
-	This is an implementation of a cache which keeps unsorted lists of objects' IDs (all versions)
+	This is an implementation of cache which keeps unsorted lists of objects' IDs (all versions)
 	for a specified bucket and a prefix.
 
 	The cache contains gcache whose entries have a key: ObjectsListKey struct and a value: list of ids.
-	After putting a record it lives for a while (default value is 60 seconds).
+	After putting a record, it lives for a while (default value is 60 seconds).
 
-	When we receive a request from the user we try to find the suitable and non-expired cache entry, go through the list
+	When we receive a request from a user, we try to find the suitable and non-expired cache entry, go through the list
 	and get ObjectInfos from common object cache or with a request to NeoFS.
 
-	When we put an object into a container we invalidate entries with prefixes that are prefixes of the object's name.
+	When we put an object into a container, we invalidate entries with prefixes that are prefixes of the object's name.
 */
 
 type (
@@ -43,18 +43,18 @@ const (
 	DefaultObjectsListCacheSize = 1e5
 )
 
-// DefaultObjectsListConfig return new default cache expiration values.
+// DefaultObjectsListConfig returns new default cache expiration values.
 func DefaultObjectsListConfig() *Config {
 	return &Config{Size: DefaultObjectsListCacheSize, Lifetime: DefaultObjectsListCacheLifetime}
 }
 
-// NewObjectsListCache is a constructor which creates an object of ListObjectsCache with given lifetime of entries.
+// NewObjectsListCache is a constructor which creates an object of ListObjectsCache with the given lifetime of entries.
 func NewObjectsListCache(config *Config) *ObjectsListCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
 	return &ObjectsListCache{cache: gc}
 }
 
-// Get return list of ObjectInfo.
+// Get returns a list of ObjectInfo.
 func (l *ObjectsListCache) Get(key ObjectsListKey) []oid.ID {
 	entry, err := l.cache.Get(key)
 	if err != nil {
@@ -93,7 +93,7 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 	}
 }
 
-// CreateObjectsListCacheKey returns ObjectsListKey with given CID and prefix.
+// CreateObjectsListCacheKey returns ObjectsListKey with the given CID and prefix.
 func CreateObjectsListCacheKey(cid *cid.ID, prefix string) ObjectsListKey {
 	p := ObjectsListKey{
 		cid:    cid.String(),

@@ -1,6 +1,6 @@
 # S3 compatibility test results
 
-To update this file using tests result run:
+To update this file using tests result, run:
 ```sh
 ./updateTestsResult.sh ceph_tests_result.txt
 ```
