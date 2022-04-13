@@ -20,7 +20,7 @@ type copyObjectArgs struct {
 
 const replaceMetadataDirective = "REPLACE"
 
-// path2BucketObject returns bucket and object.
+// path2BucketObject returns a bucket and an object.
 func path2BucketObject(path string) (bucket, prefix string) {
 	path = strings.TrimPrefix(path, api.SlashSeparator)
 	m := strings.Index(path, api.SlashSeparator)

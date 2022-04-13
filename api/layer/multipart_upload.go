@@ -255,7 +255,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			zap.String("uploadID", p.Info.UploadID),
 			zap.String("uploadKey", p.Info.Key),
 		)
-		// we return InternalError because if we are here it means we've checked InitPart before in handler and
+		// we return InternalError because if we are here it means we've checked InitPart in handler before and
 		// received successful result, it's strange we didn't get the InitPart again
 		return nil, errors.GetAPIError(errors.ErrInternalError)
 	}
@@ -284,7 +284,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		initMetadata[api.ContentType] = objects[0].ContentType
 	}
 
-	/* We will keep "S3-Upload-Id" attribute in completed object to determine is it "common" object or completed object.
+	/* We will keep "S3-Upload-Id" attribute in a completed object to determine if it is a "common" object or a completed object.
 	We will need to differ these objects if something goes wrong during completing multipart upload.
 	I.e. we had completed the object but didn't put tagging/acl for some reason */
 	delete(initMetadata, UploadPartNumberAttributeName)

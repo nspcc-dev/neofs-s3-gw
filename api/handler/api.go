@@ -16,14 +16,14 @@ type (
 		cfg *Config
 	}
 
-	// Config contains data which handler need to keep.
+	// Config contains data which handler needs to keep.
 	Config struct {
 		DefaultPolicy *netmap.PlacementPolicy
 		DefaultMaxAge int
 	}
 )
 
-// DefaultPolicy is a default policy of placing container in NeoFS if it's not set at the request.
+// DefaultPolicy is a default policy of placing containers in NeoFS if it's not set at the request.
 const DefaultPolicy = "REP 3"
 
 var _ api.Handler = (*handler)(nil)

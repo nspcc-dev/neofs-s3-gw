@@ -30,7 +30,7 @@ Reference:
 ## ACL
 
 For now there are some limitations:
-* [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) support only one `Principal` (type `AWS`) per `Statement`. To refer all users use `"AWS": "*"`
+* [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) supports only one `Principal` (type `AWS`) per `Statement`. To refer all users use `"AWS": "*"`
 * AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
 * Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html)
 

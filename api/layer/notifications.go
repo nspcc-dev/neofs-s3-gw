@@ -210,7 +210,7 @@ func (n *layer) SendNotifications(ctx context.Context, p *SendNotificationParams
 	return n.ncontroller.SendNotifications(topics, p)
 }
 
-// checkBucketConfiguration checks notification configuration and generates ID for configurations with empty ids.
+// checkBucketConfiguration checks notification configuration and generates an ID for configurations with empty ids.
 func (n *layer) checkBucketConfiguration(conf *data.NotificationConfiguration, r *api.ReqInfo) (completed bool, err error) {
 	if conf == nil {
 		return
@@ -248,7 +248,7 @@ func filterSubjects(conf *data.NotificationConfiguration, eventType, objName str
 	for _, t := range conf.QueueConfigurations {
 		event := false
 		for _, e := range t.Events {
-			// the second condition is comparison with events ending with *:
+			// the second condition is comparison with the events ending with *:
 			// s3:ObjectCreated:*, s3:ObjectRemoved:* etc without the last char
 			if eventType == e || strings.HasPrefix(eventType, e[:len(e)-1]) {
 				event = true

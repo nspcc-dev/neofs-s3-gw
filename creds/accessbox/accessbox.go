@@ -40,22 +40,22 @@ type GateData struct {
 	GateKey       *keys.PublicKey
 }
 
-// NewGateData returns GateData from provided bearer token and public gate key.
+// NewGateData returns GateData from the provided bearer token and the public gate key.
 func NewGateData(gateKey *keys.PublicKey, bearerTkn *token.BearerToken) *GateData {
 	return &GateData{GateKey: gateKey, BearerToken: bearerTkn}
 }
 
-// SessionTokenForPut return the first suitable container session context for PUT operation.
+// SessionTokenForPut returns the first suitable container session context for PUT operation.
 func (g *GateData) SessionTokenForPut() *session.Token {
 	return g.containerSessionToken(apisession.ContainerVerbPut)
 }
 
-// SessionTokenForDelete return the first suitable container session context for DELETE operation.
+// SessionTokenForDelete returns the first suitable container session context for DELETE operation.
 func (g *GateData) SessionTokenForDelete() *session.Token {
 	return g.containerSessionToken(apisession.ContainerVerbDelete)
 }
 
-// SessionTokenForSetEACL return the first suitable container session context for SetEACL operation.
+// SessionTokenForSetEACL returns the first suitable container session context for SetEACL operation.
 func (g *GateData) SessionTokenForSetEACL() *session.Token {
 	return g.containerSessionToken(apisession.ContainerVerbSetEACL)
 }
@@ -78,7 +78,7 @@ func isAppropriateContainerContext(ctx *session.ContainerContext, verb apisessio
 		verb == apisession.ContainerVerbSetEACL && ctx.IsForSetEACL()
 }
 
-// Secrets represents AccessKey and key to encrypt gate tokens.
+// Secrets represents AccessKey and the key to encrypt gate tokens.
 type Secrets struct {
 	AccessKey    string
 	EphemeralKey *keys.PrivateKey
@@ -94,7 +94,7 @@ func (x *AccessBox) Unmarshal(data []byte) error {
 	return proto.Unmarshal(data, x)
 }
 
-// PackTokens adds a bearer and session tokens to BearerTokens and SessionToken lists respectively.
+// PackTokens adds bearer and session tokens to BearerTokens and SessionToken lists respectively.
 // Session token can be nil.
 func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	box := &AccessBox{}
@@ -156,7 +156,7 @@ func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 	return result, nil
 }
 
-// GetBox parse AccessBox to Box.
+// GetBox parses AccessBox to Box.
 func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
 	tokens, err := x.GetTokens(owner)
 	if err != nil {

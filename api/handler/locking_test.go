@@ -480,7 +480,7 @@ func TestObjectLegalHold(t *testing.T) {
 	hc.Handler().GetObjectLegalHoldHandler(w, r)
 	assertLegalHold(t, w, legalHoldOn)
 
-	// to make sure put hold is idempotent operation
+	// to make sure put hold is an idempotent operation
 	w, r = prepareTestRequest(t, bktName, objName, &data.LegalHold{Status: legalHoldOn})
 	hc.Handler().PutObjectLegalHoldHandler(w, r)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -493,7 +493,7 @@ func TestObjectLegalHold(t *testing.T) {
 	hc.Handler().GetObjectLegalHoldHandler(w, r)
 	assertLegalHold(t, w, legalHoldOff)
 
-	// to make sure put hold is idempotent operation
+	// to make sure put hold is an idempotent operation
 	w, r = prepareTestRequest(t, bktName, objName, &data.LegalHold{Status: legalHoldOff})
 	hc.Handler().PutObjectLegalHoldHandler(w, r)
 	require.Equal(t, http.StatusOK, w.Code)

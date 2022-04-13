@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// newLogger constructs a zap.Logger instance for current application.
+// newLogger constructs a zap.Logger instance for the current application.
 // Panics on failure.
 //
 // Logger is built from zap's production logging configuration with:

@@ -2,7 +2,7 @@ package handler
 
 import "encoding/xml"
 
-// ListBucketsResponse - format for list buckets response.
+// ListBucketsResponse -- format for list buckets response.
 type ListBucketsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult" json:"-"`
 
@@ -85,7 +85,7 @@ func NewGrantee(t GranteeType) *Grantee {
 	}
 }
 
-// Owner - bucket owner/principal.
+// Owner -- bucket owner/principal.
 type Owner struct {
 	ID          string
 	DisplayName string
@@ -106,7 +106,7 @@ type Object struct {
 	// Owner of the object.
 	Owner *Owner `xml:"Owner,omitempty"`
 
-	// The class of storage used to store the object.
+	// Class of storage used to store the object.
 	StorageClass string `xml:"StorageClass,omitempty"`
 }
 
@@ -134,7 +134,7 @@ type DeleteMarkerEntry struct {
 // StringMap is a map[string]string.
 type StringMap map[string]string
 
-// LocationResponse - format for location response.
+// LocationResponse -- format for location response.
 type LocationResponse struct {
 	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LocationConstraint" json:"-"`
 	Location string   `xml:",chardata"`
@@ -182,13 +182,13 @@ type PostResponse struct {
 	ETag   string `xml:"Etag"`
 }
 
-// Tag is AWS key-value tag.
+// Tag is an AWS key-value tag.
 type Tag struct {
 	Key   string
 	Value string
 }
 
-// MarshalXML - StringMap marshals into XML.
+// MarshalXML -- StringMap marshals into XML.
 func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	tokens := []xml.Token{start}
 

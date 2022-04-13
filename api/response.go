@@ -13,7 +13,7 @@ import (
 )
 
 type (
-	// ErrorResponse - error response format.
+	// ErrorResponse -- error response format.
 	ErrorResponse struct {
 		XMLName    xml.Name `xml:"Error" json:"-"`
 		Code       string
@@ -24,7 +24,7 @@ type (
 		RequestID  string `xml:"RequestId" json:"RequestId"`
 		HostID     string `xml:"HostId" json:"HostId"`
 
-		// Region where the bucket is located. This header is returned
+		// The region where the bucket is located. This header is returned
 		// only in HEAD bucket and ListObjects response.
 		Region string `xml:"Region,omitempty" json:"Region,omitempty"`
 
@@ -126,7 +126,7 @@ func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
 		}
 	}
 
-	// Generate error response.
+	// Generates error response.
 	errorResponse := getAPIErrorResponse(reqInfo, err)
 	encodedErrorResponse := EncodeResponse(errorResponse)
 	WriteResponse(w, code, encodedErrorResponse, MimeXML)
@@ -152,7 +152,7 @@ func setCommonHeaders(w http.ResponseWriter) {
 }
 
 // removeSensitiveHeaders removes confidential encryption
-// information - e.g. the SSE-C key - from the HTTP headers.
+// information -- e.g. the SSE-C key -- from the HTTP headers.
 // It has the same semantics as RemoveSensitiveEntries.
 func removeSensitiveHeaders(h http.Header) {
 	h.Del(hdrSSECustomerKey)
@@ -212,7 +212,7 @@ func WriteSuccessResponseHeadersOnly(w http.ResponseWriter) {
 	WriteResponse(w, http.StatusOK, nil, MimeNone)
 }
 
-// Error - Returns S3 error string.
+// Error -- Returns S3 error string.
 func (e ErrorResponse) Error() string {
 	if e.Message == "" {
 		msg, ok := s3ErrorResponseMap[e.Code]
@@ -225,7 +225,7 @@ func (e ErrorResponse) Error() string {
 }
 
 // getErrorResponse gets in standard error and resource value and
-// provides a encodable populated response values.
+// provides an encodable populated response values.
 func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
 	code := "InternalError"
 	desc := err.Error()

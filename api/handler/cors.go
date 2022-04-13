@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// DefaultMaxAge -- default value of Access-Control-Max-Age if this value is not set in a rule.
+	// DefaultMaxAge is a default value of Access-Control-Max-Age if this value is not set in a rule.
 	DefaultMaxAge = 600
 	wildcard      = "*"
 )

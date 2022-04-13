@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// GetPassword gets passphrase for wallet.
+// GetPassword gets the passphrase for a wallet.
 func GetPassword(v *viper.Viper, variable string) *string {
 	var password *string
 	if v.IsSet(variable) {
@@ -21,7 +21,7 @@ func GetPassword(v *viper.Viper, variable string) *string {
 	return password
 }
 
-// GetKeyFromPath reads wallet and gets private key.
+// GetKeyFromPath reads a wallet and gets the private key.
 func GetKeyFromPath(walletPath, addrStr string, password *string) (*keys.PrivateKey, error) {
 	if len(walletPath) == 0 {
 		return nil, fmt.Errorf("wallet path must not be empty")

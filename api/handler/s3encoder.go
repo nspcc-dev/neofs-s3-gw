@@ -28,7 +28,7 @@ func shouldEscape(c byte) bool {
 	return true
 }
 
-// s3URLEncode is based on url.QueryEscape() code,
+// s3URLEncode is based on url.QueryEscape() code
 // while considering some S3 exceptions.
 func s3URLEncode(s string, mode encoding) string {
 	spaceCount, hexCount := 0, 0

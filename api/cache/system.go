@@ -17,11 +17,11 @@ type SystemCache struct {
 const (
 	// DefaultSystemCacheSize is a default maximum number of entries in cache.
 	DefaultSystemCacheSize = 1e4
-	// DefaultSystemCacheLifetime is a default lifetime of entries in  cache.
+	// DefaultSystemCacheLifetime is a default lifetime of entries in cache.
 	DefaultSystemCacheLifetime = 5 * time.Minute
 )
 
-// DefaultSystemConfig return new default cache expiration values.
+// DefaultSystemConfig returns new default cache expiration values.
 func DefaultSystemConfig() *Config {
 	return &Config{Size: DefaultSystemCacheSize, Lifetime: DefaultSystemCacheLifetime}
 }
@@ -32,7 +32,7 @@ func NewSystemCache(config *Config) *SystemCache {
 	return &SystemCache{cache: gc}
 }
 
-// GetObject returns cached object.
+// GetObject returns a cached object.
 func (o *SystemCache) GetObject(key string) *data.ObjectInfo {
 	entry, err := o.cache.Get(key)
 	if err != nil {

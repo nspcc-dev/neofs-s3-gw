@@ -194,11 +194,11 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 }
 
-// Wait waits for application to finish.
+// Wait waits for an application to finish.
 //
 // Pre-logs a message about the launch of the application mentioning its
-// version (version.Version) and name (neofs-s3-gw). At the end writes to the
-// log about the stop.
+// version (version.Version) and its name (neofs-s3-gw). At the end, it writes
+// about the stop to the log.
 func (a *App) Wait() {
 	a.log.Info("application started",
 		zap.String("name", "neofs-s3-gw"),

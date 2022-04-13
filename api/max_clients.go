@@ -8,7 +8,7 @@ import (
 )
 
 type (
-	// MaxClients provides HTTP handler wrapper with client limit.
+	// MaxClients provides HTTP handler wrapper with the client limit.
 	MaxClients interface {
 		Handle(http.HandlerFunc) http.HandlerFunc
 	}
@@ -22,7 +22,7 @@ type (
 const defaultRequestDeadline = time.Second * 30
 
 // NewMaxClientsMiddleware returns MaxClients interface with handler wrapper based on
-// provided count and timeout limits.
+// the provided count and the timeout limits.
 func NewMaxClientsMiddleware(count int, timeout time.Duration) MaxClients {
 	if timeout <= 0 {
 		timeout = defaultRequestDeadline

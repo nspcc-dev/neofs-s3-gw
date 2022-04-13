@@ -270,8 +270,8 @@ func DefaultCachesConfigs() *CachesConfig {
 	}
 }
 
-// NewLayer creates instance of layer. It checks credentials
-// and establishes gRPC connection with node.
+// NewLayer creates an instance of a layer. It checks credentials
+// and establishes gRPC connection with the node.
 func NewLayer(log *zap.Logger, neoFS neofs.NeoFS, config *Config) Client {
 	return &layer{
 		neoFS:       neoFS,
@@ -307,7 +307,7 @@ func (n *layer) IsNotificationEnabled() bool {
 	return n.ncontroller != nil
 }
 
-// IsAuthenticatedRequest check if access box exists in current request.
+// IsAuthenticatedRequest checks if access box exists in the current request.
 func IsAuthenticatedRequest(ctx context.Context) bool {
 	_, ok := ctx.Value(api.BoxData).(*accessbox.Box)
 	return ok
@@ -364,12 +364,12 @@ func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*Bu
 	}, nil
 }
 
-// PutBucketACL put bucket acl by name.
+// PutBucketACL puts bucket acl by name.
 func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) error {
 	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL)
 }
 
-// ListBuckets returns all user containers. Name of the bucket is a container
+// ListBuckets returns all user containers. The name of the bucket is a container
 // id. Timestamp is omitted since it is not saved in neofs container.
 func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 	return n.containerList(ctx)
@@ -532,7 +532,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 	})
 }
 
-// DeleteObject removes all objects with passed nice name.
+// DeleteObject removes all objects with the passed nice name.
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
 	var (
 		err error

@@ -18,8 +18,8 @@ const (
 type NeoFS interface {
 	// SystemDNS reads system DNS network parameters of the NeoFS.
 	//
-	// Returns exactly on non-zero value. Returns any error encountered
-	// which prevented the parameter to be read.
+	// It returns exactly on non-zero value. It returns any error encountered
+	// which prevented the parameter from being read.
 	SystemDNS(context.Context) (string, error)
 }
 

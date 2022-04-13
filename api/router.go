@@ -83,7 +83,7 @@ type (
 		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
 	}
 
-	// mimeType represents various MIME type used API responses.
+	// mimeType represents various MIME types used in API responses.
 	mimeType string
 
 	logResponseWriter struct {
@@ -95,7 +95,7 @@ type (
 )
 
 const (
-	// SlashSeparator - slash separator.
+	// SlashSeparator -- slash separator.
 	SlashSeparator = "/"
 
 	// MimeNone means no response type.
@@ -172,7 +172,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 	}
 }
 
-// GetRequestID returns request ID from response writer or context.
+// GetRequestID returns the request ID from the response writer or the context.
 func GetRequestID(v interface{}) string {
 	switch t := v.(type) {
 	case context.Context:
@@ -244,11 +244,11 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
 			Name("ListMultipartUploads")
-		// GetObjectACL - this is a dummy call.
+		// GetObjectACL -- this is a dummy call.
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectacl", h.GetObjectACLHandler))).Queries("acl", "").
 			Name("GetObjectACL")
-		// PutObjectACL - this is a dummy call.
+		// PutObjectACL -- this is a dummy call.
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("putobjectacl", h.PutObjectACLHandler))).Queries("acl", "").
 			Name("PutObjectACL")
@@ -336,27 +336,27 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("putbucketacl", h.PutBucketACLHandler))).Queries("acl", "").
 			Name("PutBucketACL")
-		// GetBucketWebsiteHandler - this is a dummy call.
+		// GetBucketWebsiteHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketwebsite", h.GetBucketWebsiteHandler))).Queries("website", "").
 			Name("GetBucketWebsite")
-		// GetBucketAccelerateHandler - this is a dummy call.
+		// GetBucketAccelerateHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketaccelerate", h.GetBucketAccelerateHandler))).Queries("accelerate", "").
 			Name("GetBucketAccelerate")
-		// GetBucketRequestPaymentHandler - this is a dummy call.
+		// GetBucketRequestPaymentHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketrequestpayment", h.GetBucketRequestPaymentHandler))).Queries("requestPayment", "").
 			Name("GetBucketRequestPayment")
-		// GetBucketLoggingHandler - this is a dummy call.
+		// GetBucketLoggingHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketlogging", h.GetBucketLoggingHandler))).Queries("logging", "").
 			Name("GetBucketLogging")
-		// GetBucketLifecycleHandler - this is a dummy call.
+		// GetBucketLifecycleHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketlifecycle", h.GetBucketLifecycleHandler))).Queries("lifecycle", "").
 			Name("GetBucketLifecycle")
-		// GetBucketReplicationHandler - this is a dummy call.
+		// GetBucketReplicationHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketreplication", h.GetBucketReplicationHandler))).Queries("replication", "").
 			Name("GetBucketReplication")
@@ -480,7 +480,7 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		m.Handle(metrics.APIStats("listbuckets", h.ListBucketsHandler))).
 		Name("ListBuckets")
 
-	// If none of the routes match add default error handler routes
+	// If none of the routes match, add default error handler routes
 	api.NotFoundHandler = metrics.APIStats("notfound", errorResponseHandler)
 	api.MethodNotAllowedHandler = metrics.APIStats("methodnotallowed", errorResponseHandler)
 }

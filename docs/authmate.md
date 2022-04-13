@@ -2,18 +2,18 @@
 
 Authmate is a tool to create gateway AWS credentials. AWS users
 are authenticated with access key IDs and secrets, while NeoFS users are
-authenticated with key pairs. To complicate things further we have S3 gateway
-that usually acts on behalf of some user, but user doesn't necessarily want to
+authenticated with key pairs. To complicate things further, we have S3 gateway
+that usually acts on behalf of some user, but the user doesn't necessarily want to
 give their keys to the gateway.
 
 To solve this, we use NeoFS bearer tokens that are signed by the owner (NeoFS
 "user") and that can implement any kind of policy for NeoFS requests allowed
-using this token. However, tokens can't be used as AWS credentials directly, thus
-they're stored on NeoFS as regular objects, and access key ID is just an
-address of this object while secret is generated randomly.
+to use this token. However, tokens can't be used as AWS credentials directly. Thus,
+they're stored on NeoFS as regular objects, and an access key ID is just an
+address of this object while a secret is generated randomly.
 
 Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
-gateway keys. So in order for a gateway to be able to successfully extract bearer
+gateway keys. So, in order for a gateway to be able to successfully extract bearer
 token, the object needs to be stored in a container available for the gateway
 to read, and it needs to be encrypted with this gateway's key (among others
 potentially).
@@ -67,10 +67,10 @@ Confirm passphrase >
  	}
  }
 
-wallet successfully created, file location is wallet.json
+wallet is successfully created, the file location is wallet.json
 ```
 
-To get public key from the wallet:
+To get the public key from the wallet:
 ```shell
 $ ./bin/neo-go wallet dump-keys -w wallet.json
 
@@ -80,23 +80,23 @@ NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 
 ## Issuance of a secret
 
-To issue a secret means to create a Bearer and, optionally, Session tokens and
+To issue a secret means to create Bearer and, optionally, Session tokens and
 put them as an object into a container on the NeoFS network.
 
 ### CLI parameters
 
 **Required parameters:**
-* `--wallet` - a path to a wallet `.json` file. You can provide a passphrase to decrypt
+* `--wallet` is a path to a wallet `.json` file. You can provide a passphrase to decrypt
 a wallet via environment variable `AUTHMATE_WALLET_PASSPHRASE`, or you will be asked to enter a passphrase 
 interactively. You can also specify an account address to use from a wallet using the `--address` parameter.
-* `--peer` - address of a NeoFS peer to connect to
-* `--gate-public-key` --  public `secp256r1` 33-byte short key of a gate (use flags repeatedly for multiple gates). The tokens are encrypted
+* `--peer` is an address of a NeoFS peer to connect to
+* `--gate-public-key` is a public `secp256r1` 33-byte short key of a gate (use flags repeatedly for multiple gates). The tokens are encrypted
 by a set of gateway keys, so you need to pass them as well.
 
 You can issue a secret using the parameters above only. The tool will 
 1. create a new container  
    1. without a friendly name
-   2. with ACL `0x3c8c8cce` - all operations are forbidden for `OTHERS` and `BEARER` user groups, except for `GET` 
+   2. with ACL `0x3c8c8cce` -- all operations are forbidden for `OTHERS` and `BEARER` user groups, except for `GET` 
    3. with policy `REP 2 IN X CBF 3 SELECT 2 FROM * AS X` 
 2. put bearer and session tokens with default rules (details in [Bearer tokens](#Bearer tokens) and 
 [Session tokens](#Session tokens))
@@ -135,9 +135,9 @@ the secret. Format of `access_key_id`: `%cid0%oid`, where 0(zero) is a delimiter
 
 ### Bearer tokens
 
-Creation of the bearer tokens is mandatory.
+Creation of bearer tokens is mandatory.
 
-Rules for bearer token can be set via parameter `--bearer-rules` (json-string and file path allowed):
+Rules for a bearer token can be set via parameter `--bearer-rules` (json-string and file path allowed):
 ```shell
 $ neofs-authmate issue-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
@@ -186,7 +186,7 @@ If bearer rules are not set, a token will be auto-generated with a value:
 
 ### Session tokens
 
-With session token, there are 3 options: 
+With a session token, there are 3 options: 
 1. append `--session-tokens` parameter with your custom rules in json format (as a string or file path). E.g.:
 ```shell
 $ neofs-authmate issue-secret --wallet wallet.json \

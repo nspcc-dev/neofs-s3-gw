@@ -252,7 +252,7 @@ func hmacSHA256(key []byte, data []byte) []byte {
 	return hash.Sum(nil)
 }
 
-// MultipartFormValue get value by key from multipart form.
+// MultipartFormValue gets value by key from multipart form.
 func MultipartFormValue(r *http.Request, key string) string {
 	if r.MultipartForm == nil {
 		return ""

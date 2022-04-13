@@ -51,18 +51,18 @@ type PrmObjectCreate struct {
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateObject creates and saves a parameterized object in the specified
-	// NeoFS container from a specific user. It sets 'Timestamp' attribute to current time.
-	// Returns ID of the saved object.
+	// NeoFS container from a specific user. It sets 'Timestamp' attribute to the current time.
+	// It returns the ID of the saved object.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the object to be created.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the object from being created.
 	CreateObject(context.Context, PrmObjectCreate) (*oid.ID, error)
 
 	// ReadObjectPayload reads payload of the object from NeoFS network by address
 	// into memory.
 	//
-	// Returns exactly one non-nil value. Returns any error encountered which
-	// prevented the object payload to be read.
+	// It returns exactly one non-nil value. It returns any error encountered which
+	// prevented the object payload from being read.
 	ReadObjectPayload(context.Context, address.Address) ([]byte, error)
 }
 
@@ -75,7 +75,7 @@ var (
 
 var _ = New
 
-// New creates new Credentials instance using given cli and key.
+// New creates a new Credentials instance using the given cli and key.
 func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config) Credentials {
 	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config)}
 }
