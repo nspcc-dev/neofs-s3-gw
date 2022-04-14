@@ -86,10 +86,10 @@ const ( // Settings.
 	cfgPeers = "peers"
 
 	// NeoGo.
-	cfgRPCEndpoint = "rpc-endpoint"
+	cfgRPCEndpoint = "rpc_endpoint"
 
 	// Resolving.
-	cfgResolveOrder = "resolve-order"
+	cfgResolveOrder = "resolve_order"
 
 	// Application.
 	cfgApplicationBuildTime = "app.build_time"
