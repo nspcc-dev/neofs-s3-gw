@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	defaultRebalanceTimer  = 15 * time.Second
-	defaultRequestTimeout  = 15 * time.Second
-	defaultConnectTimeout  = 30 * time.Second
-	defaultShutdownTimeout = 15 * time.Second
+	defaultRebalanceInterval  = 15 * time.Second
+	defaultHealthcheckTimeout = 15 * time.Second
+	defaultConnectTimeout     = 30 * time.Second
+	defaultShutdownTimeout    = 15 * time.Second
 
 	defaultMaxClientsCount    = 100
 	defaultMaxClientsDeadline = time.Second * 30
@@ -40,9 +40,9 @@ const ( // Settings.
 	cfgTLSCertFile = "tls.cert_file"
 
 	// Timeouts.
-	cfgConnectTimeout = "connect_timeout"
-	cfgRequestTimeout = "request_timeout"
-	cfgRebalanceTimer = "rebalance_timer"
+	cfgConnectTimeout     = "connect_timeout"
+	cfgHealthcheckTimeout = "healthcheck_timeout"
+	cfgRebalanceInterval  = "rebalance_interval"
 
 	// Caching.
 	cfgObjectsCacheLifetime     = "cache.objects.lifetime"
@@ -180,9 +180,9 @@ func newSettings() *viper.Viper {
 	flags.String(cfgAddress, "", `address of wallet account`)
 	config := flags.String(cmdConfig, "", "config path")
 
-	flags.Duration(cfgRequestTimeout, defaultRequestTimeout, "set gRPC request timeout")
-	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "set gRPC connect timeout")
-	flags.Duration(cfgRebalanceTimer, defaultRebalanceTimer, "set gRPC connection rebalance timer")
+	flags.Duration(cfgHealthcheckTimeout, defaultHealthcheckTimeout, "set timeout to check node health during rebalance")
+	flags.Duration(cfgConnectTimeout, defaultConnectTimeout, "set timeout to connect to NeoFS nodes")
+	flags.Duration(cfgRebalanceInterval, defaultRebalanceInterval, "set rebalance interval")
 
 	flags.Int(cfgMaxClientsCount, defaultMaxClientsCount, "set max-clients count")
 	flags.Duration(cfgMaxClientsDeadline, defaultMaxClientsDeadline, "set max-clients deadline")

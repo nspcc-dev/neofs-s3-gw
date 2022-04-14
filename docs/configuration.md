@@ -84,12 +84,12 @@ $ neofs-s3-gw --max_clients_count 150 --max_clients_deadline 1m
 ### Connection to NeoFS
 
 Timeout to connect to NeoFS nodes can be set with `--connect_timeout` (default 30s)
-and timeout to check node health during rebalance`--request_timeout` (default 15s).
+and timeout to check node health during rebalance`--healthcheck_timeout` (default 15s).
 
-Also, interval to check node health can be specified by `--rebalance_timer` value, default value is 15s.
+Also, interval to check node health can be specified by `--rebalance_interval` value, default value is 15s.
 
 ```shell
-$ neofs-s3-gw --request_timeout 15s --connect_timeout 1m --rebalance_timer 1h
+$ neofs-s3-gw --healthcheck_timeout 15s --connect_timeout 1m --rebalance_interval 1h
 ```
 
 ### Monitoring and metrics

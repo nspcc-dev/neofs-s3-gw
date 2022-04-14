@@ -200,8 +200,8 @@ func issueSecret() *cli.Command {
 				Value:       "REP 2 IN X CBF 3 SELECT 2 FROM * AS X",
 			},
 			&cli.StringFlag{
-				Name:        "session-token",
-				Usage:       "create session token with rules, if the rules are set as 'none', no session tokens will be created",
+				Name:        "session-tokens",
+				Usage:       "create session tokens with rules, if the rules are set as 'none', no session tokens will be created",
 				Required:    false,
 				Destination: &sessionTokenFlag,
 				Value:       "",
@@ -278,7 +278,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 
 			sessionRules, skipSessionRules, err := getSessionRules(sessionTokenFlag)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("couldn't parse 'session-token' flag: %s", err.Error()), 8)
+				return cli.Exit(fmt.Sprintf("couldn't parse 'session-tokens' flag: %s", err.Error()), 8)
 			}
 
 			issueSecretOptions := &authmate.IssueSecretOptions{
