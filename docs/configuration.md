@@ -63,11 +63,11 @@ $ neofs-s3-gw --listen_address 192.168.130.130:443 \
 
 ### RPC endpoint and resolving of bucket names
 
-To set RPC endpoint specify a value of parameter `-r` or `--rpc-endpoint`. The parameter is **required if** another 
-parameter's `--resolve-order` value contains `nns`.
+To set RPC endpoint specify a value of parameter `-r` or `--rpc_endpoint`. The parameter is **required if** another 
+parameter's `--resolve_order` value contains `nns`.
 
 ```shell
-$ neofs-s3-gw --rpc-endpoint http://morph-chain.neofs.devenv:30333/ --resolve-order nns,dns
+$ neofs-s3-gw --rpc_endpoint http://morph-chain.neofs.devenv:30333/ --resolve_order nns,dns
 ```
 
 ### Processing of requests

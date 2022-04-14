@@ -36,8 +36,8 @@ logger:
   level: debug
 
 # RPC endpoint and order of resolving of bucket names
-rpc-endpoint: http://node4.neofs:40332
-resolve-order:
+rpc_endpoint: http://node4.neofs:40332
+resolve_order:
   - nns
 
 # Metrics
