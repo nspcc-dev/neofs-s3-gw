@@ -61,9 +61,9 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 		prmPool pool.InitParameters
 
-		reBalance  = defaultRebalanceTimer
+		reBalance  = defaultRebalanceInterval
 		conTimeout = defaultConnectTimeout
-		reqTimeout = defaultRequestTimeout
+		hckTimeout = defaultHealthcheckTimeout
 
 		maxClientsCount    = defaultMaxClientsCount
 		maxClientsDeadline = defaultMaxClientsDeadline
@@ -73,8 +73,8 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		conTimeout = v
 	}
 
-	if v := v.GetDuration(cfgRequestTimeout); v > 0 {
-		reqTimeout = v
+	if v := v.GetDuration(cfgHealthcheckTimeout); v > 0 {
+		hckTimeout = v
 	}
 
 	if v := v.GetInt(cfgMaxClientsCount); v > 0 {
@@ -85,7 +85,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		maxClientsDeadline = v
 	}
 
-	if v := v.GetDuration(cfgRebalanceTimer); v > 0 {
+	if v := v.GetDuration(cfgRebalanceInterval); v > 0 {
 		reBalance = v
 	}
 
@@ -106,7 +106,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 	prmPool.SetKey(&key.PrivateKey)
 	prmPool.SetNodeDialTimeout(conTimeout)
-	prmPool.SetHealthcheckTimeout(reqTimeout)
+	prmPool.SetHealthcheckTimeout(hckTimeout)
 	prmPool.SetClientRebalanceInterval(reBalance)
 	for _, peer := range fetchPeers(l, v) {
 		prmPool.AddNode(peer)

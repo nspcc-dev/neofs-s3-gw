@@ -187,12 +187,12 @@ If bearer rules are not set, a token will be auto-generated with a value:
 ### Session tokens
 
 With session token, there are 3 options: 
-1. append `--session-token` parameter with your custom rules in json format (as a string or file path). E.g.:
+1. append `--session-tokens` parameter with your custom rules in json format (as a string or file path). E.g.:
 ```shell
 $ neofs-authmate issue-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
 --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
---session-token session.json
+--session-tokens session.json
 ```
 where content of `session.json`:
 ```json
@@ -219,7 +219,7 @@ where content of `session.json`:
 the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 
 forgot about the rule with `SETEACL`.
 
-2. append `--session-token` parameter with the value `none` -- no session token will be created
+2. append `--session-tokens` parameter with the value `none` -- no session token will be created
 3. skip the parameter, and `authmate` will create session tokens with default rules (the same as in `session.json`
 in example above)
 
