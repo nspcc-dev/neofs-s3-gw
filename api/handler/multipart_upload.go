@@ -14,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
@@ -345,6 +346,8 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	var (
+		sessionTokenSetEACL *session.Token
+
 		uploadID   = r.URL.Query().Get(uploadIDHeaderName)
 		uploadInfo = &layer.UploadInfoParams{
 			UploadID: uploadID,
@@ -352,6 +355,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			Key:      reqInfo.ObjectName,
 		}
 		additional = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+		uploadData = &UploadData{}
 	)
 
 	reqBody := new(CompleteMultipartUpload)
@@ -371,16 +375,6 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	c := &layer.CompleteMultipartParams{
-		Info:  uploadInfo,
-		Parts: reqBody.Parts,
-	}
-	objInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
-	if err != nil {
-		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err, additional...)
-		return
-	}
-
 	if initPart.Size > 0 {
 		initPartPayload := bytes.NewBuffer(make([]byte, 0, initPart.Size))
 		p := &layer.GetObjectParams{
@@ -392,37 +386,53 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			return
 		}
 
-		uploadData := &UploadData{}
 		if err = json.Unmarshal(initPartPayload.Bytes(), uploadData); err != nil {
 			h.logAndSendError(w, "could not unmarshal multipart upload acl and/or tagging", reqInfo, err, additional...)
 			return
 		}
 
-		if len(uploadData.TagSet) != 0 {
-			t := &layer.PutTaggingParams{
-				ObjectInfo: objInfo,
-				TagSet:     uploadData.TagSet,
-			}
-			if err = h.obj.PutObjectTagging(r.Context(), t); err != nil {
-				h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
+		if uploadData.ACL != nil {
+			if sessionTokenSetEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+				h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
 				return
 			}
 		}
+	}
 
-		if uploadData.ACL != nil {
-			resInfo := &resourceInfo{
-				Bucket: objInfo.Bucket,
-				Object: objInfo.Name,
-			}
-			astObject, err := aclToAst(uploadData.ACL, resInfo)
-			if err != nil {
-				h.logAndSendError(w, "could not translate acl of completed multipart upload to ast", reqInfo, err, additional...)
-				return
-			}
-			if err = h.updateBucketACL(r, astObject, bktInfo); err != nil {
-				h.logAndSendError(w, "could not update bucket acl while completing multipart upload", reqInfo, err, additional...)
-				return
-			}
+	c := &layer.CompleteMultipartParams{
+		Info:  uploadInfo,
+		Parts: reqBody.Parts,
+	}
+	objInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
+	if err != nil {
+		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err, additional...)
+		return
+	}
+
+	if len(uploadData.TagSet) != 0 {
+		t := &layer.PutTaggingParams{
+			ObjectInfo: objInfo,
+			TagSet:     uploadData.TagSet,
+		}
+		if err = h.obj.PutObjectTagging(r.Context(), t); err != nil {
+			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
+			return
+		}
+	}
+
+	if uploadData.ACL != nil {
+		resInfo := &resourceInfo{
+			Bucket: objInfo.Bucket,
+			Object: objInfo.Name,
+		}
+		astObject, err := aclToAst(uploadData.ACL, resInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not translate acl of completed multipart upload to ast", reqInfo, err, additional...)
+			return
+		}
+		if err = h.updateBucketACL(r, astObject, bktInfo, sessionTokenSetEACL); err != nil {
+			h.logAndSendError(w, "could not update bucket acl while completing multipart upload", reqInfo, err, additional...)
+			return
 		}
 	}
 

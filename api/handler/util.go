@@ -1,15 +1,16 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
@@ -79,4 +80,17 @@ func parseRange(s string) (*layer.RangeParams, error) {
 		Start: values[0],
 		End:   values[1],
 	}, nil
+}
+
+func getSessionTokenSetEACL(ctx context.Context) (*session.Token, error) {
+	boxData, err := layer.GetBoxData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessionToken := boxData.Gate.SessionTokenForSetEACL()
+	if sessionToken == nil {
+		return nil, errors.GetAPIError(errors.ErrAccessDenied)
+	}
+
+	return sessionToken, nil
 }
