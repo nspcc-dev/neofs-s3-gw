@@ -21,6 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
@@ -172,8 +173,21 @@ type createBucketParams struct {
 }
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
-	var newEaclTable *eacl.Table
-	reqInfo := api.GetReqInfo(r.Context())
+	var (
+		err              error
+		newEaclTable     *eacl.Table
+		sessionTokenEACL *session.Token
+		containsACL      = containsACLHeaders(r)
+		reqInfo          = api.GetReqInfo(r.Context())
+	)
+
+	if containsACL {
+		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
+			return
+		}
+	}
+
 	tagSet, err := parseTaggingHeader(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse tagging header", reqInfo, err)
@@ -233,11 +247,12 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	if containsACLHeaders(r) {
+	if containsACL {
 		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, info); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
 		}
+		newEaclTable.SetSessionToken(sessionTokenEACL)
 	}
 
 	if tagSet != nil {
@@ -269,10 +284,12 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	var (
-		newEaclTable *eacl.Table
-		tagSet       map[string]string
-		reqInfo      = api.GetReqInfo(r.Context())
-		metadata     = make(map[string]string)
+		newEaclTable     *eacl.Table
+		tagSet           map[string]string
+		sessionTokenEACL *session.Token
+		reqInfo          = api.GetReqInfo(r.Context())
+		metadata         = make(map[string]string)
+		containsACL      = containsACLHeaders(r)
 	)
 
 	policy, err := checkPostPolicy(r, reqInfo, metadata)
@@ -286,6 +303,13 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		tagSet, err = readTagSet(buffer)
 		if err != nil {
 			h.logAndSendError(w, "could not read tag set", reqInfo, err)
+			return
+		}
+	}
+
+	if containsACL {
+		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
 			return
 		}
 	}
@@ -360,6 +384,8 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if newEaclTable != nil {
+		newEaclTable.SetSessionToken(sessionTokenEACL)
+
 		p := &layer.PutBucketACLParams{
 			BktInfo: bktInfo,
 			EACL:    newEaclTable,
@@ -582,6 +608,17 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		policies = boxData.Policies
 		p.SessionToken = boxData.Gate.SessionTokenForPut()
+		p.EACL.SetSessionToken(boxData.Gate.SessionTokenForSetEACL())
+	}
+
+	if p.SessionToken == nil {
+		h.logAndSendError(w, "couldn't find session token for put", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+		return
+	}
+
+	if p.EACL.SessionToken() == nil {
+		h.logAndSendError(w, "couldn't find session token for setEACL", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+		return
 	}
 
 	if createParams.LocationConstraint != "" {
