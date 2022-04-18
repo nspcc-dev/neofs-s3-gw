@@ -441,12 +441,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 	}
 
-	p := &layer.DeleteObjectParams{
-		BktInfo:     bktInfo,
-		BktSettings: bktSettings,
-		Objects:     []*layer.VersionedObject{{Name: initPart.Name}},
-	}
-	if _, err = h.obj.DeleteObjects(r.Context(), p); err != nil {
+	if err = h.obj.DeleteSystemObject(r.Context(), bktInfo, layer.FormUploadPartName(uploadID, uploadInfo.Key, 0)); err != nil {
 		h.logAndSendError(w, "could not delete init file of multipart upload", reqInfo, err, additional...)
 		return
 	}
