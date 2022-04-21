@@ -3,7 +3,6 @@ package layer
 import (
 	"context"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -11,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/acl"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -47,7 +47,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketI
 	if err != nil {
 		log.Error("could not fetch container", zap.Error(err))
 
-		if strings.Contains(err.Error(), "container not found") {
+		if client.IsErrContainerNotFound(err) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 		}
 		return nil, err

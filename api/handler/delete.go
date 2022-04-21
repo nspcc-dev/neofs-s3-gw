@@ -4,12 +4,12 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -86,7 +86,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		err = deletedObject.Error
 	}
 	if err != nil {
-		if strings.Contains(err.Error(), "object is locked") {
+		if isErrObjectLocked(err) {
 			h.logAndSendError(w, "object is locked", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
 			return
 		}
@@ -138,6 +138,16 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func isErrObjectLocked(err error) bool {
+	switch err.(type) {
+	default:
+		return false
+	case apistatus.ObjectLocked,
+		*apistatus.ObjectLocked:
+		return true
+	}
 }
 
 // DeleteMultipleObjectsHandler handles multiple delete requests.
