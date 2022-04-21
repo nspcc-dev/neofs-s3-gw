@@ -9,13 +9,13 @@ import (
 	"io"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -292,9 +292,8 @@ func (x *NeoFS) SelectObjects(ctx context.Context, prm neofs.PrmObjectSelect) ([
 		return false
 	})
 	if err != nil {
-		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return nil, neofs.ErrAccessDenied
+		if reason, ok := isErrAccessDenied(err); ok {
+			return nil, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 		}
 
 		return nil, fmt.Errorf("read object list: %w", err)
@@ -312,9 +311,8 @@ type payloadReader struct {
 func (x payloadReader) Read(p []byte) (int, error) {
 	n, err := x.ReadCloser.Read(p)
 	if err != nil {
-		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return n, neofs.ErrAccessDenied
+		if reason, ok := isErrAccessDenied(err); ok {
+			return n, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 		}
 	}
 
@@ -340,9 +338,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 		if prm.WithPayload {
 			res, err := x.pool.GetObject(ctx, prmGet)
 			if err != nil {
-				// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-				if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-					return nil, neofs.ErrAccessDenied
+				if reason, ok := isErrAccessDenied(err); ok {
+					return nil, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 				}
 
 				return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
@@ -373,9 +370,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 
 		hdr, err := x.pool.HeadObject(ctx, prmHead)
 		if err != nil {
-			// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-			if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-				return nil, neofs.ErrAccessDenied
+			if reason, ok := isErrAccessDenied(err); ok {
+				return nil, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 			}
 
 			return nil, fmt.Errorf("read object header via connection pool: %w", err)
@@ -387,9 +383,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
 		res, err := x.pool.GetObject(ctx, prmGet)
 		if err != nil {
-			// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-			if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-				return nil, neofs.ErrAccessDenied
+			if reason, ok := isErrAccessDenied(err); ok {
+				return nil, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 			}
 
 			return nil, fmt.Errorf("init full payload range reading via connection pool: %w", err)
@@ -413,9 +408,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 
 	res, err := x.pool.ObjectRange(ctx, prmRange)
 	if err != nil {
-		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return nil, neofs.ErrAccessDenied
+		if reason, ok := isErrAccessDenied(err); ok {
+			return nil, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 		}
 
 		return nil, fmt.Errorf("init payload range reading via connection pool: %w", err)
@@ -443,15 +437,25 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) err
 
 	err := x.pool.DeleteObject(ctx, prmDelete)
 	if err != nil {
-		// TODO: (neofs-s3-gw#367) use NeoFS SDK API to check the status return
-		if strings.Contains(err.Error(), "access to operation") && strings.Contains(err.Error(), "is denied by") {
-			return neofs.ErrAccessDenied
+		if reason, ok := isErrAccessDenied(err); ok {
+			return fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
 		}
 
 		return fmt.Errorf("mark object removal via connection pool: %w", err)
 	}
 
 	return nil
+}
+
+func isErrAccessDenied(err error) (string, bool) {
+	switch err := err.(type) {
+	default:
+		return "", false
+	case apistatus.ObjectAccessDenied:
+		return err.Reason(), true
+	case *apistatus.ObjectAccessDenied:
+		return err.Reason(), true
+	}
 }
 
 // ResolverNeoFS represents virtual connection to the NeoFS network.
