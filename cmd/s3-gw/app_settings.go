@@ -86,6 +86,8 @@ const ( // Settings.
 	// Peers.
 	cfgPeers = "peers"
 
+	cfgTreeServiceEndpoint = "tree.service"
+
 	// NeoGo.
 	cfgRPCEndpoint = "rpc_endpoint"
 
