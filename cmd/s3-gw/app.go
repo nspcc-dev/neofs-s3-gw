@@ -143,12 +143,20 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("failed to form resolver", zap.Error(err))
 	}
 
+	treeServiceEndpoint := v.GetString(cfgTreeServiceEndpoint)
+	treeService, err := neofs.NewTreeClient(treeServiceEndpoint)
+	if err != nil {
+		l.Fatal("failed to create tree service", zap.Error(err))
+	}
+	l.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
+
 	layerCfg := &layer.Config{
 		Caches: getCacheOptions(v, l),
 		AnonKey: layer.AnonymousKey{
 			Key: randomKey,
 		},
-		Resolver: bucketResolver,
+		Resolver:    bucketResolver,
+		TreeService: treeService,
 	}
 
 	// prepare object layer
