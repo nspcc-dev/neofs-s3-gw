@@ -51,6 +51,7 @@ type (
 		namesCache  *cache.ObjectsNameCache
 		bucketCache *cache.BucketCache
 		systemCache *cache.SystemCache
+		treeService TreeService
 	}
 
 	Config struct {
@@ -58,6 +59,7 @@ type (
 		Caches       *CachesConfig
 		AnonKey      AnonymousKey
 		Resolver     *resolver.BucketResolver
+		TreeService  TreeService
 	}
 
 	// AnonymousKey contains data for anonymous requests.
@@ -282,6 +284,7 @@ func NewLayer(log *zap.Logger, neoFS neofs.NeoFS, config *Config) Client {
 		namesCache:  cache.NewObjectsNameCache(config.Caches.Names),
 		bucketCache: cache.NewBucketCache(config.Caches.Buckets),
 		systemCache: cache.NewSystemCache(config.Caches.System),
+		treeService: config.TreeService,
 	}
 }
 
