@@ -1,10 +1,9 @@
 package layer
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"encoding/xml"
+	errorsStd "errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -238,21 +237,16 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
-	settings := &data.BucketSettings{}
-
-	obj, err := n.getSystemObjectFromNeoFS(ctx, bktInfo, bktInfo.SettingsObjectName())
+	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo.CID, "version")
 	if err != nil {
-		if !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		if !errorsStd.Is(err, ErrNotFound) {
 			return nil, err
 		}
-	} else if err = json.Unmarshal(obj.Payload(), settings); err != nil {
-		return nil, err
+		settings = &data.BucketSettings{}
 	}
 
 	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {
-		objID, _ := obj.ID()
 		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", &objID),
 			zap.Stringer("bucket id", bktInfo.CID),
 			zap.Error(err))
 	}
@@ -261,29 +255,12 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 }
 
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	rawSettings, err := json.Marshal(p.Settings)
-	if err != nil {
-		return fmt.Errorf("couldn't marshal bucket settings")
-	}
-
-	s := &PutSystemObjectParams{
-		BktInfo:  p.BktInfo,
-		ObjName:  p.BktInfo.SettingsObjectName(),
-		Metadata: map[string]string{},
-		Reader:   bytes.NewReader(rawSettings),
-	}
-
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
-	if err != nil {
-		return err
-	}
-
-	if obj.Size == 0 {
-		return errors.GetAPIError(errors.ErrInternalError)
+	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo.CID, "version", p.Settings); err != nil {
+		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 
 	systemKey := systemObjectKey(p.BktInfo, p.BktInfo.SettingsObjectName())
-	if err = n.systemCache.PutSettings(systemKey, p.Settings); err != nil {
+	if err := n.systemCache.PutSettings(systemKey, p.Settings); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
