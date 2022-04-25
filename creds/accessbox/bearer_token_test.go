@@ -5,16 +5,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/token"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_tokens_encrypt_decrypt(t *testing.T) {
 	var (
-		tkn  = token.NewBearerToken()
-		tkn2 = token.NewBearerToken()
+		tkn  bearer.Token
+		tkn2 bearer.Token
 	)
 	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -22,13 +22,10 @@ func Test_tokens_encrypt_decrypt(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
+	tkn.SetEACLTable(*eacl.NewTable())
+	require.NoError(t, tkn.Sign(sec.PrivateKey))
 
-	rawTkn, err := tkn.Marshal()
-	require.NoError(t, err)
-
-	data, err := encrypt(cred, cred.PublicKey(), rawTkn)
+	data, err := encrypt(cred, cred.PublicKey(), tkn.Marshal())
 	require.NoError(t, err)
 
 	rawTkn2, err := decrypt(cred, cred.PublicKey(), data)
@@ -44,7 +41,7 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	var (
 		box  *AccessBox
 		box2 AccessBox
-		tkn  = token.NewBearerToken()
+		tkn  bearer.Token
 	)
 
 	sec, err := keys.NewPrivateKey()
@@ -53,10 +50,10 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
+	tkn.SetEACLTable(*eacl.NewTable())
+	require.NoError(t, tkn.Sign(sec.PrivateKey))
 
-	gate := NewGateData(cred.PublicKey(), tkn)
+	gate := NewGateData(cred.PublicKey(), &tkn)
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
@@ -69,7 +66,7 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	tkns, err := box2.GetTokens(cred)
 	require.NoError(t, err)
 
-	require.Equal(t, tkn, tkns.BearerToken)
+	require.Equal(t, &tkn, tkns.BearerToken)
 }
 
 func Test_session_token_in_access_box(t *testing.T) {
@@ -93,7 +90,8 @@ func Test_session_token_in_access_box(t *testing.T) {
 	tok.SetSessionKey(sec.PublicKey().Bytes())
 	require.NoError(t, tkn.Sign(&sec.PrivateKey))
 
-	gate := NewGateData(cred.PublicKey(), token.NewBearerToken())
+	var newTkn bearer.Token
+	gate := NewGateData(cred.PublicKey(), &newTkn)
 	gate.SessionTokens = []*session.Token{tkn}
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
@@ -113,14 +111,14 @@ func Test_session_token_in_access_box(t *testing.T) {
 func Test_accessbox_multiple_keys(t *testing.T) {
 	var (
 		box *AccessBox
-		tkn = token.NewBearerToken()
+		tkn bearer.Token
 	)
 
 	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
+	tkn.SetEACLTable(*eacl.NewTable())
+	require.NoError(t, tkn.Sign(sec.PrivateKey))
 
 	count := 10
 	gates := make([]*GateData, 0, count)
@@ -130,7 +128,7 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 			cred, err := keys.NewPrivateKey()
 			require.NoError(t, err)
 
-			gates = append(gates, NewGateData(cred.PublicKey(), tkn))
+			gates = append(gates, NewGateData(cred.PublicKey(), &tkn))
 			privateKeys = append(privateKeys, cred)
 		}
 	}
@@ -141,14 +139,14 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 	for i, k := range privateKeys {
 		tkns, err := box.GetTokens(k)
 		require.NoError(t, err, "key #%d: %s failed", i, k)
-		require.Equal(t, tkns.BearerToken, tkn)
+		require.Equal(t, *tkns.BearerToken, tkn)
 	}
 }
 
 func Test_unknown_key(t *testing.T) {
 	var (
 		box *AccessBox
-		tkn = token.NewBearerToken()
+		tkn bearer.Token
 	)
 
 	sec, err := keys.NewPrivateKey()
@@ -160,10 +158,10 @@ func Test_unknown_key(t *testing.T) {
 	wrongCred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(eacl.NewTable())
-	require.NoError(t, tkn.SignToken(&sec.PrivateKey))
+	tkn.SetEACLTable(*eacl.NewTable())
+	require.NoError(t, tkn.Sign(sec.PrivateKey))
 
-	gate := NewGateData(cred.PublicKey(), tkn)
+	gate := NewGateData(cred.PublicKey(), &tkn)
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 

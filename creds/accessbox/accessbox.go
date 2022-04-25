@@ -12,9 +12,9 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	apisession "github.com/nspcc-dev/neofs-api-go/v2/session"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/token"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
@@ -35,13 +35,13 @@ type ContainerPolicy struct {
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
 	AccessKey     string
-	BearerToken   *token.BearerToken
+	BearerToken   *bearer.Token
 	SessionTokens []*session.Token
 	GateKey       *keys.PublicKey
 }
 
 // NewGateData returns GateData from the provided bearer token and the public gate key.
-func NewGateData(gateKey *keys.PublicKey, bearerTkn *token.BearerToken) *GateData {
+func NewGateData(gateKey *keys.PublicKey, bearerTkn *bearer.Token) *GateData {
 	return &GateData{GateKey: gateKey, BearerToken: bearerTkn}
 }
 
@@ -175,12 +175,8 @@ func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
 }
 
 func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) error {
-	for i, gate := range gatesData {
-		encBearer, err := gate.BearerToken.Marshal()
-		if err != nil {
-			return fmt.Errorf("%w, sender = %d", err, i)
-		}
-
+	for _, gate := range gatesData {
+		encBearer := gate.BearerToken.Marshal()
 		encSessions := make([][]byte, len(gate.SessionTokens))
 		for i, sessionToken := range gate.SessionTokens {
 			encSession, err := sessionToken.Marshal()
@@ -231,8 +227,8 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 		return nil, err
 	}
 
-	bearerTkn := token.NewBearerToken()
-	if err := bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
+	var bearerTkn bearer.Token
+	if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
 		return nil, err
 	}
 
@@ -245,7 +241,7 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 		sessionTkns[i] = sessionTkn
 	}
 
-	gateData := NewGateData(owner.PublicKey(), bearerTkn)
+	gateData := NewGateData(owner.PublicKey(), &bearerTkn)
 	gateData.SessionTokens = sessionTkns
 	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
 	return gateData, nil

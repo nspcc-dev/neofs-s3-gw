@@ -111,8 +111,10 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object, prefix, delim
 		size = int64(meta.PayloadSize())
 	}
 
+	objID, _ := meta.ID()
+	payloadChecksum, _ := meta.PayloadChecksum()
 	return &data.ObjectInfo{
-		ID:    meta.ID(),
+		ID:    &objID,
 		CID:   bkt.CID,
 		IsDir: isDir,
 
@@ -124,18 +126,18 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object, prefix, delim
 		Headers:       userHeaders,
 		Owner:         meta.OwnerID(),
 		Size:          size,
-		HashSum:       meta.PayloadChecksum().String(),
+		HashSum:       payloadChecksum.String(),
 	}
 }
 
 func filenameFromObject(o *object.Object) string {
-	var name = o.ID().String()
 	for _, attr := range o.Attributes() {
 		if attr.Key() == object.AttributeFileName {
 			return attr.Value()
 		}
 	}
-	return name
+	objID, _ := o.ID()
+	return objID.String()
 }
 
 // NameFromString splits name into a base file name and a directory path.

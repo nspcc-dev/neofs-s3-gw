@@ -178,8 +178,9 @@ func (n *layer) getNotificationConf(ctx context.Context, bkt *data.BucketInfo, s
 	}
 
 	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(bkt, sysName), conf); err != nil {
+		objID, _ := obj.ID()
 		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", obj.ID()),
+			zap.Stringer("object id", &objID),
 			zap.Stringer("bucket id", bkt.CID),
 			zap.Error(err))
 	}

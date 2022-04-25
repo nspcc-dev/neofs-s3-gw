@@ -90,7 +90,7 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]oid.ID, erro
 	return res, n.transformNeofsError(ctx, err)
 }
 
-func newAddress(cid *cid.ID, oid *oid.ID) *address.Address {
+func newAddress(cid cid.ID, oid oid.ID) *address.Address {
 	addr := address.NewAddress()
 	addr.SetContainerID(cid)
 	addr.SetObjectID(oid)
@@ -98,10 +98,10 @@ func newAddress(cid *cid.ID, oid *oid.ID) *address.Address {
 }
 
 // objectHead returns all object's headers.
-func (n *layer) objectHead(ctx context.Context, idCnr *cid.ID, idObj *oid.ID) (*object.Object, error) {
+func (n *layer) objectHead(ctx context.Context, idCnr *cid.ID, idObj oid.ID) (*object.Object, error) {
 	prm := neofs.PrmObjectRead{
 		Container:  *idCnr,
-		Object:     *idObj,
+		Object:     idObj,
 		WithHeader: true,
 	}
 
@@ -137,9 +137,11 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Re
 
 // objectGet returns an object with payload in the object.
 func (n *layer) objectGet(ctx context.Context, addr *address.Address) (*object.Object, error) {
+	cnrID, _ := addr.ContainerID()
+	objID, _ := addr.ObjectID()
 	prm := neofs.PrmObjectRead{
-		Container:   *addr.ContainerID(),
-		Object:      *addr.ObjectID(),
+		Container:   cnrID,
+		Object:      objID,
 		WithHeader:  true,
 		WithPayload: true,
 	}
@@ -178,7 +180,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	prm := neofs.PrmObjectCreate{
 		Container:   *p.BktInfo.CID,
-		Creator:     *own,
+		Creator:     own,
 		PayloadSize: uint64(p.Size),
 		Filename:    p.Object,
 		Payload:     r,
@@ -216,7 +218,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	meta, err := n.objectHead(ctx, p.BktInfo.CID, id)
+	meta, err := n.objectHead(ctx, p.BktInfo.CID, *id)
 	if err != nil {
 		return nil, err
 	}
@@ -244,11 +246,13 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
+	payloadChecksum, _ := meta.PayloadChecksum()
+
 	return &data.ObjectInfo{
 		ID:  id,
 		CID: p.BktInfo.CID,
 
-		Owner:         own,
+		Owner:         &own,
 		Bucket:        p.BktInfo.Name,
 		Name:          p.Object,
 		Size:          p.Size,
@@ -256,7 +260,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		CreationEpoch: meta.CreationEpoch(),
 		Headers:       p.Header,
 		ContentType:   p.Header[api.ContentType],
-		HashSum:       meta.PayloadChecksum().String(),
+		HashSum:       payloadChecksum.String(),
 	}, nil
 }
 
@@ -366,7 +370,7 @@ func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectNa
 	}
 
 	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, &ids[i])
+		meta, err := n.objectHead(ctx, bkt.CID, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", &ids[i]),
@@ -406,12 +410,12 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		return objInfo, nil
 	}
 
-	id := oid.NewID()
-	if err := id.Parse(p.VersionID); err != nil {
+	var id oid.ID
+	if err := id.DecodeString(p.VersionID); err != nil {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidVersion)
 	}
 
-	if headInfo := n.objCache.Get(newAddress(bkt.CID, id)); headInfo != nil {
+	if headInfo := n.objCache.Get(newAddress(*bkt.CID, id)); headInfo != nil {
 		return objInfoFromMeta(bkt, headInfo), nil
 	}
 
@@ -445,7 +449,7 @@ func (n *layer) objectDelete(ctx context.Context, idCnr *cid.ID, idObj *oid.ID) 
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth)
 
-	n.objCache.Delete(newAddress(idCnr, idObj))
+	n.objCache.Delete(newAddress(*idCnr, *idObj))
 
 	return n.transformNeofsError(ctx, n.neoFS.DeleteObject(ctx, prm))
 }
@@ -679,10 +683,10 @@ func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInf
 func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, cid *cid.ID, oid *oid.ID) *object.Object {
 	var (
 		err  error
-		meta = n.objCache.Get(newAddress(cid, oid))
+		meta = n.objCache.Get(newAddress(*cid, *oid))
 	)
 	if meta == nil {
-		meta, err = n.objectHead(ctx, cid, oid)
+		meta, err = n.objectHead(ctx, cid, *oid)
 		if err != nil {
 			n.log.Warn("could not fetch object meta", zap.Error(err))
 			return nil

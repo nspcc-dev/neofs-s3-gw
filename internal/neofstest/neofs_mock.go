@@ -18,8 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object/id/test"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 const objectSystemAttributeName = "S3-System-name"
@@ -61,8 +60,8 @@ func (t *TestNeoFS) ContainerID(name string) (*cid.ID, error) {
 	for id, cnr := range t.containers {
 		for _, attr := range cnr.Attributes() {
 			if attr.Key() == container.AttributeName && attr.Value() == name {
-				cnrID := cid.New()
-				return cnrID, cnrID.Parse(id)
+				var cnrID cid.ID
+				return &cnrID, cnrID.DecodeString(id)
 			}
 		}
 	}
@@ -97,11 +96,11 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm neofs.PrmContainerCre
 		return nil, err
 	}
 
-	id := cid.New()
+	var id cid.ID
 	id.SetSHA256(sha256.Sum256(b))
 	t.containers[id.String()] = cnr
 
-	return id, nil
+	return &id, nil
 }
 
 func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {
@@ -114,11 +113,11 @@ func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Containe
 	return nil, fmt.Errorf("container not found " + id.String())
 }
 
-func (t *TestNeoFS) UserContainers(_ context.Context, _ owner.ID) ([]cid.ID, error) {
+func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, error) {
 	var res []cid.ID
 	for k := range t.containers {
 		var idCnr cid.ID
-		if err := idCnr.Parse(k); err != nil {
+		if err := idCnr.DecodeString(k); err != nil {
 			return nil, err
 		}
 		res = append(res, idCnr)
@@ -146,7 +145,8 @@ func (t *TestNeoFS) SelectObjects(_ context.Context, prm neofs.PrmObjectSelect) 
 	if len(filters) == 1 {
 		for k, v := range t.objects {
 			if strings.Contains(k, cidStr) {
-				res = append(res, *v.ID())
+				id, _ := v.ID()
+				res = append(res, id)
 			}
 		}
 		return res, nil
@@ -160,7 +160,8 @@ func (t *TestNeoFS) SelectObjects(_ context.Context, prm neofs.PrmObjectSelect) 
 
 	for k, v := range t.objects {
 		if strings.Contains(k, cidStr) && isMatched(v.Attributes(), filter) {
-			res = append(res, *v.ID())
+			id, _ := v.ID()
+			res = append(res, id)
 		}
 	}
 
@@ -169,8 +170,8 @@ func (t *TestNeoFS) SelectObjects(_ context.Context, prm neofs.PrmObjectSelect) 
 
 func (t *TestNeoFS) ReadObject(_ context.Context, prm neofs.PrmObjectRead) (*neofs.ObjectPart, error) {
 	var addr address.Address
-	addr.SetContainerID(&prm.Container)
-	addr.SetObjectID(&prm.Object)
+	addr.SetContainerID(prm.Container)
+	addr.SetObjectID(prm.Object)
 
 	sAddr := addr.String()
 
@@ -185,7 +186,12 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm neofs.PrmObjectRead) (*neo
 }
 
 func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (*oid.ID, error) {
-	id := test.ID()
+	b := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return nil, err
+	}
+	var id oid.ID
+	id.SetSHA256(sha256.Sum256(b))
 
 	attrs := make([]object.Attribute, 0)
 
@@ -204,7 +210,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (
 	}
 
 	obj := object.New()
-	obj.SetContainerID(&prm.Container)
+	obj.SetContainerID(prm.Container)
 	obj.SetID(id)
 	obj.SetPayloadSize(prm.PayloadSize)
 	obj.SetAttributes(attrs...)
@@ -226,22 +232,25 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (
 		obj.SetPayloadSize(uint64(len(all)))
 	}
 
-	addr := newAddress(obj.ContainerID(), obj.ID())
+	cnrID, _ := obj.ContainerID()
+	objID, _ := obj.ID()
+
+	addr := newAddress(cnrID, objID)
 	t.objects[addr.String()] = obj
-	return obj.ID(), nil
+	return &objID, nil
 }
 
 func (t *TestNeoFS) DeleteObject(_ context.Context, prm neofs.PrmObjectDelete) error {
 	var addr address.Address
-	addr.SetContainerID(&prm.Container)
-	addr.SetObjectID(&prm.Object)
+	addr.SetContainerID(prm.Container)
+	addr.SetObjectID(prm.Object)
 
 	delete(t.objects, addr.String())
 
 	return nil
 }
 
-func (t *TestNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
+func (t *TestNeoFS) TimeToEpoch(_ context.Context, futureTime time.Time) (uint64, uint64, error) {
 	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Second()), nil
 }
 
@@ -255,7 +264,7 @@ func isMatched(attributes []object.Attribute, filter object.SearchFilter) bool {
 	return false
 }
 
-func newAddress(cid *cid.ID, oid *oid.ID) *address.Address {
+func newAddress(cid cid.ID, oid oid.ID) *address.Address {
 	addr := address.NewAddress()
 	addr.SetContainerID(cid)
 	addr.SetObjectID(oid)

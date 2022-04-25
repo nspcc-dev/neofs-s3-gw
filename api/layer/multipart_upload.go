@@ -14,7 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -89,7 +89,7 @@ type (
 
 	ListPartsInfo struct {
 		Parts                []*Part
-		Owner                *owner.ID
+		Owner                *user.ID
 		NextPartNumberMarker int
 		IsTruncated          bool
 	}
@@ -105,7 +105,7 @@ type (
 		IsDir    bool
 		Key      string
 		UploadID string
-		Owner    *owner.ID
+		Owner    *user.ID
 		Created  time.Time
 	}
 )
@@ -352,7 +352,7 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 	uniqDirs := make(map[string]struct{})
 
 	for i := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, &ids[i])
+		meta, err := n.objectHead(ctx, p.Bkt.CID, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", &ids[i]),
@@ -496,7 +496,7 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (map[in
 	res := make(map[int]*data.ObjectInfo)
 
 	for i := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, &ids[i])
+		meta, err := n.objectHead(ctx, p.Bkt.CID, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head a part of upload",
 				zap.Stringer("object id", &ids[i]),

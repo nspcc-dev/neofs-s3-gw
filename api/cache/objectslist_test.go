@@ -22,10 +22,10 @@ func getTestObjectsListConfig() *Config {
 }
 
 func randID(t *testing.T) *oid.ID {
-	id := oid.NewID()
+	var id oid.ID
 	id.SetSHA256(randSHA256Checksum(t))
 
-	return id
+	return &id
 }
 
 func randSHA256Checksum(t *testing.T) (cs [sha256.Size]byte) {
@@ -140,7 +140,7 @@ func TestObjectsListCache(t *testing.T) {
 
 func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	var (
-		id   = cid.New()
+		id   cid.ID
 		oids = []oid.ID{*randID(t)}
 		keys []ObjectsListKey
 	)
@@ -157,7 +157,7 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
 		}
-		cache.CleanCacheEntriesContainingObject("obj1", id)
+		cache.CleanCacheEntriesContainingObject("obj1", &id)
 		for _, k := range keys {
 			list := cache.Get(k)
 			if k.prefix == "" {
@@ -176,7 +176,7 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
 		}
-		cache.CleanCacheEntriesContainingObject("dir/obj", id)
+		cache.CleanCacheEntriesContainingObject("dir/obj", &id)
 		for _, k := range keys {
 			list := cache.Get(k)
 			if k.prefix == "" || k.prefix == "dir/" {
@@ -195,7 +195,7 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 			err := cache.Put(k, oids)
 			require.NoError(t, err)
 		}
-		cache.CleanCacheEntriesContainingObject("dir/lol/obj", id)
+		cache.CleanCacheEntriesContainingObject("dir/lol/obj", &id)
 		for _, k := range keys {
 			list := cache.Get(k)
 			require.Nil(t, list)

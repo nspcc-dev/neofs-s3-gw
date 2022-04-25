@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 const maxObjectList = 1000 // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
@@ -13,7 +13,7 @@ const maxObjectList = 1000 // Limit number of objects in a listObjectsResponse/l
 // ListBucketsHandler handles bucket listing requests.
 func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		own     = owner.NewID()
+		own     user.ID
 		res     *ListBucketsResponse
 		reqInfo = api.GetReqInfo(r.Context())
 	)
@@ -25,7 +25,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(list) > 0 {
-		own = list[0].Owner
+		own = *list[0].Owner
 	}
 
 	res = &ListBucketsResponse{

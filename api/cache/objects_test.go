@@ -18,9 +18,11 @@ func getTestConfig() *Config {
 
 func TestCache(t *testing.T) {
 	obj := objecttest.Object()
+	objID, _ := obj.ID()
+	cnrID, _ := obj.ContainerID()
 	addr := address.NewAddress()
-	addr.SetContainerID(obj.ContainerID())
-	addr.SetObjectID(obj.ID())
+	addr.SetContainerID(cnrID)
+	addr.SetObjectID(objID)
 
 	t.Run("check get", func(t *testing.T) {
 		cache := New(getTestConfig())

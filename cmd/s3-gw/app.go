@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neo-go/pkg/rpc/client"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -128,20 +128,16 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	resolveCfg := &resolver.Config{
-		NeoFS: neofs.NewResolverNeoFS(conns),
-	}
-
-	if rpcEndpoint := v.GetString(cfgRPCEndpoint); rpcEndpoint != "" {
-		rpc, err := client.New(ctx, rpcEndpoint, client.Options{})
-		if err != nil {
-			l.Fatal("couldn't create rpc client", zap.String("endpoint", rpcEndpoint), zap.Error(err))
-		} else if err = rpc.Init(); err != nil {
-			l.Fatal("couldn't init rpc client", zap.String("endpoint", rpcEndpoint), zap.Error(err))
-		}
-		resolveCfg.RPC = rpc
+		NeoFS:      neofs.NewResolverNeoFS(conns),
+		RPCAddress: v.GetString(cfgRPCEndpoint),
 	}
 
 	order := v.GetStringSlice(cfgResolveOrder)
+	if resolveCfg.RPCAddress == "" {
+		order = remove(order, resolver.NNSResolver)
+		l.Warn(fmt.Sprintf("resolver '%s' won't be used since '%s' isn't provided", resolver.NNSResolver, cfgRPCEndpoint))
+	}
+
 	bucketResolver, err := resolver.NewResolver(order, resolveCfg)
 	if err != nil {
 		l.Fatal("failed to form resolver", zap.Error(err))
@@ -192,6 +188,15 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 		maxClients: api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline),
 	}
+}
+
+func remove(list []string, element string) []string {
+	for i, item := range list {
+		if item == element {
+			return append(list[:i], list[i+1:]...)
+		}
+	}
+	return list
 }
 
 // Wait waits for an application to finish.

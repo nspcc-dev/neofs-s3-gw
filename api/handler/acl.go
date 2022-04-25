@@ -153,7 +153,10 @@ func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, er
 		return nil, err
 	}
 
-	key, err := keys.NewPublicKeyFromBytes(box.Gate.BearerToken.Signature().Key(), elliptic.P256())
+	var btoken v2acl.BearerToken
+	box.Gate.BearerToken.WriteToV2(&btoken)
+
+	key, err := keys.NewPublicKeyFromBytes(btoken.GetSignature().GetKey(), elliptic.P256())
 	if err != nil {
 		return nil, err
 	}
@@ -791,8 +794,8 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 		}
 		if len(resource.Object) != 0 {
 			if len(resource.Version) != 0 {
-				id := oid.NewID()
-				if err := id.Parse(resource.Version); err != nil {
+				var id oid.ID
+				if err := id.DecodeString(resource.Version); err != nil {
 					return nil, err
 				}
 				record.AddObjectIDFilter(eacl.MatchStringEqual, id)

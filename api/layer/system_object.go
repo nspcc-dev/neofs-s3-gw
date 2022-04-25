@@ -122,7 +122,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, p.BktInfo.CID, id)
+	meta, err := n.objectHead(ctx, p.BktInfo.CID, *id)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +149,8 @@ func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketIn
 
 	var addr address.Address
 
-	addr.SetContainerID(bkt.CID)
-	addr.SetObjectID(objInfo.ID)
+	addr.SetContainerID(*bkt.CID)
+	addr.SetObjectID(*objInfo.ID)
 
 	obj, err := n.objectGet(ctx, &addr)
 	if err != nil {
@@ -180,8 +180,9 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	}
 
 	if err = n.systemCache.PutCORS(systemObjectKey(bkt, sysName), cors); err != nil {
+		objID, _ := obj.ID()
 		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", obj.ID()),
+			zap.Stringer("object id", &objID),
 			zap.Stringer("bucket id", bkt.CID),
 			zap.Error(err))
 	}
@@ -201,7 +202,7 @@ func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sy
 
 	versions := newObjectVersions(sysName)
 	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, &ids[i])
+		meta, err := n.objectHead(ctx, bkt.CID, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", &ids[i]),
@@ -251,8 +252,9 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 	}
 
 	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {
+		objID, _ := obj.ID()
 		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", obj.ID()),
+			zap.Stringer("object id", &objID),
 			zap.Stringer("bucket id", bktInfo.CID),
 			zap.Error(err))
 	}

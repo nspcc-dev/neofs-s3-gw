@@ -110,9 +110,9 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			ReqInfo: reqInfo,
 		}
 	} else {
-		oid := oid.NewID()
+		var objID oid.ID
 		if len(versionID) != 0 {
-			if err := oid.Parse(versionID); err != nil {
+			if err = objID.DecodeString(versionID); err != nil {
 				h.log.Error("couldn't send notification: %w", zap.Error(err))
 			}
 		}
@@ -121,7 +121,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Event: layer.EventObjectRemovedDelete,
 			ObjInfo: &data.ObjectInfo{
 				Name: reqInfo.ObjectName,
-				ID:   oid,
+				ID:   &objID,
 			},
 			BktInfo: bktInfo,
 			ReqInfo: reqInfo,

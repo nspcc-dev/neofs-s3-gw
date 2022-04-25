@@ -11,10 +11,10 @@ import (
 )
 
 func randID(t *testing.T) *oid.ID {
-	id := oid.NewID()
+	var id oid.ID
 	id.SetSHA256(randSHA256Checksum(t))
 
-	return id
+	return &id
 }
 
 func randSHA256Checksum(t *testing.T) (cs [sha256.Size]byte) {

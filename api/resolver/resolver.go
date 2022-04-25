@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nspcc-dev/neo-go/pkg/rpc/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/resolver"
+	"github.com/nspcc-dev/neofs-sdk-go/ns"
 )
 
 const (
@@ -24,8 +23,8 @@ type NeoFS interface {
 }
 
 type Config struct {
-	NeoFS NeoFS
-	RPC   *client.Client
+	NeoFS      NeoFS
+	RPCAddress string
 }
 
 type BucketResolver struct {
@@ -78,7 +77,7 @@ func newResolver(name string, cfg *Config, next *BucketResolver) (*BucketResolve
 	case DNSResolver:
 		return NewDNSResolver(cfg.NeoFS, next)
 	case NNSResolver:
-		return NewNNSResolver(cfg.RPC, next)
+		return NewNNSResolver(cfg.RPCAddress, next)
 	default:
 		return nil, fmt.Errorf("unknown resolver: %s", name)
 	}
@@ -89,6 +88,8 @@ func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) 
 		return nil, fmt.Errorf("pool must not be nil for DNS resolver")
 	}
 
+	var dns ns.DNS
+
 	resolveFunc := func(ctx context.Context, name string) (*cid.ID, error) {
 		domain, err := neoFS.SystemDNS(ctx)
 		if err != nil {
@@ -96,11 +97,11 @@ func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) 
 		}
 
 		domain = name + "." + domain
-		cnrID, err := resolver.ResolveContainerDomainName(domain)
+		cnrID, err := dns.ResolveContainerName(domain)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't resolve container '%s' as '%s': %w", name, domain, err)
 		}
-		return cnrID, nil
+		return &cnrID, nil
 	}
 
 	return &BucketResolver{
@@ -111,22 +112,23 @@ func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) 
 	}, nil
 }
 
-func NewNNSResolver(rpc *client.Client, next *BucketResolver) (*BucketResolver, error) {
-	if rpc == nil {
-		return nil, fmt.Errorf("rpc client must not be nil for NNS resolver")
+func NewNNSResolver(address string, next *BucketResolver) (*BucketResolver, error) {
+	if address == "" {
+		return nil, fmt.Errorf("rpc address must not be empty for NNS resolver")
 	}
 
-	nnsRPCResolver, err := resolver.NewNNSResolver(rpc)
-	if err != nil {
-		return nil, err
+	var nns ns.NNS
+
+	if err := nns.Dial(address); err != nil {
+		return nil, fmt.Errorf("dial %s: %w", address, err)
 	}
 
 	resolveFunc := func(_ context.Context, name string) (*cid.ID, error) {
-		cnrID, err := nnsRPCResolver.ResolveContainerName(name)
+		cnrID, err := nns.ResolveContainerName(name)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't resolve container '%s': %w", name, err)
 		}
-		return cnrID, nil
+		return &cnrID, nil
 	}
 
 	return &BucketResolver{

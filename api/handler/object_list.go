@@ -165,7 +165,8 @@ func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, 
 
 func parseContinuationToken(queryValues url.Values) (string, error) {
 	if val, ok := queryValues["continuation-token"]; ok {
-		if err := oid.NewID().Parse(val[0]); err != nil {
+		var objID oid.ID
+		if err := objID.DecodeString(val[0]); err != nil {
 			return "", errors.GetAPIError(errors.ErrIncorrectContinuationToken)
 		}
 		return val[0], nil
