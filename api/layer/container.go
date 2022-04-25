@@ -96,7 +96,7 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 		res []cid.ID
 		rid = api.GetRequestID(ctx)
 	)
-	res, err = n.neoFS.UserContainers(ctx, *own)
+	res, err = n.neoFS.UserContainers(ctx, own)
 	if err != nil {
 		n.log.Error("could not list user containers",
 			zap.String("request_id", rid),
@@ -122,9 +122,10 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
 	var err error
+	ownerID := n.Owner(ctx)
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
-		Owner:              n.Owner(ctx),
+		Owner:              &ownerID,
 		Created:            time.Now(), // this can be a little incorrect since the real time is set later
 		BasicACL:           p.ACL,
 		LocationConstraint: p.LocationConstraint,
@@ -171,7 +172,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 }
 
 func (n *layer) setContainerEACLTable(ctx context.Context, idCnr *cid.ID, table *eacl.Table) error {
-	table.SetCID(idCnr)
+	table.SetCID(*idCnr)
 
 	boxData, err := GetBoxData(ctx)
 	if err == nil {

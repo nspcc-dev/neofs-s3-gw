@@ -13,14 +13,14 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
 		GetBox(context.Context, *address.Address) (*accessbox.Box, error)
-		Put(context.Context, *cid.ID, *owner.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (*address.Address, error)
+		Put(context.Context, *cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (*address.Address, error)
 	}
 
 	cred struct {
@@ -33,7 +33,7 @@ type (
 // PrmObjectCreate groups parameters of objects created by credential tool.
 type PrmObjectCreate struct {
 	// NeoFS identifier of the object creator.
-	Creator owner.ID
+	Creator user.ID
 
 	// NeoFS container to store the object.
 	Container cid.ID
@@ -118,7 +118,7 @@ func (c *cred) getAccessBox(ctx context.Context, addr *address.Address) (*access
 	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer *owner.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*address.Address, error) {
+func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*address.Address, error) {
 	if len(keys) == 0 {
 		return nil, ErrEmptyPublicKeys
 	} else if box == nil {
@@ -130,7 +130,7 @@ func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer *owner.ID, box *ac
 	}
 
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
-		Creator:         *issuer,
+		Creator:         issuer,
 		Container:       *idCnr,
 		Filename:        strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
 		ExpirationEpoch: expiration,
@@ -141,7 +141,7 @@ func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer *owner.ID, box *ac
 	}
 
 	addr := address.NewAddress()
-	addr.SetObjectID(idObj)
-	addr.SetContainerID(idCnr)
+	addr.SetObjectID(*idObj)
+	addr.SetContainerID(*idCnr)
 	return addr, nil
 }

@@ -8,21 +8,21 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-sdk-go/acl"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/token"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 // PrmContainerCreate groups parameters of NeoFS.CreateContainer operation.
 type PrmContainerCreate struct {
 	// NeoFS identifier of the container creator.
-	Creator owner.ID
+	Creator user.ID
 
 	// Container placement policy.
 	Policy netmap.PlacementPolicy
@@ -43,7 +43,7 @@ type PrmContainerCreate struct {
 // PrmAuth groups authentication parameters for the NeoFS operation.
 type PrmAuth struct {
 	// Bearer token to be used for the operation. Overlaps PrivateKey. Optional.
-	BearerToken *token.BearerToken
+	BearerToken *bearer.Token
 
 	// Private key used for the operation if BearerToken is missing (in this case non-nil).
 	PrivateKey *ecdsa.PrivateKey
@@ -105,7 +105,7 @@ type PrmObjectCreate struct {
 	Container cid.ID
 
 	// NeoFS identifier of the object creator.
-	Creator owner.ID
+	Creator user.ID
 
 	// Key-value object attributes.
 	Attributes [][2]string
@@ -158,7 +158,7 @@ type NeoFS interface {
 	//
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the containers from being listed.
-	UserContainers(context.Context, owner.ID) ([]cid.ID, error)
+	UserContainers(context.Context, user.ID) ([]cid.ID, error)
 
 	// SetContainerEACL saves the eACL table of the container in NeoFS.
 	//

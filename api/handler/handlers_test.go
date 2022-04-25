@@ -17,7 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -83,11 +83,13 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 	})
 	require.NoError(t, err)
 
+	var ownerID user.ID
+
 	bktInfo := &data.BucketInfo{
 		CID:               cnrID,
 		Name:              bktName,
 		ObjectLockEnabled: true,
-		Owner:             owner.NewID(),
+		Owner:             &ownerID,
 	}
 
 	sp := &layer.PutSettingsParams{

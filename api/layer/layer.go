@@ -22,8 +22,8 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -314,12 +314,16 @@ func IsAuthenticatedRequest(ctx context.Context) bool {
 }
 
 // Owner returns owner id from BearerToken (context) or from client owner.
-func (n *layer) Owner(ctx context.Context) *owner.ID {
+func (n *layer) Owner(ctx context.Context) user.ID {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
-		return bd.Gate.BearerToken.Issuer()
+		ownerID, _ := bd.Gate.BearerToken.Issuer()
+		return ownerID
 	}
 
-	return owner.NewIDFromPublicKey((*ecdsa.PublicKey)(n.EphemeralKey()))
+	var ownerID user.ID
+	user.IDFromKey(&ownerID, (ecdsa.PublicKey)(*n.EphemeralKey()))
+
+	return ownerID
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *neofs.PrmAuth) {
@@ -627,7 +631,7 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 		return nil, err
 	}
 
-	if p.SessionToken != nil && bktInfo.Owner.Equal(p.SessionToken.OwnerID()) {
+	if p.SessionToken != nil && bktInfo.Owner.Equals(*p.SessionToken.OwnerID()) {
 		return nil, errors.GetAPIError(errors.ErrBucketAlreadyOwnedByYou)
 	}
 
@@ -635,12 +639,12 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 }
 
 func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error) {
-	cnrID := cid.New()
-	if err := cnrID.Parse(name); err != nil {
+	var cnrID cid.ID
+	if err := cnrID.DecodeString(name); err != nil {
 		return n.resolver.Resolve(ctx, name)
 	}
 
-	return cnrID, nil
+	return &cnrID, nil
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {

@@ -23,9 +23,9 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 // NeoFS represents virtual connection to the NeoFS network.
@@ -143,7 +143,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm neofs.PrmContainerCreat
 }
 
 // UserContainers implements neofs.NeoFS interface method.
-func (x *NeoFS) UserContainers(ctx context.Context, id owner.ID) ([]cid.ID, error) {
+func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error) {
 	var prm pool.PrmContainerList
 	prm.SetOwnerID(id)
 
@@ -226,7 +226,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm neofs.PrmObjectCreate) (*o
 	}
 
 	obj := object.New()
-	obj.SetContainerID(&prm.Container)
+	obj.SetContainerID(prm.Container)
 	obj.SetOwnerID(&prm.Creator)
 	obj.SetAttributes(attrs...)
 	obj.SetPayloadSize(prm.PayloadSize)
@@ -242,7 +242,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm neofs.PrmObjectCreate) (*o
 	prmPut.SetPayload(prm.Payload)
 
 	if prm.BearerToken != nil {
-		prmPut.UseBearer(prm.BearerToken)
+		prmPut.UseBearer(*prm.BearerToken)
 	} else {
 		prmPut.UseKey(prm.PrivateKey)
 	}
@@ -273,7 +273,7 @@ func (x *NeoFS) SelectObjects(ctx context.Context, prm neofs.PrmObjectSelect) ([
 	prmSearch.SetFilters(filters)
 
 	if prm.BearerToken != nil {
-		prmSearch.UseBearer(prm.BearerToken)
+		prmSearch.UseBearer(*prm.BearerToken)
 	} else {
 		prmSearch.UseKey(prm.PrivateKey)
 	}
@@ -322,14 +322,14 @@ func (x payloadReader) Read(p []byte) (int, error) {
 // ReadObject implements neofs.NeoFS interface method.
 func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs.ObjectPart, error) {
 	var addr address.Address
-	addr.SetContainerID(&prm.Container)
-	addr.SetObjectID(&prm.Object)
+	addr.SetContainerID(prm.Container)
+	addr.SetObjectID(prm.Object)
 
 	var prmGet pool.PrmObjectGet
 	prmGet.SetAddress(addr)
 
 	if prm.BearerToken != nil {
-		prmGet.UseBearer(prm.BearerToken)
+		prmGet.UseBearer(*prm.BearerToken)
 	} else {
 		prmGet.UseKey(prm.PrivateKey)
 	}
@@ -363,7 +363,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 		prmHead.SetAddress(addr)
 
 		if prm.BearerToken != nil {
-			prmHead.UseBearer(prm.BearerToken)
+			prmHead.UseBearer(*prm.BearerToken)
 		} else {
 			prmHead.UseKey(prm.PrivateKey)
 		}
@@ -401,7 +401,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 	prmRange.SetLength(prm.PayloadRange[1])
 
 	if prm.BearerToken != nil {
-		prmRange.UseBearer(prm.BearerToken)
+		prmRange.UseBearer(*prm.BearerToken)
 	} else {
 		prmRange.UseKey(prm.PrivateKey)
 	}
@@ -423,14 +423,14 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 // DeleteObject implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) error {
 	var addr address.Address
-	addr.SetContainerID(&prm.Container)
-	addr.SetObjectID(&prm.Object)
+	addr.SetContainerID(prm.Container)
+	addr.SetObjectID(prm.Object)
 
 	var prmDelete pool.PrmObjectDelete
 	prmDelete.SetAddress(addr)
 
 	if prm.BearerToken != nil {
-		prmDelete.UseBearer(prm.BearerToken)
+		prmDelete.UseBearer(*prm.BearerToken)
 	} else {
 		prmDelete.UseKey(prm.PrivateKey)
 	}
@@ -531,9 +531,12 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 
 // ReadObjectPayload implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr address.Address) ([]byte, error) {
+	cnrID, _ := addr.ContainerID()
+	objID, _ := addr.ObjectID()
+
 	res, err := x.neoFS.ReadObject(ctx, neofs.PrmObjectRead{
-		Container:   *addr.ContainerID(),
-		Object:      *addr.ObjectID(),
+		Container:   cnrID,
+		Object:      objID,
 		WithPayload: true,
 	})
 	if err != nil {

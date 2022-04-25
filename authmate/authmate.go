@@ -15,21 +15,21 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/token"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
 // PrmContainerCreate groups parameters of containers created by authmate.
 type PrmContainerCreate struct {
 	// NeoFS identifier of the container creator.
-	Owner owner.ID
+	Owner user.ID
 
 	// Container placement policy.
 	Policy netmap.PlacementPolicy
@@ -134,12 +134,12 @@ type (
 	}
 
 	obtainingResult struct {
-		BearerToken     *token.BearerToken `json:"-"`
-		SecretAccessKey string             `json:"secret_access_key"`
+		BearerToken     *bearer.Token `json:"-"`
+		SecretAccessKey string        `json:"secret_access_key"`
 	}
 )
 
-func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner *owner.ID) (*cid.ID, error) {
+func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner user.ID) (*cid.ID, error) {
 	if opts.ID != nil {
 		// check that the container exists
 		return opts.ID, a.neoFS.ContainerExists(ctx, *opts.ID)
@@ -151,7 +151,7 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 	}
 
 	cnrID, err := a.neoFS.CreateContainer(ctx, PrmContainerCreate{
-		Owner:        *idOwner,
+		Owner:        idOwner,
 		Policy:       *pp,
 		FriendlyName: opts.FriendlyName,
 	})
@@ -232,7 +232,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	box.ContainerPolicy = policies
 
-	idOwner := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
+	var idOwner user.ID
+	user.IDFromKey(&idOwner, options.NeoFSKey.PrivateKey.PublicKey)
 
 	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
 		zap.String("friendly_name", options.Container.FriendlyName),
@@ -251,7 +252,9 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
-	accessKeyID := addr.ContainerID().String() + "0" + addr.ObjectID().String()
+	cnrID, _ := addr.ContainerID()
+	objID, _ := addr.ObjectID()
+	accessKeyID := cnrID.EncodeToString() + "0" + objID.EncodeToString()
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
@@ -267,7 +270,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	}
 
 	if options.AwsCliCredentialsFile != "" {
-		profileName := "authmate_cred_" + addr.ObjectID().String()
+		profileName := "authmate_cred_" + objID.EncodeToString()
 		if _, err = os.Stat(options.AwsCliCredentialsFile); os.IsNotExist(err) {
 			profileName = "default"
 		}
@@ -369,19 +372,22 @@ func buildContext(rules []byte) ([]*session.ContainerContext, error) {
 	return []*session.ContainerContext{sessionCtxPut, sessionCtxDelete, sessionCtxEACL}, nil
 }
 
-func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*token.BearerToken, error) {
-	oid := owner.NewIDFromPublicKey((*ecdsa.PublicKey)(gateKey))
+func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*bearer.Token, error) {
+	var ownerID user.ID
+	user.IDFromKey(&ownerID, (ecdsa.PublicKey)(*gateKey))
 
-	bearerToken := token.NewBearerToken()
-	bearerToken.SetEACLTable(table)
-	bearerToken.SetOwner(oid)
-	bearerToken.SetLifetime(lifetime.Exp, lifetime.Iat, lifetime.Iat)
+	var bearerToken bearer.Token
+	bearerToken.SetEACLTable(*table)
+	bearerToken.SetOwnerID(ownerID)
+	bearerToken.SetExpiration(lifetime.Exp)
+	bearerToken.SetIssuedAt(lifetime.Iat)
+	bearerToken.SetNotBefore(lifetime.Iat)
 
-	return bearerToken, bearerToken.SignToken(&key.PrivateKey)
+	return &bearerToken, bearerToken.Sign(key.PrivateKey)
 }
 
-func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gatesKeys []*keys.PublicKey) ([]*token.BearerToken, error) {
-	bearerTokens := make([]*token.BearerToken, 0, len(gatesKeys))
+func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gatesKeys []*keys.PublicKey) ([]*bearer.Token, error) {
+	bearerTokens := make([]*bearer.Token, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
 		tkn, err := buildBearerToken(key, table, lifetime, gateKey)
 		if err != nil {
@@ -392,7 +398,7 @@ func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetim
 	return bearerTokens, nil
 }
 
-func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOptions, ctx *session.ContainerContext, gateKey *keys.PublicKey) (*session.Token, error) {
+func buildSessionToken(key *keys.PrivateKey, oid *user.ID, lifetime lifetimeOptions, ctx *session.ContainerContext, gateKey *keys.PublicKey) (*session.Token, error) {
 	tok := session.NewToken()
 	tok.SetContext(ctx)
 	uid, err := uuid.New().MarshalBinary()
@@ -410,7 +416,7 @@ func buildSessionToken(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOpt
 	return tok, tok.Sign(&key.PrivateKey)
 }
 
-func buildSessionTokens(key *keys.PrivateKey, oid *owner.ID, lifetime lifetimeOptions, ctxs []*session.ContainerContext, gatesKeys []*keys.PublicKey) ([][]*session.Token, error) {
+func buildSessionTokens(key *keys.PrivateKey, oid *user.ID, lifetime lifetimeOptions, ctxs []*session.ContainerContext, gatesKeys []*keys.PublicKey) ([][]*session.Token, error) {
 	sessionTokens := make([][]*session.Token, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
 		tkns := make([]*session.Token, len(ctxs))
@@ -447,8 +453,10 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*acc
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
 
-		oid := owner.NewIDFromPublicKey(&options.NeoFSKey.PrivateKey.PublicKey)
-		sessionTokens, err := buildSessionTokens(options.NeoFSKey, oid, lifetime, sessionRules, options.GatesPublicKeys)
+		var ownerID user.ID
+		user.IDFromKey(&ownerID, options.NeoFSKey.PrivateKey.PublicKey)
+
+		sessionTokens, err := buildSessionTokens(options.NeoFSKey, &ownerID, lifetime, sessionRules, options.GatesPublicKeys)
 		if err != nil {
 			return nil, fmt.Errorf("failed to biuild session token: %w", err)
 		}

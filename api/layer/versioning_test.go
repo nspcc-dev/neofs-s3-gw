@@ -13,11 +13,11 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
+	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
-	tokentest "github.com/nspcc-dev/neofs-sdk-go/token/test"
+	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -142,12 +142,12 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	bearerToken := tokentest.BearerToken()
-	require.NoError(t, bearerToken.SignToken(&key.PrivateKey))
+	bearerToken := bearertest.Token()
+	require.NoError(t, bearerToken.Sign(key.PrivateKey))
 
 	ctx := context.WithValue(context.Background(), api.BoxData, &accessbox.Box{
 		Gate: &accessbox.GateData{
-			BearerToken: bearerToken,
+			BearerToken: &bearerToken,
 			GateKey:     key.PublicKey(),
 		},
 	})
@@ -174,7 +174,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		layer: NewLayer(zap.NewNop(), tp, layerCfg),
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
-			Owner: owner.NewID(),
+			Owner: usertest.ID(),
 			CID:   bktID,
 		},
 		obj:       "obj1",
@@ -482,9 +482,10 @@ func joinVers(objs ...*data.ObjectInfo) string {
 func getOID(id byte) *oid.ID {
 	b := [32]byte{}
 	b[31] = id
-	idObj := oid.NewID()
+
+	var idObj oid.ID
 	idObj.SetSHA256(b)
-	return idObj
+	return &idObj
 }
 
 func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *data.ObjectInfo {
@@ -628,9 +629,11 @@ func TestSystemObjectsVersioning(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	cnrID, _ := objMeta.ContainerID()
+	objID, _ := objMeta.ID()
 	addr := address.NewAddress()
-	addr.SetContainerID(objMeta.ContainerID())
-	addr.SetObjectID(objMeta.ID())
+	addr.SetContainerID(cnrID)
+	addr.SetObjectID(objID)
 
 	// simulate failed deletion
 	tc.testNeoFS.AddObject(addr.String(), objMeta)
@@ -660,7 +663,9 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	// simulate failed deletion
-	tc.testNeoFS.AddObject(newAddress(objMeta.ContainerID(), objMeta.ID()).String(), objMeta)
+	cnrID, _ := objMeta.ContainerID()
+	objID, _ := objMeta.ID()
+	tc.testNeoFS.AddObject(newAddress(cnrID, objID).String(), objMeta)
 
 	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bktInfo)
 	require.NoError(t, err)

@@ -393,11 +393,11 @@ func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, ob
 	if obj.VersionID == unversionedObjectVersionID {
 		version = versions.getLast(FromUnversioned())
 	} else {
-		id := oid.NewID()
-		if err := id.Parse(obj.VersionID); err != nil {
+		var id oid.ID
+		if err = id.DecodeString(obj.VersionID); err != nil {
 			return nil, errors.GetAPIError(errors.ErrInvalidVersion)
 		}
-		version = versions.getVersion(id)
+		version = versions.getVersion(&id)
 	}
 
 	if version == nil {

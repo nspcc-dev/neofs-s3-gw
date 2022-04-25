@@ -245,10 +245,9 @@ It will be ceil rounded to the nearest amount of epoch.`,
 			}
 
 			agent := authmate.New(log, neoFS)
-			var containerID *cid.ID
+			var containerID cid.ID
 			if len(containerIDFlag) > 0 {
-				containerID = cid.New()
-				if err := containerID.Parse(containerIDFlag); err != nil {
+				if err = containerID.DecodeString(containerIDFlag); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to parse auth container id: %s", err), 3)
 				}
 			}
@@ -283,7 +282,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 
 			issueSecretOptions := &authmate.IssueSecretOptions{
 				Container: authmate.ContainerOptions{
-					ID:              containerID,
+					ID:              &containerID,
 					FriendlyName:    containerFriendlyName,
 					PlacementPolicy: containerPlacementPolicy,
 				},

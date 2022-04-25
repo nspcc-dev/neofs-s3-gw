@@ -48,7 +48,9 @@ func (o *ObjectsCache) Get(address *address.Address) *object.Object {
 
 // Put puts an object to cache.
 func (o *ObjectsCache) Put(obj object.Object) error {
-	return o.cache.Set(obj.ContainerID().String()+"/"+obj.ID().String(), obj)
+	cnrID, _ := obj.ContainerID()
+	objID, _ := obj.ID()
+	return o.cache.Set(cnrID.String()+"/"+objID.String(), obj)
 }
 
 // Delete deletes an object from cache.

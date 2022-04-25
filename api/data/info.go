@@ -7,7 +7,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/owner"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 const (
@@ -21,7 +21,7 @@ type (
 	BucketInfo struct {
 		Name               string
 		CID                *cid.ID
-		Owner              *owner.ID
+		Owner              *user.ID
 		Created            time.Time
 		BasicACL           uint32
 		LocationConstraint string
@@ -41,7 +41,7 @@ type (
 		Created       time.Time
 		CreationEpoch uint64
 		HashSum       string
-		Owner         *owner.ID
+		Owner         *user.ID
 		Headers       map[string]string
 	}
 
@@ -96,8 +96,8 @@ func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 // Address returns object address.
 func (o *ObjectInfo) Address() *address.Address {
 	addr := address.NewAddress()
-	addr.SetContainerID(o.CID)
-	addr.SetObjectID(o.ID)
+	addr.SetContainerID(*o.CID)
+	addr.SetObjectID(*o.ID)
 
 	return addr
 }
