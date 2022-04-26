@@ -320,14 +320,26 @@ func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
 	record := eacl.NewRecord()
 	record.SetOperation(eacl.OperationGet)
 	record.SetAction(eacl.ActionAllow)
-	// TODO: Change this later.
-	// from := eacl.HeaderFromObject
-	// matcher := eacl.MatchStringEqual
-	// record.AddFilter(from eacl.FilterHeaderType, matcher eacl.Match, name string, value string)
 	eacl.AddFormedTarget(record, eacl.RoleOthers)
 	table.AddRecord(record)
 
+	for _, rec := range restrictedRecords() {
+		table.AddRecord(rec)
+	}
+
 	return table, nil
+}
+
+func restrictedRecords() (records []*eacl.Record) {
+	for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
+		record := eacl.NewRecord()
+		record.SetOperation(op)
+		record.SetAction(eacl.ActionDeny)
+		eacl.AddFormedTarget(record, eacl.RoleOthers)
+		records = append(records, record)
+	}
+
+	return
 }
 
 func buildContext(rules []byte) ([]*session.ContainerContext, error) {
