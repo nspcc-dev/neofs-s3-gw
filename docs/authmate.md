@@ -158,28 +158,32 @@ where content of `bearer-rules.json`:
   ]
 }
 ```
+
+**Note:** such rules allow all operations for all users (the same behavior when records are empty). 
+To restrict access you MUST provide records with `DENY` action. That's why we recommend always place such records
+at the end of records (see default rules below) to prevent undesirable access violation.
+Since the rules are applied from top to bottom, they do not override what was previously allowed.
+
 If bearer rules are not set, a token will be auto-generated with a value:
 ```json
 {
     "version": {
-        "major": 2,
-        "minor": 11
+       "major": 2,
+       "minor": 11
     },
     "containerID": {
-        "value": null
+       "value": null
     },
     "records": [
-        {
-            "operation": "GET",
-            "action": "ALLOW",
-            "filters": [],
-            "targets": [
-                {
-                    "role": "OTHERS",
-                    "keys": []
-                }
-            ]
-        }
+       {"operation": "GET", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+
+       {"operation": "GET", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+       {"operation": "HEAD", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+       {"operation": "PUT", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+       {"operation": "DELETE", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+       {"operation": "SEARCH", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+       {"operation": "GETRANGE", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
+       {"operation": "GETRANGEHASH", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]}
     ]
 }
 ```
