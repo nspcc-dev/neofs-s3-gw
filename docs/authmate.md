@@ -18,13 +18,13 @@ token, the object needs to be stored in a container available for the gateway
 to read, and it needs to be encrypted with this gateway's key (among others
 potentially).
 
-1. [Generation of wallet](#Generation of wallet)
-2. [Issuance of a secret](#Issuance of a secret)
-   1. [CLI parameters](#CLI parameters)
-   2. [Bearer tokens](#Bearer tokens)
-   3. [Session tokens](#Session tokens)
-   4. [Containers policy](#Containers policy)
-3. [Obtainment of a secret](#Obtainment of a secret access key)
+1. [Generation of wallet](#generation-of-wallet)
+2. [Issuance of a secret](#issuance-of-a-secret)
+   1. [CLI parameters](#cli-parameters)
+   2. [Bearer tokens](#bearer-tokens)
+   3. [Session tokens](#session-tokens)
+   4. [Containers policy](#containers-policy)
+3. [Obtainment of a secret](#obtainment-of-a-secret-access-key)
 ## Generation of wallet
 
 To generate a wallet for a gateway, run the following command:

@@ -12,16 +12,16 @@ But **not vice versa**, some parameters can be configured only with environment 
 Most of these parameters have default values, therefore, these ways to configure the gateway are optional and 
 basic configuration can be completed with CLI parameters only.
 
-1. [CLI parameters](#CLI parameters)
-    1. [Nodes and weights](#Nodes and weights)
-    2. [Wallet](#Wallet)
-    3. [Binding and TLS](#Listening on address and TLS)
-    4. [RPC endpoint and resolving of bucket names](#RPC endpoint and resolving of bucket names)
-    5. [Processing of requests](#Processing of requests)
-    6. [Connection to NeoFS](#Connection to NeoFS)
-    7. [Monitoring and metrics](#Monitoring and metrics)
-2. [YAML file and environment variables](#YAML file and environment variables)
-   1. [Notifications](#Notifications)
+1. [CLI parameters](#cli-parameters)
+    1. [Nodes and weights](#nodes-and-weights)
+    2. [Wallet](#wallet)
+    3. [Binding and TLS](#listening-on-address-and-TLS)
+    4. [RPC endpoint and resolving of bucket names](#rpc-endpoint-and-resolving-of-bucket-names)
+    5. [Processing of requests](#processing-of-requests)
+    6. [Connection to NeoFS](#connection-to-NeoFS)
+    7. [Monitoring and metrics](#monitoring-and-metrics)
+2. [YAML file and environment variables](#yaml-file-and-environment-variables)
+   1. [Notifications](#notifications)
 
 
 ## CLI parameters
