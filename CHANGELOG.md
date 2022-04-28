@@ -2,6 +2,31 @@
 
 This document outlines major changes between releases.
 
+## [0.20.0] - 2022-04-29
+
+### Added
+- Support of object locking (#195)  
+- Support of basic notifications (#357, #358, #359)
+
+### Changed
+- Logger behavior: now it writes to stderr instead of stdout, app name and 
+  version are always presented and fixed, all user options except of `level` are 
+  dropped (#380)
+- Improved docs, added config examples (#396, #398)
+- Updated NeoFS SDK (#365, #409)
+
+### Fixed
+- Added check of `SetEACL` tokens before processing of requests (#347)
+- Authmate: returned lost session tokens when a parameter `--session-token` is 
+  omitted (#387)
+- Error when a bucket hasn't a settings file (#389)
+- Response to a request to delete not existing object (#392)
+- Replaced gate key in ACL Grantee by key of bearer token issuer (#395) 
+- Missing attach of bearer token to requests to put system object (#399)
+- Deletion of system object while CompleteMultipartUpload (#400)
+- Improved English in docs and comments (#405)
+- Authmate: reconsidered default bearer token rules (#406)
+
 ## [0.19.0] - 2022-03-16
 
 ### Added
@@ -162,3 +187,4 @@ releases.
 
 [0.18.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.17.0...v0.18.0
 [0.19.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.18.0...v0.19.0
+[0.20.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.19.0...v0.20.0
