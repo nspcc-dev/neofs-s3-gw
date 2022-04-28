@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	v2acl "github.com/nspcc-dev/neofs-api-go/v2/acl"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
@@ -312,11 +313,20 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 }
 
 func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
-	table := eacl.NewTable()
 	if len(eaclTable) != 0 {
-		return table, table.UnmarshalJSON(eaclTable)
+		// fixme(neofs-sdk-go/#235)
+		// Can't parse SDK version of eACL table because it requires
+		// non-empty container ID. Possible solution: read json of bearer
+		// token instead of eACL table.
+		v2table := new(v2acl.Table)
+		err := v2table.UnmarshalJSON(eaclTable)
+		if err != nil {
+			return nil, err
+		}
+		return eacl.NewTableFromV2(v2table), nil
 	}
 
+	table := eacl.NewTable()
 	record := eacl.NewRecord()
 	record.SetOperation(eacl.OperationGet)
 	record.SetAction(eacl.ActionAllow)
