@@ -170,7 +170,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	ctr = auth.New(neofs.NewAuthmateNeoFS(conns), key, getAccessBoxCacheConfig(v, l))
 	handlerOptions := getHandlerOptions(v, l)
 
-	if caller, err = handler.New(l, obj, handlerOptions); err != nil {
+	if caller, err = handler.New(l, obj, nc, handlerOptions); err != nil {
 		l.Fatal("could not initialize API handler", zap.Error(err))
 	}
 
@@ -386,6 +386,7 @@ func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 	}
 
 	cfg.DefaultMaxAge = defaultMaxAge
+	cfg.NotificatorEnabled = v.GetBool(cfgEnableNATS)
 
 	return &cfg
 }

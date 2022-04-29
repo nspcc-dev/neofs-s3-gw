@@ -28,11 +28,9 @@ import (
 )
 
 type (
-	Notificator interface {
+	EventListener interface {
 		Subscribe(context.Context, string, MsgHandler) error
 		Listen(context.Context)
-		SendNotifications(topics map[string]string, p *SendNotificationParams) error
-		SendTestNotification(topic, bucketName, requestID, HostID string) error
 	}
 
 	MsgHandler interface {
@@ -46,7 +44,7 @@ type (
 		log         *zap.Logger
 		anonKey     AnonymousKey
 		resolver    *resolver.BucketResolver
-		ncontroller Notificator
+		ncontroller EventListener
 		listsCache  *cache.ObjectsListCache
 		objCache    *cache.ObjectsCache
 		namesCache  *cache.ObjectsNameCache
@@ -192,7 +190,7 @@ type (
 
 	// Client provides S3 API client interface.
 	Client interface {
-		Initialize(ctx context.Context, c Notificator) error
+		Initialize(ctx context.Context, c EventListener) error
 		EphemeralKey() *keys.PublicKey
 
 		GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
@@ -241,8 +239,6 @@ type (
 
 		PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error
 		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)
-
-		SendNotifications(ctx context.Context, p *SendNotificationParams) error
 	}
 )
 
@@ -290,7 +286,7 @@ func (n *layer) EphemeralKey() *keys.PublicKey {
 	return n.anonKey.Key.PublicKey()
 }
 
-func (n *layer) Initialize(ctx context.Context, c Notificator) error {
+func (n *layer) Initialize(ctx context.Context, c EventListener) error {
 	if n.IsNotificationEnabled() {
 		return fmt.Errorf("already initialized")
 	}

@@ -97,11 +97,11 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err))
 	}
 
-	var m *layer.SendNotificationParams
+	var m *SendNotificationParams
 
 	if bktSettings.VersioningEnabled && len(versionID) == 0 {
-		m = &layer.SendNotificationParams{
-			Event: layer.EventObjectRemovedDeleteMarkerCreated,
+		m = &SendNotificationParams{
+			Event: EventObjectRemovedDeleteMarkerCreated,
 			ObjInfo: &data.ObjectInfo{
 				Name:    reqInfo.ObjectName,
 				HashSum: deletedObject.DeleteMarkerEtag,
@@ -117,8 +117,8 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		m = &layer.SendNotificationParams{
-			Event: layer.EventObjectRemovedDelete,
+		m = &SendNotificationParams{
+			Event: EventObjectRemovedDelete,
 			ObjInfo: &data.ObjectInfo{
 				Name: reqInfo.ObjectName,
 				ID:   &objID,
@@ -128,7 +128,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.obj.SendNotifications(r.Context(), m); err != nil {
+	if err = h.sendNotifications(r.Context(), m); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 

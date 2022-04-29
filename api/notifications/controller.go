@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
@@ -179,7 +180,7 @@ func (c *Controller) Listen(ctx context.Context) {
 	}
 }
 
-func (c *Controller) SendNotifications(topics map[string]string, p *layer.SendNotificationParams) error {
+func (c *Controller) SendNotifications(topics map[string]string, p *handler.SendNotificationParams) error {
 	event := prepareEvent(p)
 
 	for id, topic := range topics {
@@ -214,7 +215,7 @@ func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID s
 	return c.publish(topic, msg)
 }
 
-func prepareEvent(p *layer.SendNotificationParams) *Event {
+func prepareEvent(p *handler.SendNotificationParams) *Event {
 	return &Event{
 		Records: []EventRecord{
 			{
