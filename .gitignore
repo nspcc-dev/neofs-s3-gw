@@ -2,6 +2,9 @@
 .idea
 .vscode
 
+# Tree service
+internal/neofs/services/tree/
+
 # Vendoring
 vendor
 
