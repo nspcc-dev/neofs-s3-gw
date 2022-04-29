@@ -134,13 +134,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		zap.String("object", info.Name),
 		zap.Stringer("object_id", info.ID))
 
-	s := &layer.SendNotificationParams{
-		Event:   layer.EventObjectCreatedCopy,
+	s := &SendNotificationParams{
+		Event:   EventObjectCreatedCopy,
 		ObjInfo: info,
 		BktInfo: dstBktInfo,
 		ReqInfo: reqInfo,
 	}
-	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 }

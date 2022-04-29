@@ -436,13 +436,13 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	s := &layer.SendNotificationParams{
-		Event:   layer.EventObjectCreatedCompleteMultipartUpload,
+	s := &SendNotificationParams{
+		Event:   EventObjectCreatedCompleteMultipartUpload,
 		ObjInfo: objInfo,
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,
 	}
-	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 

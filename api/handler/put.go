@@ -237,13 +237,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s := &layer.SendNotificationParams{
-		Event:   layer.EventObjectCreatedPut,
+	s := &SendNotificationParams{
+		Event:   EventObjectCreatedPut,
 		ObjInfo: info,
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,
 	}
-	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
@@ -354,13 +354,13 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s := &layer.SendNotificationParams{
-		Event:   layer.EventObjectCreatedPost,
+	s := &SendNotificationParams{
+		Event:   EventObjectCreatedPost,
 		ObjInfo: info,
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,
 	}
-	if err := h.obj.SendNotifications(r.Context(), s); err != nil {
+	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
