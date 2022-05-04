@@ -176,7 +176,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err              error
 		newEaclTable     *eacl.Table
-		sessionTokenEACL *session.Token
+		sessionTokenEACL *session.Container
 		containsACL      = containsACLHeaders(r)
 		reqInfo          = api.GetReqInfo(r.Context())
 	)
@@ -286,7 +286,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	var (
 		newEaclTable     *eacl.Table
 		tagSet           map[string]string
-		sessionTokenEACL *session.Token
+		sessionTokenEACL *session.Container
 		reqInfo          = api.GetReqInfo(r.Context())
 		metadata         = make(map[string]string)
 		containsACL      = containsACLHeaders(r)

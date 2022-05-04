@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/stretchr/testify/require"
@@ -73,7 +74,7 @@ func Test_session_token_in_access_box(t *testing.T) {
 	var (
 		box  *AccessBox
 		box2 AccessBox
-		tkn  = session.NewToken()
+		tkn  = new(session.Container)
 	)
 
 	sec, err := keys.NewPrivateKey()
@@ -82,17 +83,13 @@ func Test_session_token_in_access_box(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tok := session.NewToken()
-	tok.SetContext(session.NewContainerContext())
-	uid, err := uuid.New().MarshalBinary()
-	require.NoError(t, err)
-	tok.SetID(uid)
-	tok.SetSessionKey(sec.PublicKey().Bytes())
-	require.NoError(t, tkn.Sign(&sec.PrivateKey))
+	tkn.SetID(uuid.New())
+	tkn.SetAuthKey((*neofsecdsa.PublicKey)(sec.PublicKey()))
+	require.NoError(t, tkn.Sign(sec.PrivateKey))
 
 	var newTkn bearer.Token
 	gate := NewGateData(cred.PublicKey(), &newTkn)
-	gate.SessionTokens = []*session.Token{tkn}
+	gate.SessionTokens = []*session.Container{tkn}
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
@@ -105,7 +102,7 @@ func Test_session_token_in_access_box(t *testing.T) {
 	tkns, err := box2.GetTokens(cred)
 	require.NoError(t, err)
 
-	require.Equal(t, []*session.Token{tkn}, tkns.SessionTokens)
+	require.Equal(t, []*session.Container{tkn}, tkns.SessionTokens)
 }
 
 func Test_accessbox_multiple_keys(t *testing.T) {

@@ -82,7 +82,7 @@ func parseRange(s string) (*layer.RangeParams, error) {
 	}, nil
 }
 
-func getSessionTokenSetEACL(ctx context.Context) (*session.Token, error) {
+func getSessionTokenSetEACL(ctx context.Context) (*session.Container, error) {
 	boxData, err := layer.GetBoxData(ctx)
 	if err != nil {
 		return nil, err

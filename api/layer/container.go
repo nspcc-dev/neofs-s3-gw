@@ -187,7 +187,7 @@ func (n *layer) GetContainerEACL(ctx context.Context, idCnr *cid.ID) (*eacl.Tabl
 }
 
 func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
-	var sessionToken *session.Token
+	var sessionToken *session.Container
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForDelete()

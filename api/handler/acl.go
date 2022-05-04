@@ -210,7 +210,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Token) error {
+func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Container) error {
 	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return fmt.Errorf("could not get bucket eacl: %w", err)

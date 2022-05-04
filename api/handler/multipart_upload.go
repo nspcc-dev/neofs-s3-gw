@@ -346,7 +346,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	var (
-		sessionTokenSetEACL *session.Token
+		sessionTokenSetEACL *session.Container
 
 		uploadID   = r.URL.Query().Get(uploadIDHeaderName)
 		uploadInfo = &layer.UploadInfoParams{

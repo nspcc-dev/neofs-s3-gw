@@ -197,7 +197,7 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 }
 
 // DeleteContainer implements neofs.NeoFS interface method.
-func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Token) error {
+func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container) error {
 	var prm pool.PrmContainerDelete
 	prm.SetContainerID(id)
 	prm.SetSessionToken(*token)
