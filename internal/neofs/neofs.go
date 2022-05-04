@@ -32,12 +32,25 @@ import (
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool *pool.Pool
+	pool  *pool.Pool
+	await pool.WaitParams
 }
+
+const (
+	defaultPollInterval = time.Second       // overrides default value from pool
+	defaultPollTimeout  = 120 * time.Second // same as default value from pool
+)
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
 func NewNeoFS(p *pool.Pool) *NeoFS {
-	return &NeoFS{pool: p}
+	var await pool.WaitParams
+	await.SetPollInterval(defaultPollInterval)
+	await.SetTimeout(defaultPollTimeout)
+
+	return &NeoFS{
+		pool:  p,
+		await: await,
+	}
 }
 
 // TimeToEpoch implements neofs.NeoFS interface method.
@@ -132,6 +145,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm neofs.PrmContainerCreat
 
 	var prmPut pool.PrmContainerPut
 	prmPut.SetContainer(*cnr)
+	prmPut.SetWaitParams(x.await)
 
 	// send request to save the container
 	idCnr, err := x.pool.PutContainer(ctx, prmPut)
@@ -159,6 +173,7 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table) error {
 	var prm pool.PrmContainerSetEACL
 	prm.SetTable(table)
+	prm.SetWaitParams(x.await)
 
 	err := x.pool.SetEACL(ctx, prm)
 	if err != nil {
@@ -186,6 +201,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.T
 	var prm pool.PrmContainerDelete
 	prm.SetContainerID(id)
 	prm.SetSessionToken(*token)
+	prm.SetWaitParams(x.await)
 
 	err := x.pool.DeleteContainer(ctx, prm)
 	if err != nil {
