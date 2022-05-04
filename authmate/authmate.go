@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
@@ -352,48 +353,6 @@ func restrictedRecords() (records []*eacl.Record) {
 	return
 }
 
-func buildContext(rules []byte) ([]*session.ContainerContext, error) {
-	var sessionCtxs []*session.ContainerContext
-
-	if len(rules) != 0 {
-		// cast ToV2 temporary, because there is no method for unmarshalling in ContainerContext in api-go
-		err := json.Unmarshal(rules, &sessionCtxs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal rules for session token: %w", err)
-		}
-
-		var (
-			containsPut     = false
-			containsSetEACL = false
-		)
-		for _, s := range sessionCtxs {
-			if s.IsForPut() {
-				containsPut = true
-			} else if s.IsForSetEACL() {
-				containsSetEACL = true
-			}
-		}
-		if containsPut && !containsSetEACL {
-			ectx := session.NewContainerContext()
-			ectx.ForSetEACL()
-			sessionCtxs = append(sessionCtxs, ectx)
-		}
-
-		return sessionCtxs, nil
-	}
-
-	sessionCtxPut := session.NewContainerContext()
-	sessionCtxPut.ForPut()
-
-	sessionCtxDelete := session.NewContainerContext()
-	sessionCtxDelete.ForDelete()
-
-	sessionCtxEACL := session.NewContainerContext()
-	sessionCtxEACL.ForSetEACL()
-
-	return []*session.ContainerContext{sessionCtxPut, sessionCtxDelete, sessionCtxEACL}, nil
-}
-
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*bearer.Token, error) {
 	var ownerID user.ID
 	user.IDFromKey(&ownerID, (ecdsa.PublicKey)(*gateKey))
@@ -420,30 +379,29 @@ func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetim
 	return bearerTokens, nil
 }
 
-func buildSessionToken(key *keys.PrivateKey, oid *user.ID, lifetime lifetimeOptions, ctx *session.ContainerContext, gateKey *keys.PublicKey) (*session.Token, error) {
-	tok := session.NewToken()
-	tok.SetContext(ctx)
-	uid, err := uuid.New().MarshalBinary()
-	if err != nil {
-		return nil, err
+func buildSessionToken(key *keys.PrivateKey, lifetime lifetimeOptions, ctx sessionTokenContext, gateKey *keys.PublicKey) (*session.Container, error) {
+	tok := new(session.Container)
+	tok.ForVerb(ctx.verb)
+	if ctx.containerID != nil {
+		tok.AppliedTo(*ctx.containerID)
 	}
-	tok.SetID(uid)
-	tok.SetOwnerID(oid)
-	tok.SetSessionKey(gateKey.Bytes())
+
+	tok.SetID(uuid.New())
+	tok.SetAuthKey((*neofsecdsa.PublicKey)(gateKey))
 
 	tok.SetIat(lifetime.Iat)
 	tok.SetNbf(lifetime.Iat)
 	tok.SetExp(lifetime.Exp)
 
-	return tok, tok.Sign(&key.PrivateKey)
+	return tok, tok.Sign(key.PrivateKey)
 }
 
-func buildSessionTokens(key *keys.PrivateKey, oid *user.ID, lifetime lifetimeOptions, ctxs []*session.ContainerContext, gatesKeys []*keys.PublicKey) ([][]*session.Token, error) {
-	sessionTokens := make([][]*session.Token, 0, len(gatesKeys))
+func buildSessionTokens(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []sessionTokenContext, gatesKeys []*keys.PublicKey) ([][]*session.Container, error) {
+	sessionTokens := make([][]*session.Container, 0, len(gatesKeys))
 	for _, gateKey := range gatesKeys {
-		tkns := make([]*session.Token, len(ctxs))
+		tkns := make([]*session.Container, len(ctxs))
 		for i, ctx := range ctxs {
-			tkn, err := buildSessionToken(key, oid, lifetime, ctx, gateKey)
+			tkn, err := buildSessionToken(key, lifetime, ctx, gateKey)
 			if err != nil {
 				return nil, err
 			}
@@ -475,10 +433,7 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*acc
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
 
-		var ownerID user.ID
-		user.IDFromKey(&ownerID, options.NeoFSKey.PrivateKey.PublicKey)
-
-		sessionTokens, err := buildSessionTokens(options.NeoFSKey, &ownerID, lifetime, sessionRules, options.GatesPublicKeys)
+		sessionTokens, err := buildSessionTokens(options.NeoFSKey, lifetime, sessionRules, options.GatesPublicKeys)
 		if err != nil {
 			return nil, fmt.Errorf("failed to biuild session token: %w", err)
 		}

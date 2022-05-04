@@ -31,7 +31,7 @@ type PrmContainerCreate struct {
 	Name string
 
 	// Token of the container's creation session. Nil means session absence.
-	SessionToken *session.Token
+	SessionToken *session.Container
 
 	// Basic ACL of the container.
 	BasicACL acl.BasicACL
@@ -176,7 +176,7 @@ type NeoFS interface {
 	// Successful return does not guarantee actual removal.
 	//
 	// It returns any error encountered which prevented the removal request from being sent.
-	DeleteContainer(context.Context, cid.ID, *session.Token) error
+	DeleteContainer(context.Context, cid.ID, *session.Container) error
 
 	// SelectObjects performs object selection from the NeoFS container according
 	// to the specified parameters. It selects user's objects only.

@@ -203,21 +203,24 @@ where content of `session.json`:
 [
   {
     "verb": "PUT",
-    "wildcard": true,
     "containerID": null
   },
   {
     "verb": "DELETE",
-    "wildcard": true,
     "containerID": null
   },
   {
     "verb": "SETEACL",
-    "wildcard": true,
     "containerID": null
   }
 ]
 ```
+
+Available `verb` values: `PUT`, `DELETE`, `SETEACL`.
+
+If `containerID` is `null` or omitted, then session token rule will be applied
+to all containers. Otherwise, specify `containerID` value in human-redabale
+format (base58 encoded string).
 
 > **_NB!_** To create buckets in NeoFS it's necessary to have session tokens with `PUT` and `SETEACL` permissions, that's why 
 the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 

@@ -138,7 +138,7 @@ type (
 		ACL                uint32
 		Policy             *netmap.PlacementPolicy
 		EACL               *eacl.Table
-		SessionToken       *session.Token
+		SessionToken       *session.Container
 		LocationConstraint string
 		ObjectLockEnabled  bool
 	}
@@ -627,7 +627,7 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 		return nil, err
 	}
 
-	if p.SessionToken != nil && bktInfo.Owner.Equals(*p.SessionToken.OwnerID()) {
+	if p.SessionToken != nil && p.SessionToken.IssuedBy(*bktInfo.Owner) {
 		return nil, errors.GetAPIError(errors.ErrBucketAlreadyOwnedByYou)
 	}
 
