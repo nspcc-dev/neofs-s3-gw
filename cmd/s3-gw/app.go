@@ -35,7 +35,6 @@ type (
 		tls *tlsConfig
 		obj layer.Client
 		api api.Handler
-		nc  *notifications.Controller
 
 		maxClients api.MaxClients
 
@@ -181,7 +180,6 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		obj: obj,
 		tls: tls,
 		api: caller,
-		nc:  nc,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
