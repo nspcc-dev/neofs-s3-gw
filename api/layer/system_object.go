@@ -166,8 +166,19 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
 	}
+	ids, _, err := n.treeService.GetBucketCORS(ctx, bkt.CID, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
+	}
 
-	obj, err := n.getSystemObjectFromNeoFS(ctx, bkt, sysName)
+	var addr address.Address
+	addr.SetContainerID(*bkt.CID)
+	addr.SetObjectID(*ids[0])
+
+	obj, err := n.objectGet(ctx, &addr)
 	if err != nil {
 		return nil, err
 	}

@@ -39,8 +39,10 @@ const (
 
 	settingsFileName  = "bucket-settings"
 	notifConfFileName = "bucket-notifications"
+	corsFilename      = "bucket-cors"
 
 	notifTreeID = "notifications"
+	corsTreeID  = "cors"
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
@@ -157,6 +159,36 @@ func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID
 
 func (c *TreeClient) DeleteNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, nodeID uint64) error {
 	return c.removeNode(ctx, cnrID, notifTreeID, nodeID)
+}
+
+func (c *TreeClient) GetBucketCORS(ctx context.Context, cnrID *cid.ID, latestOnly bool) ([]*oid.ID, []uint64, error) {
+	nodes, err := c.getSystemNodesWithOID(ctx, cnrID, corsTreeID, corsFilename, []string{}, latestOnly)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ids := make([]*oid.ID, 0, len(nodes))
+	nodeIds := make([]uint64, 0, len(nodes))
+
+	for _, n := range nodes {
+		ids = append(ids, n.ObjID)
+		nodeIds = append(nodeIds, n.ID)
+	}
+
+	return ids, nodeIds, nil
+}
+
+func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) error {
+	meta := make(map[string]string)
+	meta[systemNameKV] = corsFilename
+	meta[oidKv] = objID.EncodeToString()
+
+	_, err := c.addNode(ctx, cnrID, corsTreeID, 0, meta)
+	return err
+}
+
+func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID *cid.ID, nodeID uint64) error {
+	return c.removeNode(ctx, cnrID, corsTreeID, nodeID)
 }
 
 func (c *TreeClient) Close() error {
