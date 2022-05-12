@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	errorsStd "errors"
 	"fmt"
 	"io"
 
@@ -35,6 +36,11 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
+	ids, nodeIds, err := n.treeService.GetBucketCORS(ctx, &p.BktInfo.CID, false)
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+		return err
+	}
+
 	s := &PutSystemObjectParams{
 		BktInfo:  p.BktInfo,
 		ObjName:  p.BktInfo.CORSObjectName(),
@@ -44,9 +50,25 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		Size:     int64(buf.Len()),
 	}
 
-	_, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
 	if err != nil {
 		return err
+	}
+
+	if err = n.treeService.PutBucketCORS(ctx, &p.BktInfo.CID, &obj.ID); err != nil {
+		return err
+	}
+
+	for i := 0; i < len(ids); i++ {
+		if err = n.objectDelete(ctx, p.BktInfo, *ids[i]); err != nil {
+			n.log.Error("couldn't delete cors object", zap.Error(err),
+				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
+				zap.String("bucket name", p.BktInfo.Name),
+				zap.String("objID", ids[i].EncodeToString()))
+		}
+		if err = n.treeService.DeleteBucketCORS(ctx, &p.BktInfo.CID, nodeIds[i]); err != nil {
+			return err
+		}
 	}
 
 	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, s.ObjName), cors); err != nil {
@@ -59,7 +81,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
 	cors, err := n.getCORS(ctx, bktInfo, bktInfo.CORSObjectName())
 	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
+		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
 		}
 		return nil, err
@@ -69,7 +91,23 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
-	return n.DeleteSystemObject(ctx, bktInfo, bktInfo.CORSObjectName())
+	ids, nodeIds, err := n.treeService.GetBucketCORS(ctx, &bktInfo.CID, false)
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+		return err
+	}
+
+	for i := 0; i < len(ids); i++ {
+		if err = n.objectDelete(ctx, bktInfo, *ids[i]); err != nil {
+			return err
+		}
+		if err = n.treeService.DeleteBucketCORS(ctx, &bktInfo.CID, nodeIds[i]); err != nil {
+			return err
+		}
+	}
+
+	n.systemCache.Delete(systemObjectKey(bktInfo, bktInfo.CORSObjectName()))
+
+	return nil
 }
 
 func checkCORS(cors *data.CORSConfiguration) error {
