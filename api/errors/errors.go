@@ -42,6 +42,7 @@ const (
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
 	ErrInvalidPartNumberMarker
+	ErrInvalidAttributeName
 	ErrInvalidPartNumber
 	ErrInvalidRequestBody
 	ErrInvalidCopySource
@@ -333,6 +334,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrInvalidPartNumberMarker,
 		Code:           "InvalidArgument",
 		Description:    "Argument partNumberMarker must be an integer.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidAttributeName: {
+		ErrCode:        ErrInvalidAttributeName,
+		Code:           "InvalidArgument",
+		Description:    "Invalid attribute name specified",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidPolicyDocument: {

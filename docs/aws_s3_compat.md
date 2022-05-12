@@ -26,6 +26,7 @@ Reference:
 | 🟢 | PutObject              | Content-MD5 header deprecated           |
 | 🔵 | SelectObjectContent    | Need to have some Lambda to execute SQL |
 | 🔵 | WriteGetObjectResponse | Waiting for Lambda to be developed      |
+| 🟢 | GetObjectAttributes    |                                         |
 
 ## ACL
 

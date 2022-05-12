@@ -22,6 +22,7 @@ const (
 	UploadIDAttributeName         = "S3-Upload-Id"
 	UploadPartNumberAttributeName = "S3-Upload-Part-Number"
 	UploadKeyAttributeName        = "S3-Upload-Key"
+	UploadCompletedParts          = "S3-Completed-Parts"
 	UploadPartKeyPrefix           = ".upload-"
 
 	MaxSizeUploadsList  = 1000
@@ -222,7 +223,10 @@ func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 }
 
 func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error) {
-	var obj *data.ObjectInfo
+	var (
+		obj            *data.ObjectInfo
+		partsAttrValue string
+	)
 
 	for i := 1; i < len(p.Parts); i++ {
 		if p.Parts[i].PartNumber <= p.Parts[i-1].PartNumber {
@@ -277,6 +281,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			return nil, errors.GetAPIError(errors.ErrEntityTooSmall)
 		}
 		parts = append(parts, info)
+		partsAttrValue += strconv.Itoa(part.PartNumber) + "=" + strconv.FormatInt(info.Size, 10) + ","
 	}
 
 	initMetadata := objects[0].Headers
@@ -292,6 +297,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	delete(initMetadata, attrVersionsIgnore)
 	delete(initMetadata, objectSystemAttributeName)
 	delete(initMetadata, versionsUnversionedAttr)
+
+	initMetadata[UploadCompletedParts] = partsAttrValue[:len(partsAttrValue)-1]
 
 	r := &multiObjectReader{
 		ctx:   ctx,

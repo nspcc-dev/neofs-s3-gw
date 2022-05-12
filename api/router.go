@@ -26,6 +26,7 @@ type (
 		GetObjectRetentionHandler(http.ResponseWriter, *http.Request)
 		GetObjectLegalHoldHandler(http.ResponseWriter, *http.Request)
 		GetObjectHandler(http.ResponseWriter, *http.Request)
+		GetObjectAttributesHandler(http.ResponseWriter, *http.Request)
 		CopyObjectHandler(http.ResponseWriter, *http.Request)
 		PutObjectRetentionHandler(http.ResponseWriter, *http.Request)
 		PutObjectLegalHoldHandler(http.ResponseWriter, *http.Request)
@@ -276,6 +277,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectlegalhold", h.GetObjectLegalHoldHandler))).Queries("legal-hold", "").
 			Name("GetObjectLegalHold")
+		// GetObjectAttributes
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+			m.Handle(metrics.APIStats("getobjectattributes", h.GetObjectAttributesHandler))).Queries("attributes", "").
+			Name("GetObjectAttributes")
 		// GetObject
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobject", h.GetObjectHandler))).
