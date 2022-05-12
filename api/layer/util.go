@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
@@ -126,7 +127,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object, prefix, delim
 		Headers:       userHeaders,
 		Owner:         meta.OwnerID(),
 		Size:          size,
-		HashSum:       payloadChecksum.String(),
+		HashSum:       hex.EncodeToString(payloadChecksum.Value()),
 	}
 }
 
