@@ -22,6 +22,10 @@ type TreeService interface {
 	GetNotificationConfigurationNodes(ctx context.Context, cnrID *cid.ID, latestOnly bool) ([]*oid.ID, []uint64, error)
 	PutNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, objID *oid.ID) error
 	DeleteNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+
+	GetBucketCORS(ctx context.Context, cnrID *cid.ID, latestOnly bool) ([]*oid.ID, []uint64, error)
+	PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) error
+	DeleteBucketCORS(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
