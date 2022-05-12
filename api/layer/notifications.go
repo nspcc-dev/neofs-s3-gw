@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	errorsStd "errors"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"go.uber.org/zap"
 )
 
@@ -23,20 +23,43 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return err
 	}
 
+	ids, nodeIds, err := n.treeService.GetNotificationConfigurationNodes(ctx, &p.BktInfo.CID, false)
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+		return err
+	}
+
+	sysName := p.BktInfo.NotificationConfigurationObjectName()
+
 	s := &PutSystemObjectParams{
 		BktInfo:  p.BktInfo,
-		ObjName:  p.BktInfo.NotificationConfigurationObjectName(),
+		ObjName:  sysName,
 		Metadata: map[string]string{},
 		Reader:   bytes.NewReader(confXML),
 		Size:     int64(len(confXML)),
 	}
 
-	_, err = n.putSystemObjectIntoNeoFS(ctx, s)
+	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
 	if err != nil {
 		return err
 	}
 
-	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(p.BktInfo, s.ObjName), p.Configuration); err != nil {
+	if err = n.treeService.PutNotificationConfigurationNode(ctx, &p.BktInfo.CID, &obj.ID); err != nil {
+		return err
+	}
+
+	for i := 0; i < len(ids); i++ {
+		if err = n.objectDelete(ctx, p.BktInfo, *ids[i]); err != nil {
+			n.log.Error("couldn't delete notification configuration object", zap.Error(err),
+				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
+				zap.String("bucket name", p.BktInfo.Name),
+				zap.String("objID", ids[i].EncodeToString()))
+		}
+		if err = n.treeService.DeleteNotificationConfigurationNode(ctx, &p.BktInfo.CID, nodeIds[i]); err != nil {
+			return err
+		}
+	}
+
+	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(p.BktInfo, sysName), p.Configuration); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
@@ -44,38 +67,33 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 }
 
 func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
-	conf, err := n.getNotificationConf(ctx, bktInfo, bktInfo.NotificationConfigurationObjectName())
-	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
-			return &data.NotificationConfiguration{}, nil
-		}
-		return nil, err
-	}
+	systemCacheKey := systemObjectKey(bktInfo, bktInfo.NotificationConfigurationObjectName())
 
-	return conf, nil
-}
-
-func (n *layer) getNotificationConf(ctx context.Context, bkt *data.BucketInfo, sysName string) (*data.NotificationConfiguration, error) {
-	if conf := n.systemCache.GetNotificationConfiguration(systemObjectKey(bkt, sysName)); conf != nil {
+	if conf := n.systemCache.GetNotificationConfiguration(systemCacheKey); conf != nil {
 		return conf, nil
 	}
 
-	obj, err := n.getSystemObjectFromNeoFS(ctx, bkt, sysName)
-	if err != nil {
+	ids, _, err := n.treeService.GetNotificationConfigurationNodes(ctx, &bktInfo.CID, true)
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 
 	conf := &data.NotificationConfiguration{}
 
-	if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
-		return nil, err
+	if len(ids) != 0 {
+		obj, err := n.objectGet(ctx, bktInfo, *ids[0])
+		if err != nil {
+			return nil, err
+		}
+
+		if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(bkt, sysName), conf); err != nil {
-		objID, _ := obj.ID()
+	if err = n.systemCache.PutNotificationConfiguration(systemCacheKey, conf); err != nil {
 		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", &objID),
-			zap.Stringer("bucket id", bkt.CID),
+			zap.Stringer("bucket id", bktInfo.CID),
 			zap.Error(err))
 	}
 

@@ -37,7 +37,10 @@ const (
 	fileNameKV          = "FileName"
 	systemNameKV        = "SystemName"
 
-	settingsFileName = "bucket-settings"
+	settingsFileName  = "bucket-settings"
+	notifConfFileName = "bucket-notifications"
+
+	notifTreeID = "notifications"
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
@@ -124,6 +127,36 @@ func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID *cid.ID, treeID 
 	}
 
 	return c.moveNode(ctx, cnrID, treeID, node.ID, 0, meta)
+}
+
+func (c *TreeClient) GetNotificationConfigurationNodes(ctx context.Context, cnrID *cid.ID, latestOnly bool) ([]*oid.ID, []uint64, error) {
+	nodes, err := c.getSystemNodesWithOID(ctx, cnrID, notifTreeID, notifConfFileName, []string{}, latestOnly)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ids := make([]*oid.ID, 0, len(nodes))
+	nodeIds := make([]uint64, 0, len(nodes))
+
+	for _, n := range nodes {
+		ids = append(ids, n.ObjID)
+		nodeIds = append(nodeIds, n.ID)
+	}
+
+	return ids, nodeIds, nil
+}
+
+func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, objID *oid.ID) error {
+	meta := make(map[string]string)
+	meta[systemNameKV] = notifConfFileName
+	meta[oidKv] = objID.EncodeToString()
+
+	_, err := c.addNode(ctx, cnrID, notifTreeID, 0, meta)
+	return err
+}
+
+func (c *TreeClient) DeleteNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, nodeID uint64) error {
+	return c.removeNode(ctx, cnrID, notifTreeID, nodeID)
 }
 
 func (c *TreeClient) Close() error {
@@ -236,6 +269,18 @@ func (c *TreeClient) moveNode(ctx context.Context, cnrID *cid.ID, treeID string,
 	}
 
 	_, err := c.service.Move(ctx, request)
+	return err
+}
+
+func (c *TreeClient) removeNode(ctx context.Context, cnrID *cid.ID, treeID string, nodeID uint64) error {
+	r := &tree.RemoveRequest{
+		Body: &tree.RemoveRequest_Body{
+			ContainerId: []byte(cnrID.EncodeToString()),
+			TreeId:      treeID,
+			NodeId:      nodeID,
+		},
+	}
+	_, err := c.service.Remove(ctx, r)
 	return err
 }
 
