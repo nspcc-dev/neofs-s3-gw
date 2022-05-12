@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -260,7 +261,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		CreationEpoch: meta.CreationEpoch(),
 		Headers:       p.Header,
 		ContentType:   p.Header[api.ContentType],
-		HashSum:       payloadChecksum.String(),
+		HashSum:       hex.EncodeToString(payloadChecksum.Value()),
 	}, nil
 }
 

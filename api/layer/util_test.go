@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"encoding/hex"
 	"net/http"
 	"strconv"
 	"testing"
@@ -58,7 +59,7 @@ func newTestInfo(oid *oid.ID, bkt *data.BucketInfo, name string, isDir bool) *da
 		Created:     time.Unix(defaultTestCreated.Unix(), 0),
 		Owner:       bkt.Owner,
 		Headers:     make(map[string]string),
-		HashSum:     hashSum.String(),
+		HashSum:     hex.EncodeToString(hashSum.Value()),
 	}
 
 	if isDir {
