@@ -1,4 +1,4 @@
-package layer
+package neofs
 
 import (
 	"context"
@@ -15,9 +15,9 @@ type TreeService interface {
 
 	// GetSettingsNode retrieves the settings node from the tree service and form data.BucketSettings.
 	//
-	// If node is not found returns ErrNotFound error.
+	// If node is not found returns ErrNodeNotFound error.
 	GetSettingsNode(context.Context, *cid.ID, string) (*data.BucketSettings, error)
 }
 
-// ErrNotFound is returned from Tree service in case of not found error.
-var ErrNotFound = errors.New("not found")
+// ErrNodeNotFound is returned from Tree service in case of not found error.
+var ErrNodeNotFound = errors.New("not found")

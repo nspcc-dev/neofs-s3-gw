@@ -8,26 +8,32 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type TreeClient struct {
-	conn    *grpc.ClientConn
-	service tree.TreeServiceClient
-}
+type (
+	TreeClient struct {
+		conn    *grpc.ClientConn
+		service tree.TreeServiceClient
+	}
 
-type Node struct {
-	id   uint64
-	meta map[string]string
-}
+	TreeNode struct {
+		ID        uint64
+		ObjID     *oid.ID
+		TimeStamp uint64
+		Meta      map[string]string
+	}
+)
 
 const (
 	versioningEnabledKV = "versioning_enabled"
 	lockConfigurationKV = "lock_configuration"
+	oidKv               = "OID"
 	fileNameKV          = "FileName"
 	systemNameKV        = "SystemName"
 
@@ -49,36 +55,39 @@ func NewTreeClient(addr string) (*TreeClient, error) {
 	}, nil
 }
 
-func newNode(nodeInfo *tree.GetNodeByPathResponse_Info) *Node {
+func newTreeNode(nodeInfo *tree.GetNodeByPathResponse_Info) (*TreeNode, error) {
+	var objID *oid.ID
 	meta := make(map[string]string, len(nodeInfo.GetMeta()))
 
 	for _, kv := range nodeInfo.GetMeta() {
+		if kv.GetKey() == oidKv {
+			objID = new(oid.ID)
+			err := objID.DecodeString(string(kv.GetValue()))
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+
 		meta[kv.GetKey()] = string(kv.GetValue())
 	}
 
-	return &Node{
-		id:   nodeInfo.GetNodeId(),
-		meta: meta,
-	}
+	return &TreeNode{
+		ID:        nodeInfo.GetNodeId(),
+		ObjID:     objID,
+		TimeStamp: nodeInfo.Timestamp,
+		Meta:      meta,
+	}, nil
 }
 
-func (n *Node) ID() uint64 {
-	return n.id
-}
-
-func (n *Node) Meta() map[string]string {
-	return n.meta
-}
-
-func (n *Node) Get(key string) (string, bool) {
-	value, ok := n.meta[key]
+func (n *TreeNode) Get(key string) (string, bool) {
+	value, ok := n.Meta[key]
 	return value, ok
 }
 
 func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID, treeID string) (*data.BucketSettings, error) {
 	keysToReturn := []string{versioningEnabledKV, lockConfigurationKV}
-	path := []string{settingsFileName}
-	node, err := c.getSystemNode(ctx, cnrID, treeID, path, keysToReturn)
+	node, err := c.getSystemNode(ctx, cnrID, treeID, settingsFileName, keysToReturn)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -101,9 +110,8 @@ func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID, treeID 
 }
 
 func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID *cid.ID, treeID string, settings *data.BucketSettings) error {
-	path := []string{settingsFileName}
-	node, err := c.getSystemNode(ctx, cnrID, treeID, path, []string{})
-	isErrNotFound := errors.Is(err, layer.ErrNotFound)
+	node, err := c.getSystemNode(ctx, cnrID, treeID, settingsFileName, []string{})
+	isErrNotFound := errors.Is(err, neofs.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -115,7 +123,7 @@ func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID *cid.ID, treeID 
 		return err
 	}
 
-	return c.moveNode(ctx, cnrID, treeID, node.ID(), 0, meta)
+	return c.moveNode(ctx, cnrID, treeID, node.ID, 0, meta)
 }
 
 func (c *TreeClient) Close() error {
@@ -136,49 +144,66 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 	return results
 }
 
-func (c *TreeClient) getSystemNode(ctx context.Context, cnrID *cid.ID, treeID string, path, meta []string) (*Node, error) {
-	return c.getNode(ctx, cnrID, treeID, systemNameKV, path, meta)
-}
-
-func (c *TreeClient) getRegularNode(ctx context.Context, cnrID *cid.ID, treeID string, path, meta []string) (*Node, error) {
-	return c.getNode(ctx, cnrID, treeID, fileNameKV, path, meta)
-}
-
-func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string) (*Node, error) {
-	nodes, err := c.getNodes(ctx, cnrID, treeID, pathAttr, path, meta)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil, layer.ErrNotFound
-		}
-		return nil, fmt.Errorf("couldn't get nodes: %w", err)
-	}
-	if len(nodes) == 0 {
-		return nil, layer.ErrNotFound
-	}
-	if len(nodes) != 1 {
-		return nil, fmt.Errorf("found more than one node")
-	}
-
-	return newNode(nodes[0]), nil
-}
-
-func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string) ([]*tree.GetNodeByPathResponse_Info, error) {
+func (c *TreeClient) getSystemNode(ctx context.Context, cnrID *cid.ID, treeID, path string, meta []string) (*TreeNode, error) {
 	request := &tree.GetNodeByPathRequest{
 		Body: &tree.GetNodeByPathRequest_Body{
 			ContainerId:   []byte(cnrID.EncodeToString()),
 			TreeId:        treeID,
-			Path:          path,
+			Path:          []string{path},
 			Attributes:    meta,
-			PathAttribute: pathAttr,
+			PathAttribute: systemNameKV,
+		},
+	}
+	resp, err := c.service.GetNodeByPath(ctx, request)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, neofs.ErrNodeNotFound
+		}
+		return nil, fmt.Errorf("couldn't get nodes: %w", err)
+	}
+	if len(resp.Body.GetNodes()) == 0 {
+		return nil, neofs.ErrNodeNotFound
+	}
+	if len(resp.Body.GetNodes()) != 1 {
+		return nil, fmt.Errorf("found more than one node")
+	}
+
+	return newTreeNode(resp.Body.Nodes[0])
+}
+
+func (c *TreeClient) getSystemNodesWithOID(ctx context.Context, cnrID *cid.ID, treeID, path string, meta []string, latestOnly bool) ([]*TreeNode, error) {
+	meta = append(meta, oidKv)
+
+	r := &tree.GetNodeByPathRequest{
+		Body: &tree.GetNodeByPathRequest_Body{
+			ContainerId:   []byte(cnrID.EncodeToString()),
+			TreeId:        treeID,
+			PathAttribute: systemNameKV,
+			Path:          []string{path},
+			Attributes:    meta,
+			LatestOnly:    latestOnly,
+			AllAttributes: false,
 		},
 	}
 
-	resp, err := c.service.GetNodeByPath(ctx, request)
+	resp, err := c.service.GetNodeByPath(ctx, r)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get node path: %w", err)
+		if strings.Contains(err.Error(), "not found") {
+			return nil, neofs.ErrNodeNotFound
+		}
+		return nil, err
 	}
 
-	return resp.GetBody().GetNodes(), nil
+	nodes := make([]*TreeNode, 0, len(resp.Body.Nodes))
+	for _, n := range resp.Body.GetNodes() {
+		node, err := newTreeNode(n)
+		if err != nil {
+
+		}
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
 }
 
 func (c *TreeClient) addNode(ctx context.Context, cnrID *cid.ID, treeID string, parent uint64, meta map[string]string) (uint64, error) {
@@ -212,7 +237,6 @@ func (c *TreeClient) moveNode(ctx context.Context, cnrID *cid.ID, treeID string,
 
 	_, err := c.service.Move(ctx, request)
 	return err
-
 }
 
 func metaToKV(meta map[string]string) []*tree.KeyValue {
