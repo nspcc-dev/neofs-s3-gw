@@ -2,6 +2,20 @@
 
 This document outlines major changes between releases.
 
+## [0.21.0] - 2022-05-13
+
+### Added
+- Support of get-object-attributes (#430)
+
+### Fixed
+- Reduced time of bucket creation (#426)
+- Bucket removal (#428)
+- Obtainment of ETag value (#431)
+
+### Changed
+- Authmate doesn't parse session context anymore, now it accepts application defined 
+  flexible structure with container ID in human-readable format (#428)
+
 ## [0.20.0] - 2022-04-29
 
 ### Added
@@ -188,3 +202,4 @@ releases.
 [0.18.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.17.0...v0.18.0
 [0.19.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.18.0...v0.19.0
 [0.20.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.19.0...v0.20.0
+[0.21.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.20.0...v0.21.0
