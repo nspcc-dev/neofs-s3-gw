@@ -2,6 +2,12 @@
 
 This document outlines major changes between releases.
 
+## [0.21.1] - 2022-05-16
+
+### Changed
+- Update go version to go1.17 (#427)
+- Set homomorphic hashing disable attribute in container if required (#435)
+
 ## [0.21.0] - 2022-05-13
 
 ### Added
@@ -203,3 +209,4 @@ releases.
 [0.19.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.18.0...v0.19.0
 [0.20.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.19.0...v0.20.0
 [0.21.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.20.0...v0.21.0
+[0.21.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.0...v0.21.1
