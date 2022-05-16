@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
@@ -134,6 +135,16 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm neofs.PrmContainerCreat
 
 	for _, attr := range prm.AdditionalAttributes {
 		cnrOptions = append(cnrOptions, container.WithAttribute(attr[0], attr[1]))
+	}
+
+	// https://github.com/nspcc-dev/neofs-s3-gw/issues/435
+	// environment without hh disabling feature will ignore this attribute
+	// environment with hh disabling feature will set disabling = true if network config says so
+	if hhDisabled, err := isHomomorphicHashDisabled(ctx, x.pool); err != nil {
+		return nil, err
+	} else if hhDisabled {
+		cnrOptions = append(cnrOptions, container.WithAttribute(
+			"__NEOFS__DISABLE_HOMOMORPHIC_HASHING", "true"))
 	}
 
 	cnr := container.New(cnrOptions...)
@@ -574,4 +585,24 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 			{"__NEOFS__EXPIRATION_EPOCH", strconv.FormatUint(prm.ExpirationEpoch, 10)}},
 		Payload: bytes.NewReader(prm.Payload),
 	})
+}
+
+func isHomomorphicHashDisabled(ctx context.Context, p *pool.Pool) (res bool, err error) {
+	ni, err := p.NetworkInfo(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	var expectedParamKey = []byte("HomomorphicHashingDisabled")
+
+	ni.NetworkConfig().IterateParameters(func(p *netmap.NetworkParameter) bool {
+		if bytes.Equal(p.Key(), expectedParamKey) {
+			arr := stackitem.NewByteArray(p.Value())
+			res, err = arr.TryBool()
+			return true
+		}
+		return false
+	})
+
+	return res, nil
 }
