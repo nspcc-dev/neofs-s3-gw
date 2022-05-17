@@ -160,11 +160,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	own := n.Owner(ctx)
 
 	versioningEnabled := n.isVersioningEnabled(ctx, p.BktInfo)
-	versions, err := n.headVersions(ctx, p.BktInfo, p.Object)
-	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
-		return nil, err
-	}
-	idsToDeleteArr := updateCRDT2PSetHeaders(p.Header, versions, versioningEnabled)
+	newVersion := &NodeVersion{IsUnversioned: !versioningEnabled}
 
 	r := p.Reader
 	if r != nil {
@@ -191,15 +187,14 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 
-	if p.Header[VersionsDeleteMarkAttr] == DelMarkFullObject {
-		if last := versions.getLast(); last != nil {
-			n.objCache.Delete(last.Address())
-		}
-	}
-
 	id, hash, err := n.objectPutAndHash(ctx, prm)
 	if err != nil {
 		return nil, err
+	}
+
+	newVersion.OID = id
+	if err = n.treeService.AddVersion(ctx, &p.BktInfo.CID, p.Object, newVersion); err != nil {
+		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
 
 	if p.Lock != nil {
@@ -218,23 +213,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
-
-	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
-			n.log.Warn("couldn't delete object",
-				zap.Stringer("version id", id),
-				zap.Error(err))
-		}
-		if !versioningEnabled {
-			if objVersion := versions.getVersion(id); objVersion != nil {
-				if err = n.DeleteObjectTagging(ctx, p.BktInfo, objVersion); err != nil {
-					n.log.Warn("couldn't delete object tagging",
-						zap.Stringer("version id", id),
-						zap.Error(err))
-				}
-			}
-		}
-	}
 
 	return &data.ObjectInfo{
 		ID:  *id,

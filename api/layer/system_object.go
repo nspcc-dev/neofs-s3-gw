@@ -75,14 +75,6 @@ func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo
 }
 
 func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error) {
-	versions, err := n.headSystemVersions(ctx, p.BktInfo, p.ObjName)
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		return nil, err
-	}
-
-	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
-	// note that updateCRDT2PSetHeaders modifies p.Metadata and must be called further processing
-
 	prm := neofs.PrmObjectCreate{
 		Container:  p.BktInfo.CID,
 		Creator:    p.BktInfo.Owner,
@@ -121,18 +113,14 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		return nil, err
 	}
 
+	newVersion := &BaseNodeVersion{OID: id}
+	if err = n.treeService.AddSystemVersion(ctx, &p.BktInfo.CID, p.ObjName, newVersion); err != nil {
+		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
+	}
+
 	meta, err := n.objectHead(ctx, p.BktInfo.CID, *id)
 	if err != nil {
 		return nil, err
-	}
-
-	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
-			n.log.Warn("couldn't delete system object",
-				zap.Stringer("version id", id),
-				zap.String("name", p.ObjName),
-				zap.Error(err))
-		}
 	}
 
 	return objInfoFromMeta(p.BktInfo, meta), nil
