@@ -1,4 +1,4 @@
-package neofs
+package layer
 
 import (
 	"context"

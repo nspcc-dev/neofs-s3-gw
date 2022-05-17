@@ -8,7 +8,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"go.uber.org/zap"
 )
@@ -26,7 +25,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 	}
 
 	ids, nodeIds, err := n.treeService.GetNotificationConfigurationNodes(ctx, p.BktInfo.CID, false)
-	if err != nil && !errorsStd.Is(err, neofs.ErrNodeNotFound) {
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
 
@@ -75,7 +74,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 	}
 
 	ids, _, err := n.treeService.GetNotificationConfigurationNodes(ctx, bktInfo.CID, true)
-	if err != nil && !errorsStd.Is(err, neofs.ErrNodeNotFound) {
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 

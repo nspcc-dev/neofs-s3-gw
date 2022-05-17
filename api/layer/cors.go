@@ -10,7 +10,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"go.uber.org/zap"
 )
 
@@ -38,7 +37,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 	}
 
 	ids, nodeIds, err := n.treeService.GetBucketCORS(ctx, p.BktInfo.CID, false)
-	if err != nil && !errorsStd.Is(err, neofs.ErrNodeNotFound) {
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
 
@@ -81,7 +80,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
 	cors, err := n.getCORS(ctx, bktInfo, bktInfo.CORSObjectName())
 	if err != nil {
-		if errorsStd.Is(err, neofs.ErrNodeNotFound) {
+		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
 		}
 		return nil, err
@@ -92,7 +91,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
 	ids, nodeIds, err := n.treeService.GetBucketCORS(ctx, bktInfo.CID, false)
-	if err != nil && !errorsStd.Is(err, neofs.ErrNodeNotFound) {
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
 
