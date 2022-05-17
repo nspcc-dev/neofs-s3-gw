@@ -24,11 +24,6 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return err
 	}
 
-	ids, nodeIds, err := n.treeService.GetNotificationConfigurationNodes(ctx, p.BktInfo.CID, false)
-	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
-		return err
-	}
-
 	sysName := p.BktInfo.NotificationConfigurationObjectName()
 
 	s := &PutSystemObjectParams{
@@ -43,19 +38,17 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return err
 	}
 
-	if err = n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo.CID, obj.ID); err != nil {
+	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo.CID, obj.ID)
+	if err != nil {
 		return err
 	}
 
-	for i := 0; i < len(ids); i++ {
-		if err = n.objectDelete(ctx, p.BktInfo.CID, ids[i]); err != nil {
+	if objIDToDelete != nil {
+		if err = n.objectDelete(ctx, p.BktInfo.CID, objIDToDelete); err != nil {
 			n.log.Error("couldn't delete notification configuration object", zap.Error(err),
 				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
 				zap.String("bucket name", p.BktInfo.Name),
-				zap.String("objID", ids[i].String()))
-		}
-		if err = n.treeService.DeleteNotificationConfigurationNode(ctx, p.BktInfo.CID, nodeIds[i]); err != nil {
-			return err
+				zap.String("objID", objIDToDelete.String()))
 		}
 	}
 
@@ -73,17 +66,17 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		return conf, nil
 	}
 
-	ids, _, err := n.treeService.GetNotificationConfigurationNodes(ctx, bktInfo.CID, true)
+	objId, err := n.treeService.GetNotificationConfigurationNode(ctx, bktInfo.CID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 
 	conf := &data.NotificationConfiguration{}
 
-	if len(ids) != 0 {
+	if objId != nil {
 		var addr address.Address
 		addr.SetContainerID(*bktInfo.CID)
-		addr.SetObjectID(*ids[0])
+		addr.SetObjectID(*objId)
 
 		obj, err := n.objectGet(ctx, &addr)
 		if err != nil {

@@ -36,11 +36,6 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
-	ids, nodeIds, err := n.treeService.GetBucketCORS(ctx, p.BktInfo.CID, false)
-	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
-		return err
-	}
-
 	s := &PutSystemObjectParams{
 		BktInfo:  p.BktInfo,
 		ObjName:  p.BktInfo.CORSObjectName(),
@@ -54,19 +49,17 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
-	if err = n.treeService.PutBucketCORS(ctx, p.BktInfo.CID, obj.ID); err != nil {
+	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, p.BktInfo.CID, obj.ID)
+	if err != nil {
 		return err
 	}
 
-	for i := 0; i < len(ids); i++ {
-		if err = n.objectDelete(ctx, p.BktInfo.CID, ids[i]); err != nil {
+	if objIDToDelete != nil {
+		if err = n.objectDelete(ctx, p.BktInfo.CID, objIDToDelete); err != nil {
 			n.log.Error("couldn't delete cors object", zap.Error(err),
 				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
 				zap.String("bucket name", p.BktInfo.Name),
-				zap.String("objID", ids[i].String()))
-		}
-		if err = n.treeService.DeleteBucketCORS(ctx, p.BktInfo.CID, nodeIds[i]); err != nil {
-			return err
+				zap.String("objID", objIDToDelete.String()))
 		}
 	}
 
@@ -90,16 +83,12 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
-	ids, nodeIds, err := n.treeService.GetBucketCORS(ctx, bktInfo.CID, false)
-	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+	objID, err := n.treeService.DeleteBucketCORS(ctx, bktInfo.CID)
+	if err != nil {
 		return err
 	}
-
-	for i := 0; i < len(ids); i++ {
-		if err = n.objectDelete(ctx, bktInfo.CID, ids[i]); err != nil {
-			return err
-		}
-		if err = n.treeService.DeleteBucketCORS(ctx, bktInfo.CID, nodeIds[i]); err != nil {
+	if objID != nil {
+		if err = n.objectDelete(ctx, bktInfo.CID, objID); err != nil {
 			return err
 		}
 	}
