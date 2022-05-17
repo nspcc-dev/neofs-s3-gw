@@ -29,6 +29,30 @@ type TreeService interface {
 	PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error)
 	// DeleteBucketCORS removes a node from a system tree and returns objID which must be deleted in NeoFS
 	DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error)
+
+	GetVersions(ctx context.Context, cnrID *cid.ID, objectName string) ([]*NodeVersion, error)
+
+	//GetUnversioned(context.Context, *cid.ID, string) (*NodeVersion, error)
+
+	AddVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *NodeVersion) error
+
+	RemoveVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+
+	AddSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *BaseNodeVersion) error
+
+	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+}
+
+
+type NodeVersion struct {
+	BaseNodeVersion
+	IsDeleteMarker bool
+	IsUnversioned  bool
+}
+
+type BaseNodeVersion struct {
+	ID  uint64
+	OID *oid.ID
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
