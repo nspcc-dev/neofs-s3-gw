@@ -328,23 +328,34 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		}
 	}
 
-	versions, err := n.headVersions(ctx, bkt, objectName)
+	node, err := n.treeService.GetLatestVersion(ctx, &bkt.CID, objectName)
 	if err != nil {
 		return nil, err
 	}
 
-	lastVersion := versions.getLast()
-	if lastVersion == nil {
+	if node.IsDeleteMarker {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
-	if err = n.namesCache.Put(lastVersion.NiceName(), lastVersion.Address()); err != nil {
-		n.log.Warn("couldn't put obj address to head cache",
-			zap.String("obj nice name", lastVersion.NiceName()),
+	meta, err := n.objectHead(ctx, bkt, *node.OID)
+	if err != nil {
+		return nil, err
+	}
+	if err = n.objCache.Put(*meta); err != nil {
+		n.log.Warn("couldn't put meta to objects cache",
+			zap.Stringer("object id", node.OID),
+			zap.Stringer("bucket id", bkt.CID),
 			zap.Error(err))
 	}
 
-	return lastVersion, nil
+	objInfo := objInfoFromMeta(bkt, meta)
+	if err = n.namesCache.Put(objInfo.NiceName(), objInfo.Address()); err != nil {
+		n.log.Warn("couldn't put obj address to head cache",
+			zap.String("obj nice name", objInfo.NiceName()),
+			zap.Error(err))
+	}
+
+	return objInfo, nil
 }
 
 func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectName string) (*objectVersions, error) {
