@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -116,7 +116,7 @@ func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID, treeID 
 
 func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID *cid.ID, treeID string, settings *data.BucketSettings) error {
 	node, err := c.getSystemNode(ctx, cnrID, treeID, settingsFileName, []string{})
-	isErrNotFound := errors.Is(err, neofs.ErrNodeNotFound)
+	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -222,12 +222,12 @@ func (c *TreeClient) getSystemNode(ctx context.Context, cnrID *cid.ID, treeID, p
 	resp, err := c.service.GetNodeByPath(ctx, request)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return nil, neofs.ErrNodeNotFound
+			return nil, layer.ErrNodeNotFound
 		}
 		return nil, fmt.Errorf("couldn't get nodes: %w", err)
 	}
 	if len(resp.Body.GetNodes()) == 0 {
-		return nil, neofs.ErrNodeNotFound
+		return nil, layer.ErrNodeNotFound
 	}
 	if len(resp.Body.GetNodes()) != 1 {
 		return nil, fmt.Errorf("found more than one node")
@@ -254,7 +254,7 @@ func (c *TreeClient) getSystemNodesWithOID(ctx context.Context, cnrID *cid.ID, t
 	resp, err := c.service.GetNodeByPath(ctx, r)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return nil, neofs.ErrNodeNotFound
+			return nil, layer.ErrNodeNotFound
 		}
 		return nil, err
 	}

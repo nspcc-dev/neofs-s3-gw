@@ -51,7 +51,7 @@ type (
 		namesCache  *cache.ObjectsNameCache
 		bucketCache *cache.BucketCache
 		systemCache *cache.SystemCache
-		treeService neofs.TreeService
+		treeService TreeService
 	}
 
 	Config struct {
@@ -59,7 +59,7 @@ type (
 		Caches       *CachesConfig
 		AnonKey      AnonymousKey
 		Resolver     *resolver.BucketResolver
-		TreeService  neofs.TreeService
+		TreeService  TreeService
 	}
 
 	// AnonymousKey contains data for anonymous requests.
