@@ -166,17 +166,18 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
 	}
-	ids, _, err := n.treeService.GetBucketCORS(ctx, bkt.CID, true)
+	objID, err := n.treeService.GetBucketCORS(ctx, bkt.CID)
 	if err != nil {
 		return nil, err
 	}
-	if len(ids) == 0 {
+
+	if objID == nil {
 		return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
 	}
 
 	var addr address.Address
 	addr.SetContainerID(*bkt.CID)
-	addr.SetObjectID(*ids[0])
+	addr.SetObjectID(*objID)
 
 	obj, err := n.objectGet(ctx, &addr)
 	if err != nil {
@@ -248,7 +249,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
-	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo.CID, "version")
+	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo.CID)
 	if err != nil {
 		if !errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, err
@@ -266,7 +267,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 }
 
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo.CID, "version", p.Settings); err != nil {
+	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo.CID, p.Settings); err != nil {
 		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 
