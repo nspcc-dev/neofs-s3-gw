@@ -36,6 +36,7 @@ const (
 	oidKv               = "OID"
 	fileNameKV          = "FileName"
 	systemNameKV        = "SystemName"
+	isUnversionedKV     = "IsUnversioned"
 
 	settingsFileName  = "bucket-settings"
 	notifConfFileName = "bucket-notifications"
@@ -44,6 +45,11 @@ const (
 	// bucketSystemObjectsTreeID -- ID of a tree with system objects for bucket
 	// i.e. bucket settings with versioning and lock configuration, cors, notifications
 	bucketSystemObjectsTreeID = "system-bucket"
+
+	versionTree = "version"
+	systemTree  = "system"
+
+	separator = "/"
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
@@ -201,12 +207,157 @@ func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.
 	return nil, nil
 }
 
+func (c *TreeClient) GetVersions(ctx context.Context, cnrID *cid.ID, filepath string) ([]*layer.NodeVersion, error) {
+	return c.getVersions(ctx, cnrID, versionTree, filepath, false)
+}
+
+func (c *TreeClient) getUnversioned(ctx context.Context, cnrID *cid.ID, treeID, filepath string) (*layer.NodeVersion, error) {
+	nodes, err := c.getVersions(ctx, cnrID, treeID, filepath, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(nodes) > 1 {
+		return nil, fmt.Errorf("found more than one unversioned node")
+	}
+
+	if len(nodes) != 1 {
+		return nil, layer.ErrNotFound
+	}
+
+	return nodes[0], nil
+}
+
+func (c *TreeClient) AddVersion(ctx context.Context, cnrID *cid.ID, filepath string, version *layer.NodeVersion) error {
+	return c.addVersion(ctx, cnrID, versionTree, filepath, version)
+}
+
+func (c *TreeClient) AddSystemVersion(ctx context.Context, cnrID *cid.ID, filepath string, version *layer.BaseNodeVersion) error {
+	newVersion := &layer.NodeVersion{
+		BaseNodeVersion: *version,
+		IsUnversioned:   true,
+	}
+	return c.addVersion(ctx, cnrID, systemTree, filepath, newVersion)
+}
+
+func (c *TreeClient) RemoveVersion(ctx context.Context, cnrID *cid.ID, id uint64) error {
+	return c.removeVersion(ctx, cnrID, versionTree, id)
+}
+
+func (c *TreeClient) RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, id uint64) error {
+	return c.removeVersion(ctx, cnrID, systemTree, id)
+}
+
 func (c *TreeClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
 	}
 
 	return nil
+}
+
+func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, filepath string, version *layer.NodeVersion) error {
+	path := strings.Split(filepath, separator)
+	meta := map[string]string{
+		oidKV:      version.OID.String(),
+		fileNameKV: path[len(path)-1],
+	}
+
+	if version.IsUnversioned {
+		meta[isUnversionedKV] = "true"
+
+		node, err := c.getUnversioned(ctx, cnrID, treeID, filepath)
+		if err == nil {
+			parentID, err := c.getParent(ctx, cnrID, treeID, node.ID)
+			if err != nil {
+				return err
+			}
+
+			return c.moveNode(ctx, cnrID, treeID, version.ID, parentID, meta)
+		}
+
+		if !errors.Is(err, layer.ErrNotFound) {
+			return err
+		}
+	}
+
+	return c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
+}
+
+func (c *TreeClient) removeVersion(ctx context.Context, cnrID *cid.ID, treeID string, id uint64) error {
+	request := &tree.RemoveRequest{
+		Body: &tree.RemoveRequest_Body{
+			ContainerId: []byte(cnrID.String()),
+			TreeId:      treeID,
+			NodeId:      id,
+		},
+	}
+
+	_, err := c.service.Remove(ctx, request)
+	return err
+}
+
+func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*layer.NodeVersion, error) {
+	keysToReturn := []string{versioningEnabledKV, lockConfigurationKV}
+	path := strings.Split(filepath, separator)
+	nodes, err := c.getNodes(ctx, cnrID, treeID, fileNameKV, path, keysToReturn)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("couldn't get nodes: %w", err)
+	}
+
+	result := make([]*layer.NodeVersion, 0, len(nodes))
+	for _, node := range nodes {
+		treeNode := newNode(node)
+
+		objIDStr, ok := treeNode.Get(oidKV)
+		if !ok {
+			continue
+		}
+		var objId oid.ID
+		if err = objId.DecodeString(objIDStr); err != nil {
+			return nil, fmt.Errorf("invalid object id '%s': %w", objIDStr, err)
+		}
+
+		_, isUnversioned := treeNode.Get(isUnversionedKV)
+		if onlyUnversioned && !isUnversioned {
+			continue
+		}
+
+		result = append(result, &layer.NodeVersion{
+			BaseNodeVersion: layer.BaseNodeVersion{
+				ID:  node.NodeId,
+				OID: &objId,
+			},
+			IsUnversioned: isUnversioned,
+		})
+	}
+
+	return result, nil
+}
+
+func (c *TreeClient) getParent(ctx context.Context, cnrID *cid.ID, treeID string, id uint64) (uint64, error) {
+	request := &tree.GetSubTreeRequest{
+		Body: &tree.GetSubTreeRequest_Body{
+			ContainerId: []byte(cnrID.String()),
+			TreeId:      treeID,
+			RootId:      id,
+		},
+	}
+
+	cli, err := c.service.GetSubTree(ctx, request)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get sub tree client: %w", err)
+	}
+
+	resp, err := cli.Recv()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get sub tree: %w", err)
+	}
+
+	return resp.GetBody().GetParentId(), nil
 }
 
 func metaFromSettings(settings *data.BucketSettings) map[string]string {
@@ -262,6 +413,21 @@ func (c *TreeClient) addNode(ctx context.Context, cnrID *cid.ID, treeID string, 
 	}
 
 	return resp.GetBody().GetNodeId(), nil
+}
+
+func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID *cid.ID, treeID string, path []string, meta map[string]string) error {
+	request := &tree.AddByPathRequest{
+		Body: &tree.AddByPathRequest_Body{
+			ContainerId:   []byte(cnrID.String()),
+			TreeId:        treeID,
+			Path:          path,
+			Meta:          metaToKV(meta),
+			PathAttribute: fileNameKV,
+		},
+	}
+
+	_, err := c.service.AddByPath(ctx, request)
+	return err
 }
 
 func (c *TreeClient) moveNode(ctx context.Context, cnrID *cid.ID, treeID string, nodeID, parentID uint64, meta map[string]string) error {
