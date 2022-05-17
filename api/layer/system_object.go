@@ -250,7 +250,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	settings, err := n.treeService.GetSettingsNode(ctx, &bktInfo.CID, "version")
 	if err != nil {
-		if !errorsStd.Is(err, neofs.ErrNodeNotFound) {
+		if !errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, err
 		}
 		settings = &data.BucketSettings{}
