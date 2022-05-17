@@ -12,20 +12,23 @@ import (
 // TreeService provide interface to interact with tree service using s3 data models.
 type TreeService interface {
 	// PutSettingsNode update or create new settings node in tree service.
-	PutSettingsNode(context.Context, *cid.ID, string, *data.BucketSettings) error
+	PutSettingsNode(context.Context, *cid.ID, *data.BucketSettings) error
 
 	// GetSettingsNode retrieves the settings node from the tree service and form data.BucketSettings.
 	//
 	// If node is not found returns ErrNodeNotFound error.
-	GetSettingsNode(context.Context, *cid.ID, string) (*data.BucketSettings, error)
+	GetSettingsNode(context.Context, *cid.ID) (*data.BucketSettings, error)
 
-	GetNotificationConfigurationNodes(ctx context.Context, cnrID *cid.ID, latestOnly bool) ([]*oid.ID, []uint64, error)
-	PutNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, objID *oid.ID) error
-	DeleteNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+	GetNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID) (*oid.ID, error)
+	// PutNotificationConfigurationNode puts a node to a system tree
+	// and returns objectID of a previous notif config which must be deleted in NeoFS
+	PutNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error)
 
-	GetBucketCORS(ctx context.Context, cnrID *cid.ID, latestOnly bool) ([]*oid.ID, []uint64, error)
-	PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) error
-	DeleteBucketCORS(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+	GetBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error)
+	// PutBucketCORS puts a node to a system tree and returns objectID of a previous cors config which must be deleted in NeoFS
+	PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error)
+	// DeleteBucketCORS removes a node from a system tree and returns objID which must be deleted in NeoFS
+	DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error)
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
