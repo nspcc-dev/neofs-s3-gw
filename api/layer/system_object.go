@@ -238,16 +238,14 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
+	settings := &data.BucketSettings{}
+
 	obj, err := n.getSystemObjectFromNeoFS(ctx, bktInfo, bktInfo.SettingsObjectName())
 	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
-			return &data.BucketSettings{}, nil
+		if !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+			return nil, err
 		}
-		return nil, err
-	}
-
-	settings := &data.BucketSettings{}
-	if err = json.Unmarshal(obj.Payload(), settings); err != nil {
+	} else if err = json.Unmarshal(obj.Payload(), settings); err != nil {
 		return nil, err
 	}
 
