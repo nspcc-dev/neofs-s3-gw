@@ -42,16 +42,22 @@ func (n *layer) HeadSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 		return objInfo, nil
 	}
 
-	versions, err := n.headSystemVersions(ctx, bkt, objName)
+	node, err := n.treeService.GetSystemVersion(ctx, &bkt.CID, objName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = n.systemCache.PutObject(systemObjectKey(bkt, objName), versions.getLast()); err != nil {
+	meta, err := n.objectHead(ctx, bkt, *node.OID)
+	if err != nil {
+		return nil, err
+	}
+
+	objInfo := objInfoFromMeta(bkt, meta)
+	if err = n.systemCache.PutObject(systemObjectKey(bkt, objName), objInfo); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	return versions.getLast(), nil
+	return objInfo, nil
 }
 
 func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
