@@ -32,13 +32,17 @@ type TreeService interface {
 
 	GetVersions(ctx context.Context, cnrID *cid.ID, objectName string) ([]*NodeVersion, error)
 
-	//GetUnversioned(context.Context, *cid.ID, string) (*NodeVersion, error)
+	GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*NodeVersion, error)
+
+	GetUnversioned(ctx context.Context, cnrID *cid.ID, objectName string) (*NodeVersion, error)
 
 	AddVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *NodeVersion) error
 
 	RemoveVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 
 	AddSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *BaseNodeVersion) error
+
+	GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*BaseNodeVersion, error)
 
 	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 }
