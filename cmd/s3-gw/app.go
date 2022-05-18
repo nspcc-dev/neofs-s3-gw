@@ -143,7 +143,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	treeServiceEndpoint := v.GetString(cfgTreeServiceEndpoint)
-	treeService, err := neofs.NewTreeClient(treeServiceEndpoint)
+	treeService, err := neofs.NewTreeClient(treeServiceEndpoint, key)
 	if err != nil {
 		l.Fatal("failed to create tree service", zap.Error(err))
 	}
