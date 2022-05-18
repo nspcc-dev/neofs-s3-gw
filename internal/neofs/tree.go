@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -20,6 +21,7 @@ import (
 
 type (
 	TreeClient struct {
+		key     *keys.PrivateKey
 		conn    *grpc.ClientConn
 		service tree.TreeServiceClient
 	}
@@ -56,7 +58,7 @@ const (
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
-func NewTreeClient(addr string) (*TreeClient, error) {
+func NewTreeClient(addr string, key *keys.PrivateKey) (*TreeClient, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("did not connect: %v", err)
@@ -65,6 +67,7 @@ func NewTreeClient(addr string) (*TreeClient, error) {
 	c := tree.NewTreeServiceClient(conn)
 
 	return &TreeClient{
+		key:     key,
 		conn:    conn,
 		service: c,
 	}, nil
@@ -299,11 +302,11 @@ func (c *TreeClient) AddSystemVersion(ctx context.Context, cnrID *cid.ID, filepa
 }
 
 func (c *TreeClient) RemoveVersion(ctx context.Context, cnrID *cid.ID, id uint64) error {
-	return c.removeVersion(ctx, cnrID, versionTree, id)
+	return c.removeNode(ctx, cnrID, versionTree, id)
 }
 
 func (c *TreeClient) RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, id uint64) error {
-	return c.removeVersion(ctx, cnrID, systemTree, id)
+	return c.removeNode(ctx, cnrID, systemTree, id)
 }
 
 func (c *TreeClient) Close() error {
@@ -346,20 +349,6 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 	return c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
 }
 
-func (c *TreeClient) removeVersion(ctx context.Context, cnrID *cid.ID, treeID string, id uint64) error {
-	request := &tree.RemoveRequest{
-		Body: &tree.RemoveRequest_Body{
-			ContainerId: []byte(cnrID.String()),
-			TreeId:      treeID,
-			NodeId:      id,
-			BearerToken: getBearer(ctx),
-		},
-	}
-
-	_, err := c.service.Remove(ctx, request)
-	return err
-}
-
 func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*layer.NodeVersion, error) {
 	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
 	path := strings.Split(filepath, separator)
@@ -391,11 +380,20 @@ func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, fil
 func (c *TreeClient) getParent(ctx context.Context, cnrID *cid.ID, treeID string, id uint64) (uint64, error) {
 	request := &tree.GetSubTreeRequest{
 		Body: &tree.GetSubTreeRequest_Body{
-			ContainerId: []byte(cnrID.String()),
+			ContainerId: cnrID[:],
 			TreeId:      treeID,
 			RootId:      id,
 			BearerToken: getBearer(ctx),
 		},
+	}
+
+	if err := c.signRequest(request.Body, func(key, sign []byte) {
+		request.Signature = &tree.Signature{
+			Key:  key,
+			Sign: sign,
+		}
+	}); err != nil {
+		return 0, err
 	}
 
 	cli, err := c.service.GetSubTree(ctx, request)
@@ -446,7 +444,7 @@ func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID, pathAtt
 func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string, latestOnly bool) ([]*tree.GetNodeByPathResponse_Info, error) {
 	request := &tree.GetNodeByPathRequest{
 		Body: &tree.GetNodeByPathRequest_Body{
-			ContainerId:   []byte(cnrID.String()),
+			ContainerId:   cnrID[:],
 			TreeId:        treeID,
 			Path:          path,
 			Attributes:    meta,
@@ -456,9 +454,18 @@ func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAt
 		},
 	}
 
+	if err := c.signRequest(request.Body, func(key, sign []byte) {
+		request.Signature = &tree.Signature{
+			Key:  key,
+			Sign: sign,
+		}
+	}); err != nil {
+		return nil, err
+	}
+
 	resp, err := c.service.GetNodeByPath(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get node path: %w", err)
+		return nil, fmt.Errorf("failed to get node path deb: %w", err)
 	}
 
 	return resp.GetBody().GetNodes(), nil
@@ -476,12 +483,20 @@ func getBearer(ctx context.Context) []byte {
 func (c *TreeClient) addNode(ctx context.Context, cnrID *cid.ID, treeID string, parent uint64, meta map[string]string) (uint64, error) {
 	request := &tree.AddRequest{
 		Body: &tree.AddRequest_Body{
-			ContainerId: []byte(cnrID.String()),
+			ContainerId: cnrID[:],
 			TreeId:      treeID,
 			ParentId:    parent,
 			Meta:        metaToKV(meta),
 			BearerToken: getBearer(ctx),
 		},
+	}
+	if err := c.signRequest(request.Body, func(key, sign []byte) {
+		request.Signature = &tree.Signature{
+			Key:  key,
+			Sign: sign,
+		}
+	}); err != nil {
+		return 0, err
 	}
 
 	resp, err := c.service.Add(ctx, request)
@@ -495,13 +510,22 @@ func (c *TreeClient) addNode(ctx context.Context, cnrID *cid.ID, treeID string, 
 func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID *cid.ID, treeID string, path []string, meta map[string]string) error {
 	request := &tree.AddByPathRequest{
 		Body: &tree.AddByPathRequest_Body{
-			ContainerId:   []byte(cnrID.String()),
+			ContainerId:   cnrID[:],
 			TreeId:        treeID,
 			Path:          path,
 			Meta:          metaToKV(meta),
 			PathAttribute: fileNameKV,
 			BearerToken:   getBearer(ctx),
 		},
+	}
+
+	if err := c.signRequest(request.Body, func(key, sign []byte) {
+		request.Signature = &tree.Signature{
+			Key:  key,
+			Sign: sign,
+		}
+	}); err != nil {
+		return err
 	}
 
 	_, err := c.service.AddByPath(ctx, request)
@@ -511,12 +535,22 @@ func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID *cid.ID, treeID st
 func (c *TreeClient) moveNode(ctx context.Context, cnrID *cid.ID, treeID string, nodeID, parentID uint64, meta map[string]string) error {
 	request := &tree.MoveRequest{
 		Body: &tree.MoveRequest_Body{
-			ContainerId: []byte(cnrID.String()),
+			ContainerId: cnrID[:],
 			TreeId:      treeID,
 			NodeId:      nodeID,
 			ParentId:    parentID,
 			Meta:        metaToKV(meta),
+			BearerToken: getBearer(ctx),
 		},
+	}
+
+	if err := c.signRequest(request.Body, func(key, sign []byte) {
+		request.Signature = &tree.Signature{
+			Key:  key,
+			Sign: sign,
+		}
+	}); err != nil {
+		return err
 	}
 
 	_, err := c.service.Move(ctx, request)
@@ -524,15 +558,24 @@ func (c *TreeClient) moveNode(ctx context.Context, cnrID *cid.ID, treeID string,
 }
 
 func (c *TreeClient) removeNode(ctx context.Context, cnrID *cid.ID, treeID string, nodeID uint64) error {
-	r := &tree.RemoveRequest{
+	request := &tree.RemoveRequest{
 		Body: &tree.RemoveRequest_Body{
-			ContainerId: []byte(cnrID.String()),
+			ContainerId: cnrID[:],
 			TreeId:      treeID,
 			NodeId:      nodeID,
 			BearerToken: getBearer(ctx),
 		},
 	}
-	_, err := c.service.Remove(ctx, r)
+	if err := c.signRequest(request.Body, func(key, sign []byte) {
+		request.Signature = &tree.Signature{
+			Key:  key,
+			Sign: sign,
+		}
+	}); err != nil {
+		return err
+	}
+
+	_, err := c.service.Remove(ctx, request)
 	return err
 }
 
