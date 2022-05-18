@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -24,7 +26,7 @@ type (
 
 	TreeNode struct {
 		ID        uint64
-		ObjID     *oid.ID
+		ObjID     oid.ID
 		TimeStamp uint64
 		Meta      map[string]string
 	}
@@ -43,12 +45,12 @@ const (
 	notifConfFileName = "bucket-notifications"
 	corsFilename      = "bucket-cors"
 
-	// bucketSystemObjectsTreeID -- ID of a tree with system objects for bucket
-	// i.e. bucket settings with versioning and lock configuration, cors, notifications
-	bucketSystemObjectsTreeID = "system-bucket"
-
+	// versionTree -- ID of a tree with object versions.
 	versionTree = "version"
-	systemTree  = "system"
+
+	// systemTree -- ID of a tree with system objects
+	// i.e. bucket settings with versioning and lock configuration, cors, notifications.
+	systemTree = "system"
 
 	separator = "/"
 )
@@ -69,14 +71,12 @@ func NewTreeClient(addr string) (*TreeClient, error) {
 }
 
 func newTreeNode(nodeInfo *tree.GetNodeByPathResponse_Info) (*TreeNode, error) {
-	var objID *oid.ID
+	var objID oid.ID
 	meta := make(map[string]string, len(nodeInfo.GetMeta()))
 
 	for _, kv := range nodeInfo.GetMeta() {
 		if kv.GetKey() == oidKV {
-			objID = new(oid.ID)
-			err := objID.DecodeString(string(kv.GetValue()))
-			if err != nil {
+			if err := objID.DecodeString(string(kv.GetValue())); err != nil {
 				return nil, err
 			}
 			continue
@@ -119,8 +119,7 @@ func newNodeVersion(node *tree.GetNodeByPathResponse_Info) (*layer.NodeVersion, 
 
 func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID) (*data.BucketSettings, error) {
 	keysToReturn := []string{versioningEnabledKV, lockConfigurationKV}
-	path := []string{settingsFileName}
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, path, keysToReturn)
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{settingsFileName}, keysToReturn)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -143,8 +142,7 @@ func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID) (*data.
 }
 
 func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID *cid.ID, settings *data.BucketSettings) error {
-	path := []string{settingsFileName}
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, path, []string{})
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{settingsFileName}, []string{})
 	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return fmt.Errorf("couldn't get node: %w", err)
@@ -153,26 +151,24 @@ func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID *cid.ID, setting
 	meta := metaFromSettings(settings)
 
 	if isErrNotFound {
-		_, err = c.addNode(ctx, cnrID, bucketSystemObjectsTreeID, 0, meta)
+		_, err = c.addNode(ctx, cnrID, systemTree, 0, meta)
 		return err
 	}
 
-	return c.moveNode(ctx, cnrID, bucketSystemObjectsTreeID, node.ID, 0, meta)
+	return c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
 }
 
 func (c *TreeClient) GetNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID) (*oid.ID, error) {
-	path := []string{notifConfFileName}
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, path, []string{oidKV})
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{notifConfFileName}, []string{oidKV})
 	if err != nil {
 		return nil, err
 	}
 
-	return node.ObjID, nil
+	return &node.ObjID, nil
 }
 
 func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error) {
-	path := []string{notifConfFileName}
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, path, []string{oidKV})
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{notifConfFileName}, []string{oidKV})
 	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return nil, fmt.Errorf("couldn't get node: %w", err)
@@ -183,24 +179,24 @@ func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID
 	meta[oidKV] = objID.EncodeToString()
 
 	if isErrNotFound {
-		_, err = c.addNode(ctx, cnrID, bucketSystemObjectsTreeID, 0, meta)
+		_, err = c.addNode(ctx, cnrID, systemTree, 0, meta)
 		return nil, err
 	}
 
-	return node.ObjID, c.moveNode(ctx, cnrID, bucketSystemObjectsTreeID, node.ID, 0, meta)
+	return &node.ObjID, c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
 }
 
 func (c *TreeClient) GetBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error) {
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, []string{corsFilename}, []string{oidKV})
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{corsFilename}, []string{oidKV})
 	if err != nil {
 		return nil, err
 	}
 
-	return node.ObjID, nil
+	return &node.ObjID, nil
 }
 
 func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error) {
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, []string{corsFilename}, []string{oidKV})
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{corsFilename}, []string{oidKV})
 	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return nil, fmt.Errorf("couldn't get node: %w", err)
@@ -211,21 +207,21 @@ func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oi
 	meta[oidKV] = objID.EncodeToString()
 
 	if isErrNotFound {
-		_, err = c.addNode(ctx, cnrID, bucketSystemObjectsTreeID, 0, meta)
+		_, err = c.addNode(ctx, cnrID, systemTree, 0, meta)
 		return nil, err
 	}
 
-	return node.ObjID, c.moveNode(ctx, cnrID, bucketSystemObjectsTreeID, node.ID, 0, meta)
+	return &node.ObjID, c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
 }
 
 func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error) {
-	node, err := c.getSystemNode(ctx, cnrID, bucketSystemObjectsTreeID, []string{corsFilename}, []string{oidKV})
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{corsFilename}, []string{oidKV})
 	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
 		return nil, err
 	}
 
 	if node != nil {
-		return node.ObjID, c.removeNode(ctx, cnrID, bucketSystemObjectsTreeID, node.ID)
+		return &node.ObjID, c.removeNode(ctx, cnrID, systemTree, node.ID)
 	}
 
 	return nil, nil
@@ -260,6 +256,10 @@ func (c *TreeClient) getLatestVersion(ctx context.Context, cnrID *cid.ID, treeID
 			return nil, layer.ErrNodeNotFound
 		}
 		return nil, fmt.Errorf("couldn't get nodes: %w", err)
+	}
+
+	if len(nodes) == 0 {
+		return nil, layer.ErrNodeNotFound
 	}
 
 	return newNodeVersion(nodes[0])
@@ -352,6 +352,7 @@ func (c *TreeClient) removeVersion(ctx context.Context, cnrID *cid.ID, treeID st
 			ContainerId: []byte(cnrID.String()),
 			TreeId:      treeID,
 			NodeId:      id,
+			BearerToken: getBearer(ctx),
 		},
 	}
 
@@ -360,7 +361,7 @@ func (c *TreeClient) removeVersion(ctx context.Context, cnrID *cid.ID, treeID st
 }
 
 func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*layer.NodeVersion, error) {
-	keysToReturn := []string{versioningEnabledKV, lockConfigurationKV}
+	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
 	path := strings.Split(filepath, separator)
 	nodes, err := c.getNodes(ctx, cnrID, treeID, fileNameKV, path, keysToReturn, false)
 	if err != nil {
@@ -393,6 +394,7 @@ func (c *TreeClient) getParent(ctx context.Context, cnrID *cid.ID, treeID string
 			ContainerId: []byte(cnrID.String()),
 			TreeId:      treeID,
 			RootId:      id,
+			BearerToken: getBearer(ctx),
 		},
 	}
 
@@ -423,10 +425,6 @@ func (c *TreeClient) getSystemNode(ctx context.Context, cnrID *cid.ID, treeID st
 	return c.getNode(ctx, cnrID, treeID, systemNameKV, path, meta)
 }
 
-func (c *TreeClient) getRegularNode(ctx context.Context, cnrID *cid.ID, treeID string, path, meta []string) (*TreeNode, error) {
-	return c.getNode(ctx, cnrID, treeID, fileNameKV, path, meta)
-}
-
 func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string) (*TreeNode, error) {
 	nodes, err := c.getNodes(ctx, cnrID, treeID, pathAttr, path, meta, false)
 	if err != nil {
@@ -454,6 +452,7 @@ func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAt
 			Attributes:    meta,
 			PathAttribute: pathAttr,
 			LatestOnly:    latestOnly,
+			BearerToken:   getBearer(ctx),
 		},
 	}
 
@@ -465,6 +464,15 @@ func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAt
 	return resp.GetBody().GetNodes(), nil
 }
 
+func getBearer(ctx context.Context) []byte {
+	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
+		if bd.Gate.BearerToken != nil {
+			return bd.Gate.BearerToken.Marshal()
+		}
+	}
+	return nil
+}
+
 func (c *TreeClient) addNode(ctx context.Context, cnrID *cid.ID, treeID string, parent uint64, meta map[string]string) (uint64, error) {
 	request := &tree.AddRequest{
 		Body: &tree.AddRequest_Body{
@@ -472,6 +480,7 @@ func (c *TreeClient) addNode(ctx context.Context, cnrID *cid.ID, treeID string, 
 			TreeId:      treeID,
 			ParentId:    parent,
 			Meta:        metaToKV(meta),
+			BearerToken: getBearer(ctx),
 		},
 	}
 
@@ -491,6 +500,7 @@ func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID *cid.ID, treeID st
 			Path:          path,
 			Meta:          metaToKV(meta),
 			PathAttribute: fileNameKV,
+			BearerToken:   getBearer(ctx),
 		},
 	}
 
@@ -519,6 +529,7 @@ func (c *TreeClient) removeNode(ctx context.Context, cnrID *cid.ID, treeID strin
 			ContainerId: []byte(cnrID.String()),
 			TreeId:      treeID,
 			NodeId:      nodeID,
+			BearerToken: getBearer(ctx),
 		},
 	}
 	_, err := c.service.Remove(ctx, r)
