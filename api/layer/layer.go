@@ -3,10 +3,13 @@ package layer
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"net/url"
 	"strings"
+
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -541,10 +544,30 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 	})
 }
 
+func getRandomOID() (*oid.ID, error) {
+	b := [32]byte{}
+	if _, err := rand.Read(b[:]); err != nil {
+		return nil, err
+	}
+
+	var objID oid.ID
+	objID.SetSHA256(b)
+	return &objID, nil
+}
+
 // DeleteObject removes all objects with the passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if !isRegularVersion(obj.VersionID) {
+func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, _ *data.BucketSettings, obj *VersionedObject) *VersionedObject {
+	if !isRegularVersion(obj.VersionID) { // version null or empty
+		randOID, err := getRandomOID()
+		if err != nil {
+			obj.Error = fmt.Errorf("couldn't get random oid: %w", err)
+			return obj
+		}
+		obj.DeleteMarkVersion = randOID.EncodeToString()
 		newVersion := &NodeVersion{
+			BaseNodeVersion: BaseNodeVersion{
+				OID: *randOID,
+			},
 			IsDeleteMarker: true,
 			IsUnversioned:  obj.VersionID == unversionedObjectVersionID,
 		}
