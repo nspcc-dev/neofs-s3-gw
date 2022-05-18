@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type objectVersions struct {
@@ -55,11 +53,6 @@ const (
 
 func newObjectVersions(name string) *objectVersions {
 	return &objectVersions{name: name}
-}
-
-func (v *objectVersions) isAddListEmpty() bool {
-	v.sort()
-	return len(v.addList) == 0
 }
 
 func (v *objectVersions) appendVersion(oi *data.ObjectInfo) {
@@ -182,23 +175,6 @@ func (v *objectVersions) isEmpty() bool {
 	return v == nil || len(v.objects) == 0
 }
 
-func (v *objectVersions) unversioned() []*data.ObjectInfo {
-	if len(v.objects) == 0 {
-		return nil
-	}
-
-	existedVersions := v.existedVersions()
-	res := make([]*data.ObjectInfo, 0, len(v.objects))
-
-	for _, version := range v.objects {
-		if contains(existedVersions, version.Version()) && version.Headers[versionsUnversionedAttr] == "true" {
-			res = append(res, version)
-		}
-	}
-
-	return res
-}
-
 func (v *objectVersions) getLast(opts ...VersionOption) *data.ObjectInfo {
 	if v.isEmpty() {
 		return nil
@@ -267,22 +243,6 @@ func (v *objectVersions) getAddHeader() string {
 	return strings.Join(v.addList, ",")
 }
 
-func (v *objectVersions) getDelHeader() string {
-	return strings.Join(v.delList, ",")
-}
-
-func (v *objectVersions) getVersion(obj oid.ID) *data.ObjectInfo {
-	strObj := obj.EncodeToString()
-	for _, version := range v.objects {
-		if version.Version() == strObj {
-			if contains(v.delList, strObj) {
-				return nil
-			}
-			return version
-		}
-	}
-	return nil
-}
 func (n *layer) PutBucketVersioning(ctx context.Context, p *PutSettingsParams) (*data.ObjectInfo, error) {
 	metadata := map[string]string{
 		attrSettingsVersioningEnabled: strconv.FormatBool(p.Settings.VersioningEnabled),
@@ -382,28 +342,4 @@ func contains(list []string, elem string) bool {
 		}
 	}
 	return false
-}
-
-func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) (*data.ObjectInfo, error) {
-	versions, err := n.headVersions(ctx, bkt, obj.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	var version *data.ObjectInfo
-	if obj.VersionID == unversionedObjectVersionID {
-		version = versions.getLast(FromUnversioned())
-	} else {
-		var id oid.ID
-		if err = id.DecodeString(obj.VersionID); err != nil {
-			return nil, errors.GetAPIError(errors.ErrInvalidVersion)
-		}
-		version = versions.getVersion(id)
-	}
-
-	if version == nil {
-		return nil, errors.GetAPIError(errors.ErrInvalidVersion)
-	}
-
-	return version, nil
 }
