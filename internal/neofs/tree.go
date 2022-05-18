@@ -110,7 +110,7 @@ func newNodeVersion(node *tree.GetNodeByPathResponse_Info) (*layer.NodeVersion, 
 	return &layer.NodeVersion{
 		BaseNodeVersion: layer.BaseNodeVersion{
 			ID:  node.NodeId,
-			OID: treeNode.ObjID,
+			OID: *treeNode.ObjID,
 		},
 		IsUnversioned:  isUnversioned,
 		IsDeleteMarker: isDeleteMarker,
@@ -319,6 +319,10 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 	meta := map[string]string{
 		oidKV:    version.OID.EncodeToString(),
 		attrPath: path[len(path)-1],
+	}
+
+	if version.IsDeleteMarker {
+		meta[isDeleteMarkerKV] = "true"
 	}
 
 	if version.IsUnversioned {

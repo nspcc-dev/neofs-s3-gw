@@ -207,7 +207,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		return nil, err
 	}
 
-	newVersion.OID = id
+	newVersion.OID = *id
 	if err = n.treeService.AddVersion(ctx, &p.BktInfo.CID, p.Object, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
@@ -337,7 +337,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
-	meta, err := n.objectHead(ctx, bkt, *node.OID)
+	meta, err := n.objectHead(ctx, bkt, node.OID)
 	if err != nil {
 		return nil, err
 	}
