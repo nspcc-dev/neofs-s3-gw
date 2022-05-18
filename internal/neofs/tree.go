@@ -321,6 +321,10 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 		attrPath: path[len(path)-1],
 	}
 
+	if version.IsDeleteMarker {
+		meta[isDeleteMarkerKV] = "true"
+	}
+
 	if version.IsUnversioned {
 		meta[isUnversionedKV] = "true"
 
