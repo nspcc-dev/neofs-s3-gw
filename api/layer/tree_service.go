@@ -55,7 +55,7 @@ type NodeVersion struct {
 
 type BaseNodeVersion struct {
 	ID  uint64
-	OID *oid.ID
+	OID oid.ID
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
