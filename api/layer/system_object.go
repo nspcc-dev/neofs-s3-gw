@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"go.uber.org/zap"
 )
@@ -44,6 +43,9 @@ func (n *layer) HeadSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 
 	node, err := n.treeService.GetSystemVersion(ctx, bkt.CID, objName)
 	if err != nil {
+		if errorsStd.Is(err, ErrNodeNotFound) {
+			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
+		}
 		return nil, err
 	}
 
@@ -132,30 +134,6 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	return objInfoFromMeta(p.BktInfo, meta), nil
 }
 
-func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketInfo, objName string) (*object.Object, error) {
-	versions, err := n.headSystemVersions(ctx, bkt, objName)
-	if err != nil {
-		return nil, err
-	}
-
-	objInfo := versions.getLast()
-
-	var addr address.Address
-
-	addr.SetContainerID(*bkt.CID)
-	addr.SetObjectID(*objInfo.ID)
-
-	obj, err := n.objectGet(ctx, &addr)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(obj.Payload()) == 0 {
-		return nil, errors.GetAPIError(errors.ErrInternalError)
-	}
-	return obj, nil
-}
-
 func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName string) (*data.CORSConfiguration, error) {
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
@@ -193,43 +171,6 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	}
 
 	return cors, nil
-}
-
-func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
-	f := &findParams{
-		attr: [2]string{objectSystemAttributeName, sysName},
-		cid:  bkt.CID,
-	}
-	ids, err := n.objectSearch(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-
-	versions := newObjectVersions(sysName)
-	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, ids[i])
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", &ids[i]),
-				zap.Stringer("bucket id", bkt.CID),
-				zap.Error(err))
-			continue
-		}
-
-		if oi := objInfoFromMeta(bkt, meta); oi != nil {
-			if !isSystem(oi) {
-				continue
-			}
-			versions.appendVersion(oi)
-		}
-	}
-
-	lastVersion := versions.getLast()
-	if lastVersion == nil {
-		return nil, errors.GetAPIError(errors.ErrNoSuchKey)
-	}
-
-	return versions, nil
 }
 
 // systemObjectKey is a key to use in SystemCache.
