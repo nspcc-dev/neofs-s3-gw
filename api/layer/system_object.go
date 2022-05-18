@@ -47,7 +47,7 @@ func (n *layer) HeadSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, bkt, *node.OID)
+	meta, err := n.objectHead(ctx, bkt, node.OID)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		return nil, err
 	}
 
-	newVersion := &BaseNodeVersion{OID: id}
+	newVersion := &BaseNodeVersion{OID: *id}
 	if err = n.treeService.AddSystemVersion(ctx, &p.BktInfo.CID, p.ObjName, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}

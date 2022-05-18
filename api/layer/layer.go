@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"fmt"
@@ -21,7 +20,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -248,6 +246,8 @@ type (
 const (
 	tagPrefix    = "S3-Tag-"
 	tagEmptyMark = "\\"
+
+	emptyOID = "11111111111111111111111111111111"
 )
 
 func (t *VersionedObject) String() string {
@@ -540,79 +540,55 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 
 // DeleteObject removes all objects with the passed nice name.
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	var (
-		err error
-		ids []oid.ID
-	)
-
-	p := &PutObjectParams{
-		BktInfo: bkt,
-		Object:  obj.Name,
-		Reader:  bytes.NewReader(nil),
-		Header:  map[string]string{},
-	}
-
-	// Current implementation doesn't consider "unversioned" mode (so any deletion creates "delete-mark" object).
-	// The reason is difficulties to determinate whether versioning mode is "unversioned" or "suspended".
-
-	if obj.VersionID == unversionedObjectVersionID || !settings.VersioningEnabled && len(obj.VersionID) == 0 {
-		p.Header[versionsUnversionedAttr] = "true"
-		versions, err := n.headVersions(ctx, bkt, obj.Name)
-		if err != nil {
-			obj.Error = err
+	if !isRegularVersion(obj.VersionID) {
+		newVersion := &NodeVersion{
+			IsDeleteMarker: true,
+			IsUnversioned:  obj.VersionID == unversionedObjectVersionID,
+		}
+		if obj.Error = n.treeService.AddVersion(ctx, &bkt.CID, obj.Name, newVersion); obj.Error != nil {
 			return obj
 		}
-		last := versions.getLast(FromUnversioned())
-		if last == nil {
-			return obj
-		}
-		p.Header[VersionsDeleteMarkAttr] = last.Version()
-
-		for _, unversioned := range versions.unversioned() {
-			ids = append(ids, unversioned.ID)
-		}
-	} else if len(obj.VersionID) != 0 {
-		version, err := n.checkVersionsExist(ctx, bkt, obj)
-		if err != nil {
-			obj.Error = err
-			return obj
-		}
-		ids = []oid.ID{version.ID}
-		if version.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
-			obj.DeleteMarkVersion = version.Version()
-		}
-
-		p.Header[versionsDelAttr] = obj.VersionID
-		p.Header[VersionsDeleteMarkAttr] = version.Version()
 	} else {
-		p.Header[VersionsDeleteMarkAttr] = DelMarkFullObject
+		if obj.VersionID == emptyOID {
+			obj.Error = errors.GetAPIError(errors.ErrInvalidVersion)
+			return obj
+		}
+
+		versions, err := n.treeService.GetVersions(ctx, &bkt.CID, obj.Name)
+		if err != nil {
+			obj.Error = err
+			return obj
+		}
+
+		var found bool
+		for _, version := range versions {
+			if version.OID.EncodeToString() == obj.VersionID {
+				if err = n.treeService.RemoveVersion(ctx, &bkt.CID, version.ID); err == nil {
+					if err = n.objectDelete(ctx, bkt, version.OID); err == nil {
+						if err = n.DeleteObjectTagging(ctx, bkt, &data.ObjectInfo{ID: version.OID, Bucket: bkt.Name, Name: obj.Name}); err == nil {
+							found = true
+							break
+						}
+					}
+				}
+				obj.Error = err
+				return obj
+			}
+		}
+
+		if !found {
+			obj.Error = errors.GetAPIError(errors.ErrNoSuchVersion)
+			return obj
+		}
 	}
 
-	for _, id := range ids {
-		if err = n.objectDelete(ctx, bkt, id); err != nil {
-			obj.Error = err
-			return obj
-		}
-		if err = n.DeleteObjectTagging(ctx, bkt, &data.ObjectInfo{ID: id, Bucket: bkt.Name, Name: obj.Name}); err != nil {
-			obj.Error = err
-			return obj
-		}
-	}
 	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 
-	objInfo, err := n.PutObject(ctx, p)
-	if err != nil {
-		obj.Error = err
-		return obj
-	}
-	if len(obj.VersionID) == 0 {
-		obj.DeleteMarkVersion = objInfo.Version()
-		if settings.VersioningEnabled {
-			obj.DeleteMarkerEtag = objInfo.HashSum
-		}
-	}
-
 	return obj
+}
+
+func isRegularVersion(version string) bool {
+	return len(version) != 0 && version != unversionedObjectVersionID
 }
 
 // DeleteObjects from the storage.
