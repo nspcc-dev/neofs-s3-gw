@@ -44,6 +44,9 @@ func (n *layer) HeadSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 
 	node, err := n.treeService.GetSystemVersion(ctx, &bkt.CID, objName)
 	if err != nil {
+		if errorsStd.Is(err, ErrNodeNotFound) {
+			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
+		}
 		return nil, err
 	}
 
