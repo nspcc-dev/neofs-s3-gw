@@ -339,7 +339,7 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 				return err
 			}
 
-			return c.moveNode(ctx, cnrID, treeID, version.ID, parentID, meta)
+			return c.moveNode(ctx, cnrID, treeID, node.ID, parentID, meta)
 		}
 
 		if !errors.Is(err, layer.ErrNodeNotFound) {

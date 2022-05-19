@@ -9,8 +9,6 @@ import (
 	"net/url"
 	"strings"
 
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -23,6 +21,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -248,8 +247,6 @@ type (
 const (
 	tagPrefix    = "S3-Tag-"
 	tagEmptyMark = "\\"
-
-	emptyOID = "11111111111111111111111111111111"
 )
 
 func (t *VersionedObject) String() string {
@@ -550,54 +547,39 @@ func getRandomOID() (*oid.ID, error) {
 }
 
 // DeleteObject removes all objects with the passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, _ *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if !isRegularVersion(obj.VersionID) { // version null or empty
+func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
+	if len(obj.VersionID) == 0 || obj.VersionID == unversionedObjectVersionID {
 		randOID, err := getRandomOID()
 		if err != nil {
 			obj.Error = fmt.Errorf("couldn't get random oid: %w", err)
 			return obj
 		}
-		obj.DeleteMarkVersion = randOID.String()
+
+		obj.DeleteMarkVersion = unversionedObjectVersionID
 		newVersion := &NodeVersion{
 			BaseNodeVersion: BaseNodeVersion{
 				OID: *randOID,
 			},
 			IsDeleteMarker: true,
-			IsUnversioned:  obj.VersionID == unversionedObjectVersionID,
+			IsUnversioned:  true,
 		}
+
+		if len(obj.VersionID) == 0 && settings.VersioningEnabled {
+			newVersion.IsUnversioned = false
+			obj.DeleteMarkVersion = randOID.String()
+		}
+
 		if obj.Error = n.treeService.AddVersion(ctx, bkt.CID, obj.Name, newVersion); obj.Error != nil {
 			return obj
 		}
 	} else {
-		if obj.VersionID == emptyOID {
-			obj.Error = errors.GetAPIError(errors.ErrInvalidVersion)
-			return obj
-		}
-
 		versions, err := n.treeService.GetVersions(ctx, bkt.CID, obj.Name)
 		if err != nil {
 			obj.Error = err
 			return obj
 		}
 
-		var found bool
-		for _, version := range versions {
-			if version.OID.String() == obj.VersionID {
-				if err = n.treeService.RemoveVersion(ctx, bkt.CID, version.ID); err == nil {
-					if err = n.objectDelete(ctx, bkt.CID, &version.OID); err == nil {
-						if err = n.DeleteObjectTagging(ctx, bkt, &data.ObjectInfo{ID: &version.OID, Bucket: bkt.Name, Name: obj.Name}); err == nil {
-							found = true
-							break
-						}
-					}
-				}
-				obj.Error = err
-				return obj
-			}
-		}
-
-		if !found {
-			obj.Error = errors.GetAPIError(errors.ErrNoSuchVersion)
+		if obj.DeleteMarkVersion, obj.Error = n.removeVersionIfFound(ctx, bkt, versions, obj); obj.Error != nil {
 			return obj
 		}
 	}
@@ -607,8 +589,28 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, _ *data.
 	return obj
 }
 
-func isRegularVersion(version string) bool {
-	return len(version) != 0 && version != unversionedObjectVersionID
+func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, versions []*NodeVersion, obj *VersionedObject) (string, error) {
+	for _, version := range versions {
+		if version.OID.String() != obj.VersionID {
+			continue
+		}
+
+		var deleteMarkVersion string
+		if version.IsDeleteMarker {
+			deleteMarkVersion = obj.VersionID
+		}
+
+		if err := n.treeService.RemoveVersion(ctx, bkt.CID, version.ID); err != nil {
+			return deleteMarkVersion, err
+		}
+		if err := n.objectDelete(ctx, bkt.CID, &version.OID); err != nil {
+			return deleteMarkVersion, err
+		}
+
+		return deleteMarkVersion, n.DeleteObjectTagging(ctx, bkt, &data.ObjectInfo{ID: &version.OID, Bucket: bkt.Name, Name: obj.Name})
+	}
+
+	return "", errors.GetAPIError(errors.ErrNoSuchVersion)
 }
 
 // DeleteObjects from the storage.
