@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -199,7 +200,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	id, err := n.objectPut(ctx, prm)
+	id, hash, err := n.objectPutAndHash(ctx, prm)
 	if err != nil {
 		return nil, err
 	}
@@ -217,15 +218,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 				return nil, err
 			}
 		}
-	}
-
-	meta, err := n.objectHead(ctx, p.BktInfo.CID, *id)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = n.objCache.Put(*meta); err != nil {
-		n.log.Error("couldn't cache an object", zap.Error(err))
 	}
 
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
@@ -247,21 +239,18 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	payloadChecksum, _ := meta.PayloadChecksum()
-
 	return &data.ObjectInfo{
 		ID:  id,
 		CID: p.BktInfo.CID,
 
-		Owner:         &own,
-		Bucket:        p.BktInfo.Name,
-		Name:          p.Object,
-		Size:          p.Size,
-		Created:       time.Now(),
-		CreationEpoch: meta.CreationEpoch(),
-		Headers:       p.Header,
-		ContentType:   p.Header[api.ContentType],
-		HashSum:       hex.EncodeToString(payloadChecksum.Value()),
+		Owner:       &own,
+		Bucket:      p.BktInfo.Name,
+		Name:        p.Object,
+		Size:        p.Size,
+		Created:     time.Now(),
+		Headers:     p.Header,
+		ContentType: p.Header[api.ContentType],
+		HashSum:     hex.EncodeToString(hash),
 	}, nil
 }
 
@@ -461,6 +450,18 @@ func (n *layer) objectPut(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.
 
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	return id, n.transformNeofsError(ctx, err)
+}
+
+// objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
+// Returns object ID and payload sha256 hash.
+func (n *layer) objectPutAndHash(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.ID, []byte, error) {
+	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+	hash := sha256.New()
+	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
+		hash.Write(buf)
+	})
+	id, err := n.neoFS.CreateObject(ctx, prm)
+	return id, hash.Sum(nil), n.transformNeofsError(ctx, err)
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.
@@ -711,4 +712,23 @@ func (n *layer) transformNeofsError(ctx context.Context, err error) error {
 	}
 
 	return err
+}
+
+func wrapReader(input io.Reader, bufSize int, f func(buf []byte)) io.Reader {
+	r, w := io.Pipe()
+	go func() {
+		var buf = make([]byte, bufSize)
+		for {
+			n, err := input.Read(buf)
+			if n > 0 {
+				f(buf[:n])
+				_, _ = w.Write(buf[:n]) // ignore error, input is not ReadCloser
+			}
+			if err != nil {
+				_ = w.CloseWithError(err)
+				break
+			}
+		}
+	}()
+	return r
 }
