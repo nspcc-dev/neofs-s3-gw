@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -404,6 +405,14 @@ func (c *TreeClient) getParent(ctx context.Context, cnrID *cid.ID, treeID string
 	resp, err := cli.Recv()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get sub tree: %w", err)
+	}
+
+	for {
+		if _, err = cli.Recv(); err == io.EOF {
+			break
+		} else if err != nil {
+			return 0, fmt.Errorf("failed to read out sub tree stream: %w", err)
+		}
 	}
 
 	return resp.GetBody().GetParentId(), nil
