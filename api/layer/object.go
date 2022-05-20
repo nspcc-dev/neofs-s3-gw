@@ -487,17 +487,9 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 }
 
 func (n *layer) listSortedObjects(ctx context.Context, p allObjectParams) ([]*data.ObjectInfo, error) {
-	versions, err := n.getAllObjectsVersions(ctx, p.Bucket, p.Prefix, p.Delimiter)
+	objects, err := n.getLatestObjectsVersions(ctx, p.Bucket, p.Prefix, p.Delimiter)
 	if err != nil {
 		return nil, err
-	}
-
-	objects := make([]*data.ObjectInfo, 0, len(versions))
-	for _, v := range versions {
-		lastVersion := v.getLast()
-		if lastVersion != nil {
-			objects = append(objects, lastVersion)
-		}
 	}
 
 	sort.Slice(objects, func(i, j int) bool {
@@ -507,10 +499,49 @@ func (n *layer) listSortedObjects(ctx context.Context, p allObjectParams) ([]*da
 	return objects, nil
 }
 
+func (n *layer) getLatestObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) ([]*data.ObjectInfo, error) {
+	var err error
+
+	cacheKey := cache.CreateObjectsListCacheKey(&bkt.CID, prefix, true)
+	ids := n.listsCache.Get(cacheKey)
+
+	if ids == nil {
+		ids, err = n.treeService.GetLatestVersionsByPrefix(ctx, &bkt.CID, prefix)
+		if err != nil {
+			return nil, err
+		}
+		if err := n.listsCache.Put(cacheKey, ids); err != nil {
+			n.log.Error("couldn't cache list of objects", zap.Error(err))
+		}
+	}
+
+	objectsMap := make(map[string]*data.ObjectInfo, len(ids)) // to squash the same directories
+	for i := 0; i < len(ids); i++ {
+		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt.CID, ids[i])
+		if obj == nil {
+			continue
+		}
+		if oi := objectInfoFromMeta(bkt, obj, prefix, delimiter); oi != nil {
+			if isSystem(oi) {
+				continue
+			}
+
+			objectsMap[oi.Name] = oi
+		}
+	}
+
+	objects := make([]*data.ObjectInfo, 0, len(objectsMap))
+	for _, obj := range objectsMap {
+		objects = append(objects, obj)
+	}
+
+	return objects, nil
+}
+
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string]*objectVersions, error) {
 	var err error
 
-	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix)
+	cacheKey := cache.CreateObjectsListCacheKey(&bkt.CID, prefix, false)
 	ids := n.listsCache.Get(cacheKey)
 
 	if ids == nil {
