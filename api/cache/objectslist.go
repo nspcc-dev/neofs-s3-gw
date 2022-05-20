@@ -31,8 +31,9 @@ type (
 
 	// ObjectsListKey is a key to find a ObjectsListCache's entry.
 	ObjectsListKey struct {
-		cid    string
-		prefix string
+		cid        string
+		prefix     string
+		latestOnly bool
 	}
 )
 
@@ -93,11 +94,12 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 	}
 }
 
-// CreateObjectsListCacheKey returns ObjectsListKey with the given CID and prefix.
-func CreateObjectsListCacheKey(cnr cid.ID, prefix string) ObjectsListKey {
+// CreateObjectsListCacheKey returns ObjectsListKey with the given CID, prefix and latestOnly flag.
+func CreateObjectsListCacheKey(cnr *cid.ID, prefix string, latestOnly bool) ObjectsListKey {
 	p := ObjectsListKey{
-		cid:    cnr.EncodeToString(),
-		prefix: prefix,
+		cid:        cnr.EncodeToString(),
+		prefix:     prefix,
+		latestOnly: latestOnly,
 	}
 
 	return p
