@@ -30,27 +30,17 @@ type TreeService interface {
 	// DeleteBucketCORS removes a node from a system tree and returns objID which must be deleted in NeoFS
 	DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error)
 
-	GetVersions(ctx context.Context, cnrID *cid.ID, objectName string) ([]*NodeVersion, error)
-	GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*NodeVersion, error)
+	GetVersions(ctx context.Context, cnrID *cid.ID, objectName string) ([]*data.NodeVersion, error)
+	GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error)
 	GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]oid.ID, error)
-	GetUnversioned(ctx context.Context, cnrID *cid.ID, objectName string) (*NodeVersion, error)
-	AddVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *NodeVersion) error
+	GetAllVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error)
+	GetUnversioned(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error)
+	AddVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *data.NodeVersion) error
 	RemoveVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 
-	AddSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *BaseNodeVersion) error
-	GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*BaseNodeVersion, error)
+	AddSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *data.BaseNodeVersion) error
+	GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.BaseNodeVersion, error)
 	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
-}
-
-type NodeVersion struct {
-	BaseNodeVersion
-	IsDeleteMarker bool
-	IsUnversioned  bool
-}
-
-type BaseNodeVersion struct {
-	ID  uint64
-	OID oid.ID
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
