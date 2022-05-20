@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -16,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -42,7 +44,12 @@ const (
 	fileNameKV          = "FileName"
 	systemNameKV        = "SystemName"
 	isUnversionedKV     = "IsUnversioned"
-	isDeleteMarkerKV    = "IdDeleteMarker"
+
+	// keys for delete marker nodes
+	isDeleteMarkerKV = "IdDeleteMarker"
+	filePathKV       = "FilePath"
+	ownerKV          = "Owner"
+	createdKV        = "Created"
 
 	settingsFileName  = "bucket-settings"
 	notifConfFileName = "bucket-notifications"
@@ -111,23 +118,50 @@ func (n *TreeNode) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func newNodeVersion(node NodeResponse) (*layer.NodeVersion, error) {
+func newNodeVersion(node NodeResponse) (*data.NodeVersion, error) {
 	treeNode, err := newTreeNode(node)
 	if err != nil {
 		return nil, fmt.Errorf("invalid tree node: %w", err)
 	}
 
+	return newNodeVersionFromTreeNode(treeNode), nil
+}
+
+func newNodeVersionFromTreeNode(treeNode *TreeNode) *data.NodeVersion {
 	_, isUnversioned := treeNode.Get(isUnversionedKV)
 	_, isDeleteMarker := treeNode.Get(isDeleteMarkerKV)
 
-	return &layer.NodeVersion{
-		BaseNodeVersion: layer.BaseNodeVersion{
-			ID:  treeNode.ID,
-			OID: treeNode.ObjID,
+	version := &data.NodeVersion{
+		BaseNodeVersion: data.BaseNodeVersion{
+			ID:        treeNode.ID,
+			OID:       treeNode.ObjID,
+			Timestamp: treeNode.TimeStamp,
 		},
-		IsUnversioned:  isUnversioned,
-		IsDeleteMarker: isDeleteMarker,
-	}, nil
+		IsUnversioned: isUnversioned,
+	}
+
+	if isDeleteMarker {
+		filePath, _ := treeNode.Get(filePathKV)
+
+		var created time.Time
+		if createdStr, ok := treeNode.Get(createdKV); ok {
+			if utcMilli, err := strconv.ParseInt(createdStr, 10, 64); err == nil {
+				created = time.UnixMilli(utcMilli)
+			}
+		}
+
+		var owner user.ID
+		if ownerStr, ok := treeNode.Get(ownerKV); ok {
+			_ = owner.DecodeString(ownerStr)
+		}
+
+		version.DeleteMarker = &data.DeleteMarkerInfo{
+			FilePath: filePath,
+			Created:  created,
+			Owner:    owner,
+		}
+	}
+	return version
 }
 
 func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID) (*data.BucketSettings, error) {
@@ -240,11 +274,11 @@ func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.
 	return nil, nil
 }
 
-func (c *TreeClient) GetVersions(ctx context.Context, cnrID *cid.ID, filepath string) ([]*layer.NodeVersion, error) {
+func (c *TreeClient) GetVersions(ctx context.Context, cnrID *cid.ID, filepath string) ([]*data.NodeVersion, error) {
 	return c.getVersions(ctx, cnrID, versionTree, filepath, false)
 }
 
-func (c *TreeClient) GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*layer.NodeVersion, error) {
+func (c *TreeClient) GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
 	meta := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
 	path := pathFromName(objectName)
 
@@ -266,20 +300,14 @@ func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.I
 	tailPrefix := path[len(path)-1]
 
 	if len(path) > 1 {
-		meta := []string{fileNameKV}
-
-		nodes, err := c.getNodes(ctx, cnrID, versionTree, fileNameKV, path[:len(path)-1], meta, true)
+		var err error
+		rootID, err = c.getPrefixNodeID(ctx, cnrID, path[:len(path)-1])
 		if err != nil {
+			if errors.Is(err, layer.ErrNodeNotFound) {
+				return nil, nil
+			}
 			return nil, err
 		}
-		if len(nodes) == 0 {
-			return nil, nil
-		}
-		if len(nodes) != 1 {
-			return nil, layer.ErrNodeNotFound
-		}
-
-		rootID = nodes[0].NodeId
 	}
 
 	subTree, err := c.getSubTree(ctx, cnrID, versionTree, rootID, 1)
@@ -289,16 +317,44 @@ func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.I
 
 	var result []oid.ID
 	for _, node := range subTree {
-		if node.GetNodeId() != 0 && hasPrefix(node, tailPrefix) {
-			latestNodes, err := c.getSubTreeLatestVersions(ctx, cnrID, node.GetNodeId())
+		if node.GetNodeId() != rootID && hasPrefix(node, tailPrefix) {
+			latestNodes, err := c.getSubTreeVersions(ctx, cnrID, node.GetNodeId(), true)
 			if err != nil {
 				return nil, err
 			}
-			result = append(result, latestNodes...)
+
+			for _, latest := range latestNodes {
+				result = append(result, latest.OID)
+			}
 		}
 	}
 
 	return result, nil
+}
+
+func (c *TreeClient) getPrefixNodeID(ctx context.Context, cnrID *cid.ID, prefixPath []string) (uint64, error) {
+	meta := []string{fileNameKV, oidKV}
+
+	nodes, err := c.getNodes(ctx, cnrID, versionTree, fileNameKV, prefixPath, meta, false)
+	if err != nil {
+		return 0, err
+	}
+
+	var intermediateNodes []uint64
+	for _, node := range nodes {
+		if !hasOID(node) {
+			intermediateNodes = append(intermediateNodes, node.GetNodeId())
+		}
+	}
+
+	if len(intermediateNodes) == 0 {
+		return 0, layer.ErrNodeNotFound
+	}
+	if len(intermediateNodes) > 1 {
+		return 0, fmt.Errorf("found more than one intermediate nodes")
+	}
+
+	return intermediateNodes[0], nil
 }
 
 func hasPrefix(node *tree.GetSubTreeResponse_Body, prefix string) bool {
@@ -311,7 +367,17 @@ func hasPrefix(node *tree.GetSubTreeResponse_Body, prefix string) bool {
 	return false
 }
 
-func (c *TreeClient) getSubTreeLatestVersions(ctx context.Context, cnrID *cid.ID, nodeID uint64) ([]oid.ID, error) {
+func hasOID(node *tree.GetNodeByPathResponse_Info) bool {
+	for _, kv := range node.GetMeta() {
+		if kv.GetKey() == oidKV {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *TreeClient) getSubTreeVersions(ctx context.Context, cnrID *cid.ID, nodeID uint64, latestOnly bool) ([]*data.NodeVersion, error) {
 	subTree, err := c.getSubTree(ctx, cnrID, versionTree, nodeID, maxGetSubTreeDepth)
 	if err != nil {
 		return nil, err
@@ -319,10 +385,10 @@ func (c *TreeClient) getSubTreeLatestVersions(ctx context.Context, cnrID *cid.ID
 
 	var emptyOID oid.ID
 
-	latestVersions := make(map[string]*TreeNode, len(subTree))
+	versions := make(map[string][]*data.NodeVersion, len(subTree))
 	for _, node := range subTree {
 		treeNode, err := newTreeNode(node)
-		if err != nil || treeNode.ObjID.Equals(emptyOID) { // invalid OID attribute
+		if err != nil || treeNode.ObjID.Equals(emptyOID) { // invalid or empty OID attribute
 			continue
 		}
 		fileName, ok := treeNode.Get(fileNameKV)
@@ -331,18 +397,24 @@ func (c *TreeClient) getSubTreeLatestVersions(ctx context.Context, cnrID *cid.ID
 		}
 
 		key := formLatestNodeKey(node.GetParentId(), fileName)
-		latest, ok := latestVersions[key]
-		if !ok || latest.TimeStamp <= treeNode.TimeStamp { // todo also compare oid
-			latestVersions[key] = treeNode
+		versionNodes, ok := versions[key]
+		if !ok {
+			versionNodes = []*data.NodeVersion{newNodeVersionFromTreeNode(treeNode)}
+		} else if !latestOnly {
+			versionNodes = append(versionNodes, newNodeVersionFromTreeNode(treeNode))
+		} else if versionNodes[0].Timestamp <= treeNode.TimeStamp {
+			versionNodes[0] = newNodeVersionFromTreeNode(treeNode)
 		}
+
+		versions[key] = versionNodes
 	}
 
-	result := make([]oid.ID, 0, len(latestVersions))
-	for _, treeNode := range latestVersions {
-		if _, ok := treeNode.Get(isDeleteMarkerKV); ok {
+	result := make([]*data.NodeVersion, 0, len(versions)) // consider use len(subTree)
+	for _, version := range versions {
+		if latestOnly && version[0].DeleteMarker != nil {
 			continue
 		}
-		result = append(result, treeNode.ObjID)
+		result = append(result, version...)
 	}
 
 	return result, nil
@@ -352,7 +424,42 @@ func formLatestNodeKey(parentID uint64, fileName string) string {
 	return strconv.FormatUint(parentID, 10) + fileName
 }
 
-func (c *TreeClient) GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*layer.BaseNodeVersion, error) {
+func (c *TreeClient) GetAllVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
+	var rootID uint64
+	path := strings.Split(prefix, separator)
+	tailPrefix := path[len(path)-1]
+
+	if len(path) > 1 {
+		var err error
+		rootID, err = c.getPrefixNodeID(ctx, cnrID, path[:len(path)-1])
+		if err != nil {
+			if errors.Is(err, layer.ErrNodeNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+	}
+
+	subTree, err := c.getSubTree(ctx, cnrID, versionTree, rootID, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*data.NodeVersion
+	for _, node := range subTree {
+		if node.GetNodeId() != rootID && hasPrefix(node, tailPrefix) {
+			versions, err := c.getSubTreeVersions(ctx, cnrID, node.GetNodeId(), false)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, versions...)
+		}
+	}
+
+	return result, nil
+}
+
+func (c *TreeClient) GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.BaseNodeVersion, error) {
 	meta := []string{oidKV}
 	path := pathFromName(objectName)
 
@@ -363,7 +470,7 @@ func (c *TreeClient) GetSystemVersion(ctx context.Context, cnrID *cid.ID, object
 	return &node.BaseNodeVersion, nil
 }
 
-func (c *TreeClient) getLatestVersion(ctx context.Context, cnrID *cid.ID, treeID, attrPath string, path, meta []string) (*layer.NodeVersion, error) {
+func (c *TreeClient) getLatestVersion(ctx context.Context, cnrID *cid.ID, treeID, attrPath string, path, meta []string) (*data.NodeVersion, error) {
 	nodes, err := c.getNodes(ctx, cnrID, treeID, attrPath, path, meta, true)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -379,11 +486,11 @@ func (c *TreeClient) getLatestVersion(ctx context.Context, cnrID *cid.ID, treeID
 	return newNodeVersion(nodes[0])
 }
 
-func (c *TreeClient) GetUnversioned(ctx context.Context, cnrID *cid.ID, filepath string) (*layer.NodeVersion, error) {
+func (c *TreeClient) GetUnversioned(ctx context.Context, cnrID *cid.ID, filepath string) (*data.NodeVersion, error) {
 	return c.getUnversioned(ctx, cnrID, versionTree, filepath)
 }
 
-func (c *TreeClient) getUnversioned(ctx context.Context, cnrID *cid.ID, treeID, filepath string) (*layer.NodeVersion, error) {
+func (c *TreeClient) getUnversioned(ctx context.Context, cnrID *cid.ID, treeID, filepath string) (*data.NodeVersion, error) {
 	nodes, err := c.getVersions(ctx, cnrID, treeID, filepath, true)
 	if err != nil {
 		return nil, err
@@ -400,12 +507,12 @@ func (c *TreeClient) getUnversioned(ctx context.Context, cnrID *cid.ID, treeID, 
 	return nodes[0], nil
 }
 
-func (c *TreeClient) AddVersion(ctx context.Context, cnrID *cid.ID, filepath string, version *layer.NodeVersion) error {
+func (c *TreeClient) AddVersion(ctx context.Context, cnrID *cid.ID, filepath string, version *data.NodeVersion) error {
 	return c.addVersion(ctx, cnrID, versionTree, fileNameKV, filepath, version)
 }
 
-func (c *TreeClient) AddSystemVersion(ctx context.Context, cnrID *cid.ID, filepath string, version *layer.BaseNodeVersion) error {
-	newVersion := &layer.NodeVersion{
+func (c *TreeClient) AddSystemVersion(ctx context.Context, cnrID *cid.ID, filepath string, version *data.BaseNodeVersion) error {
+	newVersion := &data.NodeVersion{
 		BaseNodeVersion: *version,
 		IsUnversioned:   true,
 	}
@@ -428,15 +535,18 @@ func (c *TreeClient) Close() error {
 	return nil
 }
 
-func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attrPath, filepath string, version *layer.NodeVersion) error {
+func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attrPath, filepath string, version *data.NodeVersion) error {
 	path := pathFromName(filepath)
 	meta := map[string]string{
 		oidKV:    version.OID.EncodeToString(),
 		attrPath: path[len(path)-1],
 	}
 
-	if version.IsDeleteMarker {
+	if version.DeleteMarker != nil {
 		meta[isDeleteMarkerKV] = "true"
+		meta[filePathKV] = version.DeleteMarker.FilePath
+		meta[ownerKV] = version.DeleteMarker.Owner.EncodeToString()
+		meta[createdKV] = strconv.FormatInt(version.DeleteMarker.Created.UTC().UnixMilli(), 10)
 	}
 
 	if version.IsUnversioned {
@@ -460,7 +570,7 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 	return c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
 }
 
-func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*layer.NodeVersion, error) {
+func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*data.NodeVersion, error) {
 	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
 	path := pathFromName(filepath)
 	nodes, err := c.getNodes(ctx, cnrID, treeID, fileNameKV, path, keysToReturn, false)
@@ -471,7 +581,7 @@ func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, fil
 		return nil, fmt.Errorf("couldn't get nodes: %w", err)
 	}
 
-	result := make([]*layer.NodeVersion, 0, len(nodes))
+	result := make([]*data.NodeVersion, 0, len(nodes))
 	for _, node := range nodes {
 		nodeVersion, err := newNodeVersion(node)
 		if err != nil {

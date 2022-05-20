@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -559,12 +560,16 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		obj.DeleteMarkVersion = unversionedObjectVersionID
-		newVersion := &NodeVersion{
-			BaseNodeVersion: BaseNodeVersion{
+		newVersion := &data.NodeVersion{
+			BaseNodeVersion: data.BaseNodeVersion{
 				OID: *randOID,
 			},
-			IsDeleteMarker: true,
-			IsUnversioned:  true,
+			DeleteMarker: &data.DeleteMarkerInfo{
+				FilePath: obj.Name,
+				Created:  time.Now(),
+				Owner:    n.Owner(ctx),
+			},
+			IsUnversioned: true,
 		}
 
 		if len(obj.VersionID) == 0 && settings.VersioningEnabled {
@@ -592,14 +597,14 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	return obj
 }
 
-func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, versions []*NodeVersion, obj *VersionedObject) (string, error) {
+func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, versions []*data.NodeVersion, obj *VersionedObject) (string, error) {
 	for _, version := range versions {
 		if version.OID.EncodeToString() != obj.VersionID {
 			continue
 		}
 
 		var deleteMarkVersion string
-		if version.IsDeleteMarker {
+		if version.DeleteMarker != nil {
 			deleteMarkVersion = obj.VersionID
 		}
 
