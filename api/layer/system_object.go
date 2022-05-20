@@ -121,7 +121,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		return nil, err
 	}
 
-	newVersion := &BaseNodeVersion{OID: *id}
+	newVersion := &data.BaseNodeVersion{OID: *id}
 	if err = n.treeService.AddSystemVersion(ctx, p.BktInfo.CID, p.ObjName, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}

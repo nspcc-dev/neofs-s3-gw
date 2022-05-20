@@ -30,9 +30,10 @@ type (
 
 	// ObjectInfo holds S3 object data.
 	ObjectInfo struct {
-		ID    *oid.ID
-		CID   *cid.ID
-		IsDir bool
+		ID             *oid.ID
+		CID            *cid.ID
+		IsDir          bool
+		IsDeleteMarker bool
 
 		Bucket        string
 		Name          string
