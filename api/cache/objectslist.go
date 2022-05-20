@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
@@ -78,6 +79,21 @@ func (l *ObjectsListCache) Get(key ObjectsListKey) []oid.ID {
 	return result
 }
 
+// GetVersions returns a list of ObjectInfo.
+func (l *ObjectsListCache) GetVersions(key ObjectsListKey) []*data.NodeVersion {
+	entry, err := l.cache.Get(key)
+	if err != nil {
+		return nil
+	}
+
+	result, ok := entry.([]*data.NodeVersion)
+	if !ok {
+		return nil
+	}
+
+	return result
+}
+
 // Put puts a list of objects to cache.
 func (l *ObjectsListCache) Put(key ObjectsListKey, oids []oid.ID) error {
 	if len(oids) == 0 {
@@ -85,6 +101,15 @@ func (l *ObjectsListCache) Put(key ObjectsListKey, oids []oid.ID) error {
 	}
 
 	return l.cache.Set(key, oids)
+}
+
+// PutVersions puts a list of object versions to cache.
+func (l *ObjectsListCache) PutVersions(key ObjectsListKey, versions []*data.NodeVersion) error {
+	if len(versions) == 0 {
+		return fmt.Errorf("list versions is empty, cid: %s, prefix: %s", key.cid, key.prefix)
+	}
+
+	return l.cache.Set(key, versions)
 }
 
 // CleanCacheEntriesContainingObject deletes entries containing specified object.

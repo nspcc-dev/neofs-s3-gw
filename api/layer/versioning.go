@@ -267,7 +267,6 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	var (
 		allObjects = make([]*data.ObjectInfo, 0, p.MaxKeys)
 		res        = &ListObjectVersionsInfo{}
-		reverse    = true
 	)
 
 	versions, err := n.getAllObjectsVersions(ctx, p.BktInfo, p.Prefix, p.Delimiter)
@@ -282,7 +281,14 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	sort.Strings(sortedNames)
 
 	for _, name := range sortedNames {
-		allObjects = append(allObjects, versions[name].getFiltered(reverse)...)
+		sortedVersions := versions[name]
+		sort.Slice(sortedVersions, func(i, j int) bool {
+			return sortedVersions[j].NodeVersion.Timestamp < sortedVersions[i].NodeVersion.Timestamp // sort in reverse order
+		})
+
+		for _, version := range sortedVersions {
+			allObjects = append(allObjects, version.ObjectInfo)
+		}
 	}
 
 	for i, obj := range allObjects {
@@ -325,7 +331,7 @@ func triageVersions(objVersions []*ObjectVersionInfo) ([]*ObjectVersionInfo, []*
 	var resDelMarkVersions []*ObjectVersionInfo
 
 	for _, version := range objVersions {
-		if version.Object.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
+		if version.Object.IsDeleteMarker {
 			resDelMarkVersions = append(resDelMarkVersions, version)
 		} else {
 			resVersion = append(resVersion, version)
