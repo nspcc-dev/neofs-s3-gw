@@ -56,7 +56,11 @@ const (
 	systemTree = "system"
 
 	separator = "/"
+
+	maxGetSubTreeDepth = 10 // current limit on storage node side
 )
+
+var emptyOID oid.ID
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
 func NewTreeClient(addr string, key *keys.PrivateKey) (*TreeClient, error) {
@@ -74,7 +78,13 @@ func NewTreeClient(addr string, key *keys.PrivateKey) (*TreeClient, error) {
 	}, nil
 }
 
-func newTreeNode(nodeInfo *tree.GetNodeByPathResponse_Info) (*TreeNode, error) {
+type NodeResponse interface {
+	GetMeta() []*tree.KeyValue
+	GetNodeId() uint64
+	GetTimestamp() uint64
+}
+
+func newTreeNode(nodeInfo NodeResponse) (*TreeNode, error) {
 	var objID oid.ID
 	meta := make(map[string]string, len(nodeInfo.GetMeta()))
 
@@ -92,7 +102,7 @@ func newTreeNode(nodeInfo *tree.GetNodeByPathResponse_Info) (*TreeNode, error) {
 	return &TreeNode{
 		ID:        nodeInfo.GetNodeId(),
 		ObjID:     objID,
-		TimeStamp: nodeInfo.Timestamp,
+		TimeStamp: nodeInfo.GetTimestamp(),
 		Meta:      meta,
 	}, nil
 }
@@ -102,7 +112,7 @@ func (n *TreeNode) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func newNodeVersion(node *tree.GetNodeByPathResponse_Info) (*layer.NodeVersion, error) {
+func newNodeVersion(node NodeResponse) (*layer.NodeVersion, error) {
 	treeNode, err := newTreeNode(node)
 	if err != nil {
 		return nil, fmt.Errorf("invalid tree node: %w", err)
@@ -113,7 +123,7 @@ func newNodeVersion(node *tree.GetNodeByPathResponse_Info) (*layer.NodeVersion, 
 
 	return &layer.NodeVersion{
 		BaseNodeVersion: layer.BaseNodeVersion{
-			ID:  node.NodeId,
+			ID:  treeNode.ID,
 			OID: treeNode.ObjID,
 		},
 		IsUnversioned:  isUnversioned,
@@ -240,6 +250,96 @@ func (c *TreeClient) GetLatestVersion(ctx context.Context, cnrID *cid.ID, object
 	path := strings.Split(objectName, separator)
 
 	return c.getLatestVersion(ctx, cnrID, versionTree, fileNameKV, path, meta)
+}
+
+func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]oid.ID, error) {
+	var rootID uint64
+	path := strings.Split(prefix, separator)
+	tailPrefix := path[len(path)-1]
+
+	if len(path) > 1 {
+		meta := []string{fileNameKV}
+
+		nodes, err := c.getNodes(ctx, cnrID, versionTree, fileNameKV, path[:len(path)-1], meta, true)
+		if err != nil {
+			return nil, err
+		}
+		if len(nodes) == 0 {
+			return nil, nil
+		}
+		if len(nodes) != 1 {
+			return nil, layer.ErrNodeNotFound
+		}
+
+		rootID = nodes[0].NodeId
+	}
+
+	subTree, err := c.getSubTree(ctx, cnrID, versionTree, rootID, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []oid.ID
+	for _, node := range subTree {
+		if node.GetNodeId() != 0 && hasPrefix(node, tailPrefix) {
+			latestNodes, err := c.getSubTreeLatestVersions(ctx, cnrID, node.GetNodeId())
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, latestNodes...)
+		}
+	}
+
+	return result, nil
+}
+
+func hasPrefix(node *tree.GetSubTreeResponse_Body, prefix string) bool {
+	for _, kv := range node.GetMeta() {
+		if kv.GetKey() == fileNameKV {
+			return strings.HasPrefix(string(kv.GetValue()), prefix)
+		}
+	}
+
+	return false
+}
+
+func (c *TreeClient) getSubTreeLatestVersions(ctx context.Context, cnrID *cid.ID, nodeID uint64) ([]oid.ID, error) {
+	subTree, err := c.getSubTree(ctx, cnrID, versionTree, nodeID, maxGetSubTreeDepth)
+	if err != nil {
+		return nil, err
+	}
+
+	latestVersions := make(map[string]*TreeNode, len(subTree))
+	for _, node := range subTree {
+		treeNode, err := newTreeNode(node)
+		if err != nil || treeNode.ObjID.Equals(emptyOID) { // invalid OID attribute
+			continue
+		}
+		fileName, ok := treeNode.Get(fileNameKV)
+		if !ok {
+			continue
+		}
+
+		key := formLatestNodeKey(node.GetParentId(), fileName)
+		latest, ok := latestVersions[key]
+		if !ok || latest.TimeStamp <= treeNode.TimeStamp { // todo also compare oid
+			latestVersions[key] = treeNode
+		}
+	}
+
+	result := make([]oid.ID, 0, len(latestVersions))
+	for _, treeNode := range latestVersions {
+		if _, ok := treeNode.Get(isDeleteMarkerKV); ok {
+			continue
+		}
+		result = append(result, treeNode.ObjID)
+	}
+
+	return result, nil
+}
+
+func formLatestNodeKey(parentID uint64, fileName string) string {
+	return strconv.FormatUint(parentID, 10) + fileName
 }
 
 func (c *TreeClient) GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*layer.BaseNodeVersion, error) {
@@ -379,11 +479,21 @@ func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, fil
 }
 
 func (c *TreeClient) getParent(ctx context.Context, cnrID *cid.ID, treeID string, id uint64) (uint64, error) {
+	subTree, err := c.getSubTree(ctx, cnrID, treeID, id, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	return subTree[0].GetParentId(), nil
+}
+
+func (c *TreeClient) getSubTree(ctx context.Context, cnrID *cid.ID, treeID string, rootID uint64, depth uint32) ([]*tree.GetSubTreeResponse_Body, error) {
 	request := &tree.GetSubTreeRequest{
 		Body: &tree.GetSubTreeRequest_Body{
 			ContainerId: cnrID[:],
 			TreeId:      treeID,
-			RootId:      id,
+			RootId:      rootID,
+			Depth:       depth,
 			BearerToken: getBearer(ctx),
 		},
 	}
@@ -394,28 +504,32 @@ func (c *TreeClient) getParent(ctx context.Context, cnrID *cid.ID, treeID string
 			Sign: sign,
 		}
 	}); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	cli, err := c.service.GetSubTree(ctx, request)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get sub tree client: %w", err)
+		if strings.Contains(err.Error(), "not found") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get sub tree client: %w", err)
 	}
 
-	resp, err := cli.Recv()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get sub tree: %w", err)
-	}
-
+	var subtree []*tree.GetSubTreeResponse_Body
 	for {
-		if _, err = cli.Recv(); err == io.EOF {
+		resp, err := cli.Recv()
+		if err == io.EOF {
 			break
 		} else if err != nil {
-			return 0, fmt.Errorf("failed to read out sub tree stream: %w", err)
+			if strings.Contains(err.Error(), "not found") {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("failed to get sub tree: %w", err)
 		}
+		subtree = append(subtree, resp.Body)
 	}
 
-	return resp.GetBody().GetParentId(), nil
+	return subtree, nil
 }
 
 func metaFromSettings(settings *data.BucketSettings) map[string]string {
@@ -474,7 +588,7 @@ func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAt
 
 	resp, err := c.service.GetNodeByPath(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get node path deb: %w", err)
+		return nil, fmt.Errorf("failed to get node path: %w", err)
 	}
 
 	return resp.GetBody().GetNodes(), nil
