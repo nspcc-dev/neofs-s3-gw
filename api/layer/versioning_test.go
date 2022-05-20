@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
+	treetest "github.com/nspcc-dev/neofs-s3-gw/internal/neofstest/tree"
 	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
@@ -165,8 +166,9 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	}
 
 	layerCfg := &Config{
-		Caches:  config,
-		AnonKey: AnonymousKey{Key: key},
+		Caches:      config,
+		AnonKey:     AnonymousKey{Key: key},
+		TreeService: treetest.NewTreeService(),
 	}
 
 	return &testContext{
@@ -197,9 +199,8 @@ func TestSimpleVersioning(t *testing.T) {
 	obj1Content2 := []byte("content obj1 v2")
 	obj1v2 := tc.putObject(obj1Content2)
 
-	objv2, buffer2 := tc.getObject(tc.obj, "", false)
+	_, buffer2 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, obj1Content2, buffer2)
-	require.Contains(t, objv2.Headers[versionsAddAttr], obj1v1.ID.String())
 
 	_, buffer1 := tc.getObject(tc.obj, obj1v1.ID.String(), false)
 	require.Equal(t, obj1Content1, buffer1)
@@ -216,9 +217,8 @@ func TestSimpleNoVersioning(t *testing.T) {
 	obj1Content2 := []byte("content obj1 v2")
 	obj1v2 := tc.putObject(obj1Content2)
 
-	objv2, buffer2 := tc.getObject(tc.obj, "", false)
+	_, buffer2 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, obj1Content2, buffer2)
-	require.Contains(t, objv2.Headers[versionsDelAttr], obj1v1.ID.String())
 
 	tc.getObject(tc.obj, obj1v1.ID.String(), true)
 	tc.checkListObjects(obj1v2.ID)
