@@ -47,6 +47,7 @@ const (
 	settingsFileName  = "bucket-settings"
 	notifConfFileName = "bucket-notifications"
 	corsFilename      = "bucket-cors"
+	emptyFileName     = "<empty>" // to handle trailing slash in name
 
 	// versionTree -- ID of a tree with object versions.
 	versionTree = "version"
@@ -245,9 +246,18 @@ func (c *TreeClient) GetVersions(ctx context.Context, cnrID *cid.ID, filepath st
 
 func (c *TreeClient) GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*layer.NodeVersion, error) {
 	meta := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
-	path := strings.Split(objectName, separator)
+	path := pathFromName(objectName)
 
 	return c.getLatestVersion(ctx, cnrID, versionTree, fileNameKV, path, meta)
+}
+
+// pathFromName splits name by '/' and add an empty marker if name has trailing slash.
+func pathFromName(objectName string) []string {
+	path := strings.Split(objectName, separator)
+	if path[len(path)-1] == "" {
+		path[len(path)-1] = emptyFileName
+	}
+	return path
 }
 
 func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]oid.ID, error) {
@@ -344,7 +354,7 @@ func formLatestNodeKey(parentID uint64, fileName string) string {
 
 func (c *TreeClient) GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*layer.BaseNodeVersion, error) {
 	meta := []string{oidKV}
-	path := strings.Split(objectName, separator)
+	path := pathFromName(objectName)
 
 	node, err := c.getLatestVersion(ctx, cnrID, systemTree, systemNameKV, path, meta)
 	if err != nil {
@@ -419,7 +429,7 @@ func (c *TreeClient) Close() error {
 }
 
 func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attrPath, filepath string, version *layer.NodeVersion) error {
-	path := strings.Split(filepath, separator)
+	path := pathFromName(filepath)
 	meta := map[string]string{
 		oidKV:    version.OID.String(),
 		attrPath: path[len(path)-1],
@@ -452,7 +462,7 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 
 func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*layer.NodeVersion, error) {
 	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
-	path := strings.Split(filepath, separator)
+	path := pathFromName(filepath)
 	nodes, err := c.getNodes(ctx, cnrID, treeID, fileNameKV, path, keysToReturn, false)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
