@@ -42,3 +42,11 @@ type ObjectTaggingInfo struct {
 	ObjName   string
 	VersionID string
 }
+
+// MultipartInfo is multipart upload information.
+type MultipartInfo struct {
+	UploadID string
+	Owner    user.ID
+	Created  time.Time
+	Meta     map[string]string
+}

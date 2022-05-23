@@ -100,8 +100,6 @@ const (
 )
 
 func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
-	/* initiation of multipart uploads is implemented via creation of "system" upload part with 0 part number
-	(min value of partNumber of a common part is 1) and holding data: metadata, acl, tagging */
 	reqInfo := api.GetReqInfo(r.Context())
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
@@ -110,22 +108,19 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var (
-		hasData bool
-		b       []byte
+	uploadID := uuid.New()
+	additional := []zap.Field{
+		zap.String("uploadID", uploadID.String()),
+		zap.String("Key", reqInfo.ObjectName),
+	}
 
-		uploadID   = uuid.New()
-		data       = &UploadData{}
-		additional = []zap.Field{
-			zap.String("uploadID", uploadID.String()),
-			zap.String("Key", reqInfo.ObjectName),
-		}
-		uploadInfo = &layer.UploadInfoParams{
+	p := &layer.CreateMultipartParams{
+		Info: &layer.UploadInfoParams{
 			UploadID: uploadID.String(),
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
-		}
-	)
+		},
+	}
 
 	if containsACLHeaders(r) {
 		key, err := h.bearerTokenIssuerKey(r.Context())
@@ -133,59 +128,60 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
 			return
 		}
-		data.ACL, err = parseACLHeaders(r.Header, key)
-		if err != nil {
+		if _, err = parseACLHeaders(r.Header, key); err != nil {
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return
 		}
-		hasData = true
+		p.ACLHeaders = formACLHeadersForMultipart(r.Header)
 	}
 
 	if len(r.Header.Get(api.AmzTagging)) > 0 {
-		data.TagSet, err = parseTaggingHeader(r.Header)
+		p.TagSet, err = parseTaggingHeader(r.Header)
 		if err != nil {
 			h.logAndSendError(w, "could not parse tagging", reqInfo, err, additional...)
 			return
 		}
-		hasData = true
 	}
 
-	metadata := parseMetadata(r)
+	p.Header = parseMetadata(r)
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
-		metadata[api.ContentType] = contentType
+		p.Header[api.ContentType] = contentType
 	}
 
-	p := &layer.UploadPartParams{
-		Info:       uploadInfo,
-		PartNumber: 0,
-		Header:     metadata,
-	}
-
-	if hasData {
-		b, err = json.Marshal(data)
-		if err != nil {
-			h.logAndSendError(w, "could not marshal json with acl and/or tagging", reqInfo, err, additional...)
-			return
-		}
-		p.Reader = bytes.NewReader(b)
-	}
-
-	info, err := h.obj.UploadPart(r.Context(), p)
-	if err != nil {
+	if err = h.obj.CreateMultipartUpload(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not upload a part", reqInfo, err, additional...)
 		return
 	}
 
 	resp := InitiateMultipartUploadResponse{
-		Bucket:   info.Bucket,
-		Key:      info.Headers[layer.UploadKeyAttributeName],
-		UploadID: info.Headers[layer.UploadIDAttributeName],
+		Bucket:   reqInfo.BucketName,
+		Key:      reqInfo.ObjectName,
+		UploadID: uploadID.String(),
 	}
 
 	if err = api.EncodeToResponse(w, resp); err != nil {
 		h.logAndSendError(w, "could not encode InitiateMultipartUploadResponse to response", reqInfo, err, additional...)
 		return
 	}
+}
+
+func formACLHeadersForMultipart(header http.Header) map[string]string {
+	result := make(map[string]string)
+
+	if value := header.Get(api.AmzACL); value != "" {
+		result[api.AmzACL] = value
+	}
+	if value := header.Get(api.AmzGrantRead); value != "" {
+		result[api.AmzGrantRead] = value
+	}
+	if value := header.Get(api.AmzGrantFullControl); value != "" {
+		result[api.AmzGrantFullControl] = value
+	}
+	if value := header.Get(api.AmzGrantWrite); value != "" {
+		result[api.AmzGrantWrite] = value
+	}
+
+	return result
 }
 
 func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
