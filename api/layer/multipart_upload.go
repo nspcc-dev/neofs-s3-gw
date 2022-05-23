@@ -25,6 +25,9 @@ const (
 	UploadCompletedParts          = "S3-Completed-Parts"
 	UploadPartKeyPrefix           = ".upload-"
 
+	metaPrefix = "meta-"
+	aclPrefix  = "acl-"
+
 	MaxSizeUploadsList  = 1000
 	MaxSizePartsList    = 1000
 	UploadMinPartNumber = 1
@@ -40,12 +43,18 @@ type (
 		Key      string
 	}
 
+	CreateMultipartParams struct {
+		Info       *UploadInfoParams
+		Header     map[string]string
+		TagSet     map[string]string
+		ACLHeaders map[string]string
+	}
+
 	UploadPartParams struct {
 		Info       *UploadInfoParams
 		PartNumber int
 		Size       int64
 		Reader     io.Reader
-		Header     map[string]string
 	}
 
 	UploadCopyParams struct {
@@ -111,6 +120,29 @@ type (
 	}
 )
 
+func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error {
+	info := &data.MultipartInfo{
+		UploadID: p.Info.UploadID,
+		Owner:    n.Owner(ctx),
+		Created:  time.Now(),
+		Meta:     make(map[string]string, len(p.Header)+len(p.ACLHeaders)+len(p.TagSet)),
+	}
+
+	for key, val := range p.Header {
+		info.Meta[metaPrefix+key] = val
+	}
+
+	for key, val := range p.ACLHeaders {
+		info.Meta[aclPrefix+key] = val
+	}
+
+	for key, val := range p.TagSet {
+		info.Meta[tagPrefix+key] = val
+	}
+
+	return n.treeService.CreateMultipart(ctx, &p.Info.Bkt.CID, p.Info.Key, info)
+}
+
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error) {
 	if p.PartNumber != 0 {
 		if _, err := n.GetUploadInitInfo(ctx, p.Info); err != nil {
@@ -122,17 +154,13 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.Obje
 		return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
 	}
 
-	if p.Header == nil {
-		p.Header = make(map[string]string)
-	}
-
-	appendUploadHeaders(p.Header, p.Info.UploadID, p.Info.Key, p.PartNumber)
+	header := make(map[string]string)
+	appendUploadHeaders(header, p.Info.UploadID, p.Info.Key, p.PartNumber)
 
 	params := &PutSystemObjectParams{
 		BktInfo:  p.Info.Bkt,
 		ObjName:  FormUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
-		Metadata: p.Header,
-		Prefix:   "",
+		Metadata: header,
 		Reader:   p.Reader,
 	}
 
@@ -607,5 +635,4 @@ func uploadInfoFromMeta(meta *object.Object, prefix, delimiter string) *UploadIn
 func appendUploadHeaders(metadata map[string]string, uploadID, key string, partNumber int) {
 	metadata[UploadIDAttributeName] = uploadID
 	metadata[UploadPartNumberAttributeName] = strconv.Itoa(partNumber)
-	metadata[UploadKeyAttributeName] = key
 }

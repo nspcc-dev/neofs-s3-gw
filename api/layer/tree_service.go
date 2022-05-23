@@ -49,6 +49,8 @@ type TreeService interface {
 	AddSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *data.BaseNodeVersion) error
 	GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.BaseNodeVersion, error)
 	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+
+	CreateMultipart(ctx context.Context, cnrID *cid.ID, objectName string, info *data.MultipartInfo) error
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
