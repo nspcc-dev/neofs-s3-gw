@@ -60,8 +60,6 @@ const (
 	maxGetSubTreeDepth = 10 // current limit on storage node side
 )
 
-var emptyOID oid.ID
-
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
 func NewTreeClient(addr string, key *keys.PrivateKey) (*TreeClient, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -308,6 +306,8 @@ func (c *TreeClient) getSubTreeLatestVersions(ctx context.Context, cnrID *cid.ID
 	if err != nil {
 		return nil, err
 	}
+
+	var emptyOID oid.ID
 
 	latestVersions := make(map[string]*TreeNode, len(subTree))
 	for _, node := range subTree {
