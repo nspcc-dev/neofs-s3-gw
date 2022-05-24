@@ -236,10 +236,18 @@ func (t *TreeServiceMock) GetAllVersionsByPrefix(ctx context.Context, cnrID *cid
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) CreateMultipart(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
+func (t *TreeServiceMock) CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
 	panic("implement me")
 }
 
 func (t *TreeServiceMock) GetMultipartUploadsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.MultipartInfo, error) {
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) GetMultipartUpload(ctx context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error) {
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
 	panic("implement me")
 }

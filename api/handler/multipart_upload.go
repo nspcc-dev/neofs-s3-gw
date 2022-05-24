@@ -216,13 +216,13 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		Reader:     r.Body,
 	}
 
-	info, err := h.obj.UploadPart(r.Context(), p)
+	hash, err := h.obj.UploadPart(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not upload a part", reqInfo, err, additional...)
 		return
 	}
 
-	w.Header().Set(api.ETag, info.HashSum)
+	w.Header().Set(api.ETag, hash)
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
