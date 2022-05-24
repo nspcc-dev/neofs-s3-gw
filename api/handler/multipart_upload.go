@@ -584,19 +584,16 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var (
-		queryValues = reqInfo.URL.Query()
-		uploadID    = queryValues.Get(uploadIDHeaderName)
-		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+	uploadID := reqInfo.URL.Query().Get(uploadIDHeaderName)
+	additional := []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
 
-		p = &layer.UploadInfoParams{
-			UploadID: uploadID,
-			Bkt:      bktInfo,
-			Key:      reqInfo.ObjectName,
-		}
-	)
+	p := &layer.UploadInfoParams{
+		UploadID: uploadID,
+		Bkt:      bktInfo,
+		Key:      reqInfo.ObjectName,
+	}
 
-	if err := h.obj.AbortMultipartUpload(r.Context(), p); err != nil {
+	if err = h.obj.AbortMultipartUpload(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not abort multipart upload", reqInfo, err, additional...)
 		return
 	}

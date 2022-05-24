@@ -255,3 +255,7 @@ func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID *cid.ID, multipartN
 func (t *TreeServiceMock) GetParts(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
 	panic("implement me")
 }
+
+func (t *TreeServiceMock) DeleteMultipartUpload(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) error {
+	panic("implement me")
+}
