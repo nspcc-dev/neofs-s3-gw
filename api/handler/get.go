@@ -142,7 +142,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagSet, err := h.obj.GetObjectTagging(r.Context(), info)
+	t := &data.ObjectTaggingInfo{
+		CnrID:     info.CID,
+		ObjName:   info.Name,
+		VersionID: info.Version(),
+	}
+
+	tagSet, err := h.obj.GetObjectTagging(r.Context(), t)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
 		return

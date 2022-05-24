@@ -17,6 +17,21 @@ type TreeServiceMock struct {
 	system   map[string]map[string]*data.BaseNodeVersion
 }
 
+func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 var ErrNodeNotFound = errors.New("not found")
 
 func NewTreeService() *TreeServiceMock {
@@ -203,5 +218,20 @@ func (t *TreeServiceMock) RemoveSystemVersion(ctx context.Context, cnrID *cid.ID
 }
 
 func (t *TreeServiceMock) GetAllVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) (map[string]string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *TreeServiceMock) DeleteObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) error {
+	//TODO implement me
 	panic("implement me")
 }

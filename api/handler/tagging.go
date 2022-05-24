@@ -9,8 +9,8 @@ import (
 	"unicode"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
 const (
@@ -36,24 +36,13 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
+	p := &data.ObjectTaggingInfo{
+		CnrID:     bktInfo.CID,
+		ObjName:   reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get("versionId"),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
-		return
-	}
-
-	p2 := &layer.PutTaggingParams{
-		ObjectInfo: objInfo,
-		TagSet:     tagSet,
-	}
-
-	if err = h.obj.PutObjectTagging(r.Context(), p2); err != nil {
+	if err = h.obj.PutObjectTagging(r.Context(), p, tagSet); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
@@ -62,6 +51,7 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 
 func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
+	versionID := reqInfo.URL.Query().Get("versionId")
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
@@ -69,25 +59,19 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get("versionId"),
+	p := &data.ObjectTaggingInfo{
+		CnrID:     bktInfo.CID,
+		ObjName:   reqInfo.ObjectName,
+		VersionID: versionID,
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
-		return
-	}
-
-	tagSet, err := h.obj.GetObjectTagging(r.Context(), objInfo)
+	tagSet, err := h.obj.GetObjectTagging(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 		return
 	}
 
-	w.Header().Set(api.AmzVersionID, objInfo.Version())
+	w.Header().Set(api.AmzVersionID, versionID)
 	if err = api.EncodeToResponse(w, encodeTagging(tagSet)); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
@@ -102,19 +86,13 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
+	p := &data.ObjectTaggingInfo{
+		CnrID:     bktInfo.CID,
+		ObjName:   reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get("versionId"),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
-		return
-	}
-
-	if err = h.obj.DeleteObjectTagging(r.Context(), bktInfo, objInfo); err != nil {
+	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
 	}
