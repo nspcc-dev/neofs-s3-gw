@@ -30,6 +30,10 @@ type TreeService interface {
 	// DeleteBucketCORS removes a node from a system tree and returns objID which must be deleted in NeoFS
 	DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error)
 
+	GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error)
+	PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error
+	DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) error
+
 	GetVersions(ctx context.Context, cnrID *cid.ID, objectName string) ([]*data.NodeVersion, error)
 	GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error)
 	GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]oid.ID, error)
