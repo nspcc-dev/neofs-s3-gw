@@ -848,6 +848,27 @@ func (c *TreeClient) AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID
 	return oldObjIDToDelete, c.moveNode(ctx, cnrID, systemTree, foundPartID, multipartNodeID, meta)
 }
 
+func (c *TreeClient) GetParts(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
+	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*data.PartInfo, 0, len(parts))
+	for _, part := range parts {
+		if part.GetNodeId() == multipartNodeID {
+			continue
+		}
+		partInfo, err := newPartInfo(part)
+		if err != nil {
+			continue
+		}
+		result = append(result, partInfo)
+	}
+
+	return result, nil
+}
+
 func (c *TreeClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
