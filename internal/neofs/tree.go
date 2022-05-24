@@ -55,6 +55,7 @@ const (
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "isTag"
 	uploadIDKV          = "UploadId"
+	partNumberKV        = "Number"
 
 	// keys for delete marker nodes.
 	isDeleteMarkerKV = "IdDeleteMarker"
@@ -179,6 +180,7 @@ func newNodeVersionFromTreeNode(treeNode *TreeNode) *data.NodeVersion {
 
 func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 	multipartInfo := &data.MultipartInfo{
+		ID:   node.GetNodeId(),
 		Meta: make(map[string]string, len(node.GetMeta())),
 	}
 
@@ -204,6 +206,27 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 	}
 
 	return multipartInfo, nil
+}
+
+func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
+	partInfo := &data.PartInfo{}
+
+	for _, kv := range node.GetMeta() {
+		switch kv.GetKey() {
+		case partNumberKV:
+			partInfo.Number, _ = strconv.Atoi(string(kv.GetValue()))
+		case oidKV:
+			if err := partInfo.OID.DecodeString(string(kv.GetValue())); err != nil {
+				return nil, fmt.Errorf("invalid oid: %w", err)
+			}
+		}
+	}
+
+	if partInfo.Number <= 0 {
+		return nil, fmt.Errorf("it's not a part node")
+	}
+
+	return partInfo, nil
 }
 
 func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID *cid.ID) (*data.BucketSettings, error) {
@@ -720,7 +743,7 @@ func (c *TreeClient) RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, id 
 	return c.removeNode(ctx, cnrID, systemTree, id)
 }
 
-func (c *TreeClient) CreateMultipart(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
+func (c *TreeClient) CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
 	path := pathFromName(info.Key)
 	meta := metaFromMultipart(info)
 
@@ -761,6 +784,68 @@ func (c *TreeClient) getSubTreeMultipartUploads(ctx context.Context, cnrID *cid.
 	}
 
 	return result, nil
+}
+
+func (c *TreeClient) GetMultipartUpload(ctx context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error) {
+	path := pathFromName(objectName)
+	p := &getNodesParams{
+		CnrID:    cnrID,
+		TreeID:   systemTree,
+		Path:     path,
+		AllAttrs: true,
+	}
+
+	nodes, err := c.getNodes(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, node := range nodes {
+		info, err := newMultipartInfo(node)
+		if err != nil {
+			continue
+		}
+		if info.UploadID == uploadID {
+			return info, nil
+		}
+	}
+
+	return nil, layer.ErrNodeNotFound
+}
+
+func (c *TreeClient) AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
+	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	meta := map[string]string{
+		partNumberKV: strconv.Itoa(info.Number),
+		oidKV:        info.OID.EncodeToString(),
+	}
+
+	var foundPartID uint64
+	for _, part := range parts {
+		if part.GetNodeId() == multipartNodeID {
+			continue
+		}
+		partInfo, err := newPartInfo(part)
+		if err != nil {
+			continue
+		}
+		if partInfo.Number == info.Number {
+			foundPartID = part.GetNodeId()
+			oldObjIDToDelete = &partInfo.OID
+			break
+		}
+	}
+
+	if oldObjIDToDelete == nil {
+		_, err = c.addNode(ctx, cnrID, systemTree, multipartNodeID, meta)
+		return nil, err
+	}
+
+	return oldObjIDToDelete, c.moveNode(ctx, cnrID, systemTree, foundPartID, multipartNodeID, meta)
 }
 
 func (c *TreeClient) Close() error {

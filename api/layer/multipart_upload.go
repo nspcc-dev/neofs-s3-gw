@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"encoding/hex"
 	stderrors "errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
@@ -140,49 +142,103 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		info.Meta[tagPrefix+key] = val
 	}
 
-	return n.treeService.CreateMultipart(ctx, &p.Info.Bkt.CID, info)
+	return n.treeService.CreateMultipartUpload(ctx, &p.Info.Bkt.CID, info)
 }
 
-func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error) {
-	if p.PartNumber != 0 {
-		if _, err := n.GetUploadInitInfo(ctx, p.Info); err != nil {
-			return nil, err
+func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, error) {
+	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, &p.Info.Bkt.CID, p.Info.Key, p.Info.UploadID)
+	if err != nil {
+		if stderrors.Is(err, ErrNodeNotFound) {
+			return "", errors.GetAPIError(errors.ErrNoSuchUpload)
 		}
+		return "", err
 	}
 
 	if p.Size > uploadMaxSize {
-		return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
+		return "", errors.GetAPIError(errors.ErrEntityTooLarge)
 	}
 
-	header := make(map[string]string)
-	appendUploadHeaders(header, p.Info.UploadID, p.Info.Key, p.PartNumber)
-
-	params := &PutSystemObjectParams{
-		BktInfo:  p.Info.Bkt,
-		ObjName:  FormUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
-		Metadata: header,
-		Reader:   p.Reader,
+	objInfo, err := n.uploadPart(ctx, multipartInfo, p)
+	if err != nil {
+		return "", err
 	}
 
-	return n.PutSystemObject(ctx, params)
+	return objInfo.HashSum, nil
 }
 
-func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error) {
-	if _, err := n.GetUploadInitInfo(ctx, p.Info); err != nil {
+func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadPartParams) (*data.ObjectInfo, error) {
+	bktInfo := p.Info.Bkt
+	prm := neofs.PrmObjectCreate{
+		Container:  bktInfo.CID,
+		Creator:    bktInfo.Owner,
+		Attributes: make([][2]string, 2),
+		Payload:    p.Reader,
+	}
+
+	prm.Attributes[0][0], prm.Attributes[0][1] = UploadIDAttributeName, p.Info.UploadID
+	prm.Attributes[1][0], prm.Attributes[1][1] = UploadPartNumberAttributeName, strconv.Itoa(p.PartNumber)
+
+	id, hash, err := n.objectPutAndHash(ctx, prm)
+	if err != nil {
 		return nil, err
 	}
 
-	if p.Range != nil {
-		if p.Range.End-p.Range.Start > uploadMaxSize {
-			return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
+	partInfo := &data.PartInfo{
+		Key:      p.Info.Key,
+		UploadID: p.Info.UploadID,
+		Number:   p.PartNumber,
+		OID:      *id,
+	}
+
+	oldPartID, err := n.treeService.AddPart(ctx, &bktInfo.CID, multipartInfo.ID, partInfo)
+	if err != nil {
+		return nil, err
+	}
+	if oldPartID != nil {
+		if err = n.objectDelete(ctx, bktInfo.CID, *oldPartID); err != nil {
+			n.log.Error("couldn't delete old part object", zap.Error(err),
+				zap.String("cnrID", bktInfo.CID.EncodeToString()),
+				zap.String("bucket name", bktInfo.Name),
+				zap.String("objID", oldPartID.EncodeToString()))
 		}
+	}
+
+	objInfo := &data.ObjectInfo{
+		ID:  *id,
+		CID: bktInfo.CID,
+
+		Owner:   bktInfo.Owner,
+		Bucket:  bktInfo.Name,
+		Size:    p.Size,
+		Created: time.Now(),
+		HashSum: hex.EncodeToString(hash),
+	}
+
+	if err = n.objCache.PutObject(objInfo); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
+	}
+
+	return objInfo, nil
+}
+
+func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error) {
+	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, &p.Info.Bkt.CID, p.Info.Key, p.Info.UploadID)
+	if err != nil {
+		if stderrors.Is(err, ErrNodeNotFound) {
+			return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
+		}
+		return nil, err
+	}
+
+	size := p.SrcObjInfo.Size
+	if p.Range != nil {
+		size = int64(p.Range.End - p.Range.Start)
 		if p.Range.End > uint64(p.SrcObjInfo.Size) {
 			return nil, errors.GetAPIError(errors.ErrInvalidCopyPartRangeSource)
 		}
-	} else {
-		if p.SrcObjInfo.Size > uploadMaxSize {
-			return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
-		}
+	}
+	if size > uploadMaxSize {
+		return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
 	}
 
 	metadata := make(map[string]string)
@@ -191,7 +247,7 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	pr, pw := io.Pipe()
 
 	go func() {
-		err := n.GetObject(ctx, &GetObjectParams{
+		err = n.GetObject(ctx, &GetObjectParams{
 			ObjectInfo: p.SrcObjInfo,
 			Writer:     pw,
 			Range:      p.Range,
@@ -202,13 +258,14 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 		}
 	}()
 
-	return n.PutSystemObject(ctx, &PutSystemObjectParams{
-		BktInfo:  p.Info.Bkt,
-		ObjName:  FormUploadPartName(p.Info.UploadID, p.Info.Key, p.PartNumber),
-		Metadata: metadata,
-		Prefix:   "",
-		Reader:   pr,
-	})
+	params := &UploadPartParams{
+		Info:       p.Info,
+		PartNumber: p.PartNumber,
+		Size:       size,
+		Reader:     pr,
+	}
+
+	return n.uploadPart(ctx, multipartInfo, params)
 }
 
 // implements io.Reader of payloads of the object list stored in the NeoFS network.
