@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -185,12 +184,6 @@ type (
 		Error             error
 	}
 
-	// PutTaggingParams stores tag set params.
-	PutTaggingParams struct {
-		ObjectInfo *data.ObjectInfo
-		TagSet     map[string]string
-	}
-
 	// Client provides S3 API client interface.
 	Client interface {
 		Initialize(ctx context.Context, c EventListener) error
@@ -213,13 +206,17 @@ type (
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		HeadSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) (*data.ObjectInfo, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
-		GetObjectTagging(ctx context.Context, p *data.ObjectInfo) (map[string]string, error)
+
 		GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
+		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
+		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
+
+		GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) (map[string]string, error)
+		PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo, tagSet map[string]string) error
+		DeleteObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) error
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error)
 		PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error)
-		PutObjectTagging(ctx context.Context, p *PutTaggingParams) error
-		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
 
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ObjectInfo, error)
 
@@ -229,8 +226,6 @@ type (
 
 		DeleteObjects(ctx context.Context, p *DeleteObjectParams) ([]*VersionedObject, error)
 		DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error
-		DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) error
-		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error)
 		UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error)
@@ -425,92 +420,6 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.O
 	return n.headVersion(ctx, p.BktInfo, p)
 }
 
-// GetObjectTagging from storage.
-func (n *layer) GetObjectTagging(ctx context.Context, oi *data.ObjectInfo) (map[string]string, error) {
-	bktInfo := &data.BucketInfo{
-		Name:  oi.Bucket,
-		CID:   oi.CID,
-		Owner: oi.Owner,
-	}
-
-	objInfo, err := n.HeadSystemObject(ctx, bktInfo, oi.TagsObject())
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		return nil, err
-	}
-
-	return formTagSet(objInfo), nil
-}
-
-// GetBucketTagging from storage.
-func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
-	objInfo, err := n.HeadSystemObject(ctx, bktInfo, formBucketTagObjectName(bktInfo.Name))
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		return nil, err
-	}
-
-	return formTagSet(objInfo), nil
-}
-
-func formTagSet(objInfo *data.ObjectInfo) map[string]string {
-	var tagSet map[string]string
-	if objInfo != nil {
-		tagSet = make(map[string]string, len(objInfo.Headers))
-		for k, v := range objInfo.Headers {
-			if strings.HasPrefix(k, tagPrefix) {
-				if v == tagEmptyMark {
-					v = ""
-				}
-				tagSet[strings.TrimPrefix(k, tagPrefix)] = v
-			}
-		}
-	}
-	return tagSet
-}
-
-// PutObjectTagging into storage.
-func (n *layer) PutObjectTagging(ctx context.Context, p *PutTaggingParams) error {
-	bktInfo := &data.BucketInfo{
-		Name:  p.ObjectInfo.Bucket,
-		CID:   p.ObjectInfo.CID,
-		Owner: p.ObjectInfo.Owner,
-	}
-
-	s := &PutSystemObjectParams{
-		BktInfo:  bktInfo,
-		ObjName:  p.ObjectInfo.TagsObject(),
-		Metadata: p.TagSet,
-		Prefix:   tagPrefix,
-		Reader:   nil,
-	}
-
-	_, err := n.PutSystemObject(ctx, s)
-	return err
-}
-
-// PutBucketTagging into storage.
-func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	s := &PutSystemObjectParams{
-		BktInfo:  bktInfo,
-		ObjName:  formBucketTagObjectName(bktInfo.Name),
-		Metadata: tagSet,
-		Prefix:   tagPrefix,
-		Reader:   nil,
-	}
-
-	_, err := n.PutSystemObject(ctx, s)
-	return err
-}
-
-// DeleteObjectTagging from storage.
-func (n *layer) DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) error {
-	return n.DeleteSystemObject(ctx, bktInfo, objInfo.TagsObject())
-}
-
-// DeleteBucketTagging from storage.
-func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
-	return n.DeleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bktInfo.Name))
-}
-
 // CopyObject from one bucket into another bucket.
 func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ObjectInfo, error) {
 	pr, pw := io.Pipe()
@@ -612,7 +521,12 @@ func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, 
 			return deleteMarkVersion, err
 		}
 
-		return deleteMarkVersion, n.DeleteObjectTagging(ctx, bkt, &data.ObjectInfo{ID: version.OID, Bucket: bkt.Name, Name: obj.Name})
+		p := &data.ObjectTaggingInfo{
+			CnrID:     &bkt.CID,
+			ObjName:   obj.Name,
+			VersionID: version.OID.EncodeToString(),
+		}
+		return deleteMarkVersion, n.DeleteObjectTagging(ctx, p)
 	}
 
 	return "", errors.GetAPIError(errors.ErrNoSuchVersion)
