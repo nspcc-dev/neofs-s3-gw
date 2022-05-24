@@ -14,7 +14,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
@@ -124,6 +123,7 @@ type (
 
 func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error {
 	info := &data.MultipartInfo{
+		Key:      p.Info.Key,
 		UploadID: p.Info.UploadID,
 		Owner:    n.Owner(ctx),
 		Created:  time.Now(),
@@ -142,7 +142,7 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		info.Meta[tagPrefix+key] = val
 	}
 
-	return n.treeService.CreateMultipart(ctx, &p.Info.Bkt.CID, p.Info.Key, info)
+	return n.treeService.CreateMultipart(ctx, &p.Info.Bkt.CID, info)
 }
 
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error) {
@@ -376,29 +376,16 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 		return &result, nil
 	}
 
-	f := &findParams{
-		attr: [2]string{UploadPartNumberAttributeName, "0"},
-		bkt:  p.Bkt,
-	}
-
-	ids, err := n.objectSearch(ctx, f)
+	multipartInfos, err := n.treeService.GetMultipartUploadsByPrefix(ctx, &p.Bkt.CID, p.Prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	uploads := make([]*UploadInfo, 0, len(ids))
+	uploads := make([]*UploadInfo, 0, len(multipartInfos))
 	uniqDirs := make(map[string]struct{})
 
-	for i := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt, ids[i])
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", &ids[i]),
-				zap.Stringer("bucket id", p.Bkt.CID),
-				zap.Error(err))
-			continue
-		}
-		info := uploadInfoFromMeta(meta, p.Prefix, p.Delimiter)
+	for _, multipartInfo := range multipartInfos {
+		info := uploadInfoFromMultipartInfo(multipartInfo, p.Prefix, p.Delimiter)
 		if info != nil {
 			if info.IsDir {
 				if _, ok := uniqDirs[info.Key]; ok {
@@ -599,22 +586,12 @@ func trimAfterUploadKey(key string, objects []*UploadInfo) []*UploadInfo {
 	return result
 }
 
-func uploadInfoFromMeta(meta *object.Object, prefix, delimiter string) *UploadInfo {
-	var (
-		isDir       bool
-		creation    time.Time
-		userHeaders = userHeaders(meta.Attributes())
-		key         = userHeaders[UploadKeyAttributeName]
-	)
+func uploadInfoFromMultipartInfo(uploadInfo *data.MultipartInfo, prefix, delimiter string) *UploadInfo {
+	var isDir bool
+	key := uploadInfo.Key
 
 	if !strings.HasPrefix(key, prefix) {
 		return nil
-	}
-
-	if val, ok := userHeaders[object.AttributeTimestamp]; ok {
-		if dt, err := strconv.ParseInt(val, 10, 64); err == nil {
-			creation = time.Unix(dt, 0)
-		}
 	}
 
 	if len(delimiter) > 0 {
@@ -629,9 +606,9 @@ func uploadInfoFromMeta(meta *object.Object, prefix, delimiter string) *UploadIn
 	return &UploadInfo{
 		IsDir:    isDir,
 		Key:      key,
-		UploadID: userHeaders[UploadIDAttributeName],
-		Owner:    *meta.OwnerID(),
-		Created:  creation,
+		UploadID: uploadInfo.UploadID,
+		Owner:    uploadInfo.Owner,
+		Created:  uploadInfo.Created,
 	}
 }
 
