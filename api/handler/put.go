@@ -253,8 +253,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		newEaclTable.SetSessionToken(sessionTokenEACL)
 	}
 
+	t := &data.ObjectTaggingInfo{
+		CnrID:     &info.CID,
+		ObjName:   info.Name,
+		VersionID: info.Version(),
+	}
 	if tagSet != nil {
-		if err = h.obj.PutObjectTagging(r.Context(), &layer.PutTaggingParams{ObjectInfo: info, TagSet: tagSet}); err != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
@@ -374,8 +379,14 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	t := &data.ObjectTaggingInfo{
+		CnrID:     &info.CID,
+		ObjName:   info.Name,
+		VersionID: info.Version(),
+	}
+
 	if tagSet != nil {
-		if err = h.obj.PutObjectTagging(r.Context(), &layer.PutTaggingParams{ObjectInfo: info, TagSet: tagSet}); err != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
