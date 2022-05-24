@@ -89,6 +89,20 @@ func (o *SystemCache) GetNotificationConfiguration(key string) *data.Notificatio
 	return result
 }
 
+func (o *SystemCache) GetObjectTagging(key string) map[string]string {
+	entry, err := o.cache.Get(key)
+	if err != nil {
+		return nil
+	}
+
+	result, ok := entry.(map[string]string)
+	if !ok {
+		return nil
+	}
+
+	return result
+}
+
 // PutObject puts an object to cache.
 func (o *SystemCache) PutObject(key string, obj *data.ObjectInfo) error {
 	return o.cache.Set(key, obj)
@@ -104,6 +118,10 @@ func (o *SystemCache) PutSettings(key string, settings *data.BucketSettings) err
 
 func (o *SystemCache) PutNotificationConfiguration(key string, obj *data.NotificationConfiguration) error {
 	return o.cache.Set(key, obj)
+}
+
+func (o *SystemCache) PutObjectTagging(key string, tagSet map[string]string) error {
+	return o.cache.Set(key, tagSet)
 }
 
 // Delete deletes an object from cache.

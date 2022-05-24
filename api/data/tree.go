@@ -3,6 +3,7 @@ package data
 import (
 	"time"
 
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
@@ -34,4 +35,10 @@ type BaseNodeVersion struct {
 	ID        uint64
 	OID       oid.ID
 	Timestamp uint64
+}
+
+type ObjectTaggingInfo struct {
+	CnrID     *cid.ID
+	ObjName   string
+	VersionID string
 }
