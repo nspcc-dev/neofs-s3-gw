@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
 	"encoding/xml"
 	"net/http"
 	"net/url"
@@ -87,11 +85,6 @@ type (
 		ETag         string `xml:"ETag"`
 		LastModified string `xml:"LastModified"`
 	}
-
-	UploadData struct {
-		TagSet map[string]string
-		ACL    *AccessControlPolicy
-	}
 )
 
 const (
@@ -120,6 +113,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
+		Data: &layer.UploadData{},
 	}
 
 	if containsACLHeaders(r) {
@@ -132,11 +126,11 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return
 		}
-		p.ACLHeaders = formACLHeadersForMultipart(r.Header)
+		p.Data.ACLHeaders = formACLHeadersForMultipart(r.Header)
 	}
 
 	if len(r.Header.Get(api.AmzTagging)) > 0 {
-		p.TagSet, err = parseTaggingHeader(r.Header)
+		p.Data.TagSet, err = parseTaggingHeader(r.Header)
 		if err != nil {
 			h.logAndSendError(w, "could not parse tagging", reqInfo, err, additional...)
 			return
@@ -351,7 +345,6 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			Key:      reqInfo.ObjectName,
 		}
 		additional = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
-		uploadData = &UploadData{}
 	)
 
 	reqBody := new(CompleteMultipartUpload)
@@ -365,41 +358,11 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	initPart, err := h.obj.GetUploadInitInfo(r.Context(), uploadInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get multipart upload info", reqInfo, err, additional...)
-		return
-	}
-
-	if initPart.Size > 0 {
-		initPartPayload := bytes.NewBuffer(make([]byte, 0, initPart.Size))
-		p := &layer.GetObjectParams{
-			ObjectInfo: initPart,
-			Writer:     initPartPayload,
-		}
-		if err = h.obj.GetObject(r.Context(), p); err != nil {
-			h.logAndSendError(w, "could not get multipart upload acl and/or tagging", reqInfo, err, additional...)
-			return
-		}
-
-		if err = json.Unmarshal(initPartPayload.Bytes(), uploadData); err != nil {
-			h.logAndSendError(w, "could not unmarshal multipart upload acl and/or tagging", reqInfo, err, additional...)
-			return
-		}
-
-		if uploadData.ACL != nil {
-			if sessionTokenSetEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
-				h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
-				return
-			}
-		}
-	}
-
 	c := &layer.CompleteMultipartParams{
 		Info:  uploadInfo,
 		Parts: reqBody.Parts,
 	}
-	objInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
+	uploadData, objInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
 	if err != nil {
 		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err, additional...)
 		return
@@ -417,12 +380,23 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if uploadData.ACL != nil {
+	if len(uploadData.ACLHeaders) != 0 {
+		key, err := h.bearerTokenIssuerKey(r.Context())
+		if err != nil {
+			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+			return
+		}
+		acl, err := parseACLHeaders(r.Header, key)
+		if err != nil {
+			h.logAndSendError(w, "could not parse acl", reqInfo, err)
+			return
+		}
+
 		resInfo := &resourceInfo{
 			Bucket: objInfo.Bucket,
 			Object: objInfo.Name,
 		}
-		astObject, err := aclToAst(uploadData.ACL, resInfo)
+		astObject, err := aclToAst(acl, resInfo)
 		if err != nil {
 			h.logAndSendError(w, "could not translate acl of completed multipart upload to ast", reqInfo, err, additional...)
 			return
