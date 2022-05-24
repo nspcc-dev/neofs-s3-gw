@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
@@ -47,8 +46,12 @@ type (
 	}
 
 	CreateMultipartParams struct {
-		Info       *UploadInfoParams
-		Header     map[string]string
+		Info   *UploadInfoParams
+		Header map[string]string
+		Data   *UploadData
+	}
+
+	UploadData struct {
 		TagSet     map[string]string
 		ACLHeaders map[string]string
 	}
@@ -125,24 +128,32 @@ type (
 )
 
 func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error {
+	metaSize := len(p.Header)
+	if p.Data != nil {
+		metaSize += len(p.Data.ACLHeaders)
+		metaSize += len(p.Data.TagSet)
+	}
+
 	info := &data.MultipartInfo{
 		Key:      p.Info.Key,
 		UploadID: p.Info.UploadID,
 		Owner:    n.Owner(ctx),
 		Created:  time.Now(),
-		Meta:     make(map[string]string, len(p.Header)+len(p.ACLHeaders)+len(p.TagSet)),
+		Meta:     make(map[string]string, metaSize),
 	}
 
 	for key, val := range p.Header {
 		info.Meta[metaPrefix+key] = val
 	}
 
-	for key, val := range p.ACLHeaders {
-		info.Meta[aclPrefix+key] = val
-	}
+	if p.Data != nil {
+		for key, val := range p.Data.ACLHeaders {
+			info.Meta[aclPrefix+key] = val
+		}
 
-	for key, val := range p.TagSet {
-		info.Meta[tagPrefix+key] = val
+		for key, val := range p.Data.TagSet {
+			info.Meta[tagPrefix+key] = val
+		}
 	}
 
 	return n.treeService.CreateMultipartUpload(ctx, &p.Info.Bkt.CID, info)
@@ -311,51 +322,20 @@ func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 	return n + next, err
 }
 
-func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error) {
-	var (
-		obj            *data.ObjectInfo
-		partsAttrValue string
-	)
-
+func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ObjectInfo, error) {
 	for i := 1; i < len(p.Parts); i++ {
 		if p.Parts[i].PartNumber <= p.Parts[i-1].PartNumber {
-			return nil, errors.GetAPIError(errors.ErrInvalidPartOrder)
+			return nil, nil, errors.GetAPIError(errors.ErrInvalidPartOrder)
 		}
 	}
 
-	_, objects, err := n.getUploadParts(ctx, p.Info)
+	multipartInfo, objects, err := n.getUploadParts(ctx, p.Info) // todo consider avoid heading objects
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if len(objects) == 1 {
-		obj, err = n.headLastVersionIfNotDeleted(ctx, p.Info.Bkt, p.Info.Key)
-		if err != nil {
-			if errors.IsS3Error(err, errors.ErrNoSuchKey) {
-				return nil, errors.GetAPIError(errors.ErrInvalidPart)
-			}
-			return nil, err
-		}
-		if obj != nil && obj.Headers[UploadIDAttributeName] == p.Info.UploadID {
-			return obj, nil
-		}
-		return nil, errors.GetAPIError(errors.ErrInvalidPart)
-	}
-
-	if _, ok := objects[0]; !ok {
-		n.log.Error("could not get init multipart upload",
-			zap.Stringer("bucket id", p.Info.Bkt.CID),
-			zap.String("uploadID", misc.SanitizeString(p.Info.UploadID)),
-			zap.String("uploadKey", p.Info.Key),
-		)
-		// we return InternalError because if we are here it means we've checked InitPart in handler before and
-		// received successful result, it's strange we didn't get the InitPart again
-		return nil, errors.GetAPIError(errors.ErrInternalError)
-	}
-
-	// keep in mind objects[0] is the init part
-	if len(objects) <= len(p.Parts) {
-		return nil, errors.GetAPIError(errors.ErrInvalidPart)
+	if len(objects) < len(p.Parts) {
+		return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 	}
 
 	parts := make([]*data.ObjectInfo, 0, len(p.Parts))
@@ -363,31 +343,29 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	for i, part := range p.Parts {
 		info := objects[part.PartNumber]
 		if info == nil || part.ETag != info.HashSum {
-			return nil, errors.GetAPIError(errors.ErrInvalidPart)
+			return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 		}
 		// for the last part we have no minimum size limit
 		if i != len(p.Parts)-1 && info.Size < uploadMinSize {
-			return nil, errors.GetAPIError(errors.ErrEntityTooSmall)
+			return nil, nil, errors.GetAPIError(errors.ErrEntityTooSmall)
 		}
 		parts = append(parts, info)
-		partsAttrValue += strconv.Itoa(part.PartNumber) + "=" + strconv.FormatInt(info.Size, 10) + ","
 	}
 
-	initMetadata := objects[0].Headers
-	if len(objects[0].ContentType) != 0 {
-		initMetadata[api.ContentType] = objects[0].ContentType
+	initMetadata := make(map[string]string, len(multipartInfo.Meta))
+	uploadData := &UploadData{
+		TagSet:     make(map[string]string),
+		ACLHeaders: make(map[string]string),
 	}
-
-	/* We will keep "S3-Upload-Id" attribute in a completed object to determine if it is a "common" object or a completed object.
-	We will need to differ these objects if something goes wrong during completing multipart upload.
-	I.e. we had completed the object but didn't put tagging/acl for some reason */
-	delete(initMetadata, UploadPartNumberAttributeName)
-	delete(initMetadata, UploadKeyAttributeName)
-	delete(initMetadata, attrVersionsIgnore)
-	delete(initMetadata, objectSystemAttributeName)
-	delete(initMetadata, versionsUnversionedAttr)
-
-	initMetadata[UploadCompletedParts] = partsAttrValue[:len(partsAttrValue)-1]
+	for key, val := range multipartInfo.Meta {
+		if strings.HasPrefix(key, metaPrefix) {
+			initMetadata[strings.TrimPrefix(key, metaPrefix)] = val
+		} else if strings.HasPrefix(key, tagPrefix) {
+			uploadData.TagSet[strings.TrimPrefix(key, tagPrefix)] = val
+		} else if strings.HasPrefix(key, aclPrefix) {
+			uploadData.ACLHeaders[strings.TrimPrefix(key, aclPrefix)] = val
+		}
+	}
 
 	r := &multiObjectReader{
 		ctx:   ctx,
@@ -397,7 +375,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	r.prm.bktInfo = p.Info.Bkt
 
-	obj, err = n.PutObject(ctx, &PutObjectParams{
+	obj, err := n.PutObject(ctx, &PutObjectParams{
 		BktInfo: p.Info.Bkt,
 		Object:  p.Info.Key,
 		Reader:  r,
@@ -409,9 +387,11 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			zap.String("uploadKey", p.Info.Key),
 			zap.Error(err))
 
-		return nil, errors.GetAPIError(errors.ErrInternalError)
+		return nil, nil, errors.GetAPIError(errors.ErrInternalError)
 	}
 
+	var addr oid.Address
+	addr.SetContainer(p.Info.Bkt.CID)
 	for partNum, objInfo := range objects {
 		if partNum == 0 {
 			continue
@@ -422,10 +402,11 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 				zap.Stringer("bucket id", p.Info.Bkt.CID),
 				zap.Error(err))
 		}
-		n.systemCache.Delete(systemObjectKey(p.Info.Bkt, FormUploadPartName(p.Info.UploadID, p.Info.Key, partNum)))
+		addr.SetObject(objInfo.ID)
+		n.objCache.Delete(addr)
 	}
 
-	return obj, nil
+	return uploadData, obj, n.treeService.DeleteMultipartUpload(ctx, &p.Info.Bkt.CID, multipartInfo.ID)
 }
 
 func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error) {
@@ -548,18 +529,6 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	res.Parts = parts
 
 	return &res, nil
-}
-
-func (n *layer) GetUploadInitInfo(ctx context.Context, p *UploadInfoParams) (*data.ObjectInfo, error) {
-	info, err := n.HeadSystemObject(ctx, p.Bkt, FormUploadPartName(p.UploadID, p.Key, 0))
-	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchKey) {
-			return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
-		}
-		return nil, err
-	}
-
-	return info, nil
 }
 
 func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.MultipartInfo, map[int]*data.ObjectInfo, error) {
