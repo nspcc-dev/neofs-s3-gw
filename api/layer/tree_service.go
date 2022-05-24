@@ -50,8 +50,14 @@ type TreeService interface {
 	GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.BaseNodeVersion, error)
 	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 
-	CreateMultipart(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error
+	CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error
 	GetMultipartUploadsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.MultipartInfo, error)
+	GetMultipartUpload(ctx context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error)
+
+	// AddPart puts a node to a system tree as a child of appropriate multipart upload
+	// and returns objectID of a previous part which must be deleted in NeoFS.
+	// If a part is being added for the first time, the previous part ID will be nil.
+	AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error)
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
