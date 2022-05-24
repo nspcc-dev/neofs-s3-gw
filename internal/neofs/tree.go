@@ -44,6 +44,7 @@ const (
 	fileNameKV          = "FileName"
 	systemNameKV        = "SystemName"
 	isUnversionedKV     = "IsUnversioned"
+	isTagKV             = "isTag"
 
 	// keys for delete marker nodes
 	isDeleteMarkerKV = "IdDeleteMarker"
@@ -272,6 +273,75 @@ func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.
 	}
 
 	return nil, nil
+}
+
+func (c *TreeClient) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
+	tagNode, err := c.getObjectTaggingNode(ctx, cnrID, objVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	if tagNode == nil {
+		return nil, nil
+	}
+
+	delete(tagNode.Meta, isTagKV)
+
+	return tagNode.Meta, nil
+}
+
+func (c *TreeClient) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
+	tagNode, err := c.getObjectTaggingNode(ctx, cnrID, objVersion)
+	if err != nil {
+		return err
+	}
+
+	tagSet[isTagKV] = "true"
+
+	if tagNode == nil {
+		_, err = c.addNode(ctx, cnrID, versionTree, objVersion.ID, tagSet)
+	} else {
+		err = c.moveNode(ctx, cnrID, versionTree, tagNode.ID, objVersion.ID, tagSet)
+	}
+
+	delete(tagSet, isTagKV)
+
+	return err
+}
+
+func (c *TreeClient) DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) error {
+	tagNode, err := c.getObjectTaggingNode(ctx, cnrID, objVersion)
+	if err != nil {
+		return err
+	}
+
+	if tagNode == nil {
+		return nil
+	}
+
+	return c.removeNode(ctx, cnrID, versionTree, tagNode.ID)
+}
+
+func (c *TreeClient) getObjectTaggingNode(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (*TreeNode, error) {
+	subtree, err := c.getSubTree(ctx, cnrID, versionTree, objVersion.ID, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	var tagNode *TreeNode
+
+	for _, s := range subtree {
+		node, err := newTreeNode(s)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := node.Get(isTagKV); ok {
+			tagNode = node
+			break
+		}
+	}
+
+	return tagNode, nil
 }
 
 func (c *TreeClient) GetVersions(ctx context.Context, cnrID *cid.ID, filepath string) ([]*data.NodeVersion, error) {
