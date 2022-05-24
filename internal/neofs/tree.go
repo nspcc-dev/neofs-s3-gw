@@ -689,9 +689,6 @@ func (c *TreeClient) getLatestVersion(ctx context.Context, cnrID *cid.ID, treeID
 	}
 	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil, layer.ErrNodeNotFound
-		}
 		return nil, fmt.Errorf("couldn't get nodes: %w", err)
 	}
 
@@ -984,7 +981,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, cnrID *cid.ID, treeID strin
 	cli, err := c.service.GetSubTree(ctx, request)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return nil, nil
+			return nil, layer.ErrNodeNotFound
 		}
 		return nil, fmt.Errorf("failed to get sub tree client: %w", err)
 	}
@@ -996,7 +993,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, cnrID *cid.ID, treeID strin
 			break
 		} else if err != nil {
 			if strings.Contains(err.Error(), "not found") {
-				return nil, nil
+				return nil, layer.ErrNodeNotFound
 			}
 			return nil, fmt.Errorf("failed to get sub tree: %w", err)
 		}
@@ -1044,9 +1041,6 @@ func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID string, 
 	}
 	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil, layer.ErrNodeNotFound
-		}
 		return nil, fmt.Errorf("couldn't get nodes: %w", err)
 	}
 	if len(nodes) == 0 {
@@ -1084,6 +1078,9 @@ func (c *TreeClient) getNodes(ctx context.Context, p *getNodesParams) ([]*tree.G
 
 	resp, err := c.service.GetNodeByPath(ctx, request)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, layer.ErrNodeNotFound
+		}
 		return nil, fmt.Errorf("failed to get node path: %w", err)
 	}
 

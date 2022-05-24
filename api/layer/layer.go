@@ -229,13 +229,12 @@ type (
 		DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error
 
 		CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error
-		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error)
+		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ObjectInfo, error)
 		UploadPart(ctx context.Context, p *UploadPartParams) (string, error)
 		UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error)
 		ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error)
 		AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) error
 		ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsInfo, error)
-		GetUploadInitInfo(ctx context.Context, p *UploadInfoParams) (*data.ObjectInfo, error)
 
 		PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error
 		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)

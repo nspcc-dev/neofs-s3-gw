@@ -222,7 +222,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
-	return &data.ObjectInfo{
+	objInfo := &data.ObjectInfo{
 		ID:  *id,
 		CID: p.BktInfo.CID,
 
@@ -235,7 +235,20 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		Headers:       p.Header,
 		ContentType:   p.Header[api.ContentType],
 		HashSum:       hex.EncodeToString(hash),
-	}, nil
+	}
+
+	if err = n.objCache.PutObject(objInfo); err != nil {
+		n.log.Warn("couldn't add object to cache", zap.Error(err),
+			zap.String("object_name", p.Object), zap.String("bucket_name", p.BktInfo.Name),
+			zap.String("cid", objInfo.CID.EncodeToString()), zap.String("oid", objInfo.ID.EncodeToString()))
+	}
+	if err = n.namesCache.Put(objInfo.NiceName(), objInfo.Address()); err != nil {
+		n.log.Warn("couldn't put obj address to name cache",
+			zap.String("obj nice name", objInfo.NiceName()),
+			zap.Error(err))
+	}
+
+	return objInfo, nil
 }
 
 func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objName string, lock *data.ObjectLock) error {
