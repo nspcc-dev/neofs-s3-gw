@@ -58,6 +58,7 @@ type TreeService interface {
 	// and returns objectID of a previous part which must be deleted in NeoFS.
 	// If a part is being added for the first time, the previous part ID will be nil.
 	AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error)
+	GetParts(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error)
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
