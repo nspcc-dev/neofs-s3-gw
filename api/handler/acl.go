@@ -378,7 +378,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	token, err := getSessionTokenSetEACL(r.Context())
-	if err == nil {
+	if err != nil {
 		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
 		return
 	}
