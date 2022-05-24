@@ -51,6 +51,7 @@ type TreeService interface {
 	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 
 	CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error
+	DeleteMultipartUpload(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) error
 	GetMultipartUploadsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.MultipartInfo, error)
 	GetMultipartUpload(ctx context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error)
 

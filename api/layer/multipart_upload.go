@@ -488,7 +488,7 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 }
 
 func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) error {
-	_, objects, err := n.getUploadParts(ctx, p)
+	multipartInfo, objects, err := n.getUploadParts(ctx, p)
 	if err != nil {
 		return err
 	}
@@ -499,7 +499,7 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) e
 		}
 	}
 
-	return nil
+	return n.treeService.DeleteMultipartUpload(ctx, &p.Bkt.CID, multipartInfo.ID)
 }
 
 func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsInfo, error) {
