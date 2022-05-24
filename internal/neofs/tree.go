@@ -869,6 +869,10 @@ func (c *TreeClient) GetParts(ctx context.Context, cnrID *cid.ID, multipartNodeI
 	return result, nil
 }
 
+func (c *TreeClient) DeleteMultipartUpload(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) error {
+	return c.removeNode(ctx, cnrID, systemTree, multipartNodeID)
+}
+
 func (c *TreeClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
