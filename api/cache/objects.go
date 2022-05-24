@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
@@ -55,6 +56,21 @@ func (o *ObjectsCache) Get(address oid.Address) *object.Object {
 	return &result
 }
 
+// GetObject returns a cached object info.
+func (o *ObjectsCache) GetObject(address oid.Address) *data.ObjectInfo {
+	entry, err := o.cache.Get(address.EncodeToString())
+	if err != nil {
+		return nil
+	}
+
+	result, ok := entry.(*data.ObjectInfo)
+	if !ok {
+		return nil
+	}
+
+	return result
+}
+
 // Put puts an object to cache.
 func (o *ObjectsCache) Put(obj object.Object) error {
 	cnrID, ok := obj.ContainerID()
@@ -71,6 +87,13 @@ func (o *ObjectsCache) Put(obj object.Object) error {
 	addr.SetObject(objID)
 
 	return o.cache.Set(addr.EncodeToString(), obj)
+}
+
+// PutObject puts an object info to cache.
+func (o *ObjectsCache) PutObject(obj *data.ObjectInfo) error {
+	cnrID := obj.CID.EncodeToString()
+	objID := obj.ID.EncodeToString()
+	return o.cache.Set(cnrID+"/"+objID, obj)
 }
 
 // Delete deletes an object from cache.

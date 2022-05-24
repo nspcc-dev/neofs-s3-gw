@@ -230,7 +230,7 @@ type (
 
 		CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error
 		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*data.ObjectInfo, error)
-		UploadPart(ctx context.Context, p *UploadPartParams) (*data.ObjectInfo, error)
+		UploadPart(ctx context.Context, p *UploadPartParams) (string, error)
 		UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error)
 		ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error)
 		AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) error
