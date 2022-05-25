@@ -557,13 +557,13 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 		"tag1": "val1",
 	}
 
-	err := tc.layer.PutBucketTagging(tc.ctx, tc.bktInfo, tagSet)
+	err := tc.layer.PutBucketTagging(tc.ctx, &tc.bktInfo.CID, tagSet)
 	require.NoError(t, err)
 
 	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.CID.EncodeToString()))
 
 	tagSet["tag2"] = "val2"
-	err = tc.layer.PutBucketTagging(tc.ctx, tc.bktInfo, tagSet)
+	err = tc.layer.PutBucketTagging(tc.ctx, &tc.bktInfo.CID, tagSet)
 	require.NoError(t, err)
 
 	// simulate failed deletion
@@ -571,7 +571,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	objID, _ := objMeta.ID()
 	tc.testNeoFS.AddObject(newAddress(cnrID, objID).EncodeToString(), objMeta)
 
-	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bktInfo)
+	tagging, err := tc.layer.GetBucketTagging(tc.ctx, &tc.bktInfo.CID)
 	require.NoError(t, err)
 
 	expectedTagSet := map[string]string{
@@ -580,7 +580,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	}
 	require.Equal(t, expectedTagSet, tagging)
 
-	err = tc.layer.DeleteBucketTagging(tc.ctx, tc.bktInfo)
+	err = tc.layer.DeleteBucketTagging(tc.ctx, &tc.bktInfo.CID)
 	require.NoError(t, err)
 
 	require.Nil(t, tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.Name)))
