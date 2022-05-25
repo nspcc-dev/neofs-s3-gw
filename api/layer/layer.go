@@ -207,9 +207,9 @@ type (
 		HeadSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) (*data.ObjectInfo, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
 
-		GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
-		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
-		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
+		GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error)
+		PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error
+		DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error
 
 		GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) (map[string]string, error)
 		PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo, tagSet map[string]string) error
