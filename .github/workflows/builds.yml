@@ -29,6 +29,9 @@ jobs:
           path: /home/runner/go/pkg/mod
           key: deps-${{ hashFiles('go.sum') }}
 
+      - name: Get tree-service client
+        run: make sync-tree
+
       - name: Update Go modules
         run: make dep
 
@@ -61,6 +64,9 @@ jobs:
         with:
           path: /home/runner/go/pkg/mod
           key: deps-${{ hashFiles('go.sum') }}
+
+      - name: Get tree-service client
+        run: make sync-tree
 
       - name: Update Go modules
         run: make dep
