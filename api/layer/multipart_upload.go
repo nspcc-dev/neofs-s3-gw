@@ -134,6 +134,7 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (*data.Obje
 		Metadata: p.Header,
 		Prefix:   "",
 		Reader:   p.Reader,
+		Size:     p.Size,
 	}
 
 	return n.PutSystemObject(ctx, params)
@@ -144,17 +145,15 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 		return nil, err
 	}
 
+	size := p.SrcObjInfo.Size
 	if p.Range != nil {
-		if p.Range.End-p.Range.Start > uploadMaxSize {
-			return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
-		}
+		size = int64(p.Range.End - p.Range.Start + 1)
 		if p.Range.End > uint64(p.SrcObjInfo.Size) {
 			return nil, errors.GetAPIError(errors.ErrInvalidCopyPartRangeSource)
 		}
-	} else {
-		if p.SrcObjInfo.Size > uploadMaxSize {
-			return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
-		}
+	}
+	if size > uploadMaxSize {
+		return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
 	}
 
 	metadata := make(map[string]string)
@@ -180,6 +179,7 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 		Metadata: metadata,
 		Prefix:   "",
 		Reader:   pr,
+		Size:     size,
 	})
 }
 

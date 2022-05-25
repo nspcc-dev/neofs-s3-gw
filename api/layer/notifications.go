@@ -28,15 +28,12 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		ObjName:  p.BktInfo.NotificationConfigurationObjectName(),
 		Metadata: map[string]string{},
 		Reader:   bytes.NewReader(confXML),
+		Size:     int64(len(confXML)),
 	}
 
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	_, err = n.putSystemObjectIntoNeoFS(ctx, s)
 	if err != nil {
 		return err
-	}
-
-	if obj.Size == 0 && !p.Configuration.IsEmpty() {
-		return errors.GetAPIError(errors.ErrInternalError)
 	}
 
 	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(p.BktInfo, s.ObjName), p.Configuration); err != nil {

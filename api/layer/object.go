@@ -202,6 +202,14 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		return nil, err
 	}
 
+	currentEpoch, _, err := n.neoFS.TimeToEpoch(ctx, time.Now().Add(time.Minute))
+	if err != nil {
+		n.log.Warn("couldn't get creation epoch",
+			zap.String("bucket", p.BktInfo.Name),
+			zap.String("object", p.Object),
+			zap.Error(err))
+	}
+
 	if p.Lock != nil {
 		objInfo := &data.ObjectInfo{ID: *id, Name: p.Object}
 		p.Lock.Objects = append(p.Lock.Objects, *id)
@@ -240,14 +248,15 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		ID:  *id,
 		CID: p.BktInfo.CID,
 
-		Owner:       own,
-		Bucket:      p.BktInfo.Name,
-		Name:        p.Object,
-		Size:        p.Size,
-		Created:     time.Now(),
-		Headers:     p.Header,
-		ContentType: p.Header[api.ContentType],
-		HashSum:     hex.EncodeToString(hash),
+		Owner:         own,
+		Bucket:        p.BktInfo.Name,
+		Name:          p.Object,
+		Size:          p.Size,
+		Created:       time.Now(),
+		CreationEpoch: currentEpoch,
+		Headers:       p.Header,
+		ContentType:   p.Header[api.ContentType],
+		HashSum:       hex.EncodeToString(hash),
 	}, nil
 }
 
@@ -712,6 +721,10 @@ func (n *layer) transformNeofsError(ctx context.Context, err error) error {
 }
 
 func wrapReader(input io.Reader, bufSize int, f func(buf []byte)) io.Reader {
+	if input == nil {
+		return nil
+	}
+
 	r, w := io.Pipe()
 	go func() {
 		var buf = make([]byte, bufSize)

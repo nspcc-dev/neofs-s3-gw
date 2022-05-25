@@ -159,6 +159,7 @@ type (
 		Metadata map[string]string
 		Prefix   string
 		Reader   io.Reader
+		Size     int64
 		Lock     *data.ObjectLock
 	}
 
