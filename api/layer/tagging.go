@@ -3,11 +3,12 @@ package layer
 import (
 	"context"
 	errorsStd "errors"
-	"go.uber.org/zap"
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"go.uber.org/zap"
 )
 
 func (n *layer) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) (map[string]string, error) {
@@ -15,7 +16,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo)
 		err  error
 		tags map[string]string
 	)
-	tags = n.systemCache.GetObjectTagging(objectTaggingCacheKey(p))
+	tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
 	if tags != nil {
 		return tags, nil
 	}
@@ -33,7 +34,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo)
 		return nil, err
 	}
 
-	if err = n.systemCache.PutObjectTagging(objectTaggingCacheKey(p), tags); err != nil {
+	if err = n.systemCache.PutTagging(objectTaggingCacheKey(p), tags); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
@@ -54,7 +55,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo,
 		return err
 	}
 
-	if err = n.systemCache.PutObjectTagging(objectTaggingCacheKey(p), tagSet); err != nil {
+	if err = n.systemCache.PutTagging(objectTaggingCacheKey(p), tagSet); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
@@ -80,51 +81,51 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *data.ObjectTaggingIn
 	return nil
 }
 
-func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
-	objInfo, err := n.HeadSystemObject(ctx, bktInfo, formBucketTagObjectName(bktInfo.Name))
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+func (n *layer) GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error) {
+	var (
+		err  error
+		tags map[string]string
+	)
+
+	tags = n.systemCache.GetTagging(bucketTaggingCacheKey(cnrID))
+	if tags != nil {
+		return tags, nil
+	}
+
+	if tags, err = n.treeService.GetBucketTagging(ctx, cnrID); err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 
-	return formTagSet(objInfo), nil
-}
-
-func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	s := &PutSystemObjectParams{
-		BktInfo:  bktInfo,
-		ObjName:  formBucketTagObjectName(bktInfo.Name),
-		Metadata: tagSet,
-		Prefix:   tagPrefix,
-		Reader:   nil,
+	if err := n.systemCache.PutTagging(bucketTaggingCacheKey(cnrID), tags); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	_, err := n.PutSystemObject(ctx, s)
-	return err
+	return tags, nil
 }
 
-func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
-	return n.DeleteSystemObject(ctx, bktInfo, formBucketTagObjectName(bktInfo.Name))
-}
-
-func formTagSet(objInfo *data.ObjectInfo) map[string]string {
-	var tagSet map[string]string
-	if objInfo != nil {
-		tagSet = make(map[string]string, len(objInfo.Headers))
-		for k, v := range objInfo.Headers {
-			if strings.HasPrefix(k, tagPrefix) {
-				if v == tagEmptyMark {
-					v = ""
-				}
-				tagSet[strings.TrimPrefix(k, tagPrefix)] = v
-			}
-		}
+func (n *layer) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error {
+	if err := n.treeService.PutBucketTagging(ctx, cnrID, tagSet); err != nil {
+		return err
+	}
+	if err := n.systemCache.PutTagging(bucketTaggingCacheKey(cnrID), tagSet); err != nil {
+		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	return tagSet
+	return nil
+}
+
+func (n *layer) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error {
+	n.systemCache.Delete(bucketTaggingCacheKey(cnrID))
+
+	return n.treeService.DeleteBucketTagging(ctx, cnrID)
 }
 
 func objectTaggingCacheKey(p *data.ObjectTaggingInfo) string {
 	return ".tagset." + p.CnrID.String() + "." + p.ObjName + "." + p.VersionID
+}
+
+func bucketTaggingCacheKey(cnrID *cid.ID) string {
+	return ".tagset." + cnrID.String()
 }
 
 func (n *layer) getTaggedObjectVersion(ctx context.Context, p *data.ObjectTaggingInfo) (*data.NodeVersion, error) {
