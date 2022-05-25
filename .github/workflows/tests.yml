@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - master
+      - tree-service
     types: [opened, synchronize]
     paths-ignore:
       - '**/*.md'
@@ -15,6 +16,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+
+      - name: Get tree-service client
+        run: make sync-tree
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
@@ -41,6 +46,9 @@ jobs:
         with:
           path: /home/runner/go/pkg/mod
           key: deps-${{ hashFiles('go.sum') }}
+
+      - name: Get tree-service client
+        run: make sync-tree
 
       - name: Update Go modules
         run: make dep
@@ -77,6 +85,9 @@ jobs:
         with:
           path: /home/runner/go/pkg/mod
           key: deps-${{ hashFiles('go.sum') }}
+
+      - name: Get tree-service client
+        run: make sync-tree
 
       - name: Update Go modules
         run: make dep
