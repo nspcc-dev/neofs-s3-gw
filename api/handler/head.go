@@ -89,7 +89,7 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(api.ContainerID, bktInfo.CID.String())
+	w.Header().Set(api.ContainerID, bktInfo.CID.EncodeToString())
 	api.WriteResponse(w, http.StatusOK, nil, api.MimeNone)
 }
 

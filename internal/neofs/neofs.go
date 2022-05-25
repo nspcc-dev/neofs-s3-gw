@@ -22,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -348,9 +347,9 @@ func (x payloadReader) Read(p []byte) (int, error) {
 
 // ReadObject implements neofs.NeoFS interface method.
 func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs.ObjectPart, error) {
-	var addr address.Address
-	addr.SetContainerID(prm.Container)
-	addr.SetObjectID(prm.Object)
+	var addr oid.Address
+	addr.SetContainer(prm.Container)
+	addr.SetObject(prm.Object)
 
 	var prmGet pool.PrmObjectGet
 	prmGet.SetAddress(addr)
@@ -449,9 +448,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm neofs.PrmObjectRead) (*neofs
 
 // DeleteObject implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) error {
-	var addr address.Address
-	addr.SetContainerID(prm.Container)
-	addr.SetObjectID(prm.Object)
+	var addr oid.Address
+	addr.SetContainer(prm.Container)
+	addr.SetObject(prm.Object)
 
 	var prmDelete pool.PrmObjectDelete
 	prmDelete.SetAddress(addr)
@@ -557,13 +556,10 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 }
 
 // ReadObjectPayload implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr address.Address) ([]byte, error) {
-	cnrID, _ := addr.ContainerID()
-	objID, _ := addr.ObjectID()
-
+func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr oid.Address) ([]byte, error) {
 	res, err := x.neoFS.ReadObject(ctx, neofs.PrmObjectRead{
-		Container:   cnrID,
-		Object:      objID,
+		Container:   addr.Container(),
+		Object:      addr.Object(),
 		WithPayload: true,
 	})
 	if err != nil {

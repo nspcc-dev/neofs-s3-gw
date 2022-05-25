@@ -121,7 +121,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Event: EventObjectRemovedDelete,
 			ObjInfo: &data.ObjectInfo{
 				Name: reqInfo.ObjectName,
-				ID:   &objID,
+				ID:   objID,
 			},
 			BktInfo: bktInfo,
 			ReqInfo: reqInfo,

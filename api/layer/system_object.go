@@ -13,7 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 )
 
@@ -67,7 +67,7 @@ func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo
 
 	n.systemCache.Delete(systemObjectKey(bktInfo, name))
 	for i := range ids {
-		if err = n.objectDelete(ctx, bktInfo.CID, &ids[i]); err != nil {
+		if err = n.objectDelete(ctx, bktInfo.CID, ids[i]); err != nil {
 			return err
 		}
 	}
@@ -85,8 +85,8 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	// note that updateCRDT2PSetHeaders modifies p.Metadata and must be called further processing
 
 	prm := neofs.PrmObjectCreate{
-		Container:  *p.BktInfo.CID,
-		Creator:    *p.BktInfo.Owner,
+		Container:  p.BktInfo.CID,
+		Creator:    p.BktInfo.Owner,
 		Attributes: make([][2]string, 2, 2+len(p.Metadata)),
 		Payload:    p.Reader,
 	}
@@ -147,12 +147,12 @@ func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketIn
 
 	objInfo := versions.getLast()
 
-	var addr address.Address
+	var addr oid.Address
 
-	addr.SetContainerID(*bkt.CID)
-	addr.SetObjectID(*objInfo.ID)
+	addr.SetContainer(bkt.CID)
+	addr.SetObject(objInfo.ID)
 
-	obj, err := n.objectGet(ctx, &addr)
+	obj, err := n.objectGet(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

@@ -79,8 +79,8 @@ func (l *ObjectsListCache) Put(key ObjectsListKey, oids []oid.ID) error {
 }
 
 // CleanCacheEntriesContainingObject deletes entries containing specified object.
-func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, cid *cid.ID) {
-	cidStr := cid.String()
+func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, cnr cid.ID) {
+	cidStr := cnr.EncodeToString()
 	keys := l.cache.Keys(true)
 	for _, key := range keys {
 		k, ok := key.(ObjectsListKey)
@@ -94,9 +94,9 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 }
 
 // CreateObjectsListCacheKey returns ObjectsListKey with the given CID and prefix.
-func CreateObjectsListCacheKey(cid *cid.ID, prefix string) ObjectsListKey {
+func CreateObjectsListCacheKey(cnr cid.ID, prefix string) ObjectsListKey {
 	p := ObjectsListKey{
-		cid:    cid.String(),
+		cid:    cnr.EncodeToString(),
 		prefix: prefix,
 	}
 

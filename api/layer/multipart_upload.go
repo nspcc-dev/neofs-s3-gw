@@ -90,7 +90,7 @@ type (
 
 	ListPartsInfo struct {
 		Parts                []*Part
-		Owner                *user.ID
+		Owner                user.ID
 		NextPartNumberMarker int
 		IsTruncated          bool
 	}
@@ -106,7 +106,7 @@ type (
 		IsDir    bool
 		Key      string
 		UploadID string
-		Owner    *user.ID
+		Owner    user.ID
 		Created  time.Time
 	}
 )
@@ -599,7 +599,7 @@ func uploadInfoFromMeta(meta *object.Object, prefix, delimiter string) *UploadIn
 		IsDir:    isDir,
 		Key:      key,
 		UploadID: userHeaders[UploadIDAttributeName],
-		Owner:    meta.OwnerID(),
+		Owner:    *meta.OwnerID(),
 		Created:  creation,
 	}
 }

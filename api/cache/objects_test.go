@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	objecttest "github.com/nspcc-dev/neofs-sdk-go/object/test"
 	"github.com/stretchr/testify/require"
 )
@@ -20,9 +20,10 @@ func TestCache(t *testing.T) {
 	obj := objecttest.Object()
 	objID, _ := obj.ID()
 	cnrID, _ := obj.ContainerID()
-	addr := address.NewAddress()
-	addr.SetContainerID(cnrID)
-	addr.SetObjectID(objID)
+
+	var addr oid.Address
+	addr.SetContainer(cnrID)
+	addr.SetObject(objID)
 
 	t.Run("check get", func(t *testing.T) {
 		cache := New(getTestConfig())

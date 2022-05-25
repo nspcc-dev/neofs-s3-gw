@@ -9,22 +9,9 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
 )
-
-func randID(t *testing.T) *oid.ID {
-	var id oid.ID
-	id.SetSHA256(randSHA256Checksum(t))
-
-	return &id
-}
-
-func randSHA256Checksum(t *testing.T) (cs [sha256.Size]byte) {
-	_, err := rand.Read(cs[:])
-	require.NoError(t, err)
-
-	return
-}
 
 func TestTrimAfterObjectName(t *testing.T) {
 	var (
@@ -79,23 +66,23 @@ func TestTrimAfterObjectName(t *testing.T) {
 func TestTrimAfterObjectID(t *testing.T) {
 	var (
 		objects     []*data.ObjectInfo
-		ids         []*oid.ID
+		ids         []oid.ID
 		numberOfIDS = 3
 	)
 
 	for i := 0; i < numberOfIDS; i++ {
-		id := randID(t)
+		id := oidtest.ID()
 		objects = append(objects, &data.ObjectInfo{ID: id})
 		ids = append(ids, id)
 	}
 
 	t.Run("existing id", func(t *testing.T) {
-		actual := trimAfterObjectID(ids[0].String(), objects)
+		actual := trimAfterObjectID(ids[0].EncodeToString(), objects)
 		require.Equal(t, objects[1:], actual)
 	})
 
 	t.Run("second to last id", func(t *testing.T) {
-		actual := trimAfterObjectID(ids[len(ids)-2].String(), objects)
+		actual := trimAfterObjectID(ids[len(ids)-2].EncodeToString(), objects)
 		require.Equal(t, objects[len(objects)-1:], actual)
 	})
 
@@ -105,7 +92,7 @@ func TestTrimAfterObjectID(t *testing.T) {
 	})
 
 	t.Run("last id", func(t *testing.T) {
-		actual := trimAfterObjectID(ids[len(ids)-1].String(), objects)
+		actual := trimAfterObjectID(ids[len(ids)-1].EncodeToString(), objects)
 		require.Empty(t, actual)
 	})
 

@@ -31,7 +31,7 @@ const (
 	AttributeLockEnabled        = "LockEnabled"
 )
 
-func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketInfo, error) {
+func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketInfo, error) {
 	var (
 		err error
 		res *container.Container
@@ -40,10 +40,10 @@ func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketI
 
 		info = &data.BucketInfo{
 			CID:  idCnr,
-			Name: idCnr.String(),
+			Name: idCnr.EncodeToString(),
 		}
 	)
-	res, err = n.neoFS.Container(ctx, *idCnr)
+	res, err = n.neoFS.Container(ctx, idCnr)
 	if err != nil {
 		log.Error("could not fetch container", zap.Error(err))
 
@@ -53,7 +53,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr *cid.ID) (*data.BucketI
 		return nil, err
 	}
 
-	info.Owner = res.OwnerID()
+	info.Owner = *res.OwnerID()
 	info.BasicACL = res.BasicACL()
 
 	for _, attr := range res.Attributes() {
@@ -106,7 +106,7 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 
 	list := make([]*data.BucketInfo, 0, len(res))
 	for i := range res {
-		info, err := n.containerInfo(ctx, &res[i])
+		info, err := n.containerInfo(ctx, res[i])
 		if err != nil {
 			n.log.Error("could not fetch container info",
 				zap.String("request_id", rid),
@@ -125,7 +125,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	ownerID := n.Owner(ctx)
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
-		Owner:              &ownerID,
+		Owner:              ownerID,
 		Created:            time.Now(), // this can be a little incorrect since the real time is set later
 		BasicACL:           p.ACL,
 		LocationConstraint: p.LocationConstraint,
@@ -146,16 +146,19 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		})
 	}
 
-	if bktInfo.CID, err = n.neoFS.CreateContainer(ctx, neofs.PrmContainerCreate{
-		Creator:              *bktInfo.Owner,
+	idCnr, err := n.neoFS.CreateContainer(ctx, neofs.PrmContainerCreate{
+		Creator:              bktInfo.Owner,
 		Policy:               *p.Policy,
 		Name:                 p.Name,
 		SessionToken:         p.SessionToken,
 		BasicACL:             acl.BasicACL(p.ACL),
 		AdditionalAttributes: attributes,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
+
+	bktInfo.CID = *idCnr
 
 	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL); err != nil {
 		return nil, err
@@ -171,8 +174,8 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	return bktInfo, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, idCnr *cid.ID, table *eacl.Table) error {
-	table.SetCID(*idCnr)
+func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table) error {
+	table.SetCID(idCnr)
 
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
@@ -182,16 +185,16 @@ func (n *layer) setContainerEACLTable(ctx context.Context, idCnr *cid.ID, table 
 	return n.neoFS.SetContainerEACL(ctx, *table)
 }
 
-func (n *layer) GetContainerEACL(ctx context.Context, idCnr *cid.ID) (*eacl.Table, error) {
-	return n.neoFS.ContainerEACL(ctx, *idCnr)
+func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table, error) {
+	return n.neoFS.ContainerEACL(ctx, idCnr)
 }
 
-func (n *layer) deleteContainer(ctx context.Context, idCnr *cid.ID) error {
+func (n *layer) deleteContainer(ctx context.Context, idCnr cid.ID) error {
 	var sessionToken *session.Container
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForDelete()
 	}
 
-	return n.neoFS.DeleteContainer(ctx, *idCnr, sessionToken)
+	return n.neoFS.DeleteContainer(ctx, idCnr, sessionToken)
 }

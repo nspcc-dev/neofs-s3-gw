@@ -86,10 +86,10 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 	var ownerID user.ID
 
 	bktInfo := &data.BucketInfo{
-		CID:               cnrID,
+		CID:               *cnrID,
 		Name:              bktName,
 		ObjectLockEnabled: true,
-		Owner:             &ownerID,
+		Owner:             ownerID,
 	}
 
 	sp := &layer.PutSettingsParams{

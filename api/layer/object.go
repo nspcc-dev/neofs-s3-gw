@@ -19,7 +19,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 )
@@ -27,7 +26,7 @@ import (
 type (
 	findParams struct {
 		attr   [2]string
-		cid    *cid.ID
+		cid    cid.ID
 		prefix string
 	}
 
@@ -35,8 +34,8 @@ type (
 		// payload range
 		off, ln uint64
 
-		cid *cid.ID
-		oid *oid.ID
+		cid cid.ID
+		oid oid.ID
 	}
 
 	// ListObjectsParamsCommon contains common parameters for ListObjectsV1 and ListObjectsV2.
@@ -69,10 +68,10 @@ type (
 	}
 )
 
-func (n *layer) objectSearchByName(ctx context.Context, cid *cid.ID, filename string) ([]oid.ID, error) {
+func (n *layer) objectSearchByName(ctx context.Context, cnr cid.ID, filename string) ([]oid.ID, error) {
 	f := &findParams{
 		attr: [2]string{object.AttributeFileName, filename},
-		cid:  cid,
+		cid:  cnr,
 	}
 	return n.objectSearch(ctx, f)
 }
@@ -80,7 +79,7 @@ func (n *layer) objectSearchByName(ctx context.Context, cid *cid.ID, filename st
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]oid.ID, error) {
 	prm := neofs.PrmObjectSelect{
-		Container:      *p.cid,
+		Container:      p.cid,
 		ExactAttribute: p.attr,
 		FilePrefix:     p.prefix,
 	}
@@ -92,17 +91,17 @@ func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]oid.ID, erro
 	return res, n.transformNeofsError(ctx, err)
 }
 
-func newAddress(cid cid.ID, oid oid.ID) *address.Address {
-	addr := address.NewAddress()
-	addr.SetContainerID(cid)
-	addr.SetObjectID(oid)
+func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
+	var addr oid.Address
+	addr.SetContainer(cnr)
+	addr.SetObject(obj)
 	return addr
 }
 
 // objectHead returns all object's headers.
-func (n *layer) objectHead(ctx context.Context, idCnr *cid.ID, idObj oid.ID) (*object.Object, error) {
+func (n *layer) objectHead(ctx context.Context, idCnr cid.ID, idObj oid.ID) (*object.Object, error) {
 	prm := neofs.PrmObjectRead{
-		Container:  *idCnr,
+		Container:  idCnr,
 		Object:     idObj,
 		WithHeader: true,
 	}
@@ -121,8 +120,8 @@ func (n *layer) objectHead(ctx context.Context, idCnr *cid.ID, idObj oid.ID) (*o
 // Zero range corresponds to full payload (panics if only offset is set).
 func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Reader, error) {
 	prm := neofs.PrmObjectRead{
-		Container:    *p.cid,
-		Object:       *p.oid,
+		Container:    p.cid,
+		Object:       p.oid,
 		WithPayload:  true,
 		PayloadRange: [2]uint64{p.off, p.ln},
 	}
@@ -138,12 +137,10 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Re
 }
 
 // objectGet returns an object with payload in the object.
-func (n *layer) objectGet(ctx context.Context, addr *address.Address) (*object.Object, error) {
-	cnrID, _ := addr.ContainerID()
-	objID, _ := addr.ObjectID()
+func (n *layer) objectGet(ctx context.Context, addr oid.Address) (*object.Object, error) {
 	prm := neofs.PrmObjectRead{
-		Container:   cnrID,
-		Object:      objID,
+		Container:   addr.Container(),
+		Object:      addr.Object(),
 		WithHeader:  true,
 		WithPayload: true,
 	}
@@ -181,7 +178,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	prm := neofs.PrmObjectCreate{
-		Container:   *p.BktInfo.CID,
+		Container:   p.BktInfo.CID,
 		Creator:     own,
 		PayloadSize: uint64(p.Size),
 		Filename:    p.Object,
@@ -206,7 +203,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	if p.Lock != nil {
-		objInfo := &data.ObjectInfo{ID: id, Name: p.Object}
+		objInfo := &data.ObjectInfo{ID: *id, Name: p.Object}
 		p.Lock.Objects = append(p.Lock.Objects, *id)
 		if p.Lock.LegalHold {
 			if err = n.putLockObject(ctx, p.BktInfo, objInfo.LegalHoldObject(), p.Lock); err != nil {
@@ -240,10 +237,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	return &data.ObjectInfo{
-		ID:  id,
+		ID:  *id,
 		CID: p.BktInfo.CID,
 
-		Owner:       &own,
+		Owner:       own,
 		Bucket:      p.BktInfo.Name,
 		Name:        p.Object,
 		Size:        p.Size,
@@ -269,12 +266,12 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	return nil
 }
 
-func updateCRDT2PSetHeaders(header map[string]string, versions *objectVersions, versioningEnabled bool) []*oid.ID {
+func updateCRDT2PSetHeaders(header map[string]string, versions *objectVersions, versioningEnabled bool) []oid.ID {
 	if !versioningEnabled {
 		header[versionsUnversionedAttr] = "true"
 	}
 
-	var idsToDeleteArr []*oid.ID
+	var idsToDeleteArr []oid.ID
 	if versions.isEmpty() {
 		return idsToDeleteArr
 	}
@@ -324,7 +321,7 @@ func updateCRDT2PSetHeaders(header map[string]string, versions *objectVersions, 
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ObjectInfo, error) {
 	if addr := n.namesCache.Get(bkt.Name + "/" + objectName); addr != nil {
-		if headInfo := n.objCache.Get(addr); headInfo != nil {
+		if headInfo := n.objCache.Get(*addr); headInfo != nil {
 			return objInfoFromMeta(bkt, headInfo), nil
 		}
 	}
@@ -405,7 +402,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidVersion)
 	}
 
-	if headInfo := n.objCache.Get(newAddress(*bkt.CID, id)); headInfo != nil {
+	if headInfo := n.objCache.Get(newAddress(bkt.CID, id)); headInfo != nil {
 		return objInfoFromMeta(bkt, headInfo), nil
 	}
 
@@ -431,15 +428,15 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 }
 
 // objectDelete puts tombstone object into neofs.
-func (n *layer) objectDelete(ctx context.Context, idCnr *cid.ID, idObj *oid.ID) error {
+func (n *layer) objectDelete(ctx context.Context, idCnr cid.ID, idObj oid.ID) error {
 	prm := neofs.PrmObjectDelete{
-		Container: *idCnr,
-		Object:    *idObj,
+		Container: idCnr,
+		Object:    idObj,
 	}
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth)
 
-	n.objCache.Delete(newAddress(*idCnr, *idObj))
+	n.objCache.Delete(newAddress(idCnr, idObj))
 
 	return n.transformNeofsError(ctx, n.neoFS.DeleteObject(ctx, prm))
 }
@@ -530,7 +527,7 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	if len(allObjects) > p.MaxKeys {
 		result.IsTruncated = true
 		allObjects = allObjects[:p.MaxKeys]
-		result.NextContinuationToken = allObjects[len(allObjects)-1].ID.String()
+		result.NextContinuationToken = allObjects[len(allObjects)-1].ID.EncodeToString()
 	}
 
 	result.Prefixes, result.Objects = triageObjects(allObjects)
@@ -578,7 +575,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	versions := make(map[string]*objectVersions, len(ids)/2)
 
 	for i := 0; i < len(ids); i++ {
-		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt.CID, &ids[i])
+		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt.CID, ids[i])
 		if obj == nil {
 			continue
 		}
@@ -630,11 +627,11 @@ func trimAfterObjectName(startAfter string, objects []*data.ObjectInfo) []*data.
 }
 
 func trimAfterObjectID(id string, objects []*data.ObjectInfo) []*data.ObjectInfo {
-	if len(objects) != 0 && objects[len(objects)-1].ID.String() == id {
+	if len(objects) != 0 && objects[len(objects)-1].ID.EncodeToString() == id {
 		return []*data.ObjectInfo{}
 	}
 	for i, obj := range objects {
-		if obj.ID.String() == id {
+		if obj.ID.EncodeToString() == id {
 			return objects[i+1:]
 		}
 	}
@@ -682,13 +679,13 @@ func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInf
 	return settings.VersioningEnabled
 }
 
-func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, cid *cid.ID, oid *oid.ID) *object.Object {
+func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, cnr cid.ID, obj oid.ID) *object.Object {
 	var (
 		err  error
-		meta = n.objCache.Get(newAddress(*cid, *oid))
+		meta = n.objCache.Get(newAddress(cnr, obj))
 	)
 	if meta == nil {
-		meta, err = n.objectHead(ctx, cid, *oid)
+		meta, err = n.objectHead(ctx, cnr, obj)
 		if err != nil {
 			n.log.Warn("could not fetch object meta", zap.Error(err))
 			return nil

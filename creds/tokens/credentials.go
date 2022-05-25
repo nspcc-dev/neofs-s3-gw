@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
@@ -19,8 +18,8 @@ import (
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
-		GetBox(context.Context, *address.Address) (*accessbox.Box, error)
-		Put(context.Context, *cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (*address.Address, error)
+		GetBox(context.Context, oid.Address) (*accessbox.Box, error)
+		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (*oid.Address, error)
 	}
 
 	cred struct {
@@ -63,7 +62,7 @@ type NeoFS interface {
 	//
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the object payload from being read.
-	ReadObjectPayload(context.Context, address.Address) ([]byte, error)
+	ReadObjectPayload(context.Context, oid.Address) ([]byte, error)
 }
 
 var (
@@ -80,7 +79,7 @@ func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config) Credentials {
 	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config)}
 }
 
-func (c *cred) GetBox(ctx context.Context, addr *address.Address) (*accessbox.Box, error) {
+func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, error) {
 	cachedBox := c.cache.Get(addr)
 	if cachedBox != nil {
 		return cachedBox, nil
@@ -103,8 +102,8 @@ func (c *cred) GetBox(ctx context.Context, addr *address.Address) (*accessbox.Bo
 	return cachedBox, nil
 }
 
-func (c *cred) getAccessBox(ctx context.Context, addr *address.Address) (*accessbox.AccessBox, error) {
-	data, err := c.neoFS.ReadObjectPayload(ctx, *addr)
+func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.AccessBox, error) {
+	data, err := c.neoFS.ReadObjectPayload(ctx, addr)
 	if err != nil {
 		return nil, fmt.Errorf("read payload: %w", err)
 	}
@@ -118,7 +117,7 @@ func (c *cred) getAccessBox(ctx context.Context, addr *address.Address) (*access
 	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*address.Address, error) {
+func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*oid.Address, error) {
 	if len(keys) == 0 {
 		return nil, ErrEmptyPublicKeys
 	} else if box == nil {
@@ -131,7 +130,7 @@ func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer user.ID, box *acce
 
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
 		Creator:         issuer,
-		Container:       *idCnr,
+		Container:       idCnr,
 		Filename:        strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
 		ExpirationEpoch: expiration,
 		Payload:         data,
@@ -140,8 +139,9 @@ func (c *cred) Put(ctx context.Context, idCnr *cid.ID, issuer user.ID, box *acce
 		return nil, err
 	}
 
-	addr := address.NewAddress()
-	addr.SetObjectID(*idObj)
-	addr.SetContainerID(*idCnr)
-	return addr, nil
+	var addr oid.Address
+	addr.SetObject(*idObj)
+	addr.SetContainer(idCnr)
+
+	return &addr, nil
 }

@@ -519,8 +519,10 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 	}
 
 	parentAst := tableToAst(bacl.EACL, objInfo.Bucket)
+	strCID := bacl.Info.CID.EncodeToString()
+
 	for _, resource := range parentAst.Resources {
-		if resource.Bucket == bacl.Info.CID.String() {
+		if resource.Bucket == strCID {
 			resource.Bucket = objInfo.Bucket
 		}
 	}
