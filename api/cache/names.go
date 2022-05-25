@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 // ObjectsNameCache provides lru cache for objects.
@@ -32,23 +32,23 @@ func NewObjectsNameCache(config *Config) *ObjectsNameCache {
 	return &ObjectsNameCache{cache: gc}
 }
 
-// Get returns a cached object.
-func (o *ObjectsNameCache) Get(key string) *address.Address {
+// Get returns a cached object. Returns nil if value is missing.
+func (o *ObjectsNameCache) Get(key string) *oid.Address {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.(*address.Address)
+	result, ok := entry.(oid.Address)
 	if !ok {
 		return nil
 	}
 
-	return result
+	return &result
 }
 
 // Put puts an object to cache.
-func (o *ObjectsNameCache) Put(key string, address *address.Address) error {
+func (o *ObjectsNameCache) Put(key string, address oid.Address) error {
 	return o.cache.Set(key, address)
 }
 

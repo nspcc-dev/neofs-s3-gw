@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
@@ -104,7 +103,7 @@ func (tc *testContext) listVersions() *ListObjectVersionsInfo {
 	return res
 }
 
-func (tc *testContext) checkListObjects(ids ...*oid.ID) {
+func (tc *testContext) checkListObjects(ids ...oid.ID) {
 	objs := tc.listObjectsV1()
 	require.Equal(tc.t, len(ids), len(objs))
 	for _, id := range ids {
@@ -174,8 +173,8 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		layer: NewLayer(zap.NewNop(), tp, layerCfg),
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
-			Owner: usertest.ID(),
-			CID:   bktID,
+			Owner: *usertest.ID(),
+			CID:   *bktID,
 		},
 		obj:       "obj1",
 		t:         t,
@@ -199,9 +198,9 @@ func TestSimpleVersioning(t *testing.T) {
 
 	objv2, buffer2 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, obj1Content2, buffer2)
-	require.Contains(t, objv2.Headers[versionsAddAttr], obj1v1.ID.String())
+	require.Contains(t, objv2.Headers[versionsAddAttr], obj1v1.ID.EncodeToString())
 
-	_, buffer1 := tc.getObject(tc.obj, obj1v1.ID.String(), false)
+	_, buffer1 := tc.getObject(tc.obj, obj1v1.ID.EncodeToString(), false)
 	require.Equal(t, obj1Content1, buffer1)
 
 	tc.checkListObjects(obj1v2.ID)
@@ -218,9 +217,9 @@ func TestSimpleNoVersioning(t *testing.T) {
 
 	objv2, buffer2 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, obj1Content2, buffer2)
-	require.Contains(t, objv2.Headers[versionsDelAttr], obj1v1.ID.String())
+	require.Contains(t, objv2.Headers[versionsDelAttr], obj1v1.ID.EncodeToString())
 
-	tc.getObject(tc.obj, obj1v1.ID.String(), true)
+	tc.getObject(tc.obj, obj1v1.ID.EncodeToString(), true)
 	tc.checkListObjects(obj1v2.ID)
 }
 
@@ -479,13 +478,13 @@ func joinVers(objs ...*data.ObjectInfo) string {
 	return strings.Join(versions, ",")
 }
 
-func getOID(id byte) *oid.ID {
+func getOID(id byte) oid.ID {
 	b := [32]byte{}
 	b[31] = id
 
 	var idObj oid.ID
 	idObj.SetSHA256(b)
-	return &idObj
+	return idObj
 }
 
 func getTestObjectInfo(id byte, addAttr, delAttr, delMarkAttr string) *data.ObjectInfo {
@@ -531,7 +530,7 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 		versions            *objectVersions
 		versioningEnabled   bool
 		expectedHeader      map[string]string
-		expectedIdsToDelete []*oid.ID
+		expectedIdsToDelete []oid.ID
 	}{
 		{
 			name:           "unversioned save headers",
@@ -549,7 +548,7 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 				versionsDelAttr:         obj1.Version(),
 				versionsUnversionedAttr: "true",
 			},
-			expectedIdsToDelete: []*oid.ID{obj1.ID},
+			expectedIdsToDelete: []oid.ID{obj1.ID},
 		},
 		{
 			name:   "unversioned del header",
@@ -563,7 +562,7 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 				versionsDelAttr:         joinVers(obj1, obj2),
 				versionsUnversionedAttr: "true",
 			},
-			expectedIdsToDelete: []*oid.ID{obj2.ID},
+			expectedIdsToDelete: []oid.ID{obj2.ID},
 		},
 		{
 			name:   "versioned put",
@@ -598,7 +597,7 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 				versionsDelAttr:         obj1.Version(),
 				versionsUnversionedAttr: "true",
 			},
-			expectedIdsToDelete: []*oid.ID{obj1.ID},
+			expectedIdsToDelete: []oid.ID{obj1.ID},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -631,12 +630,13 @@ func TestSystemObjectsVersioning(t *testing.T) {
 
 	cnrID, _ := objMeta.ContainerID()
 	objID, _ := objMeta.ID()
-	addr := address.NewAddress()
-	addr.SetContainerID(cnrID)
-	addr.SetObjectID(objID)
+
+	var addr oid.Address
+	addr.SetContainer(cnrID)
+	addr.SetObject(objID)
 
 	// simulate failed deletion
-	tc.testNeoFS.AddObject(addr.String(), objMeta)
+	tc.testNeoFS.AddObject(addr.EncodeToString(), objMeta)
 
 	versioning, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
 	require.NoError(t, err)
@@ -656,7 +656,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	err := tc.layer.PutBucketTagging(tc.ctx, tc.bktInfo, tagSet)
 	require.NoError(t, err)
 
-	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.CID.String()))
+	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.CID.EncodeToString()))
 
 	tagSet["tag2"] = "val2"
 	err = tc.layer.PutBucketTagging(tc.ctx, tc.bktInfo, tagSet)
@@ -665,7 +665,7 @@ func TestDeleteSystemObjectsVersioning(t *testing.T) {
 	// simulate failed deletion
 	cnrID, _ := objMeta.ContainerID()
 	objID, _ := objMeta.ID()
-	tc.testNeoFS.AddObject(newAddress(cnrID, objID).String(), objMeta)
+	tc.testNeoFS.AddObject(newAddress(cnrID, objID).EncodeToString(), objMeta)
 
 	tagging, err := tc.layer.GetBucketTagging(tc.ctx, tc.bktInfo)
 	require.NoError(t, err)

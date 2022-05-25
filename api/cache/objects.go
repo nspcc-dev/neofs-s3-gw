@@ -5,7 +5,7 @@ import (
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 // ObjectsCache provides lru cache for objects.
@@ -32,8 +32,8 @@ func New(config *Config) *ObjectsCache {
 }
 
 // Get returns a cached object.
-func (o *ObjectsCache) Get(address *address.Address) *object.Object {
-	entry, err := o.cache.Get(address.String())
+func (o *ObjectsCache) Get(address oid.Address) *object.Object {
+	entry, err := o.cache.Get(address.EncodeToString())
 	if err != nil {
 		return nil
 	}
@@ -50,10 +50,15 @@ func (o *ObjectsCache) Get(address *address.Address) *object.Object {
 func (o *ObjectsCache) Put(obj object.Object) error {
 	cnrID, _ := obj.ContainerID()
 	objID, _ := obj.ID()
-	return o.cache.Set(cnrID.String()+"/"+objID.String(), obj)
+
+	var addr oid.Address
+	addr.SetContainer(cnrID)
+	addr.SetObject(objID)
+
+	return o.cache.Set(addr.EncodeToString(), obj)
 }
 
 // Delete deletes an object from cache.
-func (o *ObjectsCache) Delete(address *address.Address) bool {
-	return o.cache.Remove(address.String())
+func (o *ObjectsCache) Delete(address oid.Address) bool {
+	return o.cache.Remove(address.EncodeToString())
 }

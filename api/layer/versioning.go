@@ -271,10 +271,11 @@ func (v *objectVersions) getDelHeader() string {
 	return strings.Join(v.delList, ",")
 }
 
-func (v *objectVersions) getVersion(oid *oid.ID) *data.ObjectInfo {
+func (v *objectVersions) getVersion(obj oid.ID) *data.ObjectInfo {
+	strObj := obj.EncodeToString()
 	for _, version := range v.objects {
-		if version.Version() == oid.String() {
-			if contains(v.delList, oid.String()) {
+		if version.Version() == strObj {
+			if contains(v.delList, strObj) {
 				return nil
 			}
 			return version
@@ -397,7 +398,7 @@ func (n *layer) checkVersionsExist(ctx context.Context, bkt *data.BucketInfo, ob
 		if err = id.DecodeString(obj.VersionID); err != nil {
 			return nil, errors.GetAPIError(errors.ErrInvalidVersion)
 		}
-		version = versions.getVersion(&id)
+		version = versions.getVersion(id)
 	}
 
 	if version == nil {

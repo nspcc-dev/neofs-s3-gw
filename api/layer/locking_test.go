@@ -25,7 +25,7 @@ func TestObjectLockAttributes(t *testing.T) {
 		Metadata: make(map[string]string),
 		Lock: &data.ObjectLock{
 			Until:   time.Now(),
-			Objects: []oid.ID{*obj.ID},
+			Objects: []oid.ID{obj.ID},
 		},
 	})
 	require.NoError(t, err)

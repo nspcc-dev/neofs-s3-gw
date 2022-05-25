@@ -21,7 +21,7 @@ import (
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -207,7 +207,6 @@ func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPo
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
 		err      error
-		id       *cid.ID
 		box      *accessbox.AccessBox
 		lifetime lifetimeOptions
 	)
@@ -240,7 +239,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
 		zap.String("friendly_name", options.Container.FriendlyName),
 		zap.String("placement_policy", options.Container.PlacementPolicy))
-	if id, err = a.checkContainer(ctx, options.Container, idOwner); err != nil {
+	id, err := a.checkContainer(ctx, options.Container, idOwner)
+	if err != nil {
 		return err
 	}
 
@@ -249,20 +249,21 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	addr, err := tokens.
 		New(a.neoFS, secrets.EphemeralKey, cache.DefaultAccessBoxConfig()).
-		Put(ctx, id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
+		Put(ctx, *id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
 
-	cnrID, _ := addr.ContainerID()
-	objID, _ := addr.ObjectID()
-	accessKeyID := cnrID.EncodeToString() + "0" + objID.EncodeToString()
+	objID := addr.Object()
+	strIDObj := objID.EncodeToString()
+
+	accessKeyID := addr.Container().EncodeToString() + "0" + strIDObj
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secrets.AccessKey,
 		OwnerPrivateKey: hex.EncodeToString(secrets.EphemeralKey.Bytes()),
-		ContainerID:     id.String(),
+		ContainerID:     id.EncodeToString(),
 	}
 
 	enc := json.NewEncoder(w)
@@ -272,7 +273,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	}
 
 	if options.AwsCliCredentialsFile != "" {
-		profileName := "authmate_cred_" + objID.EncodeToString()
+		profileName := "authmate_cred_" + strIDObj
 		if _, err = os.Stat(options.AwsCliCredentialsFile); os.IsNotExist(err) {
 			profileName = "default"
 		}
@@ -293,8 +294,9 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
 	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig())
-	addr := address.NewAddress()
-	if err := addr.Parse(options.SecretAddress); err != nil {
+
+	var addr oid.Address
+	if err := addr.DecodeString(options.SecretAddress); err != nil {
 		return fmt.Errorf("failed to parse secret address: %w", err)
 	}
 

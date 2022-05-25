@@ -162,7 +162,7 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		ps := &layer.PutSystemObjectParams{
 			BktInfo:  bktInfo,
 			ObjName:  objInfo.LegalHoldObject(),
-			Lock:     &data.ObjectLock{LegalHold: true, Objects: []oid.ID{*objInfo.ID}},
+			Lock:     &data.ObjectLock{LegalHold: true, Objects: []oid.ID{objInfo.ID}},
 			Metadata: make(map[string]string),
 		}
 		if _, err = h.obj.PutSystemObject(r.Context(), ps); err != nil {
@@ -252,7 +252,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
 	}
-	lock.Objects = append(lock.Objects, *objInfo.ID)
+	lock.Objects = append(lock.Objects, objInfo.ID)
 
 	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.RetentionObject())
 	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
@@ -20,8 +19,8 @@ type (
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
 		Name               string
-		CID                *cid.ID
-		Owner              *user.ID
+		CID                cid.ID
+		Owner              user.ID
 		Created            time.Time
 		BasicACL           uint32
 		LocationConstraint string
@@ -30,8 +29,8 @@ type (
 
 	// ObjectInfo holds S3 object data.
 	ObjectInfo struct {
-		ID    *oid.ID
-		CID   *cid.ID
+		ID    oid.ID
+		CID   cid.ID
 		IsDir bool
 
 		Bucket        string
@@ -41,7 +40,7 @@ type (
 		Created       time.Time
 		CreationEpoch uint64
 		HashSum       string
-		Owner         *user.ID
+		Owner         user.ID
 		Headers       map[string]string
 	}
 
@@ -79,7 +78,7 @@ func (b *BucketInfo) NotificationConfigurationObjectName() string {
 }
 
 // Version returns object version from ObjectInfo.
-func (o *ObjectInfo) Version() string { return o.ID.String() }
+func (o *ObjectInfo) Version() string { return o.ID.EncodeToString() }
 
 // NullableVersion returns object version from ObjectInfo.
 // Return "null" if "S3-Versions-unversioned" header is present.
@@ -94,10 +93,10 @@ func (o *ObjectInfo) NullableVersion() string {
 func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 
 // Address returns object address.
-func (o *ObjectInfo) Address() *address.Address {
-	addr := address.NewAddress()
-	addr.SetContainerID(*o.CID)
-	addr.SetObjectID(*o.ID)
+func (o *ObjectInfo) Address() oid.Address {
+	var addr oid.Address
+	addr.SetContainer(o.CID)
+	addr.SetObject(o.ID)
 
 	return addr
 }

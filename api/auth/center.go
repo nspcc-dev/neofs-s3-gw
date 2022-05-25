@@ -21,7 +21,7 @@ import (
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/object/address"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 // authorizationFieldRegexp -- is regexp for credentials with Base58 encoded cid and oid and '0' (zero) as delimiter.
@@ -105,12 +105,12 @@ func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 	}, nil
 }
 
-func (a *authHeader) getAddress() (*address.Address, error) {
-	addr := address.NewAddress()
-	if err := addr.Parse(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
+func (a *authHeader) getAddress() (*oid.Address, error) {
+	var addr oid.Address
+	if err := addr.DecodeString(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
 	}
-	return addr, nil
+	return &addr, nil
 }
 
 func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
@@ -142,7 +142,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, err
 	}
 
-	box, err := c.cli.GetBox(r.Context(), addr)
+	box, err := c.cli.GetBox(r.Context(), *addr)
 	if err != nil {
 		return nil, err
 	}
@@ -179,8 +179,8 @@ func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
 	}
 
-	addr := address.NewAddress()
-	if err = addr.Parse(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
+	var addr oid.Address
+	if err = addr.DecodeString(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
 	}
 

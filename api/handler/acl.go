@@ -217,8 +217,10 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 	}
 
 	parentAst := tableToAst(bucketACL.EACL, bktInfo.Name)
+	strCID := bucketACL.Info.CID.EncodeToString()
+
 	for _, resource := range parentAst.Resources {
-		if resource.Bucket == bucketACL.Info.CID.String() {
+		if resource.Bucket == strCID {
 			resource.Bucket = bktInfo.Name
 		}
 	}

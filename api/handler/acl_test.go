@@ -57,7 +57,7 @@ func TestTableToAst(t *testing.T) {
 				resourceInfo: resourceInfo{
 					Bucket:  "bucketName",
 					Object:  "objectName",
-					Version: id.String(),
+					Version: id.EncodeToString(),
 				},
 				Operations: []*astOperation{{
 					Users: []string{
@@ -775,7 +775,7 @@ func TestObjectAclToAst(t *testing.T) {
 	resInfo := &resourceInfo{
 		Bucket:  "bucketName",
 		Object:  "object",
-		Version: objID.String(),
+		Version: objID.EncodeToString(),
 	}
 
 	var operations []*astOperation

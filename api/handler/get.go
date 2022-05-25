@@ -82,7 +82,7 @@ func writeHeaders(h http.Header, info *data.ObjectInfo, tagSetLength int) {
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
-	h.Set(api.AmzVersionID, info.ID.String())
+	h.Set(api.AmzVersionID, info.ID.EncodeToString())
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
 	if cacheControl := info.Headers[api.CacheControl]; cacheControl != "" {

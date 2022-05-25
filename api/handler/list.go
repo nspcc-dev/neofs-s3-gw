@@ -25,7 +25,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(list) > 0 {
-		own = *list[0].Owner
+		own = list[0].Owner
 	}
 
 	res = &ListBucketsResponse{

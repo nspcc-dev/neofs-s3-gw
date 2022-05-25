@@ -348,7 +348,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 		return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 	}
 
-	return n.containerInfo(ctx, containerID)
+	return n.containerInfo(ctx, *containerID)
 }
 
 // GetBucketACL returns bucket acl info by name.
@@ -536,7 +536,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
 	var (
 		err error
-		ids []*oid.ID
+		ids []oid.ID
 	)
 
 	p := &PutObjectParams{
@@ -571,7 +571,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			obj.Error = err
 			return obj
 		}
-		ids = []*oid.ID{version.ID}
+		ids = []oid.ID{version.ID}
 		if version.Headers[VersionsDeleteMarkAttr] == DelMarkFullObject {
 			obj.DeleteMarkVersion = version.Version()
 		}
@@ -627,7 +627,7 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 		return nil, err
 	}
 
-	if p.SessionToken != nil && p.SessionToken.IssuedBy(*bktInfo.Owner) {
+	if p.SessionToken != nil && session.IssuedBy(*p.SessionToken, bktInfo.Owner) {
 		return nil, errors.GetAPIError(errors.ErrBucketAlreadyOwnedByYou)
 	}
 
