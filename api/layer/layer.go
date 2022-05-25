@@ -524,7 +524,7 @@ func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, 
 		p := &data.ObjectTaggingInfo{
 			CnrID:     bkt.CID,
 			ObjName:   obj.Name,
-			VersionID: version.OID.String(),
+			VersionID: version.OID.EncodeToString(),
 		}
 		return deleteMarkVersion, n.DeleteObjectTagging(ctx, p)
 	}

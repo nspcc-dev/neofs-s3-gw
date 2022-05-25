@@ -121,11 +121,11 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error {
 }
 
 func objectTaggingCacheKey(p *data.ObjectTaggingInfo) string {
-	return ".tagset." + p.CnrID.String() + "." + p.ObjName + "." + p.VersionID
+	return ".tagset." + p.CnrID.EncodeToString() + "." + p.ObjName + "." + p.VersionID
 }
 
 func bucketTaggingCacheKey(cnrID *cid.ID) string {
-	return ".tagset." + cnrID.String()
+	return ".tagset." + cnrID.EncodeToString()
 }
 
 func (n *layer) getTaggedObjectVersion(ctx context.Context, p *data.ObjectTaggingInfo) (*data.NodeVersion, error) {
@@ -154,7 +154,7 @@ func (n *layer) getTaggedObjectVersion(ctx context.Context, p *data.ObjectTaggin
 			return nil, err
 		}
 		for _, v := range versions {
-			if v.OID.String() == p.VersionID {
+			if v.OID.EncodeToString() == p.VersionID {
 				version = v
 				break
 			}
