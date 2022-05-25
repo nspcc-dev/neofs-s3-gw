@@ -7,7 +7,7 @@ To update this file using tests result, run:
 
 ## CopyObject
 
-Compatibility: 16/16/17 out of 17
+Compatibility: 15/16/17 out of 17
 
 |    | Test                                                                      | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------|-------|-------|--------|
@@ -23,7 +23,7 @@ Compatibility: 16/16/17 out of 17
 | 10 | s3tests_boto3.functional.test_s3.test_object_copy_diff_bucket             | ok    | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_bucket        | ok    | FAIL  | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_object_copy_not_owned_object_bucket | ERROR | ok    | ok     |
-| 13 | s3tests_boto3.functional.test_s3.test_object_copy_canned_acl              | ok    | ok    | ok     |
+| 13 | s3tests_boto3.functional.test_s3.test_object_copy_canned_acl              | ERROR | ok    | ok     |
 | 14 | s3tests_boto3.functional.test_s3.test_object_copy_retaining_metadata      | ok    | ok    | ok     |
 | 15 | s3tests_boto3.functional.test_s3.test_object_copy_replacing_metadata      | ok    | ok    | ok     |
 | 16 | s3tests_boto3.functional.test_s3.test_object_copy_bucket_not_found        | ok    | ok    | ok     |
@@ -31,7 +31,7 @@ Compatibility: 16/16/17 out of 17
 
 ## GetObject
 
-Compatibility: 28/25/29 out of 33
+Compatibility: 29/25/29 out of 33
 
 |    | Test                                                                                     | s3-gw | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -56,16 +56,16 @@ Compatibility: 28/25/29 out of 33
 | 19 | s3tests_boto3.functional.test_s3.test_atomic_read_1mb                                    | ok    | ok    | ok     |
 | 20 | s3tests_boto3.functional.test_s3.test_atomic_read_4mb                                    | ok    | ok    | ok     |
 | 21 | s3tests_boto3.functional.test_s3.test_atomic_read_8mb                                    | ok    | ok    | ok     |
-| 22 | s3tests_boto3.functional.test_s3.test_object_raw_get_x_amz_expires_not_expired           | ERROR | ok    | ok     |
+| 22 | s3tests_boto3.functional.test_s3.test_object_raw_get_x_amz_expires_not_expired           | FAIL  | ok    | ok     |
 | 23 | s3tests_boto3.functional.test_s3.test_object_raw_get_x_amz_expires_out_range_zero        | ok    | ok    | ok     |
 | 24 | s3tests_boto3.functional.test_s3.test_object_raw_get_x_amz_expires_out_max_range         | ok    | FAIL  | FAIL   |
 | 25 | s3tests_boto3.functional.test_s3.test_object_raw_get_x_amz_expires_out_positive_range    | ok    | FAIL  | FAIL   |
 | 26 | s3tests_boto3.functional.test_s3.test_object_raw_get                                     | ok    | ERROR | ok     |
 | 27 | s3tests_boto3.functional.test_s3.test_object_raw_get_bucket_gone                         | ok    | FAIL  | ok     |
-| 28 | s3tests_boto3.functional.test_s3.test_object_delete_key_bucket_gone                      | ERROR | FAIL  | ok     |
+| 28 | s3tests_boto3.functional.test_s3.test_object_delete_key_bucket_gone                      | ok    | FAIL  | ok     |
 | 29 | s3tests_boto3.functional.test_s3.test_object_header_acl_grants                           | ERROR | FAIL  | ERROR  |
 | 30 | s3tests_boto3.functional.test_s3.test_object_raw_get_object_gone                         | ok    | FAIL  | ok     |
-| 31 | s3tests_boto3.functional.test_s3.test_object_raw_get_object_acl                          | ERROR | ok    | ok     |
+| 31 | s3tests_boto3.functional.test_s3.test_object_raw_get_object_acl                          | FAIL  | ok    | ok     |
 | 32 | s3tests_boto3.functional.test_s3.test_object_raw_authenticated                           | ok    | ok    | ok     |
 | 33 | s3tests_boto3.functional.test_s3.test_object_raw_response_headers                        | ok    | ok    | ok     |
 
@@ -80,9 +80,9 @@ Compatibility: 31/36/37 out of 64
 | 3  | s3tests_boto3.functional.test_s3.test_put_object_ifmatch_overwrite_existed_good                | ok          | ok    | ERROR  |
 | 4  | s3tests_boto3.functional.test_s3.test_put_object_ifmatch_nonexisted_failed                     | FAIL        | FAIL  | FAIL   |
 | 5  | s3tests_boto3.functional.test_s3.test_put_object_ifnonmatch_good                               | ok          | ok    | ERROR  |
-| 6  | s3tests_boto3.functional.test_s3.test_put_object_ifnonmatch_failed                             | ERROR       | FAIL  | FAIL   |
+| 6  | s3tests_boto3.functional.test_s3.test_put_object_ifnonmatch_failed                             | FAIL        | FAIL  | FAIL   |
 | 7  | s3tests_boto3.functional.test_s3.test_put_object_ifnonmatch_nonexisted_good                    | ok          | ok    | ERROR  |
-| 8  | s3tests_boto3.functional.test_s3.test_put_object_ifnonmatch_overwrite_existed_failed           | ERROR       | FAIL  | FAIL   |
+| 8  | s3tests_boto3.functional.test_s3.test_put_object_ifnonmatch_overwrite_existed_failed           | FAIL        | FAIL  | FAIL   |
 | 9  | s3tests_boto3.functional.test_headers.test_object_create_bad_md5_invalid_short                 | UNSUPPORTED | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_headers.test_object_create_bad_md5_bad                           | UNSUPPORTED | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_headers.test_object_create_bad_md5_empty                         | UNSUPPORTED | ok    | ok     |
@@ -134,11 +134,11 @@ Compatibility: 31/36/37 out of 64
 | 57 | s3tests_boto3.functional.test_s3.test_atomic_write_4mb                                         | ok          | ok    | ok     |
 | 58 | s3tests_boto3.functional.test_s3.test_atomic_write_8mb                                         | ok          | ok    | ok     |
 | 59 | s3tests_boto3.functional.test_s3.test_atomic_dual_write_1mb                                    | FAIL        | ok    | ERROR  |
-| 60 | s3tests_boto3.functional.test_s3.test_atomic_dual_write_4mb                                    | ok          | ok    | ERROR  |
+| 60 | s3tests_boto3.functional.test_s3.test_atomic_dual_write_4mb                                    | FAIL        | ok    | ERROR  |
 | 61 | s3tests_boto3.functional.test_s3.test_atomic_dual_write_8mb                                    | ok          | ok    | ERROR  |
 | 62 | s3tests_boto3.functional.test_s3.test_atomic_conditional_write_1mb                             | ok          | ok    | ERROR  |
 | 63 | s3tests_boto3.functional.test_s3.test_atomic_dual_conditional_write_1mb                        | FAIL        | FAIL  | FAIL   |
-| 64 | s3tests_boto3.functional.test_s3.test_atomic_write_bucket_gone                                 | FAIL        | ok    | ok     |
+| 64 | s3tests_boto3.functional.test_s3.test_atomic_write_bucket_gone                                 | ok          | ok    | ok     |
 
 ## PostObject
 
@@ -182,7 +182,7 @@ Compatibility: 12/12/32 out of 33
 
 ## ListObjects
 
-Compatibility: 74/63/75 out of 84
+Compatibility: 76/63/75 out of 84
 
 |    | Test                                                                                            | s3-gw | minio | aws s3 |
 |----|-------------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -265,15 +265,15 @@ Compatibility: 74/63/75 out of 84
 | 77 | s3tests_boto3.functional.test_s3.test_bucket_list_return_data                                   | ok    | FAIL  | ok     |
 | 78 | s3tests_boto3.functional.test_s3.test_bucket_list_objects_anonymous                             | ok    | ERROR | ok     |
 | 79 | s3tests_boto3.functional.test_s3.test_bucket_listv2_objects_anonymous                           | ok    | ERROR | ok     |
-| 80 | s3tests_boto3.functional.test_s3.test_bucket_list_objects_anonymous_fail                        | FAIL  | ok    | ok     |
-| 81 | s3tests_boto3.functional.test_s3.test_bucket_listv2_objects_anonymous_fail                      | FAIL  | ok    | ok     |
+| 80 | s3tests_boto3.functional.test_s3.test_bucket_list_objects_anonymous_fail                        | ok    | ok    | ok     |
+| 81 | s3tests_boto3.functional.test_s3.test_bucket_listv2_objects_anonymous_fail                      | ok    | ok    | ok     |
 | 82 | s3tests_boto3.functional.test_s3.test_bucket_list_special_prefix                                | ok    | ok    | ok     |
 | 83 | s3tests_boto3.functional.test_s3.test_bucket_list_long_name                                     | ok    | ok    | ok     |
 | 84 | s3tests_boto3.functional.test_s3.test_basic_key_count                                           | ok    | ok    | ok     |
 
 ## Object ACL
 
-Compatibility:  5/3/10 out of 19
+Compatibility:  4/3/10 out of 19
 
 |    | Test                                                                                  | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------------------|-------|-------|--------|
@@ -287,7 +287,7 @@ Compatibility:  5/3/10 out of 19
 | 8  | s3tests_boto3.functional.test_s3.test_object_acl_canned_bucketownerread               | ERROR | ERROR | ERROR  |
 | 9  | s3tests_boto3.functional.test_s3.test_object_acl_canned_bucketownerfullcontrol        | ERROR | ERROR | ERROR  |
 | 10 | s3tests_boto3.functional.test_s3.test_object_acl_full_control_verify_owner            | ERROR | ERROR | ERROR  |
-| 11 | s3tests_boto3.functional.test_s3.test_object_acl_full_control_verify_attributes       | ok    | ok    | ok     |
+| 11 | s3tests_boto3.functional.test_s3.test_object_acl_full_control_verify_attributes       | ERROR | ok    | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_object_acl                                      | ERROR | FAIL  | FAIL   |
 | 13 | s3tests_boto3.functional.test_s3.test_object_acl_write                                | ERROR | ERROR | ok     |
 | 14 | s3tests_boto3.functional.test_s3.test_object_acl_writeacp                             | ERROR | ERROR | ok     |
@@ -299,43 +299,43 @@ Compatibility:  5/3/10 out of 19
 
 ## Locking
 
-Compatibility:  0/5/29 out of 29
+Compatibility:  12/5/29 out of 29
 
 |    | Test                                                                                           | s3-gw | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------------|-------|-------|--------|
-| 1  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock                                 | ERROR | ERROR | ok     |
-| 2  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_bucket                  | FAIL  | FAIL  | ok     |
+| 1  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock                                 | ok    | ERROR | ok     |
+| 2  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_bucket                  | ok    | FAIL  | ok     |
 | 3  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_with_days_and_years             | FAIL  | ERROR | ok     |
 | 4  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_days                    | FAIL  | ERROR | FAIL   |
-| 5  | s3tests_boto3.functional.test_s3.test_object_lock_uploading_obj                                | ERROR | ERROR | ok     |
+| 5  | s3tests_boto3.functional.test_s3.test_object_lock_uploading_obj                                | ok    | ERROR | ok     |
 | 6  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_years                   | FAIL  | ERROR | ok     |
 | 7  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_status                  | FAIL  | ERROR | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_object_lock_suspend_versioning                           | FAIL  | ERROR | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock                                 | ERROR | ERROR | ok     |
-| 10 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock_invalid_bucket                  | FAIL  | ok    | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention                            | ERROR | ERROR | ok     |
+| 9  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock                                 | FAIL  | ERROR | ok     |
+| 10 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock_invalid_bucket                  | ok    | ok    | ok     |
+| 11 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention                            | ok    | ERROR | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_invalid_bucket             | FAIL  | ok    | ok     |
 | 13 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_invalid_mode               | FAIL  | ERROR | ok     |
-| 14 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention                            | ERROR | ERROR | ok     |
+| 14 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention                            | ok    | ERROR | ok     |
 | 15 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention_invalid_bucket             | FAIL  | ok    | ok     |
-| 16 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_versionid                  | ERROR | ERROR | ok     |
+| 16 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_versionid                  | ok    | ERROR | ok     |
 | 17 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_override_default_retention | ERROR | ERROR | ok     |
 | 18 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_increase_period            | ERROR | ERROR | ok     |
-| 19 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period             | ERROR | ERROR | ok     |
-| 20 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period_bypass      | ERROR | ERROR | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_retention                 | ERROR | ERROR | ok     |
-| 22 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold                               | ERROR | ERROR | ok     |
+| 19 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period             | FAIL  | ERROR | ok     |
+| 20 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period_bypass      | ok    | ERROR | ok     |
+| 21 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_retention                 | FAIL  | ERROR | ok     |
+| 22 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold                               | ok    | ERROR | ok     |
 | 23 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold_invalid_bucket                | FAIL  | ok    | ok     |
 | 24 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold_invalid_status                | FAIL  | ERROR | ok     |
-| 25 | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold                               | ERROR | ERROR | ok     |
+| 25 | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold                               | ok    | ERROR | ok     |
 | 26 | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold_invalid_bucket                | FAIL  | ok    | ok     |
-| 27 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_on             | ERROR | ERROR | ok     |
-| 28 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_off            | ERROR | ERROR | ok     |
-| 29 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_metadata                             | ERROR | ERROR | ok     |
+| 27 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_on             | FAIL  | ERROR | ok     |
+| 28 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_off            | ok    | ERROR | ok     |
+| 29 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_metadata                             | ok    | ERROR | ok     |
 
 ## Multipart
 
-Compatibility: 18/15/19 out of 22
+Compatibility: 19/15/19 out of 22
 
 |    | Test                                                                             | s3-gw | minio | aws s3 |
 |----|----------------------------------------------------------------------------------|-------|-------|--------|
@@ -347,7 +347,7 @@ Compatibility: 18/15/19 out of 22
 | 6  | s3tests_boto3.functional.test_s3.test_multipart_copy_without_range               | ok    | ok    | ok     |
 | 7  | s3tests_boto3.functional.test_s3.test_multipart_copy_special_names               | ok    | ok    | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_multipart_upload                           | ERROR | ERROR | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_multipart_upload_resend_part               | FAIL  | ok    | ok     |
+| 9  | s3tests_boto3.functional.test_s3.test_multipart_upload_resend_part               | ok    | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_multipart_upload_multiple_sizes            | ok    | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_multipart_copy_multiple_sizes              | ok    | ok    | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_multipart_upload_size_too_small            | ok    | ok    | ok     |
@@ -396,7 +396,7 @@ Compatibility: 22/19/24 out of 26
 | 7  | s3tests_boto3.functional.test_s3.test_versioning_obj_suspend_versions                       | ok    | ok    | ok     |
 | 8  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_all             | ok    | ok    | ok     |
 | 9  | s3tests_boto3.functional.test_s3.test_versioning_obj_create_versions_remove_special_names   | ok    | ok    | ok     |
-| 10 | s3tests_boto3.functional.test_s3.test_versioning_obj_create_overwrite_multipart             | ERROR | ok    | ok     |
+| 10 | s3tests_boto3.functional.test_s3.test_versioning_obj_create_overwrite_multipart             | FAIL  | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_versioning_obj_list_marker                            | ok    | ok    | ok     |
 | 12 | s3tests_boto3.functional.test_s3.test_versioning_copy_obj_version                           | ok    | ok    | ok     |
 | 13 | s3tests_boto3.functional.test_s3.test_versioning_multi_object_delete                        | ok    | ok    | ok     |
@@ -416,7 +416,7 @@ Compatibility: 22/19/24 out of 26
 
 ## Bucket
 
-Compatibility:  33/38/45 out of 59
+Compatibility:  38/38/45 out of 59
 
 |    | Test                                                                                         | s3-gw | minio | aws s3 |
 |----|----------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -442,8 +442,8 @@ Compatibility:  33/38/45 out of 59
 | 20 | s3tests_boto3.functional.test_s3.test_bucketv2_notexist                                      | ok    | ok    | ok     |
 | 21 | s3tests_boto3.functional.test_s3.test_bucket_delete_notexist                                 | ok    | ok    | ok     |
 | 22 | s3tests_boto3.functional.test_s3.test_bucket_delete_nonempty                                 | ok    | ok    | ok     |
-| 23 | s3tests_boto3.functional.test_s3.test_bucket_concurrent_set_canned_acl                       | FAIL  | FAIL  | FAIL   |
-| 24 | s3tests_boto3.functional.test_s3.test_bucket_create_delete                                   | FAIL  | ok    | ok     |
+| 23 | s3tests_boto3.functional.test_s3.test_bucket_concurrent_set_canned_acl                       | ok    | FAIL  | FAIL   |
+| 24 | s3tests_boto3.functional.test_s3.test_bucket_create_delete                                   | ok    | ok    | ok     |
 | 25 | s3tests_boto3.functional.test_s3.test_bucket_head                                            | ok    | ok    | ok     |
 | 26 | s3tests_boto3.functional.test_s3.test_bucket_head_notexist                                   | ok    | ok    | ok     |
 | 27 | s3tests_boto3.functional.test_s3.test_bucket_head_extended                                   | ERROR | ERROR | ERROR  |
@@ -456,7 +456,7 @@ Compatibility:  33/38/45 out of 59
 | 34 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_long_61                      | ok    | ok    | ok     |
 | 35 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_long_62                      | ok    | ok    | ok     |
 | 36 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_long_63                      | ok    | ok    | ok     |
-| 37 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_bad_ip                            | FAIL  | ok    | FAIL   |
+| 37 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_bad_ip                            | ok    | ok    | FAIL   |
 | 38 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_bad_punctuation                   | ERROR | ERROR | ERROR  |
 | 39 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_dns_underscore                    | ok    | ok    | ok     |
 | 40 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_dns_long                          | ok    | ok    | ok     |
@@ -466,28 +466,28 @@ Compatibility:  33/38/45 out of 59
 | 44 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_dns_dash_dot                      | ok    | ok    | ok     |
 | 45 | s3tests_boto3.functional.test_s3.test_bucket_create_exists                                   | ERROR | ERROR | ok     |
 | 46 | s3tests_boto3.functional.test_s3.test_bucket_get_location                                    | ok    | FAIL  | ERROR  |
-| 47 | s3tests_boto3.functional.test_s3.test_bucket_create_exists_nonowner                          | FAIL  | FAIL  | ok     |
+| 47 | s3tests_boto3.functional.test_s3.test_bucket_create_exists_nonowner                          | ok    | FAIL  | ok     |
 | 48 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_starts_alpha                 | ok    | ok    | ok     |
 | 49 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_starts_digit                 | ok    | ok    | ok     |
-| 50 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_contains_period              | ok    | ok    | ok     |
+| 50 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_contains_period              | ERROR | ok    | ok     |
 | 51 | s3tests_boto3.functional.test_s3.test_bucket_create_naming_good_contains_hyphen              | ok    | ok    | ok     |
 | 52 | s3tests_boto3.functional.test_s3.test_bucket_recreate_not_overriding                         | ERROR | ERROR | ok     |
-| 53 | s3tests_boto3.functional.test_s3.test_bucket_create_special_key_names                        | ERROR | ok    | ok     |
+| 53 | s3tests_boto3.functional.test_s3.test_bucket_create_special_key_names                        | ok    | ok    | ok     |
 | 54 | s3tests_boto3.functional.test_s3.test_bucket_policy_set_condition_operator_end_with_IfExists | ERROR | ERROR | FAIL   |
 | 55 | s3tests_boto3.functional.test_s3.test_buckets_create_then_list                               | ok    | ok    | ok     |
-| 56 | s3tests_boto3.functional.test_s3.test_buckets_list_ctime                                     | FAIL  | ok    | FAIL   |
+| 56 | s3tests_boto3.functional.test_s3.test_buckets_list_ctime                                     | ok    | ok    | FAIL   |
 | 57 | s3tests_boto3.functional.test_s3.test_list_buckets_anonymous                                 | ok    | ERROR | ERROR  |
 | 58 | s3tests_boto3.functional.test_s3.test_list_buckets_invalid_auth                              | ok    | ok    | ok     |
 | 59 | s3tests_boto3.functional.test_s3.test_list_buckets_bad_auth                                  | ok    | ok    | ok     |
 
 ## Bucket ACL
 
-Compatibility:  4/3/16 out of 33
+Compatibility:  2/3/16 out of 33
 
 |    | Test                                                                                       | s3-gw | minio | aws s3 |
 |----|--------------------------------------------------------------------------------------------|-------|-------|--------|
-| 1  | s3tests_boto3.functional.test_s3.test_bucket_recreate_overwrite_acl                        | ok    | FAIL  | FAIL   |
-| 2  | s3tests_boto3.functional.test_s3.test_bucket_recreate_new_acl                              | ok    | FAIL  | FAIL   |
+| 1  | s3tests_boto3.functional.test_s3.test_bucket_recreate_overwrite_acl                        | FAIL  | FAIL  | FAIL   |
+| 2  | s3tests_boto3.functional.test_s3.test_bucket_recreate_new_acl                              | FAIL  | FAIL  | FAIL   |
 | 3  | s3tests_boto3.functional.test_s3.test_bucket_acl_default                                   | FAIL  | FAIL  | ok     |
 | 4  | s3tests_boto3.functional.test_s3.test_bucket_acl_canned_during_create                      | FAIL  | FAIL  | FAIL   |
 | 5  | s3tests_boto3.functional.test_s3.test_bucket_acl_canned                                    | FAIL  | FAIL  | FAIL   |
@@ -495,30 +495,30 @@ Compatibility:  4/3/16 out of 33
 | 7  | s3tests_boto3.functional.test_s3.test_bucket_acl_canned_authenticatedread                  | FAIL  | FAIL  | FAIL   |
 | 8  | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_fullcontrol                  | ERROR | FAIL  | ERROR  |
 | 9  | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_read                         | ERROR | FAIL  | ERROR  |
-| 10 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_readacp                      | ERROR | FAIL  | ERROR  |
+| 10 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_readacp                      | FAIL  | FAIL  | ERROR  |
 | 11 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_write                        | ERROR | FAIL  | ERROR  |
-| 12 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_writeacp                     | ERROR | FAIL  | ERROR  |
-| 13 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_nonexist_user                       | ERROR | FAIL  | ok     |
+| 12 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_userid_writeacp                     | FAIL  | FAIL  | ERROR  |
+| 13 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_nonexist_user                       | FAIL  | FAIL  | ok     |
 | 14 | s3tests_boto3.functional.test_s3.test_bucket_acl_no_grants                                 | ERROR | ERROR | FAIL   |
 | 15 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_email                               | ERROR | FAIL  | ERROR  |
-| 16 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_email_not_exist                     | ERROR | FAIL  | ok     |
+| 16 | s3tests_boto3.functional.test_s3.test_bucket_acl_grant_email_not_exist                     | FAIL  | FAIL  | ok     |
 | 17 | s3tests_boto3.functional.test_s3.test_bucket_acl_revoke_all                                | ERROR | ERROR | ok     |
 | 18 | s3tests_boto3.functional.test_s3.test_bucket_acl_canned_private_to_private                 | ok    | ok    | ok     |
 | 19 | s3tests_boto3.functional.test_s3.test_bucket_header_acl_grants                             | ERROR | FAIL  | FAIL   |
-| 20 | s3tests_boto3.functional.test_s3.test_access_bucket_private_object_private                 | ERROR | FAIL  | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_access_bucket_private_objectv2_private               | ERROR | FAIL  | ok     |
+| 20 | s3tests_boto3.functional.test_s3.test_access_bucket_private_object_private                 | ok    | FAIL  | ok     |
+| 21 | s3tests_boto3.functional.test_s3.test_access_bucket_private_objectv2_private               | ok    | FAIL  | ok     |
 | 22 | s3tests_boto3.functional.test_s3.test_access_bucket_private_object_publicread              | ERROR | ERROR | ok     |
 | 23 | s3tests_boto3.functional.test_s3.test_access_bucket_private_objectv2_publicread            | ERROR | ERROR | ok     |
 | 24 | s3tests_boto3.functional.test_s3.test_access_bucket_private_object_publicreadwrite         | ERROR | ERROR | ok     |
 | 25 | s3tests_boto3.functional.test_s3.test_access_bucket_private_objectv2_publicreadwrite       | ERROR | ERROR | ok     |
-| 26 | s3tests_boto3.functional.test_s3.test_access_bucket_publicread_object_private              | ERROR | ERROR | ok     |
-| 27 | s3tests_boto3.functional.test_s3.test_access_bucket_publicread_object_publicread           | ERROR | ERROR | ok     |
-| 28 | s3tests_boto3.functional.test_s3.test_access_bucket_publicread_object_publicreadwrite      | ERROR | ERROR | ok     |
-| 29 | s3tests_boto3.functional.test_s3.test_access_bucket_publicreadwrite_object_private         | ERROR | ERROR | FAIL   |
-| 30 | s3tests_boto3.functional.test_s3.test_access_bucket_publicreadwrite_object_publicread      | ERROR | ERROR | FAIL   |
-| 31 | s3tests_boto3.functional.test_s3.test_access_bucket_publicreadwrite_object_publicreadwrite | ERROR | ERROR | FAIL   |
+| 26 | s3tests_boto3.functional.test_s3.test_access_bucket_publicread_object_private              | FAIL  | ERROR | ok     |
+| 27 | s3tests_boto3.functional.test_s3.test_access_bucket_publicread_object_publicread           | FAIL  | ERROR | ok     |
+| 28 | s3tests_boto3.functional.test_s3.test_access_bucket_publicread_object_publicreadwrite      | FAIL  | ERROR | ok     |
+| 29 | s3tests_boto3.functional.test_s3.test_access_bucket_publicreadwrite_object_private         | FAIL  | ERROR | FAIL   |
+| 30 | s3tests_boto3.functional.test_s3.test_access_bucket_publicreadwrite_object_publicread      | FAIL  | ERROR | FAIL   |
+| 31 | s3tests_boto3.functional.test_s3.test_access_bucket_publicreadwrite_object_publicreadwrite | FAIL  | ERROR | FAIL   |
 | 32 | s3tests_boto3.functional.test_s3.test_object_raw_authenticated_bucket_acl                  | ok    | ok    | ok     |
-| 33 | s3tests_boto3.functional.test_s3.test_object_raw_authenticated_bucket_gone                 | FAIL  | ok    | ok     |
+| 33 | s3tests_boto3.functional.test_s3.test_object_raw_authenticated_bucket_gone                 | ok    | ok    | ok     |
 
 ## CORS
 
@@ -533,7 +533,7 @@ Compatibility: 3/0/3 out of 4
 
 ## Encryption
 
-Compatibility: 5/9/16 out of 29
+Compatibility: 13/9/16 out of 29
 
 |    | Test                                                                                     | s3-gw       | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------|-------------|-------|--------|
@@ -548,24 +548,24 @@ Compatibility: 5/9/16 out of 29
 | 9  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_no_md5                            | FAIL        | ok    | ok     |
 | 10 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_no_key                            | FAIL        | ok    | ok     |
 | 11 | s3tests_boto3.functional.test_s3.test_encryption_key_no_sse_c                            | FAIL        | ok    | ok     |
-| 12 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_upload                  | FAIL        | ERROR | ok     |
+| 12 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_upload                  | ok          | ERROR | ok     |
 | 13 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_invalid_chunks_1        | FAIL        | ok    | ok     |
 | 14 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_invalid_chunks_2        | FAIL        | ok    | ok     |
-| 15 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_bad_download            | ERROR       | ERROR | FAIL   |
+| 15 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_bad_download            | FAIL        | ERROR | FAIL   |
 | 16 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_post_object_authenticated_request | FAIL        | FAIL  | ok     |
 | 17 | s3tests_boto3.functional.test_s3.test_sse_kms_method_head                                | ERROR       | ERROR | ERROR  |
 | 18 | s3tests_boto3.functional.test_s3.test_sse_kms_present                                    | ok          | ERROR | ERROR  |
 | 19 | s3tests_boto3.functional.test_s3.test_sse_kms_no_key                                     | FAIL        | ok    | FAIL   |
 | 20 | s3tests_boto3.functional.test_s3.test_sse_kms_not_declared                               | FAIL        | ok    | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_upload                           | ERROR       | ERROR | ERROR  |
-| 22 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_1                 | ERROR       | ERROR | ERROR  |
-| 23 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_2                 | ERROR       | ERROR | ERROR  |
+| 21 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_upload                           | ok          | ERROR | ERROR  |
+| 22 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_1                 | ok          | ERROR | ERROR  |
+| 23 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_2                 | ok          | ERROR | ERROR  |
 | 24 | s3tests_boto3.functional.test_s3.test_sse_kms_post_object_authenticated_request          | FAIL        | FAIL  | FAIL   |
-| 25 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1b                                | ERROR       | ERROR | ERROR  |
-| 26 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1kb                               | ERROR       | ERROR | ERROR  |
-| 27 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1MB                               | ERROR       | ERROR | ERROR  |
-| 28 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_13b                               | ERROR       | ERROR | ERROR  |
-| 29 | s3tests_boto3.functional.test_s3.test_sse_kms_read_declare                               | ERROR       | ok    | ok     |
+| 25 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1b                                | ok          | ERROR | ERROR  |
+| 26 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1kb                               | ok          | ERROR | ERROR  |
+| 27 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1MB                               | ok          | ERROR | ERROR  |
+| 28 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_13b                               | ok          | ERROR | ERROR  |
+| 29 | s3tests_boto3.functional.test_s3.test_sse_kms_read_declare                               | FAIL        | ok    | ok     |
 
 ## Lifecycle
 
@@ -589,7 +589,7 @@ Compatibility: 0/10/18 out of 29
 | 14 | s3tests_boto3.functional.test_s3.test_lifecycle_set_date                        | ERROR | ok    | ok     |
 | 15 | s3tests_boto3.functional.test_s3.test_lifecycle_set_invalid_date                | FAIL  | ok    | ok     |
 | 16 | s3tests_boto3.functional.test_s3.test_lifecycle_expiration_date                 | ERROR | FAIL  | FAIL   |
-| 17 | s3tests_boto3.functional.test_s3.test_lifecycle_expiration_days0                | ERROR | FAIL  | ok     |
+| 17 | s3tests_boto3.functional.test_s3.test_lifecycle_expiration_days0                | FAIL  | FAIL  | ok     |
 | 18 | s3tests_boto3.functional.test_s3.test_lifecycle_expiration_header_put           | ERROR | ok    | ok     |
 | 19 | s3tests_boto3.functional.test_s3.test_lifecycle_expiration_header_head          | ERROR | ok    | ok     |
 | 20 | s3tests_boto3.functional.test_s3.test_lifecycle_expiration_header_tags_head     | ERROR | ok    | FAIL   |
@@ -647,11 +647,11 @@ Compatibility:  0/7/20 out of 35
 
 ## Others
 
-Compatibility: 2/2/3 out of 6
+Compatibility: 3/2/3 out of 6
 
 |   | Test                                                        | s3-gw | minio | aws s3 |
 |---|-------------------------------------------------------------|-------|-------|--------|
-| 1 | s3tests_boto3.functional.test_s3.test_100_continue          | FAIL  | ERROR | ok     |
+| 1 | s3tests_boto3.functional.test_s3.test_100_continue          | ok    | ERROR | ok     |
 | 2 | s3tests_boto3.functional.test_s3.test_account_usage         | ERROR | ERROR | ERROR  |
 | 3 | s3tests_boto3.functional.test_s3.test_head_bucket_usage     | ERROR | ERROR | ERROR  |
 | 4 | s3tests_boto3.functional.test_s3.test_logging_toggle        | ERROR | ERROR | ERROR  |
