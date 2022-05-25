@@ -32,9 +32,9 @@ do
     RESULT=$(echo "$RES_LINE" | sed -e 's/^.*\.\.\.[[:space:]]*//')
 
     # beautify trailing spaces
-    OLD_RESULT_S3GW=$(sed -n "s/^.*${TEST}[[:space:]]*|[[:space:]]\(.*\)[[:space:]]|.*|.*|$/\1/p" "$RESULT_FILE")
-    OLD_RESULT_MINIO=$(sed -n "s/^.*${TEST}[[:space:]]*|.*|[[:space:]]\(.*\)[[:space:]]|.*|$/\1/p" "$RESULT_FILE")
-    OLD_RESULT_AWS=$(sed -n "s/^.*${TEST}[[:space:]]*|.*|.*|[[:space:]]\(.*\)[[:space:]]|$/\1/p" "$RESULT_FILE")
+    OLD_RESULT_S3GW=$(sed -n "s/^.*${TEST}[[:space:]]*|[[:space:]]\(.*\)[[:space:]]|.*|.*|$/\1/p" "$RESULT_FILE" | head -1)
+    OLD_RESULT_MINIO=$(sed -n "s/^.*${TEST}[[:space:]]*|.*|[[:space:]]\(.*\)[[:space:]]|.*|$/\1/p" "$RESULT_FILE" | head -1)
+    OLD_RESULT_AWS=$(sed -n "s/^.*${TEST}[[:space:]]*|.*|.*|[[:space:]]\(.*\)[[:space:]]|$/\1/p" "$RESULT_FILE" | head -1)
 
     ADJUSTED_RESULT_S3GW=$(get_adjusted_result "$OLD_RESULT_S3GW" "$RESULT")
     ADJUSTED_RESULT_MINIO=$(get_adjusted_result "$OLD_RESULT_MINIO" "$RESULT")
