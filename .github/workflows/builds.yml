@@ -39,8 +39,8 @@ jobs:
       - name: Save binary
         uses: actions/upload-artifact@v2
         with:
-          name: neofs-http-gw
-          path: bin/neofs-http-gw
+          name: neofs-s3-gw
+          path: bin/neofs-s3-gw
 
   build_image:
     needs: build_cli
