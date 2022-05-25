@@ -450,14 +450,6 @@ func (n *layer) objectDelete(ctx context.Context, idCnr cid.ID, idObj oid.ID) er
 	return n.transformNeofsError(ctx, n.neoFS.DeleteObject(ctx, prm))
 }
 
-// objectPut prepare auth parameters and invoke neofs.CreateObject.
-func (n *layer) objectPut(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.ID, error) {
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
-
-	id, err := n.neoFS.CreateObject(ctx, prm)
-	return id, n.transformNeofsError(ctx, err)
-}
-
 // objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
 // Returns object ID and payload sha256 hash.
 func (n *layer) objectPutAndHash(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.ID, []byte, error) {
