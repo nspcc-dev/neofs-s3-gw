@@ -3,6 +3,7 @@ package layer
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -117,14 +118,17 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 
-	id, err := n.objectPut(ctx, prm)
+	id, hash, err := n.objectPutAndHash(ctx, prm)
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := n.objectHead(ctx, p.BktInfo.CID, *id)
+	currentEpoch, _, err := n.neoFS.TimeToEpoch(ctx, time.Now().Add(time.Minute))
 	if err != nil {
-		return nil, err
+		n.log.Warn("couldn't get creation epoch",
+			zap.String("bucket", p.BktInfo.Name),
+			zap.String("object", p.ObjName),
+			zap.Error(err))
 	}
 
 	for _, id := range idsToDeleteArr {
@@ -136,7 +140,24 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		}
 	}
 
-	return objInfoFromMeta(p.BktInfo, meta), nil
+	headers := make(map[string]string, len(p.Metadata))
+	for _, attr := range prm.Attributes {
+		headers[attr[0]] = attr[1]
+	}
+
+	return &data.ObjectInfo{
+		ID:  *id,
+		CID: p.BktInfo.CID,
+
+		Owner:         p.BktInfo.Owner,
+		Bucket:        p.BktInfo.Name,
+		Name:          p.ObjName,
+		Created:       time.Now(),
+		CreationEpoch: currentEpoch,
+		Size:          p.Size,
+		Headers:       headers,
+		HashSum:       hex.EncodeToString(hash),
+	}, nil
 }
 
 func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketInfo, objName string) (*object.Object, error) {
@@ -271,15 +292,12 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		ObjName:  p.BktInfo.SettingsObjectName(),
 		Metadata: map[string]string{},
 		Reader:   bytes.NewReader(rawSettings),
+		Size:     int64(len(rawSettings)),
 	}
 
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	_, err = n.putSystemObjectIntoNeoFS(ctx, s)
 	if err != nil {
 		return err
-	}
-
-	if obj.Size == 0 {
-		return errors.GetAPIError(errors.ErrInternalError)
 	}
 
 	systemKey := systemObjectKey(p.BktInfo, p.BktInfo.SettingsObjectName())

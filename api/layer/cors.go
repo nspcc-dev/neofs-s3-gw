@@ -41,15 +41,12 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		Metadata: map[string]string{},
 		Prefix:   "",
 		Reader:   &buf,
+		Size:     int64(buf.Len()),
 	}
 
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	_, err := n.putSystemObjectIntoNeoFS(ctx, s)
 	if err != nil {
 		return err
-	}
-
-	if obj.Size == 0 {
-		return errors.GetAPIError(errors.ErrInternalError)
 	}
 
 	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, s.ObjName), cors); err != nil {
