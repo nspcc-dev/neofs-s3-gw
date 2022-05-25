@@ -75,7 +75,8 @@ const (
 	// i.e. bucket settings with versioning and lock configuration, cors, notifications.
 	systemTree = "system"
 
-	separator = "/"
+	separator            = "/"
+	userDefinedtagPrefix = "User-Tag-"
 
 	maxGetSubTreeDepth = 10 // current limit on storage node side
 )
@@ -296,9 +297,15 @@ func (c *TreeClient) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVer
 		return nil, nil
 	}
 
-	delete(tagNode.Meta, isTagKV)
+	meta := make(map[string]string)
 
-	return tagNode.Meta, nil
+	for key, val := range tagNode.Meta {
+		if strings.HasPrefix(key, userDefinedtagPrefix) {
+			meta[strings.TrimPrefix(key, userDefinedtagPrefix)] = val
+		}
+	}
+
+	return meta, nil
 }
 
 func (c *TreeClient) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
@@ -307,15 +314,18 @@ func (c *TreeClient) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVer
 		return err
 	}
 
-	tagSet[isTagKV] = "true"
+	treeTagSet := make(map[string]string)
+	treeTagSet[isTagKV] = "true"
 
-	if tagNode == nil {
-		_, err = c.addNode(ctx, cnrID, versionTree, objVersion.ID, tagSet)
-	} else {
-		err = c.moveNode(ctx, cnrID, versionTree, tagNode.ID, objVersion.ID, tagSet)
+	for key, val := range tagSet {
+		treeTagSet[userDefinedtagPrefix+key] = val
 	}
 
-	delete(tagSet, isTagKV)
+	if tagNode == nil {
+		_, err = c.addNode(ctx, cnrID, versionTree, objVersion.ID, treeTagSet)
+	} else {
+		err = c.moveNode(ctx, cnrID, versionTree, tagNode.ID, objVersion.ID, treeTagSet)
+	}
 
 	return err
 }
@@ -342,9 +352,15 @@ func (c *TreeClient) GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[s
 		return nil, err
 	}
 
-	delete(node.Meta, systemNameKV)
+	tags := make(map[string]string)
 
-	return node.Meta, nil
+	for key, val := range node.Meta {
+		if strings.HasPrefix(key, userDefinedtagPrefix) {
+			tags[strings.TrimPrefix(key, userDefinedtagPrefix)] = val
+		}
+	}
+
+	return tags, nil
 }
 
 func (c *TreeClient) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error {
@@ -354,15 +370,18 @@ func (c *TreeClient) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet
 		return fmt.Errorf("couldn't get node: %w", err)
 	}
 
-	tagSet[systemNameKV] = bucketTaggingFilename
+	treeTagSet := make(map[string]string)
+	treeTagSet[systemNameKV] = bucketTaggingFilename
 
-	if isErrNotFound {
-		_, err = c.addNode(ctx, cnrID, systemTree, 0, tagSet)
-	} else {
-		err = c.moveNode(ctx, cnrID, systemTree, node.ID, 0, tagSet)
+	for key, val := range tagSet {
+		treeTagSet[userDefinedtagPrefix+key] = val
 	}
 
-	delete(tagSet, systemNameKV)
+	if isErrNotFound {
+		_, err = c.addNode(ctx, cnrID, systemTree, 0, treeTagSet)
+	} else {
+		err = c.moveNode(ctx, cnrID, systemTree, node.ID, 0, treeTagSet)
+	}
 
 	return err
 }
