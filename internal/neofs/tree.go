@@ -35,6 +35,16 @@ type (
 		TimeStamp uint64
 		Meta      map[string]string
 	}
+
+	getNodesParams struct {
+		CnrID      *cid.ID
+		TreeID     string
+		PathAttr   string
+		Path       []string
+		Meta       []string
+		LatestOnly bool
+		AllAttrs   bool
+	}
 )
 
 const (
@@ -52,10 +62,11 @@ const (
 	ownerKV          = "Owner"
 	createdKV        = "Created"
 
-	settingsFileName  = "bucket-settings"
-	notifConfFileName = "bucket-notifications"
-	corsFilename      = "bucket-cors"
-	emptyFileName     = "<empty>" // to handle trailing slash in name
+	settingsFileName      = "bucket-settings"
+	notifConfFileName     = "bucket-notifications"
+	corsFilename          = "bucket-cors"
+	emptyFileName         = "<empty>" // to handle trailing slash in name
+	bucketTaggingFilename = "bucket-tagging"
 
 	// versionTree -- ID of a tree with object versions.
 	versionTree = "version"
@@ -322,6 +333,53 @@ func (c *TreeClient) DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, obj
 	return c.removeNode(ctx, cnrID, versionTree, tagNode.ID)
 }
 
+func (c *TreeClient) GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error) {
+	node, err := c.getSystemNodeWithAllAttributes(ctx, cnrID, systemTree, []string{bucketTaggingFilename})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, layer.ErrNodeNotFound
+		}
+		return nil, err
+	}
+
+	delete(node.Meta, systemNameKV)
+
+	return node.Meta, nil
+}
+
+func (c *TreeClient) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error {
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{bucketTaggingFilename}, []string{})
+	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
+	if err != nil && !isErrNotFound {
+		return fmt.Errorf("couldn't get node: %w", err)
+	}
+
+	tagSet[systemNameKV] = bucketTaggingFilename
+
+	if isErrNotFound {
+		_, err = c.addNode(ctx, cnrID, systemTree, 0, tagSet)
+	} else {
+		err = c.moveNode(ctx, cnrID, systemTree, node.ID, 0, tagSet)
+	}
+
+	delete(tagSet, systemNameKV)
+
+	return err
+}
+
+func (c *TreeClient) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error {
+	node, err := c.getSystemNode(ctx, cnrID, systemTree, []string{bucketTaggingFilename}, nil)
+	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
+		return err
+	}
+
+	if node != nil {
+		return c.removeNode(ctx, cnrID, systemTree, node.ID)
+	}
+
+	return nil
+}
+
 func (c *TreeClient) getObjectTaggingNode(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (*TreeNode, error) {
 	subtree, err := c.getSubTree(ctx, cnrID, versionTree, objVersion.ID, 1)
 	if err != nil {
@@ -403,9 +461,16 @@ func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.I
 }
 
 func (c *TreeClient) getPrefixNodeID(ctx context.Context, cnrID *cid.ID, prefixPath []string) (uint64, error) {
-	meta := []string{fileNameKV, oidKV}
-
-	nodes, err := c.getNodes(ctx, cnrID, versionTree, fileNameKV, prefixPath, meta, false)
+	p := &getNodesParams{
+		CnrID:      cnrID,
+		TreeID:     versionTree,
+		PathAttr:   fileNameKV,
+		Path:       prefixPath,
+		Meta:       []string{fileNameKV, oidKV},
+		LatestOnly: false,
+		AllAttrs:   false,
+	}
+	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
 		return 0, err
 	}
@@ -541,7 +606,16 @@ func (c *TreeClient) GetSystemVersion(ctx context.Context, cnrID *cid.ID, object
 }
 
 func (c *TreeClient) getLatestVersion(ctx context.Context, cnrID *cid.ID, treeID, attrPath string, path, meta []string) (*data.NodeVersion, error) {
-	nodes, err := c.getNodes(ctx, cnrID, treeID, attrPath, path, meta, true)
+	p := &getNodesParams{
+		CnrID:      cnrID,
+		TreeID:     treeID,
+		PathAttr:   attrPath,
+		Path:       path,
+		Meta:       meta,
+		LatestOnly: true,
+		AllAttrs:   false,
+	}
+	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return nil, layer.ErrNodeNotFound
@@ -643,7 +717,16 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, attr
 func (c *TreeClient) getVersions(ctx context.Context, cnrID *cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*data.NodeVersion, error) {
 	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
 	path := pathFromName(filepath)
-	nodes, err := c.getNodes(ctx, cnrID, treeID, fileNameKV, path, keysToReturn, false)
+	p := &getNodesParams{
+		CnrID:      cnrID,
+		TreeID:     treeID,
+		PathAttr:   fileNameKV,
+		Path:       path,
+		Meta:       keysToReturn,
+		LatestOnly: false,
+		AllAttrs:   false,
+	}
+	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return nil, nil
@@ -733,11 +816,24 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 }
 
 func (c *TreeClient) getSystemNode(ctx context.Context, cnrID *cid.ID, treeID string, path, meta []string) (*TreeNode, error) {
-	return c.getNode(ctx, cnrID, treeID, systemNameKV, path, meta)
+	return c.getNode(ctx, cnrID, treeID, systemNameKV, path, meta, false)
 }
 
-func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string) (*TreeNode, error) {
-	nodes, err := c.getNodes(ctx, cnrID, treeID, pathAttr, path, meta, false)
+func (c *TreeClient) getSystemNodeWithAllAttributes(ctx context.Context, cnrID *cid.ID, treeID string, path []string) (*TreeNode, error) {
+	return c.getNode(ctx, cnrID, treeID, systemNameKV, path, []string{}, true)
+}
+
+func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string, allAttrs bool) (*TreeNode, error) {
+	p := &getNodesParams{
+		CnrID:      cnrID,
+		TreeID:     treeID,
+		PathAttr:   pathAttr,
+		Path:       path,
+		Meta:       meta,
+		LatestOnly: false,
+		AllAttrs:   allAttrs,
+	}
+	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return nil, layer.ErrNodeNotFound
@@ -754,15 +850,16 @@ func (c *TreeClient) getNode(ctx context.Context, cnrID *cid.ID, treeID, pathAtt
 	return newTreeNode(nodes[0])
 }
 
-func (c *TreeClient) getNodes(ctx context.Context, cnrID *cid.ID, treeID, pathAttr string, path, meta []string, latestOnly bool) ([]*tree.GetNodeByPathResponse_Info, error) {
+func (c *TreeClient) getNodes(ctx context.Context, p *getNodesParams) ([]*tree.GetNodeByPathResponse_Info, error) {
 	request := &tree.GetNodeByPathRequest{
 		Body: &tree.GetNodeByPathRequest_Body{
-			ContainerId:   cnrID[:],
-			TreeId:        treeID,
-			Path:          path,
-			Attributes:    meta,
-			PathAttribute: pathAttr,
-			LatestOnly:    latestOnly,
+			ContainerId:   p.CnrID[:],
+			TreeId:        p.TreeID,
+			Path:          p.Path,
+			Attributes:    p.Meta,
+			PathAttribute: p.PathAttr,
+			LatestOnly:    p.LatestOnly,
+			AllAttributes: p.AllAttrs,
 			BearerToken:   getBearer(ctx),
 		},
 	}

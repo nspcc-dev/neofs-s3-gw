@@ -34,6 +34,10 @@ type TreeService interface {
 	PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error
 	DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) error
 
+	GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error)
+	PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error
+	DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error
+
 	GetVersions(ctx context.Context, cnrID *cid.ID, objectName string) ([]*data.NodeVersion, error)
 	GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error)
 	GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]oid.ID, error)
