@@ -3,8 +3,6 @@ package layer
 import (
 	"context"
 	errorsStd "errors"
-	"strings"
-
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -134,16 +132,16 @@ func (n *layer) getTaggedObjectVersion(ctx context.Context, p *data.ObjectTaggin
 		version *data.NodeVersion
 	)
 
-	if p.VersionID == "null" {
+	if p.VersionID == unversionedObjectVersionID {
 		if version, err = n.treeService.GetUnversioned(ctx, p.CnrID, p.ObjName); err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if errorsStd.Is(err, ErrNodeNotFound) {
 				return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 			}
 			return nil, err
 		}
 	} else if len(p.VersionID) == 0 {
 		if version, err = n.treeService.GetLatestVersion(ctx, p.CnrID, p.ObjName); err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if errorsStd.Is(err, ErrNodeNotFound) {
 				return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 			}
 			return nil, err
