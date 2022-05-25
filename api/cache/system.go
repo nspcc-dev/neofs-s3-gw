@@ -104,7 +104,8 @@ func (o *SystemCache) GetNotificationConfiguration(key string) *data.Notificatio
 	return result
 }
 
-func (o *SystemCache) GetObjectTagging(key string) map[string]string {
+// GetTagging returns tags of a bucket or an object
+func (o *SystemCache) GetTagging(key string) map[string]string {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
@@ -135,7 +136,8 @@ func (o *SystemCache) PutNotificationConfiguration(key string, obj *data.Notific
 	return o.cache.Set(key, obj)
 }
 
-func (o *SystemCache) PutObjectTagging(key string, tagSet map[string]string) error {
+// PutTagging puts tags of a bucket or an object
+func (o *SystemCache) PutTagging(key string, tagSet map[string]string) error {
 	return o.cache.Set(key, tagSet)
 }
 
