@@ -47,6 +47,21 @@ func (o *SystemCache) GetObject(key string) *data.ObjectInfo {
 	return result
 }
 
+// GetLockInfo returns a cached object.
+func (o *SystemCache) GetLockInfo(key string) *data.LockInfo {
+	entry, err := o.cache.Get(key)
+	if err != nil {
+		return nil
+	}
+
+	result, ok := entry.(*data.LockInfo)
+	if !ok {
+		return nil
+	}
+
+	return result
+}
+
 func (o *SystemCache) GetCORS(key string) *data.CORSConfiguration {
 	entry, err := o.cache.Get(key)
 	if err != nil {
@@ -107,6 +122,11 @@ func (o *SystemCache) GetTagging(key string) map[string]string {
 // PutObject puts an object to cache.
 func (o *SystemCache) PutObject(key string, obj *data.ObjectInfo) error {
 	return o.cache.Set(key, obj)
+}
+
+// PutLockInfo puts an object to cache.
+func (o *SystemCache) PutLockInfo(key string, lockInfo *data.LockInfo) error {
+	return o.cache.Set(key, lockInfo)
 }
 
 func (o *SystemCache) PutCORS(key string, obj *data.CORSConfiguration) error {

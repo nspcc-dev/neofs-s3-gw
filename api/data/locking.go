@@ -3,8 +3,6 @@ package data
 import (
 	"encoding/xml"
 	"time"
-
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type (
@@ -36,9 +34,17 @@ type (
 	}
 
 	ObjectLock struct {
-		Until        time.Time
-		LegalHold    bool
-		IsCompliance bool
-		Objects      []oid.ID
+		LegalHold *LegalHoldLock
+		Retention *RetentionLock
+	}
+
+	LegalHoldLock struct {
+		Enabled bool
+	}
+
+	RetentionLock struct {
+		Until              time.Time
+		IsCompliance       bool
+		ByPassedGovernance bool
 	}
 )

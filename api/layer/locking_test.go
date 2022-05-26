@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,18 +18,25 @@ func TestObjectLockAttributes(t *testing.T) {
 
 	obj := tc.putObject([]byte("content obj1 v1"))
 
-	_, err = tc.layer.PutSystemObject(tc.ctx, &PutSystemObjectParams{
-		BktInfo:  tc.bktInfo,
-		ObjName:  obj.RetentionObject(),
-		Metadata: make(map[string]string),
-		Lock: &data.ObjectLock{
-			Until:   time.Now(),
-			Objects: []oid.ID{obj.ID},
+	p := &ObjectVersion{
+		BktInfo:    tc.bktInfo,
+		ObjectName: obj.Name,
+		VersionID:  obj.Version(),
+	}
+
+	lock := &data.ObjectLock{
+		Retention: &data.RetentionLock{
+			Until: time.Now(),
 		},
-	})
+	}
+
+	err = tc.layer.PutLockInfo(tc.ctx, p, lock)
 	require.NoError(t, err)
 
-	lockObj := tc.getSystemObject(obj.RetentionObject())
+	foundLock, err := tc.layer.GetLockInfo(tc.ctx, p)
+	require.NoError(t, err)
+
+	lockObj := tc.getObjectByID(*foundLock.RetentionOID)
 	require.NotNil(t, lockObj)
 
 	expEpoch := false

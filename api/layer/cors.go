@@ -10,6 +10,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"go.uber.org/zap"
 )
 
@@ -36,21 +37,19 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
-	s := &PutSystemObjectParams{
-		BktInfo:  p.BktInfo,
-		ObjName:  p.BktInfo.CORSObjectName(),
-		Metadata: map[string]string{},
-		Prefix:   "",
-		Reader:   &buf,
-		Size:     int64(buf.Len()),
+	prm := neofs.PrmObjectCreate{
+		Container: p.BktInfo.CID,
+		Creator:   p.BktInfo.Owner,
+		Payload:   p.Reader,
+		Filename:  p.BktInfo.CORSObjectName(),
 	}
 
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	objID, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return err
 	}
 
-	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, &p.BktInfo.CID, &obj.ID)
+	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, &p.BktInfo.CID, objID)
 	if err != nil {
 		return err
 	}
@@ -64,7 +63,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		}
 	}
 
-	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, s.ObjName), cors); err != nil {
+	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, prm.Filename), cors); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -143,7 +144,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 func isErrObjectLocked(err error) bool {
 	switch err.(type) {
 	default:
-		return false
+		return strings.Contains(err.Error(), "object is locked")
 	case apistatus.ObjectLocked,
 		*apistatus.ObjectLocked:
 		return true
