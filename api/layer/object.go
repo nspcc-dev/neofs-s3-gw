@@ -200,18 +200,15 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
 
-	if p.Lock != nil {
-		objInfo := &data.ObjectInfo{ID: id, Name: p.Object}
-		p.Lock.Objects = append(p.Lock.Objects, *id)
-		if p.Lock.LegalHold {
-			if err = n.putLockObject(ctx, p.BktInfo, objInfo.LegalHoldObject(), p.Lock); err != nil {
-				return nil, err
-			}
+	if p.Lock != nil && (p.Lock.Retention != nil || p.Lock.LegalHold != nil) {
+		objVersion := &ObjectVersion{
+			BktInfo:    p.BktInfo,
+			ObjectName: p.Object,
+			VersionID:  id.EncodeToString(),
 		}
-		if !p.Lock.Until.IsZero() {
-			if err = n.putLockObject(ctx, p.BktInfo, objInfo.RetentionObject(), p.Lock); err != nil {
-				return nil, err
-			}
+
+		if err = n.PutLockInfo(ctx, objVersion, p.Lock); err != nil {
+			return nil, err
 		}
 	}
 
@@ -243,21 +240,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	return objInfo, nil
-}
-
-func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objName string, lock *data.ObjectLock) error {
-	ps := &PutSystemObjectParams{
-		BktInfo:  bktInfo,
-		ObjName:  objName,
-		Lock:     lock,
-		Metadata: make(map[string]string),
-	}
-
-	if _, err := n.PutSystemObject(ctx, ps); err != nil {
-		return fmt.Errorf("coudln't add lock for '%s': %w", objName, err)
-	}
-
-	return nil
 }
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ObjectInfo, error) {

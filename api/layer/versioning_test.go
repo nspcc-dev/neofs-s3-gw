@@ -130,6 +130,16 @@ func (tc *testContext) getSystemObject(objectName string) *object.Object {
 	return nil
 }
 
+func (tc *testContext) getObjectByID(objID oid.ID) *object.Object {
+	for _, obj := range tc.testNeoFS.Objects() {
+		id, _ := obj.ID()
+		if id.Equals(objID) {
+			return obj
+		}
+	}
+	return nil
+}
+
 type testContext struct {
 	t         *testing.T
 	ctx       context.Context

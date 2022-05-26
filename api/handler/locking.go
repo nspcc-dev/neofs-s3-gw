@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 const (
@@ -130,45 +129,20 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+	lock := &data.ObjectLock{
+		LegalHold: &data.LegalHoldLock{
+			Enabled: legalHold.Status == legalHoldOn,
+		},
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
+	if err = h.obj.PutLockInfo(r.Context(), p, lock); err != nil {
+		h.logAndSendError(w, "couldn't head put legal hold", reqInfo, err)
 		return
-	}
-
-	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.LegalHoldObject())
-	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
-		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
-		return
-	}
-
-	if lockInfo == nil && legalHold.Status == legalHoldOff ||
-		lockInfo != nil && legalHold.Status == legalHoldOn {
-		return
-	}
-
-	if lockInfo != nil {
-		if err = h.obj.DeleteSystemObject(r.Context(), bktInfo, objInfo.LegalHoldObject()); err != nil {
-			h.logAndSendError(w, "couldn't delete legal hold", reqInfo, err)
-			return
-		}
-	} else {
-		ps := &layer.PutSystemObjectParams{
-			BktInfo:  bktInfo,
-			ObjName:  objInfo.LegalHoldObject(),
-			Lock:     &data.ObjectLock{LegalHold: true, Objects: []oid.ID{*objInfo.ID}},
-			Metadata: make(map[string]string),
-		}
-		if _, err = h.obj.PutSystemObject(r.Context(), ps); err != nil {
-			h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
-			return
-		}
 	}
 }
 
@@ -187,26 +161,20 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	lockInfo, err := h.obj.GetLockInfo(r.Context(), p)
 	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
-		return
-	}
-
-	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.LegalHoldObject())
-	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
 		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
 		return
 	}
 
 	legalHold := &data.LegalHold{Status: legalHoldOff}
-	if lockInfo != nil {
+	if lockInfo.LegalHoldOID != nil {
 		legalHold.Status = legalHoldOn
 	}
 
@@ -241,37 +209,13 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
-		return
-	}
-	lock.Objects = append(lock.Objects, *objInfo.ID)
-
-	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.RetentionObject())
-	if err != nil && !apiErrors.IsS3Error(err, apiErrors.ErrNoSuchKey) {
-		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
-		return
-	}
-
-	if err = checkLockInfo(lockInfo, r.Header); err != nil {
-		h.logAndSendError(w, "couldn't change lock mode", reqInfo, err)
-		return
-	}
-
-	ps := &layer.PutSystemObjectParams{
-		BktInfo:  bktInfo,
-		ObjName:  objInfo.RetentionObject(),
-		Lock:     lock,
-		Metadata: make(map[string]string),
-	}
-	if _, err = h.obj.PutSystemObject(r.Context(), ps); err != nil {
+	if err = h.obj.PutLockInfo(r.Context(), p, lock); err != nil {
 		h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
 		return
 	}
@@ -308,29 +252,28 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
-		return
-	}
-
-	lockInfo, err := h.obj.HeadSystemObject(r.Context(), bktInfo, objInfo.RetentionObject())
+	lockInfo, err := h.obj.GetLockInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
 		return
 	}
 
+	if lockInfo.RetentionOID == nil {
+		h.logAndSendError(w, "retention lock isn't set", reqInfo, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey))
+		return
+	}
+
 	retention := &data.Retention{
 		Mode:            governanceMode,
-		RetainUntilDate: lockInfo.Headers[layer.AttributeRetainUntil],
+		RetainUntilDate: lockInfo.UntilDate,
 	}
-	if lockInfo.Headers[layer.AttributeComplianceMode] != "" {
+	if lockInfo.IsCompliance {
 		retention.Mode = complianceMode
 	}
 
@@ -379,21 +322,28 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 	}
 
 	if defaultConfig.Rule != nil && defaultConfig.Rule.DefaultRetention != nil {
+		retention := &data.RetentionLock{}
 		defaultRetention := defaultConfig.Rule.DefaultRetention
-		objectLock.IsCompliance = defaultRetention.Mode == complianceMode
+		retention.IsCompliance = defaultRetention.Mode == complianceMode
 		now := time.Now()
 		if defaultRetention.Days != 0 {
-			objectLock.Until = now.Add(time.Duration(defaultRetention.Days) * dayDuration)
+			retention.Until = now.Add(time.Duration(defaultRetention.Days) * dayDuration)
 		} else {
-			objectLock.Until = now.Add(time.Duration(defaultRetention.Years) * yearDuration)
+			retention.Until = now.Add(time.Duration(defaultRetention.Years) * yearDuration)
 		}
+		objectLock.Retention = retention
 	}
 
-	objectLock.LegalHold = header.Get(api.AmzObjectLockLegalHold) == legalHoldOn
+	if header.Get(api.AmzObjectLockLegalHold) == legalHoldOn {
+		objectLock.LegalHold = &data.LegalHoldLock{Enabled: true}
+	}
 
 	mode := header.Get(api.AmzObjectLockMode)
 	if mode != "" {
-		objectLock.IsCompliance = mode == complianceMode
+		if objectLock.Retention == nil {
+			objectLock.Retention = &data.RetentionLock{}
+		}
+		objectLock.Retention.IsCompliance = mode == complianceMode
 	}
 
 	until := header.Get(api.AmzObjectLockRetainUntilDate)
@@ -402,7 +352,10 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 		if err != nil {
 			return nil, fmt.Errorf("invalid header %s: '%s'", api.AmzObjectLockRetainUntilDate, until)
 		}
-		objectLock.Until = retentionDate
+		if objectLock.Retention == nil {
+			objectLock.Retention = &data.RetentionLock{}
+		}
+		objectLock.Retention.Until = retentionDate
 	}
 
 	return objectLock, nil
@@ -424,9 +377,20 @@ func formObjectLockFromRetention(retention *data.Retention, header http.Header) 
 		return nil, fmt.Errorf("couldn't parse retain until date: %s", retention.RetainUntilDate)
 	}
 
+	var bypass bool
+	if bypassStr := header.Get(api.AmzBypassGovernanceRetention); len(bypassStr) > 0 {
+		bypass, err = strconv.ParseBool(bypassStr)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't parse bypass governance header: %w", err)
+		}
+	}
+
 	lock := &data.ObjectLock{
-		Until:        retentionDate,
-		IsCompliance: retention.Mode == complianceMode,
+		Retention: &data.RetentionLock{
+			Until:              retentionDate,
+			IsCompliance:       retention.Mode == complianceMode,
+			ByPassedGovernance: bypass,
+		},
 	}
 
 	return lock, nil

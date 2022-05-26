@@ -8,6 +8,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/object/address"
 	"go.uber.org/zap"
 )
@@ -26,19 +27,19 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 
 	sysName := p.BktInfo.NotificationConfigurationObjectName()
 
-	s := &PutSystemObjectParams{
-		BktInfo:  p.BktInfo,
-		ObjName:  sysName,
-		Metadata: map[string]string{},
-		Reader:   bytes.NewReader(confXML),
+	prm := neofs.PrmObjectCreate{
+		Container: *p.BktInfo.CID,
+		Creator:   *p.BktInfo.Owner,
+		Payload:   bytes.NewReader(confXML),
+		Filename:  sysName,
 	}
 
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	objID, err := n.objectPut(ctx, prm)
 	if err != nil {
 		return err
 	}
 
-	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo.CID, obj.ID)
+	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo.CID, objID)
 	if err != nil {
 		return err
 	}

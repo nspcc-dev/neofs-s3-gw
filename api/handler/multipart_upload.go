@@ -369,10 +369,10 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	if len(uploadData.TagSet) != 0 {
-		t := &data.ObjectTaggingInfo{
-			CnrID:     bktInfo.CID,
-			ObjName:   objInfo.Name,
-			VersionID: objInfo.Version(),
+		t := &layer.ObjectVersion{
+			BktInfo:    bktInfo,
+			ObjectName: objInfo.Name,
+			VersionID:  objInfo.Version(),
 		}
 		if err = h.obj.PutObjectTagging(r.Context(), t, uploadData.TagSet); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)

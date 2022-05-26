@@ -90,6 +90,13 @@ type (
 		VersionID string
 	}
 
+	// ObjectVersion stores object version info.
+	ObjectVersion struct {
+		BktInfo    *data.BucketInfo
+		ObjectName string
+		VersionID  string
+	}
+
 	// RangeParams stores range header request parameters.
 	RangeParams struct {
 		Start uint64
@@ -204,19 +211,20 @@ type (
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
-		HeadSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) (*data.ObjectInfo, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
+
+		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
+		PutLockInfo(ctx context.Context, p *ObjectVersion, lock *data.ObjectLock) error
 
 		GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error)
 		PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error
 		DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error
 
-		GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) (map[string]string, error)
-		PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo, tagSet map[string]string) error
-		DeleteObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) error
+		GetObjectTagging(ctx context.Context, p *ObjectVersion) (map[string]string, error)
+		PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) error
+		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error)
-		PutSystemObject(ctx context.Context, p *PutSystemObjectParams) (*data.ObjectInfo, error)
 
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ObjectInfo, error)
 
@@ -241,8 +249,7 @@ type (
 )
 
 const (
-	tagPrefix    = "S3-Tag-"
-	tagEmptyMark = "\\"
+	tagPrefix = "S3-Tag-"
 )
 
 func (t *VersionedObject) String() string {
@@ -514,17 +521,17 @@ func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, 
 			deleteMarkVersion = obj.VersionID
 		}
 
-		if err := n.treeService.RemoveVersion(ctx, bkt.CID, version.ID); err != nil {
-			return deleteMarkVersion, err
-		}
 		if err := n.objectDelete(ctx, bkt.CID, &version.OID); err != nil {
 			return deleteMarkVersion, err
 		}
+		if err := n.treeService.RemoveVersion(ctx, bkt.CID, version.ID); err != nil {
+			return deleteMarkVersion, err
+		}
 
-		p := &data.ObjectTaggingInfo{
-			CnrID:     bkt.CID,
-			ObjName:   obj.Name,
-			VersionID: version.OID.EncodeToString(),
+		p := &ObjectVersion{
+			BktInfo:    bkt,
+			ObjectName: obj.Name,
+			VersionID:  version.OID.EncodeToString(),
 		}
 		return deleteMarkVersion, n.DeleteObjectTagging(ctx, p)
 	}
