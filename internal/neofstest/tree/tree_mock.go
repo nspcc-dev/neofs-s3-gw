@@ -15,6 +15,7 @@ type TreeServiceMock struct {
 	settings map[string]*data.BucketSettings
 	versions map[string]map[string][]*data.NodeVersion
 	system   map[string]map[string]*data.BaseNodeVersion
+	locks    map[string]map[uint64]*data.LockInfo
 }
 
 func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
@@ -54,6 +55,7 @@ func NewTreeService() *TreeServiceMock {
 		settings: make(map[string]*data.BucketSettings),
 		versions: make(map[string]map[string][]*data.NodeVersion),
 		system:   make(map[string]map[string]*data.BaseNodeVersion),
+		locks:    make(map[string]map[uint64]*data.LockInfo),
 	}
 }
 
@@ -187,7 +189,6 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectNam
 			if !node.IsUnversioned {
 				result = append(result, node)
 			}
-
 		}
 	}
 
@@ -197,38 +198,6 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectNam
 }
 
 func (t *TreeServiceMock) RemoveVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error {
-	panic("implement me")
-}
-
-func (t *TreeServiceMock) AddSystemVersion(_ context.Context, cnrID *cid.ID, objectName string, newVersion *data.BaseNodeVersion) error {
-	cnrSystemMap, ok := t.system[cnrID.EncodeToString()]
-	if !ok {
-		t.system[cnrID.EncodeToString()] = map[string]*data.BaseNodeVersion{
-			objectName: newVersion,
-		}
-		return nil
-	}
-
-	cnrSystemMap[objectName] = newVersion
-
-	return nil
-}
-
-func (t *TreeServiceMock) GetSystemVersion(_ context.Context, cnrID *cid.ID, objectName string) (*data.BaseNodeVersion, error) {
-	cnrSystemMap, ok := t.system[cnrID.EncodeToString()]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	sysVersion, ok := cnrSystemMap[objectName]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	return sysVersion, nil
-}
-
-func (t *TreeServiceMock) RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error {
 	panic("implement me")
 }
 
@@ -258,4 +227,27 @@ func (t *TreeServiceMock) GetParts(ctx context.Context, cnrID *cid.ID, multipart
 
 func (t *TreeServiceMock) DeleteMultipartUpload(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) error {
 	panic("implement me")
+}
+
+func (t *TreeServiceMock) PutLock(ctx context.Context, cnrID *cid.ID, nodeID uint64, lock *data.LockInfo) error {
+	cnrLockMap, ok := t.locks[cnrID.EncodeToString()]
+	if !ok {
+		t.locks[cnrID.EncodeToString()] = map[uint64]*data.LockInfo{
+			nodeID: lock,
+		}
+		return nil
+	}
+
+	cnrLockMap[nodeID] = lock
+
+	return nil
+}
+
+func (t *TreeServiceMock) GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) (*data.LockInfo, error) {
+	cnrLockMap, ok := t.locks[cnrID.EncodeToString()]
+	if !ok {
+		return nil, nil
+	}
+
+	return cnrLockMap[nodeID], nil
 }

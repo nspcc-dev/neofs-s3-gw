@@ -51,10 +51,10 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := &data.ObjectTaggingInfo{
-		CnrID:     &info.CID,
-		ObjName:   info.Name,
-		VersionID: info.Version(),
+	t := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: info.Name,
+		VersionID:  info.Version(),
 	}
 
 	tagSet, err := h.obj.GetObjectTagging(r.Context(), t)
@@ -106,25 +106,28 @@ func (h *handler) setLockingHeaders(ctx context.Context, bktInfo *data.BucketInf
 	}
 
 	legalHold := &data.LegalHold{Status: legalHoldOff}
-	legalHoldInfo, err := h.obj.HeadSystemObject(ctx, bktInfo, objInfo.LegalHoldObject())
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		return err
-	}
-
-	if legalHoldInfo != nil {
-		legalHold.Status = legalHoldOn
-	}
-
 	retention := &data.Retention{Mode: governanceMode}
-	retentionInfo, err := h.obj.HeadSystemObject(ctx, bktInfo, objInfo.RetentionObject())
+
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: objInfo.Name,
+		VersionID:  objInfo.Version(),
+	}
+
+	lockInfo, err := h.obj.GetLockInfo(ctx, p)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		return err
 	}
 
-	if retentionInfo != nil {
-		retention.RetainUntilDate = retentionInfo.Headers[layer.AttributeRetainUntil]
-		if retentionInfo.Headers[layer.AttributeComplianceMode] != "" {
-			retention.Mode = complianceMode
+	if lockInfo != nil {
+		if lockInfo.LegalHoldOID != nil {
+			legalHold.Status = legalHoldOn
+		}
+		if lockInfo.RetentionOID != nil {
+			retention.RetainUntilDate = lockInfo.UntilDate
+			if lockInfo.IsCompliance {
+				retention.Mode = complianceMode
+			}
 		}
 	}
 

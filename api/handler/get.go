@@ -142,10 +142,10 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := &data.ObjectTaggingInfo{
-		CnrID:     &info.CID,
-		ObjName:   info.Name,
-		VersionID: info.Version(),
+	t := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: info.Name,
+		VersionID:  info.Version(),
 	}
 
 	tagSet, err := h.obj.GetObjectTagging(r.Context(), t)

@@ -46,9 +46,8 @@ type TreeService interface {
 	AddVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *data.NodeVersion) error
 	RemoveVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
 
-	AddSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string, newVersion *data.BaseNodeVersion) error
-	GetSystemVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.BaseNodeVersion, error)
-	RemoveSystemVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error
+	PutLock(ctx context.Context, cnrID *cid.ID, nodeID uint64, lock *data.LockInfo) error
+	GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) (*data.LockInfo, error)
 
 	CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error
 	DeleteMultipartUpload(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) error
