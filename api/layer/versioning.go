@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -42,13 +41,12 @@ const (
 	VersionsDeleteMarkAttr = "S3-Versions-delete-mark"
 	DelMarkFullObject      = "*"
 
-	unversionedObjectVersionID    = "null"
-	objectSystemAttributeName     = "S3-System-name"
-	attrVersionsIgnore            = "S3-Versions-ignore"
-	attrSettingsVersioningEnabled = "S3-Settings-Versioning-enabled"
-	versionsDelAttr               = "S3-Versions-del"
-	versionsAddAttr               = "S3-Versions-add"
-	versionsUnversionedAttr       = "S3-Versions-unversioned"
+	unversionedObjectVersionID = "null"
+	objectSystemAttributeName  = "S3-System-name"
+	attrVersionsIgnore         = "S3-Versions-ignore"
+	versionsDelAttr            = "S3-Versions-del"
+	versionsAddAttr            = "S3-Versions-add"
+	versionsUnversionedAttr    = "S3-Versions-unversioned"
 )
 
 func newObjectVersions(name string) *objectVersions {
@@ -213,54 +211,9 @@ func (v *objectVersions) existedVersions() []string {
 	return res
 }
 
-func (v *objectVersions) getFiltered(reverse bool) []*data.ObjectInfo {
-	if len(v.objects) == 0 {
-		return nil
-	}
-
-	v.sort()
-	existedVersions := v.existedVersions()
-	res := make([]*data.ObjectInfo, 0, len(v.objects))
-
-	for _, version := range v.objects {
-		delMark := version.Headers[VersionsDeleteMarkAttr]
-		if contains(existedVersions, version.Version()) && (delMark == DelMarkFullObject || delMark == "") {
-			res = append(res, version)
-		}
-	}
-
-	if reverse {
-		for i, j := 0, len(res)-1; i < j; i, j = i+1, j-1 {
-			res[i], res[j] = res[j], res[i]
-		}
-	}
-
-	return res
-}
-
 func (v *objectVersions) getAddHeader() string {
 	v.sort()
 	return strings.Join(v.addList, ",")
-}
-
-func (n *layer) PutBucketVersioning(ctx context.Context, p *PutSettingsParams) (*data.ObjectInfo, error) {
-	metadata := map[string]string{
-		attrSettingsVersioningEnabled: strconv.FormatBool(p.Settings.VersioningEnabled),
-	}
-
-	s := &PutSystemObjectParams{
-		BktInfo:  p.BktInfo,
-		ObjName:  p.BktInfo.SettingsObjectName(),
-		Metadata: metadata,
-		Prefix:   "",
-		Reader:   nil,
-	}
-
-	return n.PutSystemObject(ctx, s)
-}
-
-func (n *layer) GetBucketVersioning(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	return n.GetBucketSettings(ctx, bktInfo)
 }
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {

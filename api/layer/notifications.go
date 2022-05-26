@@ -25,20 +25,19 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 
 	sysName := p.BktInfo.NotificationConfigurationObjectName()
 
-	s := &PutSystemObjectParams{
-		BktInfo:  p.BktInfo,
-		ObjName:  sysName,
-		Metadata: map[string]string{},
-		Reader:   bytes.NewReader(confXML),
-		Size:     int64(len(confXML)),
+	prm := PrmObjectCreate{
+		Container: p.BktInfo.CID,
+		Creator:   p.BktInfo.Owner,
+		Payload:   bytes.NewReader(confXML),
+		Filename:  sysName,
 	}
 
-	obj, err := n.putSystemObjectIntoNeoFS(ctx, s)
+	objID, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return err
 	}
 
-	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, &p.BktInfo.CID, &obj.ID)
+	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, &p.BktInfo.CID, objID)
 	if err != nil {
 		return err
 	}
