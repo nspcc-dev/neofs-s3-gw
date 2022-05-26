@@ -51,7 +51,6 @@ const (
 	lockConfigurationKV = "lock_configuration"
 	oidKV               = "OID"
 	fileNameKV          = "FileName"
-	systemNameKV        = "SystemName"
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "isTag"
 	uploadIDKV          = "UploadId"
@@ -188,7 +187,7 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 		switch kv.GetKey() {
 		case uploadIDKV:
 			multipartInfo.UploadID = string(kv.GetValue())
-		case systemNameKV:
+		case fileNameKV:
 			multipartInfo.Key = strings.TrimSuffix(string(kv.GetValue()), emptyFileName)
 		case createdKV:
 			if utcMilli, err := strconv.ParseInt(string(kv.GetValue()), 10, 64); err == nil {
@@ -287,7 +286,7 @@ func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID
 	}
 
 	meta := make(map[string]string)
-	meta[systemNameKV] = notifConfFileName
+	meta[fileNameKV] = notifConfFileName
 	meta[oidKV] = objID.EncodeToString()
 
 	if isErrNotFound {
@@ -315,7 +314,7 @@ func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oi
 	}
 
 	meta := make(map[string]string)
-	meta[systemNameKV] = corsFilename
+	meta[fileNameKV] = corsFilename
 	meta[oidKV] = objID.EncodeToString()
 
 	if isErrNotFound {
@@ -423,7 +422,7 @@ func (c *TreeClient) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet
 	}
 
 	treeTagSet := make(map[string]string)
-	treeTagSet[systemNameKV] = bucketTaggingFilename
+	treeTagSet[fileNameKV] = bucketTaggingFilename
 
 	for key, val := range tagSet {
 		treeTagSet[userDefinedtagPrefix+key] = val
@@ -545,7 +544,7 @@ func (c *TreeClient) getPrefixNodeID(ctx context.Context, cnrID *cid.ID, treeID 
 
 	var intermediateNodes []uint64
 	for _, node := range nodes {
-		if !isIntermediate(node, pathAttributeFromTreeID(treeID)) {
+		if !isIntermediate(node) {
 			intermediateNodes = append(intermediateNodes, node.GetNodeId())
 		}
 	}
@@ -576,7 +575,7 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID *cid.ID, tree
 
 	result := make([]*tree.GetSubTreeResponse_Body, 0, len(subTree))
 	for _, node := range subTree {
-		if node.GetNodeId() != rootID && hasPrefix(node, pathAttributeFromTreeID(treeID), tailPrefix) {
+		if node.GetNodeId() != rootID && hasPrefix(node, tailPrefix) {
 			result = append(result, node)
 		}
 	}
@@ -584,9 +583,9 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID *cid.ID, tree
 	return result, nil
 }
 
-func hasPrefix(node *tree.GetSubTreeResponse_Body, key, prefix string) bool {
+func hasPrefix(node *tree.GetSubTreeResponse_Body, prefix string) bool {
 	for _, kv := range node.GetMeta() {
-		if kv.GetKey() == key {
+		if kv.GetKey() == fileNameKV {
 			return strings.HasPrefix(string(kv.GetValue()), prefix)
 		}
 	}
@@ -594,12 +593,12 @@ func hasPrefix(node *tree.GetSubTreeResponse_Body, key, prefix string) bool {
 	return false
 }
 
-func isIntermediate(node *tree.GetNodeByPathResponse_Info, key string) bool {
+func isIntermediate(node *tree.GetNodeByPathResponse_Info) bool {
 	if len(node.GetMeta()) != 1 {
 		return false
 	}
 
-	return node.GetMeta()[0].GetKey() == key
+	return node.GetMeta()[0].GetKey() == fileNameKV
 }
 
 func (c *TreeClient) getSubTreeVersions(ctx context.Context, cnrID *cid.ID, nodeID uint64, latestOnly bool) ([]*data.NodeVersion, error) {
@@ -881,8 +880,8 @@ func (c *TreeClient) Close() error {
 func (c *TreeClient) addVersion(ctx context.Context, cnrID *cid.ID, treeID, filepath string, version *data.NodeVersion) error {
 	path := pathFromName(filepath)
 	meta := map[string]string{
-		oidKV:                           version.OID.EncodeToString(),
-		pathAttributeFromTreeID(treeID): path[len(path)-1],
+		oidKV:      version.OID.EncodeToString(),
+		fileNameKV: path[len(path)-1],
 	}
 
 	if version.DeleteMarker != nil {
@@ -1006,7 +1005,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, cnrID *cid.ID, treeID strin
 func metaFromSettings(settings *data.BucketSettings) map[string]string {
 	results := make(map[string]string, 3)
 
-	results[systemNameKV] = settingsFileName
+	results[fileNameKV] = settingsFileName
 	results[versioningEnabledKV] = strconv.FormatBool(settings.VersioningEnabled)
 	results[lockConfigurationKV] = encodeLockConfiguration(settings.LockConfiguration)
 
@@ -1014,7 +1013,7 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 }
 
 func metaFromMultipart(info *data.MultipartInfo) map[string]string {
-	info.Meta[systemNameKV] = info.Key
+	info.Meta[fileNameKV] = info.Key
 	info.Meta[uploadIDKV] = info.UploadID
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
@@ -1060,7 +1059,7 @@ func (c *TreeClient) getNodes(ctx context.Context, p *getNodesParams) ([]*tree.G
 			TreeId:        p.TreeID,
 			Path:          p.Path,
 			Attributes:    p.Meta,
-			PathAttribute: pathAttributeFromTreeID(p.TreeID),
+			PathAttribute: fileNameKV,
 			LatestOnly:    p.LatestOnly,
 			AllAttributes: p.AllAttrs,
 			BearerToken:   getBearer(ctx),
@@ -1130,7 +1129,7 @@ func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID *cid.ID, treeID st
 			TreeId:        treeID,
 			Path:          path,
 			Meta:          metaToKV(meta),
-			PathAttribute: pathAttributeFromTreeID(treeID),
+			PathAttribute: fileNameKV,
 			BearerToken:   getBearer(ctx),
 		},
 	}
@@ -1146,15 +1145,6 @@ func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID *cid.ID, treeID st
 
 	_, err := c.service.AddByPath(ctx, request)
 	return err
-}
-
-func pathAttributeFromTreeID(treeID string) string {
-	switch treeID {
-	case systemTree:
-		return systemNameKV
-	default:
-		return fileNameKV
-	}
 }
 
 func (c *TreeClient) moveNode(ctx context.Context, cnrID *cid.ID, treeID string, nodeID, parentID uint64, meta map[string]string) error {
