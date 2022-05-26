@@ -33,14 +33,17 @@ func TestFormObjectLock(t *testing.T) {
 			bktInfo: &data.BucketInfo{ObjectLockEnabled: true},
 			config: &data.ObjectLockConfiguration{Rule: &data.ObjectLockRule{
 				DefaultRetention: &data.DefaultRetention{Mode: complianceMode, Days: 1}}},
-			expectedLock: &data.ObjectLock{IsCompliance: true, Until: time.Now().Add(24 * time.Hour)},
+			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{
+				IsCompliance: true,
+				Until:        time.Now().Add(24 * time.Hour)}},
 		},
 		{
 			name:    "default years",
 			bktInfo: &data.BucketInfo{ObjectLockEnabled: true},
 			config: &data.ObjectLockConfiguration{Rule: &data.ObjectLockRule{
 				DefaultRetention: &data.DefaultRetention{Mode: governanceMode, Years: 1}}},
-			expectedLock: &data.ObjectLock{Until: time.Now().Add(365 * 24 * time.Hour)},
+			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{
+				Until: time.Now().Add(365 * 24 * time.Hour)}},
 		},
 		{
 			name:    "basic override",
@@ -51,7 +54,9 @@ func TestFormObjectLock(t *testing.T) {
 				api.AmzObjectLockMode:            {governanceMode},
 				api.AmzObjectLockLegalHold:       {legalHoldOn},
 			},
-			expectedLock: &data.ObjectLock{Until: time.Now(), LegalHold: true},
+			expectedLock: &data.ObjectLock{
+				LegalHold: &data.LegalHoldLock{Enabled: true},
+				Retention: &data.RetentionLock{Until: time.Now()}},
 		},
 		{
 			name:          "lock disabled error",
@@ -95,7 +100,9 @@ func TestFormObjectLockFromRetention(t *testing.T) {
 				Mode:            complianceMode,
 				RetainUntilDate: time.Now().Format(time.RFC3339),
 			},
-			expectedLock: &data.ObjectLock{Until: time.Now(), IsCompliance: true},
+			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{
+				Until:        time.Now(),
+				IsCompliance: true}},
 		},
 		{
 			name: "basic governance",
@@ -106,7 +113,7 @@ func TestFormObjectLockFromRetention(t *testing.T) {
 			header: map[string][]string{
 				api.AmzBypassGovernanceRetention: {strconv.FormatBool(true)},
 			},
-			expectedLock: &data.ObjectLock{Until: time.Now()},
+			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{Until: time.Now()}},
 		},
 		{
 			name: "error invalid mode",
@@ -140,8 +147,10 @@ func TestFormObjectLockFromRetention(t *testing.T) {
 
 func assertObjectLocks(t *testing.T, expected, actual *data.ObjectLock) {
 	require.Equal(t, expected.LegalHold, actual.LegalHold)
-	require.Equal(t, expected.IsCompliance, actual.IsCompliance)
-	require.InDelta(t, expected.Until.Unix(), actual.Until.Unix(), 1)
+	if expected.Retention != nil {
+		require.Equal(t, expected.Retention.IsCompliance, actual.Retention.IsCompliance)
+		require.InDelta(t, expected.Retention.Until.Unix(), actual.Retention.Until.Unix(), 1)
+	}
 }
 
 func TestCheckLockObject(t *testing.T) {

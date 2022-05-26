@@ -3,13 +3,14 @@ package layer
 import (
 	"context"
 	errorsStd "errors"
+
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"go.uber.org/zap"
 )
 
-func (n *layer) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) (map[string]string, error) {
+func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (map[string]string, error) {
 	var (
 		err  error
 		tags map[string]string
@@ -19,12 +20,12 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo)
 		return tags, nil
 	}
 
-	version, err := n.getTaggedObjectVersion(ctx, p)
+	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
 		return nil, err
 	}
 
-	tags, err = n.treeService.GetObjectTagging(ctx, p.CnrID, version)
+	tags, err = n.treeService.GetObjectTagging(ctx, &p.BktInfo.CID, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
@@ -39,13 +40,13 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo)
 	return tags, nil
 }
 
-func (n *layer) PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo, tagSet map[string]string) error {
-	version, err := n.getTaggedObjectVersion(ctx, p)
+func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) error {
+	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	err = n.treeService.PutObjectTagging(ctx, p.CnrID, version, tagSet)
+	err = n.treeService.PutObjectTagging(ctx, &p.BktInfo.CID, version, tagSet)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return errors.GetAPIError(errors.ErrNoSuchKey)
@@ -60,13 +61,13 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo,
 	return nil
 }
 
-func (n *layer) DeleteObjectTagging(ctx context.Context, p *data.ObjectTaggingInfo) error {
-	version, err := n.getTaggedObjectVersion(ctx, p)
+func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
+	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	err = n.treeService.DeleteObjectTagging(ctx, p.CnrID, version)
+	err = n.treeService.DeleteObjectTagging(ctx, &p.BktInfo.CID, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return errors.GetAPIError(errors.ErrNoSuchKey)
@@ -118,50 +119,41 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error {
 	return n.treeService.DeleteBucketTagging(ctx, cnrID)
 }
 
-func objectTaggingCacheKey(p *data.ObjectTaggingInfo) string {
-	return ".tagset." + p.CnrID.EncodeToString() + "." + p.ObjName + "." + p.VersionID
+func objectTaggingCacheKey(p *ObjectVersion) string {
+	return ".tagset." + p.BktInfo.CID.EncodeToString() + "." + p.ObjectName + "." + p.VersionID
 }
 
 func bucketTaggingCacheKey(cnrID *cid.ID) string {
 	return ".tagset." + cnrID.EncodeToString()
 }
 
-func (n *layer) getTaggedObjectVersion(ctx context.Context, p *data.ObjectTaggingInfo) (*data.NodeVersion, error) {
-	var (
-		err     error
-		version *data.NodeVersion
-	)
+func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (*data.NodeVersion, error) {
+	var err error
+	var version *data.NodeVersion
 
-	if p.VersionID == unversionedObjectVersionID {
-		if version, err = n.treeService.GetUnversioned(ctx, p.CnrID, p.ObjName); err != nil {
-			if errorsStd.Is(err, ErrNodeNotFound) {
-				return nil, errors.GetAPIError(errors.ErrNoSuchKey)
-			}
-			return nil, err
-		}
-	} else if len(p.VersionID) == 0 {
-		if version, err = n.treeService.GetLatestVersion(ctx, p.CnrID, p.ObjName); err != nil {
-			if errorsStd.Is(err, ErrNodeNotFound) {
-				return nil, errors.GetAPIError(errors.ErrNoSuchKey)
-			}
-			return nil, err
-		}
+	if objVersion.VersionID == unversionedObjectVersionID {
+		version, err = n.treeService.GetUnversioned(ctx, &objVersion.BktInfo.CID, objVersion.ObjectName)
+	} else if len(objVersion.VersionID) == 0 {
+		version, err = n.treeService.GetLatestVersion(ctx, &objVersion.BktInfo.CID, objVersion.ObjectName)
 	} else {
-		versions, err := n.treeService.GetVersions(ctx, p.CnrID, p.ObjName)
-		if err != nil {
-			return nil, err
+		versions, err2 := n.treeService.GetVersions(ctx, &objVersion.BktInfo.CID, objVersion.ObjectName)
+		if err2 != nil {
+			return nil, err2
 		}
 		for _, v := range versions {
-			if v.OID.EncodeToString() == p.VersionID {
+			if v.OID.EncodeToString() == objVersion.VersionID {
 				version = v
 				break
 			}
 		}
+		if version == nil {
+			err = errors.GetAPIError(errors.ErrNoSuchKey)
+		}
 	}
 
-	if version == nil || version.DeleteMarker != nil {
+	if err == nil && version.DeleteMarker != nil || errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 	}
 
-	return version, nil
+	return version, err
 }

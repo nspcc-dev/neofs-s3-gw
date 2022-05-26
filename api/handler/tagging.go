@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -37,10 +38,10 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p := &data.ObjectTaggingInfo{
-		CnrID:     &bktInfo.CID,
-		ObjName:   reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get("versionId"),
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  reqInfo.URL.Query().Get("versionId"),
 	}
 
 	if err = h.obj.PutObjectTagging(r.Context(), p, tagSet); err != nil {
@@ -73,10 +74,10 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p := &data.ObjectTaggingInfo{
-		CnrID:     &bktInfo.CID,
-		ObjName:   reqInfo.ObjectName,
-		VersionID: versionID,
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  versionID,
 	}
 
 	tagSet, err := h.obj.GetObjectTagging(r.Context(), p)
@@ -100,10 +101,10 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := &data.ObjectTaggingInfo{
-		CnrID:     &bktInfo.CID,
-		ObjName:   reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get("versionId"),
+	p := &layer.ObjectVersion{
+		BktInfo:    bktInfo,
+		ObjectName: reqInfo.ObjectName,
+		VersionID:  reqInfo.URL.Query().Get("versionId"),
 	}
 
 	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
