@@ -62,3 +62,12 @@ type PartInfo struct {
 	Number   int
 	OID      oid.ID
 }
+
+// LockInfo is lock information to create appropriate tree node.
+type LockInfo struct {
+	ID           uint64
+	LegalHoldOID *oid.ID
+	RetentionOID *oid.ID
+	UntilDate    string
+	IsCompliance bool
+}
