@@ -28,6 +28,7 @@ type (
 
 const (
 	attributeLocationConstraint = ".s3-location-constraint"
+	defaultLocationConstraint   = "default"
 	AttributeLockEnabled        = "LockEnabled"
 )
 
@@ -123,6 +124,9 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
 	var err error
 	ownerID := n.Owner(ctx)
+	if p.LocationConstraint == "" {
+		p.LocationConstraint = defaultLocationConstraint // s3tests_boto3.functional.test_s3:test_bucket_get_location
+	}
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
 		Owner:              &ownerID,
@@ -134,11 +138,9 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 
 	var attributes [][2]string
 
-	if p.LocationConstraint != "" {
-		attributes = append(attributes, [2]string{
-			attributeLocationConstraint, p.LocationConstraint,
-		})
-	}
+	attributes = append(attributes, [2]string{
+		attributeLocationConstraint, p.LocationConstraint,
+	})
 
 	if p.ObjectLockEnabled {
 		attributes = append(attributes, [2]string{
