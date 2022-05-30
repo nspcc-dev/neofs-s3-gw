@@ -46,6 +46,7 @@ type (
 
 	// BucketSettings stores settings such as versioning.
 	BucketSettings struct {
+		IsNoneStatus      bool
 		VersioningEnabled bool                     `json:"versioning_enabled"`
 		LockConfiguration *ObjectLockConfiguration `json:"lock_configuration"`
 	}

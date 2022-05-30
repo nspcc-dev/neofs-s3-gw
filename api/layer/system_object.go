@@ -245,6 +245,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		if !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 			return nil, err
 		}
+		settings.IsNoneStatus = true
 	} else if err = json.Unmarshal(obj.Payload(), settings); err != nil {
 		return nil, err
 	}
