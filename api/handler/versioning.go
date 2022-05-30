@@ -34,6 +34,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	settings.VersioningEnabled = configuration.Status == "Enabled"
+	settings.IsNoneStatus = false
 
 	p := &layer.PutSettingsParams{
 		BktInfo:  bktInfo,
@@ -76,7 +77,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 func formVersioningConfiguration(settings *data.BucketSettings) *VersioningConfiguration {
 	res := &VersioningConfiguration{}
-	if settings == nil {
+	if settings.IsNoneStatus {
 		return res
 	}
 	if settings.VersioningEnabled {
