@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
@@ -323,8 +323,8 @@ func parsePolicies(val string) (authmate.ContainerPolicies, error) {
 	if err = json.Unmarshal(data, &policies); err != nil {
 		return nil, err
 	}
-	if _, ok := policies[layer.DefaultLocationConstraint]; ok {
-		return nil, fmt.Errorf("config overrides %s location constraint", layer.DefaultLocationConstraint)
+	if _, ok := policies[api.DefaultLocationConstraint]; ok {
+		return nil, fmt.Errorf("config overrides %s location constraint", api.DefaultLocationConstraint)
 	}
 
 	return policies, nil
