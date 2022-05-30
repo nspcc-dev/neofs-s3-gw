@@ -66,6 +66,8 @@ const (
 	AccessControlRequestHeaders = "Access-Control-Request-Headers"
 
 	Vary = "Vary"
+
+	DefaultLocationConstraint = "default"
 )
 
 // S3 request query params.
