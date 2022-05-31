@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -13,7 +14,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -150,57 +150,6 @@ func assertObjectLocks(t *testing.T, expected, actual *data.ObjectLock) {
 	if expected.Retention != nil {
 		require.Equal(t, expected.Retention.IsCompliance, actual.Retention.IsCompliance)
 		require.InDelta(t, expected.Retention.Until.Unix(), actual.Retention.Until.Unix(), 1)
-	}
-}
-
-func TestCheckLockObject(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		isCompliance  bool
-		header        http.Header
-		expectedError bool
-	}{
-		{
-			name: "error governance bypass",
-			header: map[string][]string{
-				api.AmzBypassGovernanceRetention: {strconv.FormatBool(false)},
-			},
-			expectedError: true,
-		},
-		{
-			name: "error invalid governance bypass",
-			header: map[string][]string{
-				api.AmzBypassGovernanceRetention: {"t r u e"},
-			},
-			expectedError: true,
-		},
-		{
-			name:          "error failed change compliance mode",
-			isCompliance:  true,
-			expectedError: true,
-		},
-		{
-			name: "valid",
-			header: map[string][]string{
-				api.AmzBypassGovernanceRetention: {strconv.FormatBool(true)},
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			header := make(map[string]string)
-			if tc.isCompliance {
-				header[layer.AttributeComplianceMode] = strconv.FormatBool(true)
-			}
-
-			lockInfo := &data.ObjectInfo{Headers: header}
-			err := checkLockInfo(lockInfo, tc.header)
-			if tc.expectedError {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-		})
 	}
 }
 
@@ -530,25 +479,25 @@ func TestObjectRetention(t *testing.T) {
 	hc.Handler().GetObjectRetentionHandler(w, r)
 	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey))
 
-	retention := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().Format(time.RFC3339)}
+	retention := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Format(time.RFC3339)}
 	w, r = prepareTestRequest(t, bktName, objName, retention)
 	hc.Handler().PutObjectRetentionHandler(w, r)
-	require.Equal(t, http.StatusOK, w.Code)
+	assertStatus(t, w, http.StatusOK)
 
 	w, r = prepareTestRequest(t, bktName, objName, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
 	assertRetention(t, w, retention)
 
-	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().Format(time.RFC3339)}
+	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Format(time.RFC3339)}
 	w, r = prepareTestRequest(t, bktName, objName, retention)
 	hc.Handler().PutObjectRetentionHandler(w, r)
 	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrInternalError))
 
-	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().Format(time.RFC3339)}
+	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().UTC().Format(time.RFC3339)}
 	w, r = prepareTestRequest(t, bktName, objName, retention)
 	r.Header.Set(api.AmzBypassGovernanceRetention, strconv.FormatBool(true))
 	hc.Handler().PutObjectRetentionHandler(w, r)
-	require.Equal(t, http.StatusOK, w.Code)
+	assertStatus(t, w, http.StatusOK)
 
 	w, r = prepareTestRequest(t, bktName, objName, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
@@ -589,7 +538,7 @@ func TestPutObjectWithLock(t *testing.T) {
 
 	w, r := prepareTestRequest(t, bktName, objDefault, nil)
 	hc.Handler().PutObjectHandler(w, r)
-	require.Equal(t, http.StatusOK, w.Code)
+	assertStatus(t, w, http.StatusOK)
 
 	w, r = prepareTestRequest(t, bktName, objDefault, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
@@ -607,9 +556,10 @@ func TestPutObjectWithLock(t *testing.T) {
 	w, r = prepareTestRequest(t, bktName, objOverride, nil)
 	r.Header.Set(api.AmzObjectLockMode, complianceMode)
 	r.Header.Set(api.AmzObjectLockLegalHold, legalHoldOn)
+	r.Header.Set(api.AmzBypassGovernanceRetention, "true")
 	r.Header.Set(api.AmzObjectLockRetainUntilDate, time.Now().Add(2*24*time.Hour).Format(time.RFC3339))
 	hc.Handler().PutObjectHandler(w, r)
-	require.Equal(t, http.StatusOK, w.Code)
+	assertStatus(t, w, http.StatusOK)
 
 	w, r = prepareTestRequest(t, bktName, objOverride, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
@@ -638,4 +588,12 @@ func assertRetentionApproximate(t *testing.T, w *httptest.ResponseRecorder, rete
 	require.NoError(t, err)
 
 	require.InDelta(t, expectedUntil.Unix(), actualUntil.Unix(), delta)
+}
+
+func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
+	if w.Code != status {
+		resp, err := io.ReadAll(w.Result().Body)
+		require.NoError(t, err)
+		require.Fail(t, string(resp))
+	}
 }
