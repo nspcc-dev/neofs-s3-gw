@@ -108,7 +108,7 @@ func writeAttributesHeaders(h http.Header, info *data.ObjectInfo, params *GetObj
 		h.Set(api.AmzVersionID, info.Version())
 	}
 
-	if _, ok := info.Headers[layer.VersionsDeleteMarkAttr]; ok {
+	if info.IsDeleteMarker {
 		h.Set(api.AmzDeleteMarker, strconv.FormatBool(true))
 	}
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -275,16 +274,6 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not head source object", reqInfo, err, additional...)
 		return
 	}
-	if isDeleted(srcInfo) {
-		if versionID != "" {
-			h.logAndSendError(w, "could not head source object version", reqInfo,
-				errors.GetAPIError(errors.ErrBadRequest), additional...)
-			return
-		}
-		h.logAndSendError(w, "could not head source object", reqInfo,
-			errors.GetAPIError(errors.ErrNoSuchKey), additional...)
-		return
-	}
 
 	args, err := parseCopyObjectArgs(r.Header)
 	if err != nil {
@@ -420,11 +409,6 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-	}
-
-	if err = h.obj.DeleteSystemObject(r.Context(), bktInfo, layer.FormUploadPartName(uploadID, uploadInfo.Key, 0)); err != nil {
-		h.logAndSendError(w, "could not delete init file of multipart upload", reqInfo, err, additional...)
-		return
 	}
 
 	response := CompleteMultipartUploadResponse{
@@ -631,8 +615,4 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		UploadID:         params.Info.UploadID,
 		Parts:            info.Parts,
 	}
-}
-
-func isDeleted(objInfo *data.ObjectInfo) bool {
-	return objInfo.Headers[layer.VersionsDeleteMarkAttr] == layer.DelMarkFullObject
 }

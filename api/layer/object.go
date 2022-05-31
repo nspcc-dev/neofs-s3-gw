@@ -24,12 +24,6 @@ import (
 )
 
 type (
-	findParams struct {
-		attr   [2]string
-		cid    cid.ID
-		prefix string
-	}
-
 	getParams struct {
 		// payload range
 		off, ln uint64
@@ -67,29 +61,6 @@ type (
 		Prefix    string
 	}
 )
-
-func (n *layer) objectSearchByName(ctx context.Context, cnr cid.ID, filename string) ([]oid.ID, error) {
-	f := &findParams{
-		attr: [2]string{object.AttributeFileName, filename},
-		cid:  cnr,
-	}
-	return n.objectSearch(ctx, f)
-}
-
-// objectSearch returns all available objects by search params.
-func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]oid.ID, error) {
-	prm := neofs.PrmObjectSelect{
-		Container:      p.cid,
-		ExactAttribute: p.attr,
-		FilePrefix:     p.prefix,
-	}
-
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
-
-	res, err := n.neoFS.SelectObjects(ctx, prm)
-
-	return res, n.transformNeofsError(ctx, err)
-}
 
 func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
 	var addr oid.Address
@@ -277,44 +248,6 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 	}
 
 	return objInfo, nil
-}
-
-func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectName string) (*objectVersions, error) {
-	ids, err := n.objectSearchByName(ctx, bkt.CID, objectName)
-	if err != nil {
-		return nil, err
-	}
-
-	versions := newObjectVersions(objectName)
-	if len(ids) == 0 {
-		return versions, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
-	}
-
-	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, ids[i])
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", &ids[i]),
-				zap.Stringer("bucket id", bkt.CID),
-				zap.Error(err))
-			continue
-		}
-		if err = n.objCache.Put(*meta); err != nil {
-			n.log.Warn("couldn't put meta to objects cache",
-				zap.Stringer("object id", &ids[i]),
-				zap.Stringer("bucket id", bkt.CID),
-				zap.Error(err))
-		}
-
-		if oi := objInfoFromMeta(bkt, meta); oi != nil {
-			if isSystem(oi) {
-				continue
-			}
-			versions.appendVersion(oi)
-		}
-	}
-
-	return versions, nil
 }
 
 func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ObjectInfo, error) {
@@ -514,10 +447,6 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, bkt *data.BucketIn
 			continue
 		}
 		if oi := objectInfoFromMeta(bkt, obj, prefix, delimiter); oi != nil {
-			if isSystem(oi) {
-				continue
-			}
-
 			objectsMap[oi.Name] = oi
 		}
 	}
@@ -583,19 +512,6 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	}
 
 	return versions, nil
-}
-
-func splitVersions(header string) []string {
-	if len(header) == 0 {
-		return nil
-	}
-
-	return strings.Split(header, ",")
-}
-
-func isSystem(obj *data.ObjectInfo) bool {
-	return len(obj.Headers[objectSystemAttributeName]) > 0 ||
-		len(obj.Headers[attrVersionsIgnore]) > 0
 }
 
 func IsSystemHeader(key string) bool {

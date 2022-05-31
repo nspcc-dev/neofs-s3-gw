@@ -129,26 +129,6 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 	return lockInfo, nil
 }
 
-func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
-	f := &findParams{
-		attr: [2]string{objectSystemAttributeName, name},
-		cid:  bktInfo.CID,
-	}
-	ids, err := n.objectSearch(ctx, f)
-	if err != nil {
-		return err
-	}
-
-	n.systemCache.Delete(systemObjectKey(bktInfo, name))
-	for i := range ids {
-		if err = n.objectDelete(ctx, bktInfo.CID, ids[i]); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName string) (*data.CORSConfiguration, error) {
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
