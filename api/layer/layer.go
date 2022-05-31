@@ -498,6 +498,8 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		if obj.Error = n.treeService.AddVersion(ctx, &bkt.CID, obj.Name, newVersion); obj.Error != nil {
 			return obj
 		}
+
+		n.namesCache.Delete(bkt.Name + "/" + obj.Name)
 	} else {
 		versions, err := n.treeService.GetVersions(ctx, &bkt.CID, obj.Name)
 		if err != nil {
@@ -529,16 +531,7 @@ func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, 
 		if err := n.objectDelete(ctx, bkt, version.OID); err != nil {
 			return deleteMarkVersion, err
 		}
-		if err := n.treeService.RemoveVersion(ctx, &bkt.CID, version.ID); err != nil {
-			return deleteMarkVersion, err
-		}
-
-		p := &ObjectVersion{
-			BktInfo:    bkt,
-			ObjectName: obj.Name,
-			VersionID:  version.OID.EncodeToString(),
-		}
-		return deleteMarkVersion, n.DeleteObjectTagging(ctx, p)
+		return deleteMarkVersion, n.treeService.RemoveVersion(ctx, &bkt.CID, version.ID)
 	}
 
 	return "", errors.GetAPIError(errors.ErrNoSuchVersion)

@@ -328,34 +328,31 @@ func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectNa
 }
 
 func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ObjectInfo, error) {
+	var err error
+	var foundVersion *data.NodeVersion
 	if p.VersionID == unversionedObjectVersionID {
-		versions, err := n.headVersions(ctx, bkt, p.Object)
+		foundVersion, err = n.treeService.GetUnversioned(ctx, &bkt.CID, p.Object)
 		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
+			}
 			return nil, err
 		}
+	} else {
+		versions, err := n.treeService.GetVersions(ctx, &bkt.CID, p.Object)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't get versions: %w", err)
+		}
 
-		objInfo := versions.getLast(FromUnversioned())
-		if objInfo == nil {
+		for _, version := range versions {
+			if version.OID.EncodeToString() == p.VersionID {
+				foundVersion = version
+				break
+			}
+		}
+		if foundVersion == nil {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
 		}
-		return objInfo, nil
-	}
-
-	versions, err := n.treeService.GetVersions(ctx, &bkt.CID, p.Object)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get versions: %w", err)
-	}
-
-	var foundVersion *data.NodeVersion
-	for _, version := range versions {
-		if version.OID.EncodeToString() == p.VersionID {
-			foundVersion = version
-			break
-		}
-	}
-
-	if foundVersion == nil {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
 	}
 
 	if headInfo := n.objCache.Get(newAddress(bkt.CID, foundVersion.OID)); headInfo != nil {
