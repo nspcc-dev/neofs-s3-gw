@@ -262,7 +262,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ObjectInfo, error) {
 	var err error
 	var foundVersion *data.NodeVersion
-	if p.VersionID == unversionedObjectVersionID {
+	if p.VersionID == UnversionedObjectVersionID {
 		foundVersion, err = n.treeService.GetUnversioned(ctx, &bkt.CID, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
@@ -549,6 +549,18 @@ func triageObjects(allObjects []*data.ObjectInfo) (prefixes []string, objects []
 	for _, ov := range allObjects {
 		if ov.IsDir {
 			prefixes = append(prefixes, ov.Name)
+		} else {
+			objects = append(objects, ov)
+		}
+	}
+
+	return
+}
+
+func triageExtendedObjects(allObjects []*data.ExtendedObjectInfo) (prefixes []string, objects []*data.ExtendedObjectInfo) {
+	for _, ov := range allObjects {
+		if ov.ObjectInfo.IsDir {
+			prefixes = append(prefixes, ov.ObjectInfo.Name)
 		} else {
 			objects = append(objects, ov)
 		}

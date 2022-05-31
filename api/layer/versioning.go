@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	unversionedObjectVersionID = "null"
+	UnversionedObjectVersionID = "null"
 )
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
 	var (
-		allObjects = make([]*data.ObjectInfo, 0, p.MaxKeys)
+		allObjects = make([]*data.ExtendedObjectInfo, 0, p.MaxKeys)
 		res        = &ListObjectVersionsInfo{}
 	)
 
@@ -34,35 +34,37 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 			return sortedVersions[j].NodeVersion.Timestamp < sortedVersions[i].NodeVersion.Timestamp // sort in reverse order
 		})
 
-		for _, version := range sortedVersions {
-			allObjects = append(allObjects, version.ObjectInfo)
+		for i, version := range sortedVersions {
+			version.IsLatest = i == 0
+			allObjects = append(allObjects, version)
 		}
 	}
 
 	for i, obj := range allObjects {
-		if obj.Name >= p.KeyMarker && obj.Version() >= p.VersionIDMarker {
+		if obj.ObjectInfo.Name >= p.KeyMarker && obj.ObjectInfo.Version() >= p.VersionIDMarker {
 			allObjects = allObjects[i:]
 			break
 		}
 	}
 
-	res.CommonPrefixes, allObjects = triageObjects(allObjects)
+	res.CommonPrefixes, allObjects = triageExtendedObjects(allObjects)
 
 	if len(allObjects) > p.MaxKeys {
 		res.IsTruncated = true
-		res.NextKeyMarker = allObjects[p.MaxKeys].Name
-		res.NextVersionIDMarker = allObjects[p.MaxKeys].Version()
+		res.NextKeyMarker = allObjects[p.MaxKeys].ObjectInfo.Name
+		res.NextVersionIDMarker = allObjects[p.MaxKeys].ObjectInfo.Version()
 
 		allObjects = allObjects[:p.MaxKeys]
-		res.KeyMarker = allObjects[p.MaxKeys-1].Name
-		res.VersionIDMarker = allObjects[p.MaxKeys-1].Version()
+		res.KeyMarker = allObjects[p.MaxKeys-1].ObjectInfo.Name
+		res.VersionIDMarker = allObjects[p.MaxKeys-1].ObjectInfo.Version()
 	}
 
 	objects := make([]*ObjectVersionInfo, len(allObjects))
 	for i, obj := range allObjects {
-		objects[i] = &ObjectVersionInfo{Object: obj}
-		if i == 0 || allObjects[i-1].Name != obj.Name {
-			objects[i].IsLatest = true
+		objects[i] = &ObjectVersionInfo{
+			Object:        obj.ObjectInfo,
+			IsUnversioned: obj.NodeVersion.IsUnversioned,
+			IsLatest:      obj.IsLatest,
 		}
 	}
 
