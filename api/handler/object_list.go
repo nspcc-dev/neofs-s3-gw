@@ -281,7 +281,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 				DisplayName: ver.Object.Owner.String(),
 			},
 			Size:      ver.Object.Size,
-			VersionID: ver.Object.NullableVersion(),
+			VersionID: ver.Object.Version(), // todo return "null" version for unversioned https://github.com/nspcc-dev/neofs-s3-gw/issues/474
 			ETag:      ver.Object.HashSum,
 		})
 	}

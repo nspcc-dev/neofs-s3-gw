@@ -233,7 +233,6 @@ type (
 		ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error)
 
 		DeleteObjects(ctx context.Context, p *DeleteObjectParams) ([]*VersionedObject, error)
-		DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error
 
 		CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error
 		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ObjectInfo, error)
