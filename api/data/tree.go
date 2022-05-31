@@ -27,6 +27,7 @@ type DeleteMarkerInfo struct {
 type ExtendedObjectInfo struct {
 	ObjectInfo  *ObjectInfo
 	NodeVersion *NodeVersion
+	IsLatest    bool
 }
 
 // BaseNodeVersion is minimal node info from tree service.
