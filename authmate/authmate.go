@@ -132,6 +132,7 @@ type (
 		AccessKeyID     string `json:"access_key_id"`
 		SecretAccessKey string `json:"secret_access_key"`
 		OwnerPrivateKey string `json:"owner_private_key"`
+		WalletPublicKey string `json:"wallet_public_key"`
 		ContainerID     string `json:"container_id"`
 	}
 
@@ -263,6 +264,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secrets.AccessKey,
 		OwnerPrivateKey: hex.EncodeToString(secrets.EphemeralKey.Bytes()),
+		WalletPublicKey: hex.EncodeToString(options.NeoFSKey.PublicKey().Bytes()),
 		ContainerID:     id.EncodeToString(),
 	}
 
