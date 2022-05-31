@@ -37,8 +37,9 @@ type (
 
 	// ObjectVersionInfo stores info about objects versions.
 	ObjectVersionInfo struct {
-		Object   *data.ObjectInfo
-		IsLatest bool
+		Object        *data.ObjectInfo
+		IsLatest      bool
+		IsUnversioned bool
 	}
 
 	// ListObjectVersionsInfo stores info and list of objects versions.
