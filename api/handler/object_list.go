@@ -272,6 +272,10 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 	}
 
 	for _, ver := range info.Version {
+		versionID := ver.Object.Version()
+		if ver.IsUnversioned {
+			versionID = layer.UnversionedObjectVersionID
+		}
 		res.Version = append(res.Version, ObjectVersionResponse{
 			IsLatest:     ver.IsLatest,
 			Key:          ver.Object.Name,
@@ -281,7 +285,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 				DisplayName: ver.Object.Owner.String(),
 			},
 			Size:      ver.Object.Size,
-			VersionID: ver.Object.Version(), // todo return "null" version for unversioned https://github.com/nspcc-dev/neofs-s3-gw/issues/474
+			VersionID: versionID,
 			ETag:      ver.Object.HashSum,
 		})
 	}
