@@ -17,7 +17,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
-	treetest "github.com/nspcc-dev/neofs-s3-gw/internal/neofstest/tree"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -58,7 +57,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
 		AnonKey:     layer.AnonymousKey{Key: key},
 		Resolver:    testResolver,
-		TreeService: treetest.NewTreeService(),
+		TreeService: layer.NewTreeService(),
 	}
 
 	h := &handler{

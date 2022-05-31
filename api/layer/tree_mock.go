@@ -1,8 +1,7 @@
-package tree
+package layer
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"strings"
 
@@ -47,8 +46,6 @@ func (t *TreeServiceMock) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID
 	//TODO implement me
 	panic("implement me")
 }
-
-var ErrNodeNotFound = errors.New("not found")
 
 func NewTreeService() *TreeServiceMock {
 	return &TreeServiceMock{
@@ -107,7 +104,7 @@ func (t *TreeServiceMock) GetVersions(_ context.Context, cnrID *cid.ID, objectNa
 	return versions, nil
 }
 
-func (t *TreeServiceMock) GetLatestVersion(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
+func (t *TreeServiceMock) GetLatestVersion(_ context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -154,8 +151,24 @@ func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID *ci
 	return result, nil
 }
 
-func (t *TreeServiceMock) GetUnversioned(ctx context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
-	panic("implement me")
+func (t *TreeServiceMock) GetUnversioned(_ context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
+	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
+	if !ok {
+		return nil, ErrNodeNotFound
+	}
+
+	versions, ok := cnrVersionsMap[objectName]
+	if !ok {
+		return nil, ErrNodeNotFound
+	}
+
+	for _, version := range versions {
+		if version.IsUnversioned {
+			return version, nil
+		}
+	}
+
+	return nil, ErrNodeNotFound
 }
 
 func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectName string, newVersion *data.NodeVersion) error {
@@ -179,6 +192,7 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectNam
 
 	if len(versions) != 0 {
 		newVersion.ID = versions[len(versions)-1].ID + 1
+		newVersion.Timestamp = versions[len(versions)-1].Timestamp + 1
 	}
 
 	result := versions
@@ -197,12 +211,38 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectNam
 	return nil
 }
 
-func (t *TreeServiceMock) RemoveVersion(ctx context.Context, cnrID *cid.ID, nodeID uint64) error {
-	panic("implement me")
+func (t *TreeServiceMock) RemoveVersion(_ context.Context, cnrID *cid.ID, nodeID uint64) error {
+	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
+	if !ok {
+		return ErrNodeNotFound
+	}
+
+	for key, versions := range cnrVersionsMap {
+		for i, node := range versions {
+			if node.ID == nodeID {
+				cnrVersionsMap[key] = append(versions[:i], versions[i+1:]...)
+				return nil
+			}
+		}
+	}
+
+	return ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) GetAllVersionsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
-	panic("implement me")
+func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
+	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
+	if !ok {
+		return nil, nil
+	}
+
+	var result []*data.NodeVersion
+	for objName, versions := range cnrVersionsMap {
+		if strings.HasPrefix(objName, prefix) {
+			result = append(result, versions...)
+		}
+	}
+
+	return result, nil
 }
 
 func (t *TreeServiceMock) CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
