@@ -20,33 +20,38 @@ type TreeServiceMock struct {
 	parts      map[string]map[int]*data.PartInfo
 }
 
+func (t *TreeServiceMock) GetObjectTaggingAndLock(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *TreeServiceMock) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *TreeServiceMock) DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *TreeServiceMock) GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *TreeServiceMock) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *TreeServiceMock) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
