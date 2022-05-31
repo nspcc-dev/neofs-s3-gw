@@ -389,7 +389,7 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var params getParams
 
-	params.objInfo = p.ObjectInfo
+	params.oid = p.ObjectInfo.ID
 	params.bktInfo = p.BucketInfo
 
 	if p.Range != nil {

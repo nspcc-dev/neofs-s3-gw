@@ -61,6 +61,9 @@ type PartInfo struct {
 	UploadID string
 	Number   int
 	OID      oid.ID
+	Size     int64
+	ETag     string
+	Created  time.Time
 }
 
 // LockInfo is lock information to create appropriate tree node.
