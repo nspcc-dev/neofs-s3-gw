@@ -244,6 +244,11 @@ type (
 
 		PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error
 		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)
+
+		// Compound methods for optimizations
+
+		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in single tree service invocation.
+		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
 	}
 )
 
