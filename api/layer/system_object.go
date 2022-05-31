@@ -129,26 +129,6 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 	return lockInfo, nil
 }
 
-func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
-	f := &findParams{
-		attr: [2]string{objectSystemAttributeName, name},
-		bkt:  bktInfo,
-	}
-	ids, err := n.objectSearch(ctx, f)
-	if err != nil {
-		return err
-	}
-
-	n.systemCache.Delete(systemObjectKey(bktInfo, name))
-	for i := range ids {
-		if err = n.objectDelete(ctx, bktInfo, ids[i]); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName string) (*data.CORSConfiguration, error) {
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
@@ -182,43 +162,6 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	}
 
 	return cors, nil
-}
-
-func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
-	f := &findParams{
-		attr: [2]string{objectSystemAttributeName, sysName},
-		bkt:  bkt,
-	}
-	ids, err := n.objectSearch(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-
-	versions := newObjectVersions(sysName)
-	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt, ids[i])
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("object id", &ids[i]),
-				zap.Stringer("bucket id", bkt.CID),
-				zap.Error(err))
-			continue
-		}
-
-		if oi := objInfoFromMeta(bkt, meta); oi != nil {
-			if !isSystem(oi) {
-				continue
-			}
-			versions.appendVersion(oi)
-		}
-	}
-
-	lastVersion := versions.getLast()
-	if lastVersion == nil {
-		return nil, errors.GetAPIError(errors.ErrNoSuchKey)
-	}
-
-	return versions, nil
 }
 
 // systemObjectKey is a key to use in SystemCache.
