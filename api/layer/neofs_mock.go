@@ -28,6 +28,8 @@ type TestNeoFS struct {
 	currentEpoch uint64
 }
 
+const objectSystemAttributeName = "S3-System-name"
+
 func NewTestNeoFS() *TestNeoFS {
 	return &TestNeoFS{
 		objects:    make(map[string]*object.Object),
