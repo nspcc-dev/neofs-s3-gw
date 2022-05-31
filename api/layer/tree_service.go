@@ -59,6 +59,11 @@ type TreeService interface {
 	// If a part is being added for the first time, the previous part ID will be nil.
 	AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error)
 	GetParts(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error)
+
+	// Compound methods for optimizations
+
+	// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in single tree service invocation.
+	GetObjectTaggingAndLock(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error)
 }
 
 // ErrNodeNotFound is returned from Tree service in case of not found error.
