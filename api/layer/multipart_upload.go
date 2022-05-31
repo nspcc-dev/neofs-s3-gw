@@ -198,6 +198,9 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		UploadID: p.Info.UploadID,
 		Number:   p.PartNumber,
 		OID:      *id,
+		Size:     p.Size,
+		ETag:     hex.EncodeToString(hash),
+		Created:  time.Now(),
 	}
 
 	oldPartID, err := n.treeService.AddPart(ctx, &bktInfo.CID, multipartInfo.ID, partInfo)
@@ -219,9 +222,9 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 		Owner:   bktInfo.Owner,
 		Bucket:  bktInfo.Name,
-		Size:    p.Size,
-		Created: time.Now(),
-		HashSum: hex.EncodeToString(hash),
+		Size:    partInfo.Size,
+		Created: partInfo.Created,
+		HashSum: partInfo.ETag,
 	}
 
 	if err = n.objCache.PutObject(objInfo); err != nil {
@@ -285,7 +288,7 @@ type multiObjectReader struct {
 
 	curReader io.Reader
 
-	parts []*data.ObjectInfo
+	parts []*data.PartInfo
 }
 
 func (x *multiObjectReader) Read(p []byte) (n int, err error) {
@@ -300,7 +303,7 @@ func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 		return n, io.EOF
 	}
 
-	x.prm.oid = x.parts[0].ID
+	x.prm.oid = x.parts[0].OID
 
 	x.curReader, err = x.layer.initObjectPayloadReader(x.ctx, x.prm)
 	if err != nil {
@@ -321,27 +324,27 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 	}
 
-	multipartInfo, objects, err := n.getUploadParts(ctx, p.Info) // todo consider avoid heading objects
+	multipartInfo, partsInfo, err := n.getUploadParts(ctx, p.Info)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if len(objects) < len(p.Parts) {
+	if len(partsInfo) < len(p.Parts) {
 		return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 	}
 
-	parts := make([]*data.ObjectInfo, 0, len(p.Parts))
+	parts := make([]*data.PartInfo, 0, len(p.Parts))
 
 	for i, part := range p.Parts {
-		info := objects[part.PartNumber]
-		if info == nil || part.ETag != info.HashSum {
+		partInfo := partsInfo[part.PartNumber]
+		if part.ETag != partInfo.ETag {
 			return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 		}
 		// for the last part we have no minimum size limit
-		if i != len(p.Parts)-1 && info.Size < uploadMinSize {
+		if i != len(p.Parts)-1 && partInfo.Size < uploadMinSize {
 			return nil, nil, errors.GetAPIError(errors.ErrEntityTooSmall)
 		}
-		parts = append(parts, info)
+		parts = append(parts, partInfo)
 	}
 
 	initMetadata := make(map[string]string, len(multipartInfo.Meta))
@@ -384,17 +387,14 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	var addr oid.Address
 	addr.SetContainer(p.Info.Bkt.CID)
-	for partNum, objInfo := range objects {
-		if partNum == 0 {
-			continue
-		}
-		if err = n.objectDelete(ctx, p.Info.Bkt.CID, objInfo.ID); err != nil {
+	for _, partInfo := range partsInfo {
+		if err = n.objectDelete(ctx, p.Info.Bkt.CID, partInfo.OID); err != nil {
 			n.log.Warn("could not delete upload part",
-				zap.Stringer("object id", objInfo.ID),
-				zap.Stringer("bucket id", p.Info.Bkt.CID),
+				zap.Stringer("object id", &partInfo.OID),
+				zap.Stringer("bucket id", &p.Info.Bkt.CID),
 				zap.Error(err))
 		}
-		addr.SetObject(objInfo.ID)
+		addr.SetObject(partInfo.OID)
 		n.objCache.Delete(addr)
 	}
 
@@ -462,14 +462,15 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 }
 
 func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) error {
-	multipartInfo, objects, err := n.getUploadParts(ctx, p)
+	multipartInfo, parts, err := n.getUploadParts(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	for _, info := range objects {
-		if err = n.objectDelete(ctx, info.CID, info.ID); err != nil {
-			return err
+	for _, info := range parts {
+		if err = n.objectDelete(ctx, p.Bkt.CID, info.OID); err != nil {
+			n.log.Warn("couldn't delete part", zap.String("cid", p.Bkt.CID.EncodeToString()),
+				zap.String("oid", info.OID.EncodeToString()), zap.Int("part number", info.Number))
 		}
 	}
 
@@ -478,24 +479,21 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) e
 
 func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsInfo, error) {
 	var res ListPartsInfo
-	multipartInfo, objs, err := n.getUploadParts(ctx, p.Info) // todo consider listing without head object from NeoFS
+	multipartInfo, partsInfo, err := n.getUploadParts(ctx, p.Info)
 	if err != nil {
 		return nil, err
 	}
 
 	res.Owner = multipartInfo.Owner
 
-	parts := make([]*Part, 0, len(objs))
+	parts := make([]*Part, 0, len(partsInfo))
 
-	for num, objInfo := range objs {
-		if num == 0 {
-			continue
-		}
+	for _, partInfo := range partsInfo {
 		parts = append(parts, &Part{
-			ETag:         objInfo.HashSum,
-			LastModified: objInfo.Created.UTC().Format(time.RFC3339),
-			PartNumber:   num,
-			Size:         objInfo.Size,
+			ETag:         partInfo.ETag,
+			LastModified: partInfo.Created.UTC().Format(time.RFC3339),
+			PartNumber:   partInfo.Number,
+			Size:         partInfo.Size,
 		})
 	}
 
@@ -523,7 +521,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	return &res, nil
 }
 
-func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.MultipartInfo, map[int]*data.ObjectInfo, error) {
+func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.MultipartInfo, map[int]*data.PartInfo, error) {
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, &p.Bkt.CID, p.Key, p.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
@@ -537,28 +535,9 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.
 		return nil, nil, err
 	}
 
-	res := make(map[int]*data.ObjectInfo)
-	var addr oid.Address
-	addr.SetContainer(p.Bkt.CID)
+	res := make(map[int]*data.PartInfo, len(parts))
 	for _, part := range parts {
-		addr.SetObject(part.OID)
-		objInfo := n.objCache.GetObject(addr)
-		if objInfo == nil {
-			meta, err := n.objectHead(ctx, p.Bkt.CID, part.OID)
-			if err != nil {
-				n.log.Warn("couldn't head a part of upload",
-					zap.String("object id", part.OID.EncodeToString()),
-					zap.String("bucket id", p.Bkt.CID.EncodeToString()),
-					zap.Error(err))
-				continue
-			}
-			objInfo = objInfoFromMeta(p.Bkt, meta)
-		}
-
-		res[part.Number] = objInfo
-		if err = n.objCache.PutObject(objInfo); err != nil {
-			n.log.Warn("couldn't cache upload part", zap.Error(err))
-		}
+		res[part.Number] = part
 	}
 
 	return multipartInfo, res, nil
