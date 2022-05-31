@@ -67,17 +67,17 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		return conf, nil
 	}
 
-	objId, err := n.treeService.GetNotificationConfigurationNode(ctx, &bktInfo.CID)
+	objID, err := n.treeService.GetNotificationConfigurationNode(ctx, &bktInfo.CID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 
 	conf := &data.NotificationConfiguration{}
 
-	if objId != nil {
+	if objID != nil {
 		var addr oid.Address
 		addr.SetContainer(bktInfo.CID)
-		addr.SetObject(*objId)
+		addr.SetObject(*objID)
 
 		obj, err := n.objectGet(ctx, addr)
 		if err != nil {
