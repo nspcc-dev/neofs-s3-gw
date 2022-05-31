@@ -23,9 +23,7 @@ import (
 const (
 	UploadIDAttributeName         = "S3-Upload-Id"
 	UploadPartNumberAttributeName = "S3-Upload-Part-Number"
-	UploadKeyAttributeName        = "S3-Upload-Key"
 	UploadCompletedParts          = "S3-Completed-Parts"
-	UploadPartKeyPrefix           = ".upload-"
 
 	metaPrefix = "meta-"
 	aclPrefix  = "acl-"
@@ -254,9 +252,6 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	if size > uploadMaxSize {
 		return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
 	}
-
-	metadata := make(map[string]string)
-	appendUploadHeaders(metadata, p.Info.UploadID, p.Info.Key, p.PartNumber)
 
 	pr, pw := io.Pipe()
 
@@ -572,10 +567,6 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.
 	return multipartInfo, res, nil
 }
 
-func FormUploadPartName(uploadID, key string, partNumber int) string {
-	return UploadPartKeyPrefix + uploadID + "-" + key + "-" + strconv.Itoa(partNumber)
-}
-
 func trimAfterUploadIDAndKey(key, id string, uploads []*UploadInfo) []*UploadInfo {
 	var res []*UploadInfo
 	if len(uploads) != 0 && uploads[len(uploads)-1].Key < key {
@@ -630,9 +621,4 @@ func uploadInfoFromMultipartInfo(uploadInfo *data.MultipartInfo, prefix, delimit
 		Owner:    uploadInfo.Owner,
 		Created:  uploadInfo.Created,
 	}
-}
-
-func appendUploadHeaders(metadata map[string]string, uploadID, key string, partNumber int) {
-	metadata[UploadIDAttributeName] = uploadID
-	metadata[UploadPartNumberAttributeName] = strconv.Itoa(partNumber)
 }
