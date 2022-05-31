@@ -131,7 +131,7 @@ func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (
 	var err error
 	var version *data.NodeVersion
 
-	if objVersion.VersionID == unversionedObjectVersionID {
+	if objVersion.VersionID == UnversionedObjectVersionID {
 		version, err = n.treeService.GetUnversioned(ctx, &objVersion.BktInfo.CID, objVersion.ObjectName)
 	} else if len(objVersion.VersionID) == 0 {
 		version, err = n.treeService.GetLatestVersion(ctx, &objVersion.BktInfo.CID, objVersion.ObjectName)
