@@ -144,9 +144,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID:  info.Version(),
 	}
 
-	tagSet, err := h.obj.GetObjectTagging(r.Context(), t)
+	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
+		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		overrideResponseHeaders(w.Header(), reqInfo.URL.Query())
 	}
 
-	if err = h.setLockingHeaders(r.Context(), bktInfo, info, w.Header()); err != nil {
+	if err = h.setLockingHeaders(bktInfo, lockInfo, w.Header()); err != nil {
 		h.logAndSendError(w, "could not get locking info", reqInfo, err)
 		return
 	}
