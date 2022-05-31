@@ -464,14 +464,14 @@ func getRandomOID() (*oid.ID, error) {
 
 // DeleteObject removes all objects with the passed nice name.
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if len(obj.VersionID) == 0 || obj.VersionID == unversionedObjectVersionID {
+	if len(obj.VersionID) == 0 || obj.VersionID == UnversionedObjectVersionID {
 		randOID, err := getRandomOID()
 		if err != nil {
 			obj.Error = fmt.Errorf("couldn't get random oid: %w", err)
 			return obj
 		}
 
-		obj.DeleteMarkVersion = unversionedObjectVersionID
+		obj.DeleteMarkVersion = UnversionedObjectVersionID
 		newVersion := &data.NodeVersion{
 			BaseNodeVersion: data.BaseNodeVersion{
 				OID: *randOID,
