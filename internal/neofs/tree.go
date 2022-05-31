@@ -55,6 +55,8 @@ const (
 	isTagKV             = "isTag"
 	uploadIDKV          = "UploadId"
 	partNumberKV        = "Number"
+	sizeKV              = "Size"
+	etagKV              = "ETag"
 
 	// keys for lock.
 	isLockKV       = "IsLock"
@@ -215,16 +217,32 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 }
 
 func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
+	var err error
 	partInfo := &data.PartInfo{}
 
 	for _, kv := range node.GetMeta() {
+		value := string(kv.GetValue())
 		switch kv.GetKey() {
 		case partNumberKV:
-			partInfo.Number, _ = strconv.Atoi(string(kv.GetValue()))
+			if partInfo.Number, err = strconv.Atoi(value); err != nil {
+				return nil, fmt.Errorf("invalid part number: %w", err)
+			}
 		case oidKV:
-			if err := partInfo.OID.DecodeString(string(kv.GetValue())); err != nil {
+			if err = partInfo.OID.DecodeString(value); err != nil {
 				return nil, fmt.Errorf("invalid oid: %w", err)
 			}
+		case etagKV:
+			partInfo.ETag = value
+		case sizeKV:
+			if partInfo.Size, err = strconv.ParseInt(value, 10, 64); err != nil {
+				return nil, fmt.Errorf("invalid part size: %w", err)
+			}
+		case createdKV:
+			var utcMilli int64
+			if utcMilli, err = strconv.ParseInt(value, 10, 64); err != nil {
+				return nil, fmt.Errorf("invalid created timestamp: %w", err)
+			}
+			partInfo.Created = time.UnixMilli(utcMilli)
 		}
 	}
 
@@ -802,6 +820,9 @@ func (c *TreeClient) AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID
 	meta := map[string]string{
 		partNumberKV: strconv.Itoa(info.Number),
 		oidKV:        info.OID.EncodeToString(),
+		sizeKV:       strconv.FormatInt(info.Size, 10),
+		createdKV:    strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
+		etagKV:       info.ETag,
 	}
 
 	var foundPartID uint64
