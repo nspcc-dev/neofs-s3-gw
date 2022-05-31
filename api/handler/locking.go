@@ -221,22 +221,6 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func checkLockInfo(lock *data.ObjectInfo, header http.Header) error {
-	if lock == nil {
-		return nil
-	}
-
-	if lock.Headers[layer.AttributeComplianceMode] != "" {
-		return fmt.Errorf("it's forbidden to change compliance lock mode")
-	}
-
-	if bypass, err := strconv.ParseBool(header.Get(api.AmzBypassGovernanceRetention)); err != nil || !bypass {
-		return fmt.Errorf("cannot bypass governance mode")
-	}
-
-	return nil
-}
-
 func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
@@ -356,6 +340,16 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 			objectLock.Retention = &data.RetentionLock{}
 		}
 		objectLock.Retention.Until = retentionDate
+	}
+
+	if objectLock.Retention != nil {
+		if bypassStr := header.Get(api.AmzBypassGovernanceRetention); len(bypassStr) > 0 {
+			bypass, err := strconv.ParseBool(bypassStr)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't parse bypass governance header: %w", err)
+			}
+			objectLock.Retention.ByPassedGovernance = bypass
+		}
 	}
 
 	return objectLock, nil
