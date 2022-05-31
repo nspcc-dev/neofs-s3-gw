@@ -81,15 +81,6 @@ func (b *BucketInfo) NotificationConfigurationObjectName() string {
 // Version returns object version from ObjectInfo.
 func (o *ObjectInfo) Version() string { return o.ID.EncodeToString() }
 
-// NullableVersion returns object version from ObjectInfo.
-// Return "null" if "S3-Versions-unversioned" header is present.
-func (o *ObjectInfo) NullableVersion() string {
-	if _, ok := o.Headers["S3-Versions-unversioned"]; ok {
-		return "null"
-	}
-	return o.Version()
-}
-
 // NiceName returns object name for cache.
 func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 
@@ -101,9 +92,3 @@ func (o *ObjectInfo) Address() oid.Address {
 
 	return addr
 }
-
-// LegalHoldObject returns the name of a system object for a lock object.
-func (o *ObjectInfo) LegalHoldObject() string { return ".lock." + o.Name + "." + o.Version() }
-
-// RetentionObject returns the name of a system object for a retention lock object.
-func (o *ObjectInfo) RetentionObject() string { return ".retention." + o.Name + "." + o.Version() }
