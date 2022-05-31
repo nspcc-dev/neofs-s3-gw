@@ -13,7 +13,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
-	treetest "github.com/nspcc-dev/neofs-s3-gw/internal/neofstest/tree"
 	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -177,7 +176,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	layerCfg := &Config{
 		Caches:      config,
 		AnonKey:     AnonymousKey{Key: key},
-		TreeService: treetest.NewTreeService(),
+		TreeService: NewTreeService(),
 	}
 
 	return &testContext{
@@ -249,6 +248,24 @@ func TestVersioningDeleteObject(t *testing.T) {
 	tc.getObject(tc.obj, "", true)
 
 	tc.checkListObjects()
+}
+
+func TestGetUnversioned(t *testing.T) {
+	tc := prepareContext(t)
+
+	objContent := []byte("content obj1 v1")
+	objInfo := tc.putObject(objContent)
+
+	settings := &data.BucketSettings{VersioningEnabled: false}
+	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: settings,
+	})
+	require.NoError(t, err)
+
+	resInfo, buffer := tc.getObject(tc.obj, unversionedObjectVersionID, false)
+	require.Equal(t, objContent, buffer)
+	require.Equal(t, objInfo.Version(), resInfo.Version())
 }
 
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
@@ -520,78 +537,4 @@ func getTestObjectInfoEpoch(epoch uint64, id byte, addAttr, delAttr, delMarkAttr
 	obj := getTestObjectInfo(id, addAttr, delAttr, delMarkAttr)
 	obj.CreationEpoch = epoch
 	return obj
-}
-
-func TestSystemObjectsVersioning(t *testing.T) {
-	cacheConfig := DefaultCachesConfigs()
-	cacheConfig.System.Lifetime = 0
-
-	tc := prepareContext(t, cacheConfig)
-	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{VersioningEnabled: false},
-	})
-	require.NoError(t, err)
-
-	objMeta := tc.getSystemObject(tc.bktInfo.SettingsObjectName())
-	require.NotNil(t, objMeta)
-
-	err = tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{VersioningEnabled: true},
-	})
-	require.NoError(t, err)
-
-	cnrID, _ := objMeta.ContainerID()
-	objID, _ := objMeta.ID()
-
-	var addr oid.Address
-	addr.SetContainer(cnrID)
-	addr.SetObject(objID)
-
-	// simulate failed deletion
-	tc.testNeoFS.AddObject(addr.EncodeToString(), objMeta)
-
-	versioning, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
-	require.NoError(t, err)
-	require.True(t, versioning.VersioningEnabled)
-}
-
-func TestDeleteSystemObjectsVersioning(t *testing.T) {
-	cacheConfig := DefaultCachesConfigs()
-	cacheConfig.System.Lifetime = 0
-
-	tc := prepareContext(t, cacheConfig)
-
-	tagSet := map[string]string{
-		"tag1": "val1",
-	}
-
-	err := tc.layer.PutBucketTagging(tc.ctx, &tc.bktInfo.CID, tagSet)
-	require.NoError(t, err)
-
-	objMeta := tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.CID.EncodeToString()))
-
-	tagSet["tag2"] = "val2"
-	err = tc.layer.PutBucketTagging(tc.ctx, &tc.bktInfo.CID, tagSet)
-	require.NoError(t, err)
-
-	// simulate failed deletion
-	cnrID, _ := objMeta.ContainerID()
-	objID, _ := objMeta.ID()
-	tc.testNeoFS.AddObject(newAddress(cnrID, objID).EncodeToString(), objMeta)
-
-	tagging, err := tc.layer.GetBucketTagging(tc.ctx, &tc.bktInfo.CID)
-	require.NoError(t, err)
-
-	expectedTagSet := map[string]string{
-		"tag1": "val1",
-		"tag2": "val2",
-	}
-	require.Equal(t, expectedTagSet, tagging)
-
-	err = tc.layer.DeleteBucketTagging(tc.ctx, &tc.bktInfo.CID)
-	require.NoError(t, err)
-
-	require.Nil(t, tc.getSystemObject(formBucketTagObjectName(tc.bktInfo.Name)))
 }
