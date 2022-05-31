@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -68,9 +67,9 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID:  info.Version(),
 	}
 
-	tagSet, err := h.obj.GetObjectTagging(r.Context(), t)
+	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
+		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}
 
@@ -91,7 +90,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err = h.setLockingHeaders(r.Context(), bktInfo, info, w.Header()); err != nil {
+	if err = h.setLockingHeaders(bktInfo, lockInfo, w.Header()); err != nil {
 		h.logAndSendError(w, "could not get locking info", reqInfo, err)
 		return
 	}
@@ -113,7 +112,7 @@ func (h *handler) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteResponse(w, http.StatusOK, nil, api.MimeNone)
 }
 
-func (h *handler) setLockingHeaders(ctx context.Context, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo, header http.Header) error {
+func (h *handler) setLockingHeaders(bktInfo *data.BucketInfo, lockInfo *data.LockInfo, header http.Header) error {
 	if !bktInfo.ObjectLockEnabled {
 		return nil
 	}
@@ -121,26 +120,13 @@ func (h *handler) setLockingHeaders(ctx context.Context, bktInfo *data.BucketInf
 	legalHold := &data.LegalHold{Status: legalHoldOff}
 	retention := &data.Retention{Mode: governanceMode}
 
-	p := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: objInfo.Name,
-		VersionID:  objInfo.Version(),
+	if lockInfo.LegalHoldOID != nil {
+		legalHold.Status = legalHoldOn
 	}
-
-	lockInfo, err := h.obj.GetLockInfo(ctx, p)
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
-		return err
-	}
-
-	if lockInfo != nil {
-		if lockInfo.LegalHoldOID != nil {
-			legalHold.Status = legalHoldOn
-		}
-		if lockInfo.RetentionOID != nil {
-			retention.RetainUntilDate = lockInfo.UntilDate
-			if lockInfo.IsCompliance {
-				retention.Mode = complianceMode
-			}
+	if lockInfo.RetentionOID != nil {
+		retention.RetainUntilDate = lockInfo.UntilDate
+		if lockInfo.IsCompliance {
+			retention.Mode = complianceMode
 		}
 	}
 
