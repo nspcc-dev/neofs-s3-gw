@@ -29,7 +29,7 @@ type (
 		// payload range
 		off, ln uint64
 
-		objInfo *data.ObjectInfo
+		oid     oid.ID
 		bktInfo *data.BucketInfo
 	}
 
@@ -92,8 +92,8 @@ func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj 
 // Zero range corresponds to full payload (panics if only offset is set).
 func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Reader, error) {
 	prm := neofs.PrmObjectRead{
-		Container:    p.objInfo.CID,
-		Object:       p.objInfo.ID,
+		Container:    p.bktInfo.CID,
+		Object:       p.oid,
 		WithPayload:  true,
 		PayloadRange: [2]uint64{p.off, p.ln},
 	}
