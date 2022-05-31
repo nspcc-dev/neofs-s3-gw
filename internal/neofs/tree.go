@@ -369,8 +369,12 @@ func (c *TreeClient) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVer
 		return nil, err
 	}
 
+	return getObjectTagging(tagNode), nil
+}
+
+func getObjectTagging(tagNode *TreeNode) map[string]string {
 	if tagNode == nil {
-		return nil, nil
+		return nil
 	}
 
 	meta := make(map[string]string)
@@ -381,7 +385,7 @@ func (c *TreeClient) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVer
 		}
 	}
 
-	return meta, nil
+	return meta
 }
 
 func (c *TreeClient) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
@@ -916,6 +920,10 @@ func (c *TreeClient) GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) 
 		return nil, err
 	}
 
+	return getLock(lockNode)
+}
+
+func getLock(lockNode *TreeNode) (*data.LockInfo, error) {
 	lockInfo := &data.LockInfo{}
 	if lockNode == nil {
 		return lockInfo, nil
@@ -924,7 +932,7 @@ func (c *TreeClient) GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) 
 
 	if legalHold, ok := lockNode.Get(legalHoldOIDKV); ok {
 		var legalHoldOID oid.ID
-		if err = legalHoldOID.DecodeString(legalHold); err != nil {
+		if err := legalHoldOID.DecodeString(legalHold); err != nil {
 			return nil, fmt.Errorf("invalid legal hold object id: %w", err)
 		}
 		lockInfo.LegalHoldOID = &legalHoldOID
@@ -932,7 +940,7 @@ func (c *TreeClient) GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) 
 
 	if retention, ok := lockNode.Get(retentionOIDKV); ok {
 		var retentionOID oid.ID
-		if err = retentionOID.DecodeString(retention); err != nil {
+		if err := retentionOID.DecodeString(retention); err != nil {
 			return nil, fmt.Errorf("invalid retention object id: %w", err)
 		}
 		lockInfo.RetentionOID = &retentionOID
@@ -942,6 +950,20 @@ func (c *TreeClient) GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) 
 	lockInfo.UntilDate, _ = lockNode.Get(untilDateKV)
 
 	return lockInfo, nil
+}
+
+func (c *TreeClient) GetObjectTaggingAndLock(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
+	nodes, err := c.getTreeNodes(ctx, cnrID, objVersion.ID, isTagKV, isLockKV)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	lockInfo, err := getLock(nodes[isLockKV])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return getObjectTagging(nodes[isTagKV]), lockInfo, nil
 }
 
 func (c *TreeClient) Close() error {
