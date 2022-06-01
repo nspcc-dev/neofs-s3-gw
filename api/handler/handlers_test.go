@@ -143,10 +143,18 @@ func prepareTestRequest(t *testing.T, bktName, objName string, body interface{})
 	return w, r
 }
 
-func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
-	if w.Code != status {
-		resp, err := io.ReadAll(w.Result().Body)
-		require.NoError(t, err)
-		require.Failf(t, string(resp), "assert status fail, expected: %d, actual: %d", status, w.Code)
-	}
+func prepareTestPayloadRequest(bktName, objName string, payload io.Reader) (*httptest.ResponseRecorder, *http.Request) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, defaultURL, payload)
+
+	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
+	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
+
+	return w, r
+}
+
+func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body interface{}) {
+	assertStatus(t, response, http.StatusOK)
+	err := xml.NewDecoder(response.Result().Body).Decode(body)
+	require.NoError(t, err)
 }
