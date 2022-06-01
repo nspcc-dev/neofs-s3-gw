@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -11,10 +12,12 @@ import (
 )
 
 type TreeServiceMock struct {
-	settings map[string]*data.BucketSettings
-	versions map[string]map[string][]*data.NodeVersion
-	system   map[string]map[string]*data.BaseNodeVersion
-	locks    map[string]map[uint64]*data.LockInfo
+	settings   map[string]*data.BucketSettings
+	versions   map[string]map[string][]*data.NodeVersion
+	system     map[string]map[string]*data.BaseNodeVersion
+	locks      map[string]map[uint64]*data.LockInfo
+	multiparts map[string]map[string][]*data.MultipartInfo
+	parts      map[string]map[int]*data.PartInfo
 }
 
 func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
@@ -49,10 +52,12 @@ func (t *TreeServiceMock) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID
 
 func NewTreeService() *TreeServiceMock {
 	return &TreeServiceMock{
-		settings: make(map[string]*data.BucketSettings),
-		versions: make(map[string]map[string][]*data.NodeVersion),
-		system:   make(map[string]map[string]*data.BaseNodeVersion),
-		locks:    make(map[string]map[uint64]*data.LockInfo),
+		settings:   make(map[string]*data.BucketSettings),
+		versions:   make(map[string]map[string][]*data.NodeVersion),
+		system:     make(map[string]map[string]*data.BaseNodeVersion),
+		locks:      make(map[string]map[uint64]*data.LockInfo),
+		multiparts: make(map[string]map[string][]*data.MultipartInfo),
+		parts:      make(map[string]map[int]*data.PartInfo),
 	}
 }
 
@@ -245,28 +250,115 @@ func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, cnrID *cid.I
 	return result, nil
 }
 
-func (t *TreeServiceMock) CreateMultipartUpload(ctx context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
-	panic("implement me")
+func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
+	cnrMultipartsMap, ok := t.multiparts[cnrID.EncodeToString()]
+	if !ok {
+		t.multiparts[cnrID.EncodeToString()] = map[string][]*data.MultipartInfo{
+			info.Key: {info},
+		}
+		return nil
+	}
+
+	multiparts := cnrMultipartsMap[info.Key]
+	if len(multiparts) != 0 {
+		info.ID = multiparts[len(multiparts)-1].ID + 1
+	}
+	cnrMultipartsMap[info.Key] = append(multiparts, info)
+
+	return nil
 }
 
 func (t *TreeServiceMock) GetMultipartUploadsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.MultipartInfo, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetMultipartUpload(ctx context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error) {
-	panic("implement me")
+func (t *TreeServiceMock) GetMultipartUpload(_ context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error) {
+	cnrMultipartsMap, ok := t.multiparts[cnrID.EncodeToString()]
+	if !ok {
+		return nil, ErrNodeNotFound
+	}
+
+	multiparts := cnrMultipartsMap[objectName]
+	for _, multipart := range multiparts {
+		if multipart.UploadID == uploadID {
+			return multipart, nil
+		}
+	}
+
+	return nil, ErrNodeNotFound
 }
 
 func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
-	panic("implement me")
+	multipartInfo, err := t.GetMultipartUpload(ctx, cnrID, info.Key, info.UploadID)
+	if err != nil {
+		return nil, err
+	}
+
+	if multipartInfo.ID != multipartNodeID {
+		return nil, fmt.Errorf("invalid multipart info id")
+	}
+
+	partsMap, ok := t.parts[info.UploadID]
+	if !ok {
+		partsMap = make(map[int]*data.PartInfo)
+	}
+
+	partsMap[info.Number] = info
+
+	t.parts[info.UploadID] = partsMap
+	return nil, nil
 }
 
-func (t *TreeServiceMock) GetParts(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
-	panic("implement me")
+func (t *TreeServiceMock) GetParts(_ context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
+	cnrMultipartsMap := t.multiparts[cnrID.EncodeToString()]
+
+	var foundMultipart *data.MultipartInfo
+
+LOOP:
+	for _, multiparts := range cnrMultipartsMap {
+		for _, multipart := range multiparts {
+			if multipart.ID == multipartNodeID {
+				foundMultipart = multipart
+				break LOOP
+			}
+		}
+	}
+
+	if foundMultipart == nil {
+		return nil, ErrNodeNotFound
+	}
+
+	partsMap := t.parts[foundMultipart.UploadID]
+	result := make([]*data.PartInfo, 0, len(partsMap))
+	for _, part := range partsMap {
+		result = append(result, part)
+	}
+
+	return result, nil
 }
 
-func (t *TreeServiceMock) DeleteMultipartUpload(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64) error {
-	panic("implement me")
+func (t *TreeServiceMock) DeleteMultipartUpload(_ context.Context, cnrID *cid.ID, multipartNodeID uint64) error {
+	cnrMultipartsMap := t.multiparts[cnrID.EncodeToString()]
+
+	var uploadID string
+
+LOOP:
+	for key, multiparts := range cnrMultipartsMap {
+		for i, multipart := range multiparts {
+			if multipart.ID == multipartNodeID {
+				uploadID = multipart.UploadID
+				cnrMultipartsMap[key] = append(multiparts[:i], multiparts[i+1:]...)
+				break LOOP
+			}
+		}
+	}
+
+	if uploadID == "" {
+		return ErrNodeNotFound
+	}
+
+	delete(t.parts, uploadID)
+	return nil
 }
 
 func (t *TreeServiceMock) PutLock(ctx context.Context, cnrID *cid.ID, nodeID uint64, lock *data.LockInfo) error {

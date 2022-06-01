@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,7 +26,9 @@ type (
 		NextPartNumberMarker int    `xml:"NextPartNumberMarker,omitempty"`
 		PartNumberMarker     int    `xml:"PartNumberMarker,omitempty"`
 		Parts                []Part `xml:"Part,omitempty"`
-		PartsCount           int    `xml:"PartsCount,omitempty"`
+
+		// Only this field is used.
+		PartsCount int `xml:"PartsCount,omitempty"`
 	}
 
 	Part struct {
@@ -34,16 +37,12 @@ type (
 	}
 
 	GetObjectAttributesArgs struct {
-		MaxParts         int
-		PartNumberMarker int
-		Attributes       []string
-		VersionID        string
+		Attributes []string
+		VersionID  string
 	}
 )
 
 const (
-	partNumberMarkerDefault = -1
-
 	eTag         = "ETag"
 	checksum     = "Checksum"
 	objectParts  = "ObjectParts"
@@ -116,16 +115,11 @@ func writeAttributesHeaders(h http.Header, info *data.ObjectInfo, params *GetObj
 }
 
 func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, error) {
-	var (
-		err error
+	res := &GetObjectAttributesArgs{
+		VersionID: r.URL.Query().Get(api.QueryVersionID),
+	}
 
-		res           = &GetObjectAttributesArgs{}
-		attributesVal = r.Header.Get("X-Amz-Object-Attributes")
-		maxPartsVal   = r.Header.Get("X-Amz-Max-Parts")
-		markerVal     = r.Header.Get("X-Amz-Part-Number-Marker")
-		queryValues   = r.URL.Query()
-	)
-
+	attributesVal := r.Header.Get(api.AmzObjectAttributes)
 	if attributesVal == "" {
 		return nil, errors.GetAPIError(errors.ErrInvalidAttributeName)
 	}
@@ -137,20 +131,6 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 		}
 		res.Attributes = append(res.Attributes, a)
 	}
-
-	if maxPartsVal == "" {
-		res.MaxParts = layer.MaxSizePartsList
-	} else if res.MaxParts, err = strconv.Atoi(maxPartsVal); err != nil || res.MaxParts < 0 {
-		return nil, errors.GetAPIError(errors.ErrInvalidMaxKeys)
-	}
-
-	if markerVal == "" {
-		res.PartNumberMarker = partNumberMarkerDefault
-	} else if res.PartNumberMarker, err = strconv.Atoi(markerVal); err != nil || res.PartNumberMarker < 0 {
-		return nil, errors.GetAPIError(errors.ErrInvalidPartNumberMarker)
-	}
-
-	res.VersionID = queryValues.Get(api.QueryVersionID)
 
 	return res, nil
 }
@@ -167,7 +147,7 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 		case objectSize:
 			resp.ObjectSize = info.Size
 		case objectParts:
-			parts, err := formUploadAttributes(info, p.MaxParts, p.PartNumberMarker)
+			parts, err := formUploadAttributes(info)
 			if err != nil {
 				return nil, err
 			}
@@ -180,54 +160,19 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 	return resp, nil
 }
 
-func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectParts, error) {
+func formUploadAttributes(info *data.ObjectInfo) (*ObjectParts, error) {
+	var err error
 	res := ObjectParts{}
 
-	if _, ok := info.Headers[layer.UploadIDAttributeName]; !ok {
+	partsCountStr, ok := info.Headers[layer.UploadCompletedPartsCount]
+	if !ok {
 		return nil, nil
 	}
 
-	parts := make([]Part, 0)
-	val, ok := info.Headers[layer.UploadCompletedParts]
-	if ok {
-		pairs := strings.Split(val, ",")
-		for _, p := range pairs {
-			// nums[0] -- part number, nums[1] -- part size
-			nums := strings.Split(p, "=")
-			if len(nums) != 2 {
-				return nil, nil
-			}
-			num, err := strconv.Atoi(nums[0])
-			if err != nil {
-				return nil, err
-			}
-			size, err := strconv.Atoi(nums[1])
-			if err != nil {
-				return nil, err
-			}
-			parts = append(parts, Part{PartNumber: num, Size: size})
-		}
+	res.PartsCount, err = strconv.Atoi(partsCountStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid parts count header '%s': %w", partsCountStr, err)
 	}
-
-	res.PartsCount = len(parts)
-
-	if marker != partNumberMarkerDefault {
-		res.PartNumberMarker = marker
-		for i, n := range parts {
-			if n.PartNumber == marker {
-				parts = parts[i:]
-				break
-			}
-		}
-	}
-	res.MaxParts = maxParts
-	if len(parts) > maxParts {
-		res.IsTruncated = true
-		res.NextPartNumberMarker = parts[maxParts].PartNumber
-		parts = parts[:maxParts]
-	}
-
-	res.Parts = parts
 
 	return &res, nil
 }
