@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -312,9 +313,8 @@ func IsAuthenticatedRequest(ctx context.Context) bool {
 
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) user.ID {
-	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
-		ownerID, _ := bd.Gate.BearerToken.Issuer()
-		return ownerID
+	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
+		return bearer.ResolveIssuer(*bd.Gate.BearerToken)
 	}
 
 	var ownerID user.ID

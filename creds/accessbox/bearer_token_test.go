@@ -12,6 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func assertBearerToken(t *testing.T, exp, act bearer.Token) {
+	// compare binary representations since deep equal is not guaranteed
+	require.Equal(t, exp.Marshal(), act.Marshal())
+}
+
 func Test_tokens_encrypt_decrypt(t *testing.T) {
 	var (
 		tkn  bearer.Token
@@ -35,7 +40,7 @@ func Test_tokens_encrypt_decrypt(t *testing.T) {
 	err = tkn2.Unmarshal(rawTkn2)
 	require.NoError(t, err)
 
-	require.Equal(t, tkn, tkn2)
+	assertBearerToken(t, tkn, tkn2)
 }
 
 func Test_bearer_token_in_access_box(t *testing.T) {
@@ -67,7 +72,7 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	tkns, err := box2.GetTokens(cred)
 	require.NoError(t, err)
 
-	require.Equal(t, &tkn, tkns.BearerToken)
+	assertBearerToken(t, tkn, *tkns.BearerToken)
 }
 
 func Test_session_token_in_access_box(t *testing.T) {
@@ -136,7 +141,7 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 	for i, k := range privateKeys {
 		tkns, err := box.GetTokens(k)
 		require.NoError(t, err, "key #%d: %s failed", i, k)
-		require.Equal(t, *tkns.BearerToken, tkn)
+		assertBearerToken(t, tkn, *tkns.BearerToken)
 	}
 }
 
