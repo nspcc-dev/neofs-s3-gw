@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -17,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -111,12 +115,16 @@ func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktI
 	_, err := rand.Read(content)
 	require.NoError(t, err)
 
+	header := map[string]string{
+		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),
+	}
+
 	_, err = h.Layer().PutObject(ctx, &layer.PutObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,
 		Size:    int64(len(content)),
 		Reader:  bytes.NewReader(content),
-		Header:  make(map[string]string),
+		Header:  header,
 	})
 	require.NoError(t, err)
 }
@@ -132,4 +140,12 @@ func prepareTestRequest(t *testing.T, bktName, objName string, body interface{})
 	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
 
 	return w, r
+}
+
+func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
+	if w.Code != status {
+		resp, err := io.ReadAll(w.Result().Body)
+		require.NoError(t, err)
+		require.Failf(t, string(resp), "assert status fail, expected: %d, actual: %d", status, w.Code)
+	}
 }

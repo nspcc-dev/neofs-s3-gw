@@ -13,6 +13,7 @@ import (
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
+	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -229,6 +230,9 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (
 		}
 		obj.SetPayload(all)
 		obj.SetPayloadSize(uint64(len(all)))
+		var hash checksum.Checksum
+		checksum.Calculate(&hash, checksum.SHA256, all)
+		obj.SetPayloadChecksum(hash)
 	}
 
 	cnrID, _ := obj.ContainerID()
