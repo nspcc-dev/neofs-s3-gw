@@ -208,7 +208,7 @@ func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 		return n, io.EOF
 	}
 
-	x.prm.oid = x.parts[0].ID
+	x.prm.objInfo = x.parts[0]
 
 	x.curReader, err = x.layer.initObjectPayloadReader(x.ctx, x.prm)
 	if err != nil {
@@ -306,8 +306,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		parts: parts,
 	}
 
-	r.prm.cid = p.Info.Bkt.CID
-
 	obj, err = n.PutObject(ctx, &PutObjectParams{
 		BktInfo: p.Info.Bkt,
 		Object:  p.Info.Key,
@@ -327,7 +325,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		if partNum == 0 {
 			continue
 		}
-		if err = n.objectDelete(ctx, p.Info.Bkt.CID, objInfo.ID); err != nil {
+		if err = n.objectDelete(ctx, p.Info.Bkt, objInfo.ID); err != nil {
 			n.log.Warn("could not delete upload part",
 				zap.Stringer("object id", objInfo.ID),
 				zap.Stringer("bucket id", p.Info.Bkt.CID),
@@ -347,7 +345,7 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 
 	f := &findParams{
 		attr: [2]string{UploadPartNumberAttributeName, "0"},
-		cid:  p.Bkt.CID,
+		bkt:  p.Bkt,
 	}
 
 	ids, err := n.objectSearch(ctx, f)
@@ -359,7 +357,7 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 	uniqDirs := make(map[string]struct{})
 
 	for i := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, ids[i])
+		meta, err := n.objectHead(ctx, p.Bkt, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", &ids[i]),
@@ -419,7 +417,7 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) e
 	}
 
 	for _, info := range objects {
-		err := n.objectDelete(ctx, info.CID, info.ID)
+		err := n.objectDelete(ctx, p.Bkt, info.ID)
 		if err != nil {
 			return err
 		}
@@ -492,7 +490,7 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (map[in
 	// and search in attributes by prefix is not supported
 	f := &findParams{
 		attr: [2]string{UploadIDAttributeName, p.UploadID},
-		cid:  p.Bkt.CID,
+		bkt:  p.Bkt,
 	}
 
 	ids, err := n.objectSearch(ctx, f)
@@ -503,7 +501,7 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (map[in
 	res := make(map[int]*data.ObjectInfo)
 
 	for i := range ids {
-		meta, err := n.objectHead(ctx, p.Bkt.CID, ids[i])
+		meta, err := n.objectHead(ctx, p.Bkt, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head a part of upload",
 				zap.Stringer("object id", &ids[i]),

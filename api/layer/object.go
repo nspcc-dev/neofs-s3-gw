@@ -26,7 +26,7 @@ import (
 type (
 	findParams struct {
 		attr   [2]string
-		cid    cid.ID
+		bkt    *data.BucketInfo
 		prefix string
 	}
 
@@ -34,8 +34,7 @@ type (
 		// payload range
 		off, ln uint64
 
-		cid cid.ID
-		oid oid.ID
+		objInfo *data.ObjectInfo
 	}
 
 	// ListObjectsParamsCommon contains common parameters for ListObjectsV1 and ListObjectsV2.
@@ -68,10 +67,10 @@ type (
 	}
 )
 
-func (n *layer) objectSearchByName(ctx context.Context, cnr cid.ID, filename string) ([]oid.ID, error) {
+func (n *layer) objectSearchByName(ctx context.Context, bktInfo *data.BucketInfo, filename string) ([]oid.ID, error) {
 	f := &findParams{
 		attr: [2]string{object.AttributeFileName, filename},
-		cid:  cnr,
+		bkt:  bktInfo,
 	}
 	return n.objectSearch(ctx, f)
 }
@@ -79,12 +78,12 @@ func (n *layer) objectSearchByName(ctx context.Context, cnr cid.ID, filename str
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]oid.ID, error) {
 	prm := neofs.PrmObjectSelect{
-		Container:      p.cid,
+		Container:      p.bkt.CID,
 		ExactAttribute: p.attr,
 		FilePrefix:     p.prefix,
 	}
 
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.bkt.Owner)
 
 	res, err := n.neoFS.SelectObjects(ctx, prm)
 
@@ -99,14 +98,14 @@ func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
 }
 
 // objectHead returns all object's headers.
-func (n *layer) objectHead(ctx context.Context, idCnr cid.ID, idObj oid.ID) (*object.Object, error) {
+func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
 	prm := neofs.PrmObjectRead{
-		Container:  idCnr,
+		Container:  bktInfo.CID,
 		Object:     idObj,
 		WithHeader: true,
 	}
 
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {
@@ -120,13 +119,19 @@ func (n *layer) objectHead(ctx context.Context, idCnr cid.ID, idObj oid.ID) (*ob
 // Zero range corresponds to full payload (panics if only offset is set).
 func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Reader, error) {
 	prm := neofs.PrmObjectRead{
-		Container:    p.cid,
-		Object:       p.oid,
+		Container:    p.objInfo.CID,
+		Object:       p.objInfo.ID,
 		WithPayload:  true,
 		PayloadRange: [2]uint64{p.off, p.ln},
 	}
 
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+	// should be taken from cache
+	bktInfo, err := n.GetBucketInfo(ctx, p.objInfo.Bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {
@@ -137,15 +142,15 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Re
 }
 
 // objectGet returns an object with payload in the object.
-func (n *layer) objectGet(ctx context.Context, addr oid.Address) (*object.Object, error) {
+func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (*object.Object, error) {
 	prm := neofs.PrmObjectRead{
-		Container:   addr.Container(),
-		Object:      addr.Object(),
+		Container:   bktInfo.CID,
+		Object:      objID,
 		WithHeader:  true,
 		WithPayload: true,
 	}
 
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {
@@ -197,7 +202,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	id, hash, err := n.objectPutAndHash(ctx, prm)
+	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +233,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
+		if err = n.objectDelete(ctx, p.BktInfo, id); err != nil {
 			n.log.Warn("couldn't delete object",
 				zap.Stringer("version id", id),
 				zap.Error(err))
@@ -355,7 +360,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 }
 
 func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectName string) (*objectVersions, error) {
-	ids, err := n.objectSearchByName(ctx, bkt.CID, objectName)
+	ids, err := n.objectSearchByName(ctx, bkt, objectName)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +371,7 @@ func (n *layer) headVersions(ctx context.Context, bkt *data.BucketInfo, objectNa
 	}
 
 	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, ids[i])
+		meta, err := n.objectHead(ctx, bkt, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", &ids[i]),
@@ -415,7 +420,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		return objInfoFromMeta(bkt, headInfo), nil
 	}
 
-	meta, err := n.objectHead(ctx, bkt.CID, id)
+	meta, err := n.objectHead(ctx, bkt, id)
 	if err != nil {
 		if client.IsErrObjectNotFound(err) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
@@ -437,23 +442,23 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 }
 
 // objectDelete puts tombstone object into neofs.
-func (n *layer) objectDelete(ctx context.Context, idCnr cid.ID, idObj oid.ID) error {
+func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) error {
 	prm := neofs.PrmObjectDelete{
-		Container: idCnr,
+		Container: bktInfo.CID,
 		Object:    idObj,
 	}
 
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
-	n.objCache.Delete(newAddress(idCnr, idObj))
+	n.objCache.Delete(newAddress(bktInfo.CID, idObj))
 
 	return n.transformNeofsError(ctx, n.neoFS.DeleteObject(ctx, prm))
 }
 
 // objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
 // Returns object ID and payload sha256 hash.
-func (n *layer) objectPutAndHash(ctx context.Context, prm neofs.PrmObjectCreate) (*oid.ID, []byte, error) {
-	n.prepareAuthParameters(ctx, &prm.PrmAuth)
+func (n *layer) objectPutAndHash(ctx context.Context, prm neofs.PrmObjectCreate, bktInfo *data.BucketInfo) (*oid.ID, []byte, error) {
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 	hash := sha256.New()
 	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
 		hash.Write(buf)
@@ -564,7 +569,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	ids := n.listsCache.Get(cacheKey)
 
 	if ids == nil {
-		ids, err = n.objectSearch(ctx, &findParams{cid: bkt.CID, prefix: prefix})
+		ids, err = n.objectSearch(ctx, &findParams{bkt: bkt, prefix: prefix})
 		if err != nil {
 			return nil, err
 		}
@@ -576,7 +581,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	versions := make(map[string]*objectVersions, len(ids)/2)
 
 	for i := 0; i < len(ids); i++ {
-		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt.CID, ids[i])
+		obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt, ids[i])
 		if obj == nil {
 			continue
 		}
@@ -680,13 +685,13 @@ func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInf
 	return settings.VersioningEnabled
 }
 
-func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, cnr cid.ID, obj oid.ID) *object.Object {
+func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID) *object.Object {
 	var (
 		err  error
-		meta = n.objCache.Get(newAddress(cnr, obj))
+		meta = n.objCache.Get(newAddress(bktInfo.CID, obj))
 	)
 	if meta == nil {
-		meta, err = n.objectHead(ctx, cnr, obj)
+		meta, err = n.objectHead(ctx, bktInfo, obj)
 		if err != nil {
 			n.log.Warn("could not fetch object meta", zap.Error(err))
 			return nil
