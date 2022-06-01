@@ -476,25 +476,40 @@ func (c *TreeClient) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) err
 }
 
 func (c *TreeClient) getTreeNode(ctx context.Context, cnrID *cid.ID, nodeID uint64, key string) (*TreeNode, error) {
+	nodes, err := c.getTreeNodes(ctx, cnrID, nodeID, key)
+	if err != nil {
+		return nil, err
+	}
+	// if there will be many allocations, consider having separate
+	// implementations of 'getTreeNode' and 'getTreeNodes'
+	return nodes[key], nil
+}
+
+func (c *TreeClient) getTreeNodes(ctx context.Context, cnrID *cid.ID, nodeID uint64, keys ...string) (map[string]*TreeNode, error) {
 	subtree, err := c.getSubTree(ctx, cnrID, versionTree, nodeID, 1)
 	if err != nil {
 		return nil, err
 	}
 
-	var treeNode *TreeNode
+	treeNodes := make(map[string]*TreeNode, len(keys))
 
 	for _, s := range subtree {
 		node, err := newTreeNode(s)
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := node.Get(key); ok {
-			treeNode = node
+		for _, key := range keys {
+			if _, ok := node.Get(key); ok {
+				treeNodes[key] = node
+				break
+			}
+		}
+		if len(treeNodes) == len(keys) {
 			break
 		}
 	}
 
-	return treeNode, nil
+	return treeNodes, nil
 }
 
 func (c *TreeClient) GetVersions(ctx context.Context, cnrID *cid.ID, filepath string) ([]*data.NodeVersion, error) {
