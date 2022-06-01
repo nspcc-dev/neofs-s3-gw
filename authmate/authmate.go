@@ -363,12 +363,17 @@ func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetime
 
 	var bearerToken bearer.Token
 	bearerToken.SetEACLTable(*table)
-	bearerToken.SetOwnerID(ownerID)
-	bearerToken.SetExpiration(lifetime.Exp)
-	bearerToken.SetIssuedAt(lifetime.Iat)
-	bearerToken.SetNotBefore(lifetime.Iat)
+	bearerToken.ForUser(ownerID)
+	bearerToken.SetExp(lifetime.Exp)
+	bearerToken.SetIat(lifetime.Iat)
+	bearerToken.SetNbf(lifetime.Iat)
 
-	return &bearerToken, bearerToken.Sign(key.PrivateKey)
+	err := bearerToken.Sign(key.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("sign bearer token: %w", err)
+	}
+
+	return &bearerToken, nil
 }
 
 func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gatesKeys []*keys.PublicKey) ([]*bearer.Token, error) {

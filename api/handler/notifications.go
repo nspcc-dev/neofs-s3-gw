@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"go.uber.org/zap"
 )
 
@@ -159,8 +160,8 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 	}
 
 	box, err := layer.GetBoxData(ctx)
-	if err == nil {
-		p.User = box.Gate.BearerToken.OwnerID().String()
+	if err == nil && box.Gate.BearerToken != nil {
+		p.User = bearer.ResolveIssuer(*box.Gate.BearerToken).EncodeToString()
 	}
 
 	topics := filterSubjects(conf, p.Event, p.ObjInfo.Name)
