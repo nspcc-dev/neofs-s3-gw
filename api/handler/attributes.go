@@ -38,6 +38,7 @@ type (
 		PartNumberMarker int
 		Attributes       []string
 		VersionID        string
+		Conditional      *conditionalArgs
 	}
 )
 
@@ -87,6 +88,11 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 
 	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
+		return
+	}
+
+	if err = checkPreconditions(info, params.Conditional); err != nil {
+		h.logAndSendError(w, "precondition failed", reqInfo, err)
 		return
 	}
 
@@ -152,7 +158,8 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 
 	res.VersionID = queryValues.Get(api.QueryVersionID)
 
-	return res, nil
+	res.Conditional, err = parseConditionalHeaders(r.Header)
+	return res, err
 }
 
 func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttributesArgs) (*GetObjectAttributesResponse, error) {

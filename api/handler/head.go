@@ -40,6 +40,12 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	conditional, err := parseConditionalHeaders(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "could not parse request params", reqInfo, err)
+		return
+	}
+
 	p := &layer.HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
@@ -50,6 +56,12 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
+
+	if err = checkPreconditions(info, conditional); err != nil {
+		h.logAndSendError(w, "precondition failed", reqInfo, err)
+		return
+	}
+
 	tagSet, err := h.obj.GetObjectTagging(r.Context(), info)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object tag set", reqInfo, err)
