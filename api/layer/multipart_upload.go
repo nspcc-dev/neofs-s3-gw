@@ -22,7 +22,7 @@ import (
 const (
 	UploadIDAttributeName         = "S3-Upload-Id"
 	UploadPartNumberAttributeName = "S3-Upload-Part-Number"
-	UploadCompletedParts          = "S3-Completed-Parts"
+	UploadCompletedPartsCount     = "S3-Completed-Parts-Count"
 
 	metaPrefix = "meta-"
 	aclPrefix  = "acl-"
@@ -347,7 +347,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		parts = append(parts, partInfo)
 	}
 
-	initMetadata := make(map[string]string, len(multipartInfo.Meta))
+	initMetadata := make(map[string]string, len(multipartInfo.Meta)+1)
+	initMetadata[UploadCompletedPartsCount] = strconv.Itoa(len(p.Parts))
 	uploadData := &UploadData{
 		TagSet:     make(map[string]string),
 		ACLHeaders: make(map[string]string),

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -133,4 +134,20 @@ func prepareTestRequest(t *testing.T, bktName, objName string, body interface{})
 	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
 
 	return w, r
+}
+
+func prepareTestPayloadRequest(bktName, objName string, payload io.Reader) (*httptest.ResponseRecorder, *http.Request) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, defaultURL, payload)
+
+	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
+	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
+
+	return w, r
+}
+
+func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body interface{}) {
+	assertStatus(t, response, http.StatusOK)
+	err := xml.NewDecoder(response.Result().Body).Decode(body)
+	require.NoError(t, err)
 }
