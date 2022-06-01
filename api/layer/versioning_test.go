@@ -50,7 +50,6 @@ func (tc *testContext) getObject(objectName, versionID string, needError bool) (
 	err = tc.layer.GetObject(tc.ctx, &GetObjectParams{
 		ObjectInfo: objInfo,
 		Writer:     content,
-		VersionID:  versionID,
 	})
 	require.NoError(tc.t, err)
 

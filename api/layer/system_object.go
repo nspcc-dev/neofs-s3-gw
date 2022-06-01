@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +59,7 @@ func (n *layer) HeadSystemObject(ctx context.Context, bkt *data.BucketInfo, objN
 func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo, name string) error {
 	f := &findParams{
 		attr: [2]string{objectSystemAttributeName, name},
-		cid:  bktInfo.CID,
+		bkt:  bktInfo,
 	}
 	ids, err := n.objectSearch(ctx, f)
 	if err != nil {
@@ -69,7 +68,7 @@ func (n *layer) DeleteSystemObject(ctx context.Context, bktInfo *data.BucketInfo
 
 	n.systemCache.Delete(systemObjectKey(bktInfo, name))
 	for i := range ids {
-		if err = n.objectDelete(ctx, bktInfo.CID, ids[i]); err != nil {
+		if err = n.objectDelete(ctx, bktInfo, ids[i]); err != nil {
 			return err
 		}
 	}
@@ -119,7 +118,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 
-	id, hash, err := n.objectPutAndHash(ctx, prm)
+	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +132,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	}
 
 	for _, id := range idsToDeleteArr {
-		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
+		if err = n.objectDelete(ctx, p.BktInfo, id); err != nil {
 			n.log.Warn("couldn't delete system object",
 				zap.Stringer("version id", id),
 				zap.String("name", misc.SanitizeString(p.ObjName)),
@@ -169,12 +168,7 @@ func (n *layer) getSystemObjectFromNeoFS(ctx context.Context, bkt *data.BucketIn
 
 	objInfo := versions.getLast()
 
-	var addr oid.Address
-
-	addr.SetContainer(bkt.CID)
-	addr.SetObject(objInfo.ID)
-
-	obj, err := n.objectGet(ctx, addr)
+	obj, err := n.objectGet(ctx, bkt, objInfo.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +209,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sysName string) (*objectVersions, error) {
 	f := &findParams{
 		attr: [2]string{objectSystemAttributeName, sysName},
-		cid:  bkt.CID,
+		bkt:  bkt,
 	}
 	ids, err := n.objectSearch(ctx, f)
 	if err != nil {
@@ -224,7 +218,7 @@ func (n *layer) headSystemVersions(ctx context.Context, bkt *data.BucketInfo, sy
 
 	versions := newObjectVersions(sysName)
 	for i := range ids {
-		meta, err := n.objectHead(ctx, bkt.CID, ids[i])
+		meta, err := n.objectHead(ctx, bkt, ids[i])
 		if err != nil {
 			n.log.Warn("couldn't head object",
 				zap.Stringer("object id", &ids[i]),

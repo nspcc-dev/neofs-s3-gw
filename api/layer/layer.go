@@ -79,7 +79,6 @@ type (
 		Range      *RangeParams
 		ObjectInfo *data.ObjectInfo
 		Writer     io.Writer
-		VersionID  string
 	}
 
 	// HeadObjectParams stores object head request parameters.
@@ -323,10 +322,12 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	return ownerID
 }
 
-func (n *layer) prepareAuthParameters(ctx context.Context, prm *neofs.PrmAuth) {
+func (n *layer) prepareAuthParameters(ctx context.Context, prm *neofs.PrmAuth, bktOwner user.ID) {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
-		prm.BearerToken = bd.Gate.BearerToken
-		return
+		if issuer, ok := bd.Gate.BearerToken.Issuer(); ok && bktOwner.Equals(issuer) {
+			prm.BearerToken = bd.Gate.BearerToken
+			return
+		}
 	}
 
 	prm.PrivateKey = &n.anonKey.Key.PrivateKey
@@ -380,8 +381,7 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var params getParams
 
-	params.oid = p.ObjectInfo.ID
-	params.cid = p.ObjectInfo.CID
+	params.objInfo = p.ObjectInfo
 
 	if p.Range != nil {
 		if p.Range.Start > p.Range.End {
@@ -584,7 +584,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	}
 
 	for _, id := range ids {
-		if err = n.objectDelete(ctx, bkt.CID, id); err != nil {
+		if err = n.objectDelete(ctx, bkt, id); err != nil {
 			obj.Error = err
 			return obj
 		}
