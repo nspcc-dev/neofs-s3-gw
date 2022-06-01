@@ -21,10 +21,6 @@ type conditionalArgs struct {
 	IfNoneMatch       string
 }
 
-type getObjectArgs struct {
-	Conditional *conditionalArgs
-}
-
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
 	const prefix = "bytes="
 	rangeHeader := headers.Get("Range")
@@ -109,7 +105,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		reqInfo = api.GetReqInfo(r.Context())
 	)
 
-	args, err := parseGetObjectArgs(r.Header)
+	conditional, err := parseConditionalHeaders(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse request params", reqInfo, err)
 		return
@@ -132,7 +128,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = checkPreconditions(info, args.Conditional); err != nil {
+	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
 		return
 	}
@@ -194,7 +190,7 @@ func checkPreconditions(info *data.ObjectInfo, args *conditionalArgs) error {
 	return nil
 }
 
-func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
+func parseConditionalHeaders(headers http.Header) (*conditionalArgs, error) {
 	var err error
 	args := &conditionalArgs{
 		IfMatch:     headers.Get(api.IfMatch),
@@ -208,7 +204,7 @@ func parseGetObjectArgs(headers http.Header) (*getObjectArgs, error) {
 		return nil, err
 	}
 
-	return &getObjectArgs{Conditional: args}, nil
+	return args, nil
 }
 
 func parseHTTPTime(data string) (*time.Time, error) {
