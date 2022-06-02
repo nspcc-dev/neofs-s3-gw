@@ -21,8 +21,9 @@ type TreeServiceMock struct {
 }
 
 func (t *TreeServiceMock) GetObjectTaggingAndLock(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
-	// TODO implement me
-	panic("implement me")
+	// TODO implement object tagging
+	lock, err := t.GetLock(ctx, cnrID, objVersion.ID)
+	return nil, lock, err
 }
 
 func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
