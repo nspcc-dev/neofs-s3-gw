@@ -22,7 +22,7 @@ import (
 const (
 	UploadIDAttributeName         = "S3-Upload-Id"
 	UploadPartNumberAttributeName = "S3-Upload-Part-Number"
-	UploadCompletedPartsCount     = "S3-Completed-Parts-Count"
+	UploadCompletedParts          = "S3-Completed-Parts"
 
 	metaPrefix = "meta-"
 	aclPrefix  = "acl-"
@@ -337,6 +337,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	parts := make([]*data.PartInfo, 0, len(p.Parts))
 
+	var completedPartsHeader strings.Builder
 	for i, part := range p.Parts {
 		partInfo := partsInfo[part.PartNumber]
 		if part.ETag != partInfo.ETag {
@@ -347,10 +348,19 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			return nil, nil, errors.GetAPIError(errors.ErrEntityTooSmall)
 		}
 		parts = append(parts, partInfo)
+
+		partInfoStr := partInfo.ToHeaderString()
+		if i != len(p.Parts)-1 {
+			partInfoStr += ","
+		}
+		if _, err = completedPartsHeader.WriteString(partInfoStr); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	initMetadata := make(map[string]string, len(multipartInfo.Meta)+1)
-	initMetadata[UploadCompletedPartsCount] = strconv.Itoa(len(p.Parts))
+	initMetadata[UploadCompletedParts] = completedPartsHeader.String()
+
 	uploadData := &UploadData{
 		TagSet:     make(map[string]string),
 		ACLHeaders: make(map[string]string),

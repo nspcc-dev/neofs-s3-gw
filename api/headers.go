@@ -53,6 +53,8 @@ const (
 	AmzObjectLockRetainUntilDate = "X-Amz-Object-Lock-Retain-Until-Date"
 	AmzBypassGovernanceRetention = "X-Amz-Bypass-Governance-Retention"
 	AmzObjectAttributes          = "X-Amz-Object-Attributes"
+	AmzMaxParts                  = "X-Amz-Max-Parts"
+	AmzPartNumberMarker          = "X-Amz-Part-Number-Marker"
 
 	ContainerID = "X-Container-Id"
 
