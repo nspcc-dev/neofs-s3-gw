@@ -67,5 +67,8 @@ func TestGetObjectPartsAttributes(t *testing.T) {
 	result = &GetObjectAttributesResponse{}
 	parseTestResponse(t, w, result)
 	require.NotNil(t, result.ObjectParts)
+	require.Len(t, result.ObjectParts.Parts, 1)
+	require.Equal(t, etag, result.ObjectParts.Parts[0].ChecksumSHA256)
+	require.Equal(t, 8, result.ObjectParts.Parts[0].Size)
 	require.Equal(t, 1, result.ObjectParts.PartsCount)
 }

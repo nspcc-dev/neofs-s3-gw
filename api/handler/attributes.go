@@ -15,9 +15,14 @@ import (
 type (
 	GetObjectAttributesResponse struct {
 		ETag         string       `xml:"ETag,omitempty"`
+		Checksum     *Checksum    `xml:"Checksum,omitempty"`
 		ObjectSize   int64        `xml:"ObjectSize,omitempty"`
 		StorageClass string       `xml:"StorageClass,omitempty"`
 		ObjectParts  *ObjectParts `xml:"ObjectParts,omitempty"`
+	}
+
+	Checksum struct {
+		ChecksumSHA256 string `xml:"ChecksumSHA256,omitempty"`
 	}
 
 	ObjectParts struct {
@@ -26,20 +31,21 @@ type (
 		NextPartNumberMarker int    `xml:"NextPartNumberMarker,omitempty"`
 		PartNumberMarker     int    `xml:"PartNumberMarker,omitempty"`
 		Parts                []Part `xml:"Part,omitempty"`
-
-		// Only this field is used.
-		PartsCount int `xml:"PartsCount,omitempty"`
+		PartsCount           int    `xml:"PartsCount,omitempty"`
 	}
 
 	Part struct {
-		PartNumber int `xml:"PartNumber,omitempty"`
-		Size       int `xml:"Size,omitempty"`
+		ChecksumSHA256 string `xml:"ChecksumSHA256,omitempty"`
+		PartNumber     int    `xml:"PartNumber,omitempty"`
+		Size           int    `xml:"Size,omitempty"`
 	}
 
 	GetObjectAttributesArgs struct {
-		Attributes  []string
-		VersionID   string
-		Conditional *conditionalArgs
+		MaxParts         int
+		PartNumberMarker int
+		Attributes       []string
+		VersionID        string
+		Conditional      *conditionalArgs
 	}
 )
 
@@ -138,7 +144,23 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 		res.Attributes = append(res.Attributes, a)
 	}
 
-	return res, nil
+	var err error
+	maxPartsVal := r.Header.Get(api.AmzMaxParts)
+	if maxPartsVal == "" {
+		res.MaxParts = layer.MaxSizePartsList
+	} else if res.MaxParts, err = strconv.Atoi(maxPartsVal); err != nil || res.MaxParts < 0 {
+		return nil, errors.GetAPIError(errors.ErrInvalidMaxKeys)
+	}
+
+	markerVal := r.Header.Get(api.AmzPartNumberMarker)
+	if markerVal != "" {
+		if res.PartNumberMarker, err = strconv.Atoi(markerVal); err != nil || res.PartNumberMarker < 0 {
+			return nil, errors.GetAPIError(errors.ErrInvalidPartNumberMarker)
+		}
+	}
+
+	res.Conditional, err = parseConditionalHeaders(r.Header)
+	return res, err
 }
 
 func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttributesArgs) (*GetObjectAttributesResponse, error) {
@@ -152,8 +174,10 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 			resp.StorageClass = "STANDARD"
 		case objectSize:
 			resp.ObjectSize = info.Size
+		case checksum:
+			resp.Checksum = &Checksum{ChecksumSHA256: info.HashSum}
 		case objectParts:
-			parts, err := formUploadAttributes(info)
+			parts, err := formUploadAttributes(info, p.MaxParts, p.PartNumberMarker)
 			if err != nil {
 				return nil, err
 			}
@@ -166,19 +190,62 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 	return resp, nil
 }
 
-func formUploadAttributes(info *data.ObjectInfo) (*ObjectParts, error) {
-	var err error
-	res := ObjectParts{}
-
-	partsCountStr, ok := info.Headers[layer.UploadCompletedPartsCount]
+func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectParts, error) {
+	completedParts, ok := info.Headers[layer.UploadCompletedParts]
 	if !ok {
 		return nil, nil
 	}
 
-	res.PartsCount, err = strconv.Atoi(partsCountStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid parts count header '%s': %w", partsCountStr, err)
+	partInfos := strings.Split(completedParts, ",")
+	parts := make([]Part, len(partInfos))
+	for i, p := range partInfos {
+		// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum
+		partInfo := strings.Split(p, "-")
+		if len(partInfo) != 3 {
+			return nil, fmt.Errorf("invalid completed parts header")
+		}
+		num, err := strconv.Atoi(partInfo[0])
+		if err != nil {
+			return nil, err
+		}
+		size, err := strconv.Atoi(partInfo[1])
+		if err != nil {
+			return nil, err
+		}
+		parts[i] = Part{
+			PartNumber:     num,
+			Size:           size,
+			ChecksumSHA256: partInfo[2],
+		}
 	}
 
-	return &res, nil
+	res := &ObjectParts{
+		PartsCount: len(parts),
+	}
+
+	if marker != 0 {
+		res.PartNumberMarker = marker
+		var found bool
+		for i, n := range parts {
+			if n.PartNumber == marker {
+				parts = parts[i:]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, errors.GetAPIError(errors.ErrInvalidPartNumberMarker)
+		}
+	}
+
+	res.MaxParts = maxParts
+	if len(parts) > maxParts {
+		res.IsTruncated = true
+		res.NextPartNumberMarker = parts[maxParts].PartNumber
+		parts = parts[:maxParts]
+	}
+
+	res.Parts = parts
+
+	return res, nil
 }
