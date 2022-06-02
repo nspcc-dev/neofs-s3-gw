@@ -77,6 +77,7 @@ type (
 	GetObjectParams struct {
 		Range      *RangeParams
 		ObjectInfo *data.ObjectInfo
+		BucketInfo *data.BucketInfo
 		Writer     io.Writer
 	}
 
@@ -124,6 +125,7 @@ type (
 	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
 		SrcObject  *data.ObjectInfo
+		ScrBktInfo *data.BucketInfo
 		DstBktInfo *data.BucketInfo
 		DstObject  string
 		SrcSize    int64
@@ -382,6 +384,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var params getParams
 
 	params.objInfo = p.ObjectInfo
+	params.bktInfo = p.BucketInfo
 
 	if p.Range != nil {
 		if p.Range.Start > p.Range.End {
@@ -517,6 +520,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 			ObjectInfo: p.SrcObject,
 			Writer:     pw,
 			Range:      p.Range,
+			BucketInfo: p.ScrBktInfo,
 		})
 
 		if err = pw.CloseWithError(err); err != nil {

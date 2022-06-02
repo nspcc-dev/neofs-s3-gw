@@ -102,6 +102,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	params := &layer.CopyObjectParams{
 		SrcObject:  info,
+		ScrBktInfo: p.BktInfo,
 		DstBktInfo: dstBktInfo,
 		DstObject:  reqInfo.ObjectName,
 		SrcSize:    info.Size,
