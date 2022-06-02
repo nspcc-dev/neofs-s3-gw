@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -206,7 +207,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	if err != nil {
 		n.log.Warn("couldn't get creation epoch",
 			zap.String("bucket", p.BktInfo.Name),
-			zap.String("object", p.Object),
+			zap.String("object", misc.SanitizeString(p.Object)),
 			zap.Error(err))
 	}
 

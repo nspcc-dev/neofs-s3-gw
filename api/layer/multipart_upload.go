@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -256,7 +257,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	if _, ok := objects[0]; !ok {
 		n.log.Error("could not get init multipart upload",
 			zap.Stringer("bucket id", p.Info.Bkt.CID),
-			zap.String("uploadID", p.Info.UploadID),
+			zap.String("uploadID", misc.SanitizeString(p.Info.UploadID)),
 			zap.String("uploadKey", p.Info.Key),
 		)
 		// we return InternalError because if we are here it means we've checked InitPart in handler before and
@@ -316,7 +317,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	})
 	if err != nil {
 		n.log.Error("could not put a completed object (multipart upload)",
-			zap.String("uploadID", p.Info.UploadID),
+			zap.String("uploadID", misc.SanitizeString(p.Info.UploadID)),
 			zap.String("uploadKey", p.Info.Key),
 			zap.Error(err))
 

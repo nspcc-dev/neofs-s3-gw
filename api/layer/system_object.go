@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
@@ -127,7 +128,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	if err != nil {
 		n.log.Warn("couldn't get creation epoch",
 			zap.String("bucket", p.BktInfo.Name),
-			zap.String("object", p.ObjName),
+			zap.String("object", misc.SanitizeString(p.ObjName)),
 			zap.Error(err))
 	}
 
@@ -135,7 +136,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 		if err = n.objectDelete(ctx, p.BktInfo.CID, id); err != nil {
 			n.log.Warn("couldn't delete system object",
 				zap.Stringer("version id", id),
-				zap.String("name", p.ObjName),
+				zap.String("name", misc.SanitizeString(p.ObjName)),
 				zap.Error(err))
 		}
 	}
