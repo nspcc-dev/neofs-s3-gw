@@ -516,8 +516,8 @@ func formGrantee(granteeType, value string) (*Grantee, error) {
 			Type:         acpAmazonCustomerByEmail,
 		}, nil
 	}
-
-	return nil, fmt.Errorf("unknown type: %s", granteeType)
+	// do not return grantee type to avoid sensitive data logging (#489)
+	return nil, fmt.Errorf("unknown grantee type")
 }
 
 func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessControlPolicy, error) {
