@@ -36,6 +36,7 @@ type (
 		off, ln uint64
 
 		objInfo *data.ObjectInfo
+		bktInfo *data.BucketInfo
 	}
 
 	// ListObjectsParamsCommon contains common parameters for ListObjectsV1 and ListObjectsV2.
@@ -126,13 +127,7 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Re
 		PayloadRange: [2]uint64{p.off, p.ln},
 	}
 
-	// should be taken from cache
-	bktInfo, err := n.GetBucketInfo(ctx, p.objInfo.Bucket)
-	if err != nil {
-		return nil, err
-	}
-
-	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.bktInfo.Owner)
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {

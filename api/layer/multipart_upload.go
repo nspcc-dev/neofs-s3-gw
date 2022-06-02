@@ -52,6 +52,7 @@ type (
 	UploadCopyParams struct {
 		Info       *UploadInfoParams
 		SrcObjInfo *data.ObjectInfo
+		SrcBktInfo *data.BucketInfo
 		PartNumber int
 		Range      *RangeParams
 	}
@@ -167,6 +168,7 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 			ObjectInfo: p.SrcObjInfo,
 			Writer:     pw,
 			Range:      p.Range,
+			BucketInfo: p.SrcBktInfo,
 		})
 
 		if err = pw.CloseWithError(err); err != nil {
@@ -306,6 +308,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		layer: n,
 		parts: parts,
 	}
+
+	r.prm.bktInfo = p.Info.Bkt
 
 	obj, err = n.PutObject(ctx, &PutObjectParams{
 		BktInfo: p.Info.Bkt,

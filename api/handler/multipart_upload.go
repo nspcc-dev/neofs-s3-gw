@@ -316,6 +316,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 			Key:      reqInfo.ObjectName,
 		},
 		SrcObjInfo: srcInfo,
+		SrcBktInfo: srcBktInfo,
 		PartNumber: partNumber,
 		Range:      srcRange,
 	}
@@ -380,6 +381,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		p := &layer.GetObjectParams{
 			ObjectInfo: initPart,
 			Writer:     initPartPayload,
+			BucketInfo: bktInfo,
 		}
 		if err = h.obj.GetObject(r.Context(), p); err != nil {
 			h.logAndSendError(w, "could not get multipart upload acl and/or tagging", reqInfo, err, additional...)

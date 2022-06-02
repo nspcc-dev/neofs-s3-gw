@@ -164,6 +164,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		ObjectInfo: info,
 		Writer:     w,
 		Range:      params,
+		BucketInfo: bktInfo,
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)

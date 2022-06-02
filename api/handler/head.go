@@ -74,6 +74,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 			ObjectInfo: info,
 			Writer:     buffer,
 			Range:      getRangeToDetectContentType(info.Size),
+			BucketInfo: bktInfo,
 		}
 		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 			h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", info.ID))
