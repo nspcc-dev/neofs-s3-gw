@@ -1,6 +1,7 @@
 package data
 
 import (
+	"strconv"
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -65,6 +66,11 @@ type PartInfo struct {
 	Size     int64
 	ETag     string
 	Created  time.Time
+}
+
+// ToHeaderString form short part representation to use in S3-Completed-Parts header.
+func (p *PartInfo) ToHeaderString() string {
+	return strconv.Itoa(p.Number) + "-" + strconv.FormatInt(p.Size, 10) + "-" + p.ETag
 }
 
 // LockInfo is lock information to create appropriate tree node.
