@@ -325,8 +325,8 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *neofs.PrmAuth, bktOwner user.ID) {
-	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
-		if issuer, ok := bd.Gate.BearerToken.Issuer(); ok && bktOwner.Equals(issuer) {
+	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
+		if bktOwner.Equals(bearer.ResolveIssuer(*bd.Gate.BearerToken)) {
 			prm.BearerToken = bd.Gate.BearerToken
 			return
 		}
