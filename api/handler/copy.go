@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
@@ -32,12 +33,15 @@ func path2BucketObject(path string) (bucket, prefix string) {
 
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err      error
-		info     *data.ObjectInfo
-		metadata map[string]string
+		versionID        string
+		err              error
+		info             *data.ObjectInfo
+		metadata         map[string]string
+		sessionTokenEACL *session.Container
 
-		reqInfo   = api.GetReqInfo(r.Context())
-		versionID string
+		reqInfo = api.GetReqInfo(r.Context())
+
+		containsACL = containsACLHeaders(r)
 	)
 
 	src := r.Header.Get("X-Amz-Copy-Source")
@@ -79,6 +83,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logAndSendError(w, "couldn't get target bucket", reqInfo, err)
 		return
+	}
+
+	if containsACL {
+		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
+			return
+		}
 	}
 
 	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
@@ -128,6 +139,25 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: info.Created.UTC().Format(time.RFC3339), ETag: info.HashSum}); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err, additional...)
 		return
+	}
+
+	if containsACL {
+		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, info)
+		if err != nil {
+			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
+			return
+		}
+		newEaclTable.SetSessionToken(sessionTokenEACL)
+
+		p := &layer.PutBucketACLParams{
+			BktInfo: dstBktInfo,
+			EACL:    newEaclTable,
+		}
+
+		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
+			return
+		}
 	}
 
 	h.log.Info("object is copied",
