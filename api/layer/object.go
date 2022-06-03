@@ -17,7 +17,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -183,14 +182,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
 
-	currentEpoch, _, err := n.neoFS.TimeToEpoch(ctx, time.Now().Add(time.Minute))
-	if err != nil {
-		n.log.Warn("couldn't get creation epoch",
-			zap.String("bucket", p.BktInfo.Name),
-			zap.String("object", misc.SanitizeString(p.Object)),
-			zap.Error(err))
-	}
-
 	if p.Lock != nil && (p.Lock.Retention != nil || p.Lock.LegalHold != nil) {
 		objVersion := &ObjectVersion{
 			BktInfo:    p.BktInfo,
@@ -209,15 +200,14 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		ID:  *id,
 		CID: p.BktInfo.CID,
 
-		Owner:         own,
-		Bucket:        p.BktInfo.Name,
-		Name:          p.Object,
-		Size:          p.Size,
-		Created:       time.Now(),
-		CreationEpoch: currentEpoch,
-		Headers:       p.Header,
-		ContentType:   p.Header[api.ContentType],
-		HashSum:       hex.EncodeToString(hash),
+		Owner:       own,
+		Bucket:      p.BktInfo.Name,
+		Name:        p.Object,
+		Size:        p.Size,
+		Created:     time.Now(),
+		Headers:     p.Header,
+		ContentType: p.Header[api.ContentType],
+		HashSum:     hex.EncodeToString(hash),
 	}
 
 	if err = n.objCache.PutObject(objInfo); err != nil {

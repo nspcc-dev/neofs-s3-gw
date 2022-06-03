@@ -33,15 +33,14 @@ type (
 		IsDir          bool
 		IsDeleteMarker bool
 
-		Bucket        string
-		Name          string
-		Size          int64
-		ContentType   string
-		Created       time.Time
-		CreationEpoch uint64
-		HashSum       string
-		Owner         user.ID
-		Headers       map[string]string
+		Bucket      string
+		Name        string
+		Size        int64
+		ContentType string
+		Created     time.Time
+		HashSum     string
+		Owner       user.ID
+		Headers     map[string]string
 	}
 
 	// BucketSettings stores settings such as versioning.
