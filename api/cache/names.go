@@ -1,17 +1,20 @@
 package cache
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bluele/gcache"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"go.uber.org/zap"
 )
 
 // ObjectsNameCache provides lru cache for objects.
 // This cache contains mapping nice names to object addresses.
 // Key is bucketName+objectName.
 type ObjectsNameCache struct {
-	cache gcache.Cache
+	cache  gcache.Cache
+	logger *zap.Logger
 }
 
 const (
@@ -22,14 +25,18 @@ const (
 )
 
 // DefaultObjectsNameConfig returns new default cache expiration values.
-func DefaultObjectsNameConfig() *Config {
-	return &Config{Size: DefaultObjectsNameCacheSize, Lifetime: DefaultObjectsNameCacheLifetime}
+func DefaultObjectsNameConfig(logger *zap.Logger) *Config {
+	return &Config{
+		Size:     DefaultObjectsNameCacheSize,
+		Lifetime: DefaultObjectsNameCacheLifetime,
+		Logger:   logger,
+	}
 }
 
 // NewObjectsNameCache creates an object of ObjectsNameCache.
 func NewObjectsNameCache(config *Config) *ObjectsNameCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
-	return &ObjectsNameCache{cache: gc}
+	return &ObjectsNameCache{cache: gc, logger: config.Logger}
 }
 
 // Get returns a cached object. Returns nil if value is missing.
@@ -41,6 +48,8 @@ func (o *ObjectsNameCache) Get(key string) *oid.Address {
 
 	result, ok := entry.(oid.Address)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "oid.Address"))
 		return nil
 	}
 

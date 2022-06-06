@@ -259,13 +259,13 @@ func (f MsgHandlerFunc) HandleMessage(ctx context.Context, msg *nats.Msg) error 
 }
 
 // DefaultCachesConfigs returns filled configs.
-func DefaultCachesConfigs() *CachesConfig {
+func DefaultCachesConfigs(logger *zap.Logger) *CachesConfig {
 	return &CachesConfig{
-		Objects:     cache.DefaultObjectsConfig(),
-		ObjectsList: cache.DefaultObjectsListConfig(),
-		Names:       cache.DefaultObjectsNameConfig(),
-		Buckets:     cache.DefaultBucketConfig(),
-		System:      cache.DefaultSystemConfig(),
+		Objects:     cache.DefaultObjectsConfig(logger),
+		ObjectsList: cache.DefaultObjectsListConfig(logger),
+		Names:       cache.DefaultObjectsNameConfig(logger),
+		Buckets:     cache.DefaultBucketConfig(logger),
+		System:      cache.DefaultSystemConfig(logger),
 	}
 }
 

@@ -56,7 +56,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	})
 
 	layerCfg := &layer.Config{
-		Caches:   layer.DefaultCachesConfigs(),
+		Caches:   layer.DefaultCachesConfigs(zap.NewExample()),
 		AnonKey:  layer.AnonymousKey{Key: key},
 		Resolver: testResolver,
 	}

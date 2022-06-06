@@ -297,7 +297,7 @@ func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Optio
 }
 
 func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CachesConfig {
-	cacheCfg := layer.DefaultCachesConfigs()
+	cacheCfg := layer.DefaultCachesConfigs(l)
 
 	cacheCfg.Objects.Lifetime = getLifetime(v, l, cfgObjectsCacheLifetime, cacheCfg.Objects.Lifetime)
 	cacheCfg.Objects.Size = getSize(v, l, cfgObjectsCacheSize, cacheCfg.Objects.Size)
@@ -348,7 +348,7 @@ func getSize(v *viper.Viper, l *zap.Logger, cfgEntry string, defaultValue int) i
 }
 
 func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
-	cacheCfg := cache.DefaultAccessBoxConfig()
+	cacheCfg := cache.DefaultAccessBoxConfig(l)
 
 	cacheCfg.Lifetime = getLifetime(v, l, cfgAccessBoxCacheLifetime, cacheCfg.Lifetime)
 	cacheCfg.Size = getSize(v, l, cfgAccessBoxCacheSize, cacheCfg.Size)
