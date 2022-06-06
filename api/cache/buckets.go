@@ -47,7 +47,7 @@ func (o *BucketCache) Get(key string) *data.BucketInfo {
 	result, ok := entry.(*data.BucketInfo)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "*data.BucketInfo"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 

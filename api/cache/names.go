@@ -49,7 +49,7 @@ func (o *ObjectsNameCache) Get(key string) *oid.Address {
 	result, ok := entry.(oid.Address)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "oid.Address"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 

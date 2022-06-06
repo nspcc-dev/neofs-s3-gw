@@ -49,7 +49,7 @@ func (o *SystemCache) GetObject(key string) *data.ObjectInfo {
 	result, ok := entry.(*data.ObjectInfo)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "*data.ObjectInfo"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
@@ -65,7 +65,7 @@ func (o *SystemCache) GetCORS(key string) *data.CORSConfiguration {
 	result, ok := entry.(*data.CORSConfiguration)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "*data.CORSConfiguration"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
@@ -81,7 +81,7 @@ func (o *SystemCache) GetSettings(key string) *data.BucketSettings {
 	result, ok := entry.(*data.BucketSettings)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "*data.BucketSettings"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
@@ -97,7 +97,7 @@ func (o *SystemCache) GetNotificationConfiguration(key string) *data.Notificatio
 	result, ok := entry.(*data.NotificationConfiguration)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "*data.NotificationConfiguration"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 

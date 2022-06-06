@@ -70,7 +70,7 @@ func (l *ObjectsListCache) Get(key ObjectsListKey) []oid.ID {
 	result, ok := entry.([]oid.ID)
 	if !ok {
 		l.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "[]oid.ID"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
@@ -94,7 +94,7 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 		k, ok := key.(ObjectsListKey)
 		if !ok {
 			l.logger.Warn("invalid cache key type", zap.String("actual", fmt.Sprintf("%T", key)),
-				zap.String("expected", "ObjectsListKey"))
+				zap.String("expected", fmt.Sprintf("%T", k)))
 			continue
 		}
 		if cidStr == k.cid && strings.HasPrefix(objectName, k.prefix) {
