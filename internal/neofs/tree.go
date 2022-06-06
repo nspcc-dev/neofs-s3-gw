@@ -614,6 +614,9 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID *cid.ID, tree
 
 	subTree, err := c.getSubTree(ctx, cnrID, treeID, rootID, 1)
 	if err != nil {
+		if errors.Is(err, layer.ErrNodeNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
