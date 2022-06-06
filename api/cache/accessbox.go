@@ -1,23 +1,27 @@
 package cache
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"go.uber.org/zap"
 )
 
 type (
 	// AccessBoxCache stores an access box by its address.
 	AccessBoxCache struct {
-		cache gcache.Cache
+		logger *zap.Logger
+		cache  gcache.Cache
 	}
 
 	// Config stores expiration params for cache.
 	Config struct {
 		Size     int
 		Lifetime time.Duration
+		Logger   *zap.Logger
 	}
 )
 
@@ -29,15 +33,19 @@ const (
 )
 
 // DefaultAccessBoxConfig returns new default cache expiration values.
-func DefaultAccessBoxConfig() *Config {
-	return &Config{Size: DefaultAccessBoxCacheSize, Lifetime: DefaultAccessBoxCacheLifetime}
+func DefaultAccessBoxConfig(logger *zap.Logger) *Config {
+	return &Config{
+		Size:     DefaultAccessBoxCacheSize,
+		Lifetime: DefaultAccessBoxCacheLifetime,
+		Logger:   logger,
+	}
 }
 
 // NewAccessBoxCache creates an object of BucketCache.
 func NewAccessBoxCache(config *Config) *AccessBoxCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
 
-	return &AccessBoxCache{cache: gc}
+	return &AccessBoxCache{cache: gc, logger: config.Logger}
 }
 
 // Get returns a cached object.
@@ -49,6 +57,8 @@ func (o *AccessBoxCache) Get(address oid.Address) *accessbox.Box {
 
 	result, ok := entry.(*accessbox.Box)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "*accessbox.Box"))
 		return nil
 	}
 

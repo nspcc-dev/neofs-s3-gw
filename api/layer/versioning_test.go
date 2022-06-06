@@ -136,6 +136,8 @@ type testContext struct {
 }
 
 func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
+	logger := zap.NewExample()
+
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
@@ -156,7 +158,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	})
 	require.NoError(t, err)
 
-	config := DefaultCachesConfigs()
+	config := DefaultCachesConfigs(logger)
 	if len(cachesConfig) != 0 {
 		config = cachesConfig[0]
 	}
@@ -168,7 +170,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 	return &testContext{
 		ctx:   ctx,
-		layer: NewLayer(zap.NewNop(), tp, layerCfg),
+		layer: NewLayer(logger, tp, layerCfg),
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
 			Owner: *usertest.ID(),
@@ -607,7 +609,7 @@ func TestUpdateCRDT2PSetHeaders(t *testing.T) {
 }
 
 func TestSystemObjectsVersioning(t *testing.T) {
-	cacheConfig := DefaultCachesConfigs()
+	cacheConfig := DefaultCachesConfigs(zap.NewExample())
 	cacheConfig.System.Lifetime = 0
 
 	tc := prepareContext(t, cacheConfig)
@@ -642,7 +644,7 @@ func TestSystemObjectsVersioning(t *testing.T) {
 }
 
 func TestDeleteSystemObjectsVersioning(t *testing.T) {
-	cacheConfig := DefaultCachesConfigs()
+	cacheConfig := DefaultCachesConfigs(zap.NewExample())
 	cacheConfig.System.Lifetime = 0
 
 	tc := prepareContext(t, cacheConfig)

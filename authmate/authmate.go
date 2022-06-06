@@ -249,7 +249,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		zap.Stringer("owner_tkn", idOwner))
 
 	addr, err := tokens.
-		New(a.neoFS, secrets.EphemeralKey, cache.DefaultAccessBoxConfig()).
+		New(a.neoFS, secrets.EphemeralKey, cache.DefaultAccessBoxConfig(a.log)).
 		Put(ctx, *id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
@@ -295,7 +295,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
 func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
-	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig())
+	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig(a.log))
 
 	var addr oid.Address
 	if err := addr.DecodeString(options.SecretAddress); err != nil {

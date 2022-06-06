@@ -1,15 +1,18 @@
 package cache
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"go.uber.org/zap"
 )
 
 // BucketCache contains cache with objects and the lifetime of cache entries.
 type BucketCache struct {
-	cache gcache.Cache
+	cache  gcache.Cache
+	logger *zap.Logger
 }
 
 const (
@@ -20,14 +23,18 @@ const (
 )
 
 // DefaultBucketConfig returns new default cache expiration values.
-func DefaultBucketConfig() *Config {
-	return &Config{Size: DefaultBucketCacheSize, Lifetime: DefaultBucketCacheLifetime}
+func DefaultBucketConfig(logger *zap.Logger) *Config {
+	return &Config{
+		Size:     DefaultBucketCacheSize,
+		Lifetime: DefaultBucketCacheLifetime,
+		Logger:   logger,
+	}
 }
 
 // NewBucketCache creates an object of BucketCache.
 func NewBucketCache(config *Config) *BucketCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
-	return &BucketCache{cache: gc}
+	return &BucketCache{cache: gc, logger: config.Logger}
 }
 
 // Get returns a cached object.
@@ -39,6 +46,8 @@ func (o *BucketCache) Get(key string) *data.BucketInfo {
 
 	result, ok := entry.(*data.BucketInfo)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "*data.BucketInfo"))
 		return nil
 	}
 

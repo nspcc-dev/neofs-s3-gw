@@ -1,16 +1,19 @@
 package cache
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"go.uber.org/zap"
 )
 
 // ObjectsCache provides lru cache for objects.
 type ObjectsCache struct {
-	cache gcache.Cache
+	cache  gcache.Cache
+	logger *zap.Logger
 }
 
 const (
@@ -21,14 +24,18 @@ const (
 )
 
 // DefaultObjectsConfig returns new default cache expiration values.
-func DefaultObjectsConfig() *Config {
-	return &Config{Size: DefaultObjectsCacheSize, Lifetime: DefaultObjectsCacheLifetime}
+func DefaultObjectsConfig(logger *zap.Logger) *Config {
+	return &Config{
+		Size:     DefaultObjectsCacheSize,
+		Lifetime: DefaultObjectsCacheLifetime,
+		Logger:   logger,
+	}
 }
 
 // New creates an object of ObjectHeadersCache.
 func New(config *Config) *ObjectsCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
-	return &ObjectsCache{cache: gc}
+	return &ObjectsCache{cache: gc, logger: config.Logger}
 }
 
 // Get returns a cached object.
@@ -40,6 +47,8 @@ func (o *ObjectsCache) Get(address oid.Address) *object.Object {
 
 	result, ok := entry.(object.Object)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "object.Object"))
 		return nil
 	}
 
@@ -48,8 +57,14 @@ func (o *ObjectsCache) Get(address oid.Address) *object.Object {
 
 // Put puts an object to cache.
 func (o *ObjectsCache) Put(obj object.Object) error {
-	cnrID, _ := obj.ContainerID()
-	objID, _ := obj.ID()
+	cnrID, ok := obj.ContainerID()
+	if !ok {
+		return fmt.Errorf("empty container id")
+	}
+	objID, ok := obj.ID()
+	if !ok {
+		return fmt.Errorf("empty object id")
+	}
 
 	var addr oid.Address
 	addr.SetContainer(cnrID)

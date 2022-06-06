@@ -1,17 +1,20 @@
 package cache
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"go.uber.org/zap"
 )
 
 // SystemCache provides lru cache for objects.
 // This cache contains "system" objects (bucket versioning settings, tagging object etc.).
 // Key is bucketName+systemFileName.
 type SystemCache struct {
-	cache gcache.Cache
+	cache  gcache.Cache
+	logger *zap.Logger
 }
 
 const (
@@ -22,14 +25,18 @@ const (
 )
 
 // DefaultSystemConfig returns new default cache expiration values.
-func DefaultSystemConfig() *Config {
-	return &Config{Size: DefaultSystemCacheSize, Lifetime: DefaultSystemCacheLifetime}
+func DefaultSystemConfig(logger *zap.Logger) *Config {
+	return &Config{
+		Size:     DefaultSystemCacheSize,
+		Lifetime: DefaultSystemCacheLifetime,
+		Logger:   logger,
+	}
 }
 
 // NewSystemCache creates an object of SystemCache.
 func NewSystemCache(config *Config) *SystemCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
-	return &SystemCache{cache: gc}
+	return &SystemCache{cache: gc, logger: config.Logger}
 }
 
 // GetObject returns a cached object.
@@ -41,6 +48,8 @@ func (o *SystemCache) GetObject(key string) *data.ObjectInfo {
 
 	result, ok := entry.(*data.ObjectInfo)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "*data.ObjectInfo"))
 		return nil
 	}
 
@@ -55,6 +64,8 @@ func (o *SystemCache) GetCORS(key string) *data.CORSConfiguration {
 
 	result, ok := entry.(*data.CORSConfiguration)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "*data.CORSConfiguration"))
 		return nil
 	}
 
@@ -69,6 +80,8 @@ func (o *SystemCache) GetSettings(key string) *data.BucketSettings {
 
 	result, ok := entry.(*data.BucketSettings)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "*data.BucketSettings"))
 		return nil
 	}
 
@@ -83,6 +96,8 @@ func (o *SystemCache) GetNotificationConfiguration(key string) *data.Notificatio
 
 	result, ok := entry.(*data.NotificationConfiguration)
 	if !ok {
+		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "*data.NotificationConfiguration"))
 		return nil
 	}
 

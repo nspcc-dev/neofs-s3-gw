@@ -8,6 +8,7 @@ import (
 	"github.com/bluele/gcache"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"go.uber.org/zap"
 )
 
 /*
@@ -26,7 +27,8 @@ import (
 type (
 	// ObjectsListCache contains cache for ListObjects and ListObjectVersions.
 	ObjectsListCache struct {
-		cache gcache.Cache
+		cache  gcache.Cache
+		logger *zap.Logger
 	}
 
 	// ObjectsListKey is a key to find a ObjectsListCache's entry.
@@ -44,14 +46,18 @@ const (
 )
 
 // DefaultObjectsListConfig returns new default cache expiration values.
-func DefaultObjectsListConfig() *Config {
-	return &Config{Size: DefaultObjectsListCacheSize, Lifetime: DefaultObjectsListCacheLifetime}
+func DefaultObjectsListConfig(logger *zap.Logger) *Config {
+	return &Config{
+		Size:     DefaultObjectsListCacheSize,
+		Lifetime: DefaultObjectsListCacheLifetime,
+		Logger:   logger,
+	}
 }
 
 // NewObjectsListCache is a constructor which creates an object of ListObjectsCache with the given lifetime of entries.
 func NewObjectsListCache(config *Config) *ObjectsListCache {
 	gc := gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build()
-	return &ObjectsListCache{cache: gc}
+	return &ObjectsListCache{cache: gc, logger: config.Logger}
 }
 
 // Get returns a list of ObjectInfo.
@@ -63,6 +69,8 @@ func (l *ObjectsListCache) Get(key ObjectsListKey) []oid.ID {
 
 	result, ok := entry.([]oid.ID)
 	if !ok {
+		l.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", "[]oid.ID"))
 		return nil
 	}
 
@@ -85,6 +93,8 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 	for _, key := range keys {
 		k, ok := key.(ObjectsListKey)
 		if !ok {
+			l.logger.Warn("invalid cache key type", zap.String("actual", fmt.Sprintf("%T", key)),
+				zap.String("expected", "ObjectsListKey"))
 			continue
 		}
 		if cidStr == k.cid && strings.HasPrefix(objectName, k.prefix) {
