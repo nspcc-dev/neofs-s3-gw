@@ -48,7 +48,7 @@ func (o *ObjectsCache) Get(address oid.Address) *object.Object {
 	result, ok := entry.(object.Object)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "object.Object"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 

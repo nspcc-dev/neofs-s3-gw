@@ -58,7 +58,7 @@ func (o *AccessBoxCache) Get(address oid.Address) *accessbox.Box {
 	result, ok := entry.(*accessbox.Box)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", "*accessbox.Box"))
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
