@@ -8,7 +8,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
@@ -147,7 +146,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		})
 	}
 
-	idCnr, err := n.neoFS.CreateContainer(ctx, neofs.PrmContainerCreate{
+	idCnr, err := n.neoFS.CreateContainer(ctx, PrmContainerCreate{
 		Creator:              bktInfo.Owner,
 		Policy:               *p.Policy,
 		Name:                 p.Name,

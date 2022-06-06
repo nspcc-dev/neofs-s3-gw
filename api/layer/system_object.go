@@ -12,7 +12,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"go.uber.org/zap"
@@ -85,7 +84,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 	idsToDeleteArr := updateCRDT2PSetHeaders(p.Metadata, versions, false) // false means "last write wins"
 	// note that updateCRDT2PSetHeaders modifies p.Metadata and must be called further processing
 
-	prm := neofs.PrmObjectCreate{
+	prm := PrmObjectCreate{
 		Container:  p.BktInfo.CID,
 		Creator:    p.BktInfo.Owner,
 		Attributes: make([][2]string, 2, 2+len(p.Metadata)),

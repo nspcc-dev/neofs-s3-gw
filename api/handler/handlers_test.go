@@ -16,9 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
-	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -28,14 +26,14 @@ import (
 
 type handlerContext struct {
 	h  *handler
-	tp *neofstest.TestNeoFS
+	tp *layer.TestNeoFS
 }
 
 func (hc *handlerContext) Handler() *handler {
 	return hc.h
 }
 
-func (hc *handlerContext) MockedPool() *neofstest.TestNeoFS {
+func (hc *handlerContext) MockedPool() *layer.TestNeoFS {
 	return hc.tp
 }
 
@@ -48,7 +46,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	require.NoError(t, err)
 
 	l := zap.NewNop()
-	tp := neofstest.NewTestNeoFS()
+	tp := layer.NewTestNeoFS()
 
 	testResolver := &resolver.BucketResolver{Name: "test_resolver"}
 	testResolver.SetResolveFunc(func(_ context.Context, name string) (*cid.ID, error) {
@@ -74,14 +72,14 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 }
 
 func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktName string) {
-	_, err := h.MockedPool().CreateContainer(ctx, neofs.PrmContainerCreate{
+	_, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
 		Name: bktName,
 	})
 	require.NoError(t, err)
 }
 
 func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
-	cnrID, err := h.MockedPool().CreateContainer(ctx, neofs.PrmContainerCreate{
+	cnrID, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
 		Name:                 bktName,
 		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
 	})
