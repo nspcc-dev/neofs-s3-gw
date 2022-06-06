@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
@@ -41,7 +40,7 @@ type (
 	MsgHandlerFunc func(context.Context, *nats.Msg) error
 
 	layer struct {
-		neoFS       neofs.NeoFS
+		neoFS       NeoFS
 		log         *zap.Logger
 		anonKey     AnonymousKey
 		resolver    *resolver.BucketResolver
@@ -271,7 +270,7 @@ func DefaultCachesConfigs() *CachesConfig {
 
 // NewLayer creates an instance of a layer. It checks credentials
 // and establishes gRPC connection with the node.
-func NewLayer(log *zap.Logger, neoFS neofs.NeoFS, config *Config) Client {
+func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 	return &layer{
 		neoFS:       neoFS,
 		log:         log,
@@ -324,7 +323,7 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	return ownerID
 }
 
-func (n *layer) prepareAuthParameters(ctx context.Context, prm *neofs.PrmAuth, bktOwner user.ID) {
+func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
 		if bktOwner.Equals(bearer.ResolveIssuer(*bd.Gate.BearerToken)) {
 			prm.BearerToken = bd.Gate.BearerToken

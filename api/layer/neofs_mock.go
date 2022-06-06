@@ -1,4 +1,4 @@
-package neofstest
+package layer
 
 import (
 	"bytes"
@@ -12,7 +12,6 @@ import (
 	"time"
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -21,10 +20,8 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
-const objectSystemAttributeName = "S3-System-name"
-
 type TestNeoFS struct {
-	neofs.NeoFS
+	NeoFS
 
 	objects      map[string]*object.Object
 	containers   map[string]*container.Container
@@ -68,7 +65,7 @@ func (t *TestNeoFS) ContainerID(name string) (*cid.ID, error) {
 	return nil, fmt.Errorf("not found")
 }
 
-func (t *TestNeoFS) CreateContainer(_ context.Context, prm neofs.PrmContainerCreate) (*cid.ID, error) {
+func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (*cid.ID, error) {
 	opts := []container.Option{
 		container.WithOwnerID(&prm.Creator),
 		container.WithPolicy(&prm.Policy),
@@ -126,7 +123,7 @@ func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, erro
 	return res, nil
 }
 
-func (t *TestNeoFS) SelectObjects(_ context.Context, prm neofs.PrmObjectSelect) ([]oid.ID, error) {
+func (t *TestNeoFS) SelectObjects(_ context.Context, prm PrmObjectSelect) ([]oid.ID, error) {
 	filters := object.NewSearchFilters()
 	filters.AddRootFilter()
 
@@ -168,7 +165,7 @@ func (t *TestNeoFS) SelectObjects(_ context.Context, prm neofs.PrmObjectSelect) 
 	return res, nil
 }
 
-func (t *TestNeoFS) ReadObject(_ context.Context, prm neofs.PrmObjectRead) (*neofs.ObjectPart, error) {
+func (t *TestNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPart, error) {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
 	addr.SetObject(prm.Object)
@@ -176,7 +173,7 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm neofs.PrmObjectRead) (*neo
 	sAddr := addr.EncodeToString()
 
 	if obj, ok := t.objects[sAddr]; ok {
-		return &neofs.ObjectPart{
+		return &ObjectPart{
 			Head:    obj,
 			Payload: io.NopCloser(bytes.NewReader(obj.Payload())),
 		}, nil
@@ -185,7 +182,7 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm neofs.PrmObjectRead) (*neo
 	return nil, fmt.Errorf("object not found %s", addr)
 }
 
-func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (*oid.ID, error) {
+func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.ID, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return nil, err
@@ -243,7 +240,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm neofs.PrmObjectCreate) (
 	return &objID, nil
 }
 
-func (t *TestNeoFS) DeleteObject(_ context.Context, prm neofs.PrmObjectDelete) error {
+func (t *TestNeoFS) DeleteObject(_ context.Context, prm PrmObjectDelete) error {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
 	addr.SetObject(prm.Object)
@@ -265,11 +262,4 @@ func isMatched(attributes []object.Attribute, filter object.SearchFilter) bool {
 	}
 
 	return false
-}
-
-func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
-	var addr oid.Address
-	addr.SetContainer(cnr)
-	addr.SetObject(obj)
-	return addr
 }

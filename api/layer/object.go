@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -79,7 +78,7 @@ func (n *layer) objectSearchByName(ctx context.Context, bktInfo *data.BucketInfo
 
 // objectSearch returns all available objects by search params.
 func (n *layer) objectSearch(ctx context.Context, p *findParams) ([]oid.ID, error) {
-	prm := neofs.PrmObjectSelect{
+	prm := PrmObjectSelect{
 		Container:      p.bkt.CID,
 		ExactAttribute: p.attr,
 		FilePrefix:     p.prefix,
@@ -101,7 +100,7 @@ func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
 
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
-	prm := neofs.PrmObjectRead{
+	prm := PrmObjectRead{
 		Container:  bktInfo.CID,
 		Object:     idObj,
 		WithHeader: true,
@@ -120,7 +119,7 @@ func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj 
 // initializes payload reader of the NeoFS object.
 // Zero range corresponds to full payload (panics if only offset is set).
 func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Reader, error) {
-	prm := neofs.PrmObjectRead{
+	prm := PrmObjectRead{
 		Container:    p.objInfo.CID,
 		Object:       p.objInfo.ID,
 		WithPayload:  true,
@@ -139,7 +138,7 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Re
 
 // objectGet returns an object with payload in the object.
 func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (*object.Object, error) {
-	prm := neofs.PrmObjectRead{
+	prm := PrmObjectRead{
 		Container:   bktInfo.CID,
 		Object:      objID,
 		WithHeader:  true,
@@ -178,7 +177,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	prm := neofs.PrmObjectCreate{
+	prm := PrmObjectCreate{
 		Container:   p.BktInfo.CID,
 		Creator:     own,
 		PayloadSize: uint64(p.Size),
@@ -439,7 +438,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 
 // objectDelete puts tombstone object into neofs.
 func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) error {
-	prm := neofs.PrmObjectDelete{
+	prm := PrmObjectDelete{
 		Container: bktInfo.CID,
 		Object:    idObj,
 	}
@@ -453,7 +452,7 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 
 // objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
 // Returns object ID and payload sha256 hash.
-func (n *layer) objectPutAndHash(ctx context.Context, prm neofs.PrmObjectCreate, bktInfo *data.BucketInfo) (*oid.ID, []byte, error) {
+func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (*oid.ID, []byte, error) {
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 	hash := sha256.New()
 	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
@@ -705,7 +704,7 @@ func (n *layer) transformNeofsError(ctx context.Context, err error) error {
 		return nil
 	}
 
-	if errors.Is(err, neofs.ErrAccessDenied) {
+	if errors.Is(err, ErrAccessDenied) {
 		n.log.Debug("error was transformed", zap.String("request_id", api.GetRequestID(ctx)), zap.Error(err))
 		return apiErrors.GetAPIError(apiErrors.ErrAccessDenied)
 	}

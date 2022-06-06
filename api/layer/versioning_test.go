@@ -10,9 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-s3-gw/internal/neofstest"
 	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -134,7 +132,7 @@ type testContext struct {
 	layer     Client
 	bktInfo   *data.BucketInfo
 	obj       string
-	testNeoFS *neofstest.TestNeoFS
+	testNeoFS *TestNeoFS
 }
 
 func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
@@ -150,10 +148,10 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 			GateKey:     key.PublicKey(),
 		},
 	})
-	tp := neofstest.NewTestNeoFS()
+	tp := NewTestNeoFS()
 
 	bktName := "testbucket1"
-	bktID, err := tp.CreateContainer(ctx, neofs.PrmContainerCreate{
+	bktID, err := tp.CreateContainer(ctx, PrmContainerCreate{
 		Name: bktName,
 	})
 	require.NoError(t, err)
