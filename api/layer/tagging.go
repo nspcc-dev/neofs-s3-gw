@@ -10,34 +10,36 @@ import (
 	"go.uber.org/zap"
 )
 
-func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (map[string]string, error) {
+func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error) {
 	var (
 		err  error
 		tags map[string]string
 	)
+
 	tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
 	if tags != nil {
-		return tags, nil
+		return p.VersionID, tags, nil
 	}
 
 	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
+	p.VersionID = version.OID.EncodeToString()
 
 	tags, err = n.treeService.GetObjectTagging(ctx, &p.BktInfo.CID, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
+			return "", nil, errors.GetAPIError(errors.ErrNoSuchKey)
 		}
-		return nil, err
+		return "", nil, err
 	}
 
 	if err = n.systemCache.PutTagging(objectTaggingCacheKey(p), tags); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	return tags, nil
+	return p.VersionID, tags, nil
 }
 
 func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) error {
@@ -45,6 +47,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet m
 	if err != nil {
 		return err
 	}
+	p.VersionID = version.OID.EncodeToString()
 
 	err = n.treeService.PutObjectTagging(ctx, &p.BktInfo.CID, version, tagSet)
 	if err != nil {
