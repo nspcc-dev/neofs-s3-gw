@@ -26,6 +26,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 	if err != nil {
 		return nil, nil, err
 	}
+	objVersion.VersionID = version.OID.EncodeToString()
 
 	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, &objVersion.BktInfo.CID, version)
 	if err != nil {
