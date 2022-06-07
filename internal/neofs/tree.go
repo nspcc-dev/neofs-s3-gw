@@ -74,7 +74,7 @@ const (
 	settingsFileName      = "bucket-settings"
 	notifConfFileName     = "bucket-notifications"
 	corsFilename          = "bucket-cors"
-	emptyFileName         = "<empty>" // to handle trailing slash in name
+	emptyFileName         = "<empty>" // to handle trailing and leading slash in name
 	bucketTaggingFilename = "bucket-tagging"
 
 	// versionTree -- ID of a tree with object versions.
@@ -527,9 +527,12 @@ func (c *TreeClient) GetLatestVersion(ctx context.Context, cnrID *cid.ID, object
 	return c.getLatestVersion(ctx, cnrID, versionTree, path, meta)
 }
 
-// pathFromName splits name by '/' and add an empty marker if name has trailing slash.
+// pathFromName splits name by '/' and add an empty marker if name has trailing or leading slash.
 func pathFromName(objectName string) []string {
 	path := strings.Split(objectName, separator)
+	if path[0] == "" {
+		path[0] = emptyFileName
+	}
 	if path[len(path)-1] == "" {
 		path[len(path)-1] = emptyFileName
 	}
@@ -560,6 +563,9 @@ func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.I
 func (c *TreeClient) determinePrefixNode(ctx context.Context, cnrID *cid.ID, treeID, prefix string) (uint64, string, error) {
 	var rootID uint64
 	path := strings.Split(prefix, separator)
+	if path[0] == "" {
+		path[0] = emptyFileName
+	}
 	tailPrefix := path[len(path)-1]
 
 	if len(path) > 1 {
