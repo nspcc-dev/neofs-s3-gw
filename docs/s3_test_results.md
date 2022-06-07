@@ -143,6 +143,7 @@ Compatibility: 31/36/37 out of 64
 ## PostObject
 
 Compatibility: 12/12/32 out of 33
+This group is not explicitly supported by s3-gw, but some tests may pass.
 
 |     | Test                                                                                     | s3-gw | minio | aws s3 |
 |-----|------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -483,6 +484,7 @@ Compatibility:  38/38/45 out of 59
 ## Bucket ACL
 
 Compatibility:  2/3/16 out of 33
+This group is not explicitly supported by s3-gw, but some tests may pass.
 
 |    | Test                                                                                       | s3-gw | minio | aws s3 |
 |----|--------------------------------------------------------------------------------------------|-------|-------|--------|
@@ -534,6 +536,7 @@ Compatibility: 3/0/3 out of 4
 ## Encryption
 
 Compatibility: 13/9/16 out of 29
+This group is not explicitly supported by s3-gw, but some tests may pass.
 
 |    | Test                                                                                     | s3-gw       | minio | aws s3 |
 |----|------------------------------------------------------------------------------------------|-------------|-------|--------|
@@ -570,6 +573,7 @@ Compatibility: 13/9/16 out of 29
 ## Lifecycle
 
 Compatibility: 0/10/18 out of 29
+This group is not explicitly supported by s3-gw, but some tests may pass.
 
 |    | Test                                                                            | s3-gw | minio | aws s3 |
 |----|---------------------------------------------------------------------------------|-------|-------|--------|
@@ -606,6 +610,7 @@ Compatibility: 0/10/18 out of 29
 ## Policy and replication
 
 Compatibility:  0/7/20 out of 35
+This group is not explicitly supported by s3-gw, but some tests may pass.
 
 |    | Test                                                                                | s3-gw | minio | aws s3 |
 |----|-------------------------------------------------------------------------------------|-------|-------|--------|
