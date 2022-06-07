@@ -528,11 +528,10 @@ func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, 
 		var deleteMarkVersion string
 		if version.DeleteMarker != nil {
 			deleteMarkVersion = obj.VersionID
-		}
-
-		if err := n.objectDelete(ctx, bkt, version.OID); err != nil {
+		} else if err := n.objectDelete(ctx, bkt, version.OID); err != nil {
 			return deleteMarkVersion, err
 		}
+
 		return deleteMarkVersion, n.treeService.RemoveVersion(ctx, &bkt.CID, version.ID)
 	}
 
