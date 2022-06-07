@@ -51,7 +51,6 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 
 func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	versionID := reqInfo.URL.Query().Get("versionId")
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
@@ -59,19 +58,27 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
 	p := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
-		VersionID:  versionID,
+		VersionID:  reqInfo.URL.Query().Get("versionId"),
 	}
 
-	tagSet, err := h.obj.GetObjectTagging(r.Context(), p)
+	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 		return
 	}
 
-	w.Header().Set(api.AmzVersionID, versionID)
+	if settings.VersioningEnabled {
+		w.Header().Set(api.AmzVersionID, versionID)
+	}
 	if err = api.EncodeToResponse(w, encodeTagging(tagSet)); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
