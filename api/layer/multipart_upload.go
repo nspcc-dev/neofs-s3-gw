@@ -340,7 +340,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	var completedPartsHeader strings.Builder
 	for i, part := range p.Parts {
 		partInfo := partsInfo[part.PartNumber]
-		if part.ETag != partInfo.ETag {
+		if partInfo == nil || part.ETag != partInfo.ETag {
 			return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 		}
 		// for the last part we have no minimum size limit
