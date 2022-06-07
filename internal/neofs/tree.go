@@ -563,7 +563,7 @@ func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID *cid.I
 func (c *TreeClient) determinePrefixNode(ctx context.Context, cnrID *cid.ID, treeID, prefix string) (uint64, string, error) {
 	var rootID uint64
 	path := strings.Split(prefix, separator)
-	if path[0] == "" {
+	if len(path) > 1 && path[0] == "" {
 		path[0] = emptyFileName
 	}
 	tailPrefix := path[len(path)-1]
@@ -594,7 +594,7 @@ func (c *TreeClient) getPrefixNodeID(ctx context.Context, cnrID *cid.ID, treeID 
 
 	var intermediateNodes []uint64
 	for _, node := range nodes {
-		if !isIntermediate(node) {
+		if isIntermediate(node) {
 			intermediateNodes = append(intermediateNodes, node.GetNodeId())
 		}
 	}
