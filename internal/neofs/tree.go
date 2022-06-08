@@ -907,7 +907,8 @@ func (c *TreeClient) PutLock(ctx context.Context, cnrID *cid.ID, nodeID uint64, 
 
 	if lock.LegalHoldOID != nil {
 		meta[legalHoldOIDKV] = lock.LegalHoldOID.EncodeToString()
-	} else if lock.RetentionOID != nil {
+	}
+	if lock.RetentionOID != nil {
 		meta[retentionOIDKV] = lock.RetentionOID.EncodeToString()
 		meta[untilDateKV] = lock.UntilDate
 		if lock.IsCompliance {
