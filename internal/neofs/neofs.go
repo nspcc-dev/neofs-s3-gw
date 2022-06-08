@@ -275,6 +275,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm neofs.PrmObjectCreate) (*o
 
 	idObj, err := x.pool.PutObject(ctx, prmPut)
 	if err != nil {
+		reason, ok := isErrAccessDenied(err)
+		if ok {
+			return nil, fmt.Errorf("%w: %s", neofs.ErrAccessDenied, reason)
+		}
 		return nil, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
@@ -474,6 +478,12 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm neofs.PrmObjectDelete) err
 }
 
 func isErrAccessDenied(err error) (string, bool) {
+	unwrappedErr := errors.Unwrap(err)
+	for unwrappedErr != nil {
+		err = unwrappedErr
+		unwrappedErr = errors.Unwrap(err)
+	}
+
 	switch err := err.(type) {
 	default:
 		return "", false
