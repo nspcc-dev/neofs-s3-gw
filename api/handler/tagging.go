@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"go.uber.org/zap"
 )
 
 const (
@@ -57,6 +58,17 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
+
+	s := &SendNotificationParams{
+		Event:   EventObjectTaggingPut,
+		ObjInfo: objInfo,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err = h.sendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -118,6 +130,17 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
 	}
+
+	s := &SendNotificationParams{
+		Event:   EventObjectTaggingDelete,
+		ObjInfo: objInfo,
+		BktInfo: bktInfo,
+		ReqInfo: reqInfo,
+	}
+	if err = h.sendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
