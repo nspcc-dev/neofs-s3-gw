@@ -21,6 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"go.uber.org/zap"
 )
 
 var (
@@ -203,17 +204,17 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.updateBucketACL(r, astBucket, bktInfo, token); err != nil {
+	if _, err = h.updateBucketACL(r, astBucket, bktInfo, token); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Container) error {
+func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Container) (bool, error) {
 	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
-		return fmt.Errorf("could not get bucket eacl: %w", err)
+		return false, fmt.Errorf("could not get bucket eacl: %w", err)
 	}
 
 	parentAst := tableToAst(bucketACL.EACL, bktInfo.Name)
@@ -227,12 +228,12 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 
 	resAst, updated := mergeAst(parentAst, astChild)
 	if !updated {
-		return nil
+		return false, nil
 	}
 
 	table, err := astToTable(resAst)
 	if err != nil {
-		return fmt.Errorf("could not translate ast to table: %w", err)
+		return false, fmt.Errorf("could not translate ast to table: %w", err)
 	}
 
 	table.SetSessionToken(sessionToken)
@@ -243,10 +244,10 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 	}
 
 	if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
-		return fmt.Errorf("could not put bucket acl: %w", err)
+		return false, fmt.Errorf("could not put bucket acl: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
@@ -320,14 +321,27 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: versionID,
 	}
 
-	if _, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
 	}
 
-	if err = h.updateBucketACL(r, astObject, bktInfo, token); err != nil {
+	updated, err := h.updateBucketACL(r, astObject, bktInfo, token)
+	if err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
+	}
+	if updated {
+		s := &SendNotificationParams{
+			Event:   EventObjectACLPut,
+			ObjInfo: objInfo,
+			BktInfo: bktInfo,
+			ReqInfo: reqInfo,
+		}
+		if err = h.sendNotifications(r.Context(), s); err != nil {
+			h.log.Error("couldn't send notification: %w", zap.Error(err))
+		}
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -397,7 +411,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err = h.updateBucketACL(r, astPolicy, bktInfo, token); err != nil {
+	if _, err = h.updateBucketACL(r, astPolicy, bktInfo, token); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
