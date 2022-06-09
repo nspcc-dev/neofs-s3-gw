@@ -1151,7 +1151,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectName string)
 			var found bool
 			for _, filter := range record.Filters() {
 				if filter.Matcher() == eacl.MatchStringEqual &&
-					filter.Key() == object.AttributeFileName && filter.Key() == objectName {
+					filter.Key() == object.AttributeFileName && filter.Value() == objectName {
 					found = true
 				}
 			}
