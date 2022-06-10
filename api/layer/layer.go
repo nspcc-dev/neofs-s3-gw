@@ -482,12 +482,12 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		obj.DeleteMarkVersion = UnversionedObjectVersionID
 		newVersion := &data.NodeVersion{
 			BaseNodeVersion: data.BaseNodeVersion{
-				OID: *randOID,
+				OID:      *randOID,
+				FilePath: obj.Name,
 			},
 			DeleteMarker: &data.DeleteMarkerInfo{
-				FilePath: obj.Name,
-				Created:  time.Now(),
-				Owner:    n.Owner(ctx),
+				Created: time.Now(),
+				Owner:   n.Owner(ctx),
 			},
 			IsUnversioned: true,
 		}
@@ -497,7 +497,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			obj.DeleteMarkVersion = randOID.EncodeToString()
 		}
 
-		if obj.Error = n.treeService.AddVersion(ctx, &bkt.CID, obj.Name, newVersion); obj.Error != nil {
+		if obj.Error = n.treeService.AddVersion(ctx, &bkt.CID, newVersion); obj.Error != nil {
 			return obj
 		}
 
@@ -573,7 +573,7 @@ func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error)
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
-	objects, err := n.listSortedObjects(ctx, allObjectParams{Bucket: p.BktInfo})
+	objects, _, err := n.getLatestObjectsVersions(ctx, allObjectParams{Bucket: p.BktInfo, MaxKeys: 1})
 	if err != nil {
 		return err
 	}
