@@ -8,7 +8,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -53,7 +52,6 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 	}
 
 	info.Owner = *res.OwnerID()
-	info.BasicACL = res.BasicACL()
 
 	for _, attr := range res.Attributes() {
 		switch key, val := attr.Key(), attr.Value(); key {
@@ -129,7 +127,6 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Name:               p.Name,
 		Owner:              ownerID,
 		Created:            time.Now(), // this can be a little incorrect since the real time is set later
-		BasicACL:           p.ACL,
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
 	}
@@ -151,7 +148,6 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Policy:               *p.Policy,
 		Name:                 p.Name,
 		SessionToken:         p.SessionToken,
-		BasicACL:             acl.BasicACL(p.ACL),
 		AdditionalAttributes: attributes,
 	})
 	if err != nil {

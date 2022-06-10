@@ -22,7 +22,6 @@ type (
 		CID                cid.ID
 		Owner              user.ID
 		Created            time.Time
-		BasicACL           uint32
 		LocationConstraint string
 		ObjectLockEnabled  bool
 	}
