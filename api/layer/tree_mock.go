@@ -137,13 +137,13 @@ func (t *TreeServiceMock) GetLatestVersion(_ context.Context, cnrID *cid.ID, obj
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID *cid.ID, prefix string) ([]oid.ID, error) {
+func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
 	}
 
-	var result []oid.ID
+	var result []*data.NodeVersion
 
 	for key, versions := range cnrVersionsMap {
 		if !strings.HasPrefix(key, prefix) {
@@ -155,7 +155,7 @@ func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID *ci
 		})
 
 		if len(versions) != 0 {
-			result = append(result, versions[len(versions)-1].OID)
+			result = append(result, versions[len(versions)-1])
 		}
 	}
 
@@ -182,18 +182,18 @@ func (t *TreeServiceMock) GetUnversioned(_ context.Context, cnrID *cid.ID, objec
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectName string, newVersion *data.NodeVersion) error {
+func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, newVersion *data.NodeVersion) error {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		t.versions[cnrID.EncodeToString()] = map[string][]*data.NodeVersion{
-			objectName: {newVersion},
+			newVersion.FilePath: {newVersion},
 		}
 		return nil
 	}
 
-	versions, ok := cnrVersionsMap[objectName]
+	versions, ok := cnrVersionsMap[newVersion.FilePath]
 	if !ok {
-		cnrVersionsMap[objectName] = []*data.NodeVersion{newVersion}
+		cnrVersionsMap[newVersion.FilePath] = []*data.NodeVersion{newVersion}
 		return nil
 	}
 
@@ -217,7 +217,7 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, objectNam
 		}
 	}
 
-	cnrVersionsMap[objectName] = append(result, newVersion)
+	cnrVersionsMap[newVersion.FilePath] = append(result, newVersion)
 
 	return nil
 }
