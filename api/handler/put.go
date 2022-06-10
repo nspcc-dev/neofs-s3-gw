@@ -163,8 +163,6 @@ const (
 	basicACLReadOnly  = "public-read"
 	basicACLPublic    = "public-read-write"
 	cannedACLAuthRead = "authenticated-read"
-
-	publicBasicRule = 0x0FFFFFFF
 )
 
 type createBucketParams struct {
@@ -572,7 +570,9 @@ func parseMetadata(r *http.Request) map[string]string {
 func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		reqInfo = api.GetReqInfo(r.Context())
-		p       = layer.CreateBucketParams{Name: reqInfo.BucketName, ACL: publicBasicRule}
+		p       = layer.CreateBucketParams{
+			Name: reqInfo.BucketName,
+		}
 	)
 
 	if err := checkBucketName(reqInfo.BucketName); err != nil {

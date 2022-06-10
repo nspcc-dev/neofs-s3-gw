@@ -144,6 +144,8 @@ type NeoFS interface {
 	// It sets 'Timestamp' attribute to the current time.
 	// It returns the ID of the saved container.
 	//
+	// Created container is public with enabled ACL extension.
+	//
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the container from being created.
 	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)

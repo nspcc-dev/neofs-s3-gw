@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -119,7 +120,13 @@ func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Contain
 }
 
 // CreateContainer implements neofs.NeoFS interface method.
+//
+// If prm.BasicACL is zero, 'eacl-public-read-write' is used.
 func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (*cid.ID, error) {
+	if prm.BasicACL == 0 {
+		prm.BasicACL = acl.EACLPublicBasicRule
+	}
+
 	// fill container structure
 	cnrOptions := []container.Option{
 		container.WithPolicy(&prm.Policy),
