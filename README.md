@@ -54,6 +54,36 @@ $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
   neofs-s3-gw
 ```
 
+## AWS SDK Compatibility
+
+To match signature of the request you must not include the following headers to `SignedHeaders`:
+* `User-Agent`
+* `X-Amzn-Trace-Id`
+
+### AWS SDK JAVA v1
+Using [aws-sdk-java](https://github.com/aws/aws-sdk-java) you can get the following error:
+```
+Exception in thread "main" com.amazonaws.services.s3.model.AmazonS3Exception: 
+The request signature we calculated does not match the signature you provided. Check your key and signing method.
+```
+
+To solve this problem you should configure client properly:
+```
+RequestHandler2 handler = new RequestHandler2() {
+   @Override
+   public void beforeAttempt(HandlerBeforeAttemptContext context) {
+      context.getRequest().getHeaders().remove("User-Agent");
+      super.beforeAttempt(context);
+   }
+};
+
+AmazonS3 s3Client = AmazonS3ClientBuilder.standard()
+   .withRequestHandlers(handler)
+   .enablePathStyleAccess()
+   // ...
+   .build()
+```
+
 ## Documentation
 
 - [Configuration](./docs/configuration.md)
