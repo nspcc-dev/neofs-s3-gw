@@ -51,6 +51,8 @@ type (
 		SignatureV4  string
 		SignedFields []string
 		Date         string
+		IsPresigned  bool
+		Expiration   time.Duration
 	}
 )
 
@@ -58,6 +60,15 @@ const (
 	accessKeyPartsNum  = 2
 	authHeaderPartsNum = 6
 	maxFormSizeMemory  = 50 * 1048576 // 50 MB
+
+	AmzAlgorithm     = "X-Amz-Algorithm"
+	AmzCredential    = "X-Amz-Credential"
+	AmzSignature     = "X-Amz-Signature"
+	AmzSignedHeaders = "X-Amz-SignedHeaders"
+	AmzExpires       = "X-Amz-Expires"
+	AmzDate          = "X-Amz-Date"
+	AuthorizationHdr = "Authorization"
+	ContentTypeHdr   = "Content-Type"
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -114,30 +125,53 @@ func (a *authHeader) getAddress() (*oid.Address, error) {
 }
 
 func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
+	var (
+		err                  error
+		authHdr              *authHeader
+		signatureDateTimeStr string
+	)
+
 	queryValues := r.URL.Query()
-	if queryValues.Get("X-Amz-Algorithm") == "AWS4-HMAC-SHA256" {
-		return nil, errors.New("pre-signed form of request is not supported")
-	}
-
-	authHeaderField := r.Header["Authorization"]
-	if len(authHeaderField) != 1 {
-		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-			return c.checkFormData(r)
+	if queryValues.Get(AmzAlgorithm) == "AWS4-HMAC-SHA256" {
+		creds := strings.Split(queryValues.Get(AmzCredential), "/")
+		if len(creds) != 5 || creds[4] != "aws4_request" {
+			return nil, fmt.Errorf("bad X-Amz-Credential")
 		}
-		return nil, ErrNoAuthorizationHeader
+		authHdr = &authHeader{
+			AccessKeyID:  creds[0],
+			Service:      creds[3],
+			Region:       creds[2],
+			SignatureV4:  queryValues.Get(AmzSignature),
+			SignedFields: queryValues[AmzSignedHeaders],
+			Date:         creds[1],
+			IsPresigned:  true,
+		}
+		authHdr.Expiration, err = time.ParseDuration(queryValues.Get(AmzExpires) + "s")
+		if err != nil {
+			return nil, fmt.Errorf("couldn't parse X-Amz-Expires: %w", err)
+		}
+		signatureDateTimeStr = queryValues.Get(AmzDate)
+	} else {
+		authHeaderField := r.Header[AuthorizationHdr]
+		if len(authHeaderField) != 1 {
+			if strings.HasPrefix(r.Header.Get(ContentTypeHdr), "multipart/form-data") {
+				return c.checkFormData(r)
+			}
+			return nil, ErrNoAuthorizationHeader
+		}
+		authHdr, err = c.parseAuthHeader(authHeaderField[0])
+		if err != nil {
+			return nil, err
+		}
+		signatureDateTimeStr = r.Header.Get(AmzDate)
 	}
 
-	authHeader, err := c.parseAuthHeader(authHeaderField[0])
-	if err != nil {
-		return nil, err
-	}
-
-	signatureDateTime, err := time.Parse("20060102T150405Z", r.Header.Get("X-Amz-Date"))
+	signatureDateTime, err := time.Parse("20060102T150405Z", signatureDateTimeStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
-	addr, err := authHeader.getAddress()
+	addr, err := authHdr.getAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +181,8 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, err
 	}
 
-	clonedRequest := cloneRequest(r, authHeader)
-	if err = c.checkSign(authHeader, box, clonedRequest, signatureDateTime); err != nil {
+	clonedRequest := cloneRequest(r, authHdr)
+	if err = c.checkSign(authHdr, box, clonedRequest, signatureDateTime); err != nil {
 		return nil, err
 	}
 
@@ -212,21 +246,41 @@ func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 		}
 	}
 
+	if authHeader.IsPresigned {
+		otherQuery := otherRequest.URL.Query()
+		otherQuery.Del(AmzSignature)
+		otherRequest.URL.RawQuery = otherQuery.Encode()
+	}
+
 	return otherRequest
 }
 
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
 	awsCreds := credentials.NewStaticCredentials(authHeader.AccessKeyID, box.Gate.AccessKey, "")
 	signer := v4.NewSigner(awsCreds)
-	signer.DisableURIPathEscaping = true
 
-	// body not required
-	if _, err := signer.Sign(request, nil, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
-		return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
+	var signature string
+	if authHeader.IsPresigned {
+		now := time.Now()
+		if signatureDateTime.Add(authHeader.Expiration).Before(now) {
+			return apiErrors.GetAPIError(apiErrors.ErrExpiredPresignRequest)
+		}
+		if now.Before(signatureDateTime) {
+			return apiErrors.GetAPIError(apiErrors.ErrBadRequest)
+		}
+		if _, err := signer.Presign(request, nil, authHeader.Service, authHeader.Region, authHeader.Expiration, signatureDateTime); err != nil {
+			return fmt.Errorf("failed to pre-sign temporary HTTP request: %w", err)
+		}
+		signature = request.URL.Query().Get(AmzSignature)
+	} else {
+		signer.DisableURIPathEscaping = true
+		if _, err := signer.Sign(request, nil, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
+			return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
+		}
+		signature = c.reg.getSubmatches(request.Header.Get(AuthorizationHdr))["v4_signature"]
 	}
 
-	sms2 := c.reg.getSubmatches(request.Header.Get("Authorization"))
-	if authHeader.SignatureV4 != sms2["v4_signature"] {
+	if authHeader.SignatureV4 != signature {
 		return apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
 	}
 

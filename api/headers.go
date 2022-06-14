@@ -10,6 +10,7 @@ const (
 	AmzDeleteMarker      = "X-Amz-Delete-Marker"
 	AmzCopySource        = "X-Amz-Copy-Source"
 	AmzCopySourceRange   = "X-Amz-Copy-Source-Range"
+	AmzDate              = "X-Amz-Date"
 
 	LastModified       = "Last-Modified"
 	Date               = "Date"
