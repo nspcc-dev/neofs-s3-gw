@@ -3,7 +3,6 @@ package neofs
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -21,7 +20,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
@@ -68,22 +66,7 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, 
 		return 0, 0, fmt.Errorf("get network info via client: %w", err)
 	}
 
-	var durEpoch uint64
-
-	networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
-		if string(parameter.Key()) == "EpochDuration" {
-			data := make([]byte, 8)
-
-			copy(data, parameter.Value())
-
-			durEpoch = binary.LittleEndian.Uint64(data)
-
-			return true
-		}
-
-		return false
-	})
-
+	durEpoch := networkInfo.EpochDuration()
 	if durEpoch == 0 {
 		return 0, 0, errors.New("epoch duration is missing or zero")
 	}
@@ -509,22 +492,12 @@ func (x *ResolverNeoFS) SystemDNS(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("read network info via client: %w", err)
 	}
 
-	var domain string
-
-	networkInfo.NetworkConfig().IterateParameters(func(parameter *netmap.NetworkParameter) bool {
-		if string(parameter.Key()) == "SystemDNS" {
-			domain = string(parameter.Value())
-			return true
-		}
-
-		return false
-	})
-
-	if domain == "" {
+	domain := networkInfo.RawNetworkParameter("SystemDNS")
+	if domain == nil {
 		return "", errors.New("system DNS parameter not found or empty")
 	}
 
-	return domain, nil
+	return string(domain), nil
 }
 
 // AuthmateNeoFS is a mediator which implements authmate.NeoFS through pool.Pool.
@@ -590,22 +563,18 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 	})
 }
 
-func isHomomorphicHashDisabled(ctx context.Context, p *pool.Pool) (res bool, err error) {
+func isHomomorphicHashDisabled(ctx context.Context, p *pool.Pool) (bool, error) {
 	ni, err := p.NetworkInfo(ctx)
 	if err != nil {
 		return false, err
 	}
 
-	var expectedParamKey = []byte("HomomorphicHashingDisabled")
+	// FIXME(@cthulhu-rider): parameter format hasn't been fixed in the protocol yet,
+	//  use decoding  provided by SDK after neofs-api#214 support.
+	rawPrm := ni.RawNetworkParameter("HomomorphicHashingDisabled")
+	if rawPrm != nil {
+		return stackitem.NewByteArray(rawPrm).TryBool()
+	}
 
-	ni.NetworkConfig().IterateParameters(func(p *netmap.NetworkParameter) bool {
-		if bytes.Equal(p.Key(), expectedParamKey) {
-			arr := stackitem.NewByteArray(p.Value())
-			res, err = arr.TryBool()
-			return true
-		}
-		return false
-	})
-
-	return res, nil
+	return false, nil
 }

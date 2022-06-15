@@ -28,7 +28,7 @@ type Box struct {
 // ContainerPolicy represents friendly AccessBox_ContainerPolicy.
 type ContainerPolicy struct {
 	LocationConstraint string
-	Policy             *netmap.PlacementPolicy
+	Policy             netmap.PlacementPolicy
 }
 
 // GateData represents gate tokens in AccessBox.
@@ -141,15 +141,14 @@ func (x *AccessBox) GetTokens(owner *keys.PrivateKey) (*GateData, error) {
 func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 	var result []*ContainerPolicy
 	for _, policy := range x.ContainerPolicy {
-		placementPolicy := netmap.NewPlacementPolicy()
-		if err := placementPolicy.Unmarshal(policy.Policy); err != nil {
+		var cnrPolicy ContainerPolicy
+		if err := cnrPolicy.Policy.Unmarshal(policy.Policy); err != nil {
 			return nil, err
 		}
 
-		result = append(result, &ContainerPolicy{
-			LocationConstraint: policy.LocationConstraint,
-			Policy:             placementPolicy,
-		})
+		cnrPolicy.LocationConstraint = policy.LocationConstraint
+
+		result = append(result, &cnrPolicy)
 	}
 
 	return result, nil

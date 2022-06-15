@@ -20,7 +20,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
-	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -368,7 +367,7 @@ func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 		policyStr = v.GetString(cfgDefaultPolicy)
 	}
 
-	if cfg.DefaultPolicy, err = policy.Parse(policyStr); err != nil {
+	if err = cfg.DefaultPolicy.DecodeString(policyStr); err != nil {
 		l.Fatal("couldn't parse container default policy",
 			zap.Error(err))
 	}

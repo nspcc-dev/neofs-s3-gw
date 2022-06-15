@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/policy"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -147,16 +147,17 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 		return opts.ID, a.neoFS.ContainerExists(ctx, *opts.ID)
 	}
 
-	pp, err := policy.Parse(opts.PlacementPolicy)
+	var prm PrmContainerCreate
+
+	err := prm.Policy.DecodeString(opts.PlacementPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build placement policy: %w", err)
 	}
 
-	cnrID, err := a.neoFS.CreateContainer(ctx, PrmContainerCreate{
-		Owner:        idOwner,
-		Policy:       *pp,
-		FriendlyName: opts.FriendlyName,
-	})
+	prm.Owner = idOwner
+	prm.FriendlyName = opts.FriendlyName
+
+	cnrID, err := a.neoFS.CreateContainer(ctx, prm)
 	if err != nil {
 		return nil, err
 	}
@@ -165,17 +166,18 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 }
 
 func checkPolicy(policyString string) (*netmap.PlacementPolicy, error) {
-	result, err := policy.Parse(policyString)
+	var result netmap.PlacementPolicy
+
+	err := result.DecodeString(policyString)
 	if err == nil {
-		return result, nil
+		return &result, nil
 	}
 
-	result = netmap.NewPlacementPolicy()
 	if err = result.UnmarshalJSON([]byte(policyString)); err == nil {
-		return result, nil
+		return &result, nil
 	}
 
-	return nil, fmt.Errorf("can't parse placement policy")
+	return nil, errors.New("can't parse placement policy")
 }
 
 func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPolicy, error) {
@@ -189,14 +191,10 @@ func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPo
 		if err != nil {
 			return nil, err
 		}
-		marshaled, err := parsedPolicy.Marshal()
-		if err != nil {
-			return nil, fmt.Errorf("can't marshal placement policy: %w", err)
-		}
 
 		result = append(result, &accessbox.AccessBox_ContainerPolicy{
 			LocationConstraint: locationConstraint,
-			Policy:             marshaled,
+			Policy:             parsedPolicy.Marshal(),
 		})
 	}
 
