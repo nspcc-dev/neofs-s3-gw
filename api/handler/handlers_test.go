@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	l := zap.NewNop()
+	l := zap.NewExample()
 	tp := layer.NewTestNeoFS()
 
 	testResolver := &resolver.BucketResolver{Name: "test_resolver"}
@@ -109,7 +110,7 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 	return bktInfo
 }
 
-func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktInfo *data.BucketInfo, objName string) {
+func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktInfo *data.BucketInfo, objName string) *data.ObjectInfo {
 	content := make([]byte, 1024)
 	_, err := rand.Read(content)
 	require.NoError(t, err)
@@ -118,7 +119,7 @@ func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktI
 		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),
 	}
 
-	_, err = h.Layer().PutObject(ctx, &layer.PutObjectParams{
+	objInfo, err := h.Layer().PutObject(ctx, &layer.PutObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,
 		Size:    int64(len(content)),
@@ -126,14 +127,21 @@ func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktI
 		Header:  header,
 	})
 	require.NoError(t, err)
+
+	return objInfo
 }
 
 func prepareTestRequest(t *testing.T, bktName, objName string, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+	return prepareTestFullRequest(t, bktName, objName, make(url.Values), body)
+}
+
+func prepareTestFullRequest(t *testing.T, bktName, objName string, query url.Values, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
 	rawBody, err := xml.Marshal(body)
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(rawBody))
+	r.URL.RawQuery = query.Encode()
 
 	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
 	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))

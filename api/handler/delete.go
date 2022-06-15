@@ -77,9 +77,8 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &layer.DeleteObjectParams{
-		BktInfo:     bktInfo,
-		BktSettings: bktSettings,
-		Objects:     versionedObject,
+		BktInfo: bktInfo,
+		Objects: versionedObject,
 	}
 	deletedObjects, err := h.obj.DeleteObjects(r.Context(), p)
 	deletedObject := deletedObjects[0]
@@ -205,16 +204,9 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return nil
 	})
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	p := &layer.DeleteObjectParams{
-		BktInfo:     bktInfo,
-		BktSettings: bktSettings,
-		Objects:     toRemove,
+		BktInfo: bktInfo,
+		Objects: toRemove,
 	}
 	deletedObjects, err := h.obj.DeleteObjects(r.Context(), p)
 	if !requested.Quiet && err != nil {
