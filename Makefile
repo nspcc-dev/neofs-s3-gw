@@ -3,6 +3,7 @@
 # Common variables
 REPO ?= $(shell go list -m)
 VERSION ?= $(shell git describe --tags 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
+GO_VERSION ?= 1.17
 BINDIR = bin
 
 # Binaries to build
@@ -14,7 +15,7 @@ REPO_BASENAME = $(shell basename `go list -m`)
 HUB_IMAGE ?= "nspccdev/$(REPO_BASENAME)"
 HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 
-.PHONY: help all dep clean format test cover lint docker/lint image-push image dirty-image
+.PHONY: help all dep docker/ clean format test cover lint docker/lint image-push image dirty-image
 
 # Make all binaries
 all: $(BINS)
@@ -38,6 +39,17 @@ dep:
 	@printf "⇒ Tidy requirements: "
 	@CGO_ENABLED=0 \
 	go mod tidy -v && echo OK
+
+docker/%:
+	$(if $(filter $*,all $(BINS)), \
+		@echo "=> Running 'make $*' in clean Docker environment" && \
+		docker run --rm -t \
+		  -v `pwd`:/src \
+		  -w /src \
+		  -u `stat -c "%u:%g" .` \
+		  --env HOME=/src \
+		  golang:$(GO_VERSION) make $*,\
+	  	@echo "supported docker targets: all $(BINS) lint")
 
 # Run tests
 test:
