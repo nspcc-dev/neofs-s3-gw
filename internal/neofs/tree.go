@@ -47,12 +47,12 @@ type (
 )
 
 const (
-	versioningEnabledKV = "versioning_enabled"
-	lockConfigurationKV = "lock_configuration"
+	versioningEnabledKV = "VersioningEnabled"
+	lockConfigurationKV = "LockConfiguration"
 	oidKV               = "OID"
 	fileNameKV          = "FileName"
 	isUnversionedKV     = "IsUnversioned"
-	isTagKV             = "isTag"
+	isTagKV             = "IsTag"
 	uploadIDKV          = "UploadId"
 	partNumberKV        = "Number"
 	sizeKV              = "Size"
@@ -66,7 +66,7 @@ const (
 	isComplianceKV = "IsCompliance"
 
 	// keys for delete marker nodes.
-	isDeleteMarkerKV = "IdDeleteMarker"
+	isDeleteMarkerKV = "IsDeleteMarker"
 	ownerKV          = "Owner"
 	createdKV        = "Created"
 
@@ -84,7 +84,7 @@ const (
 	systemTree = "system"
 
 	separator            = "/"
-	userDefinedtagPrefix = "User-Tag-"
+	userDefinedTagPrefix = "User-Tag-"
 
 	maxGetSubTreeDepth = 10 // current limit on storage node side
 )
@@ -390,8 +390,8 @@ func getObjectTagging(tagNode *TreeNode) map[string]string {
 	meta := make(map[string]string)
 
 	for key, val := range tagNode.Meta {
-		if strings.HasPrefix(key, userDefinedtagPrefix) {
-			meta[strings.TrimPrefix(key, userDefinedtagPrefix)] = val
+		if strings.HasPrefix(key, userDefinedTagPrefix) {
+			meta[strings.TrimPrefix(key, userDefinedTagPrefix)] = val
 		}
 	}
 
@@ -408,7 +408,7 @@ func (c *TreeClient) PutObjectTagging(ctx context.Context, cnrID cid.ID, objVers
 	treeTagSet[isTagKV] = "true"
 
 	for key, val := range tagSet {
-		treeTagSet[userDefinedtagPrefix+key] = val
+		treeTagSet[userDefinedTagPrefix+key] = val
 	}
 
 	if tagNode == nil {
@@ -445,8 +445,8 @@ func (c *TreeClient) GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[st
 	tags := make(map[string]string)
 
 	for key, val := range node.Meta {
-		if strings.HasPrefix(key, userDefinedtagPrefix) {
-			tags[strings.TrimPrefix(key, userDefinedtagPrefix)] = val
+		if strings.HasPrefix(key, userDefinedTagPrefix) {
+			tags[strings.TrimPrefix(key, userDefinedTagPrefix)] = val
 		}
 	}
 
@@ -464,7 +464,7 @@ func (c *TreeClient) PutBucketTagging(ctx context.Context, cnrID cid.ID, tagSet 
 	treeTagSet[fileNameKV] = bucketTaggingFilename
 
 	for key, val := range tagSet {
-		treeTagSet[userDefinedtagPrefix+key] = val
+		treeTagSet[userDefinedTagPrefix+key] = val
 	}
 
 	if isErrNotFound {
