@@ -25,6 +25,8 @@ potentially).
    3. [Session tokens](#session-tokens)
    4. [Containers policy](#containers-policy)
 3. [Obtainment of a secret](#obtainment-of-a-secret-access-key)
+4. [Generate presigned url](#generate-presigned-url)
+
 ## Generation of wallet
 
 To generate a wallet for a gateway, run the following command:
@@ -260,4 +262,42 @@ Enter password for gate-wallet.json >
 {
   "secret_access_key": "438bbd8243060e1e1c9dd4821756914a6e872ce29bf203b68f81b140ac91231c"
 }
+```
+
+
+## Generate presigned URL
+
+You can generate [presigned url](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html) 
+using AWS credentials from `~/.aws/credentials` (you can specify profile using the `--profile` flag) 
+with the following command:
+
+```shell
+$ neofs-authmate generate-presigned-url --endpoint http://localhost:8084 \
+  --method get --bucket presigned --object obj --lifetime 30s
+  
+{
+  "URL": "http://localhost:8084/presigned/obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=6UpmiuYspPLMWfyhEKYmZQSsTGkFLS5MhQVdsda3fhz908Hw9eo9urTmaJtfvHMHUpY8SWAptk61bns2Js8f1M5tZ%2F20220615%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20220615T084203Z&X-Amz-Expires=30&X-Amz-SignedHeaders=host&X-Amz-Signature=47f74d4b84566708a17dded05cce732690745f141235215104ad051e265e3c59"
+}
+```
+
+You can also provide credential explicitly:
+
+```shell
+$ neofs-authmate generate-presigned-url --endpoint http://localhost:8084 \
+  --method put --bucket presigned --object obj --lifetime 12h \
+  --region ru --aws-secret-access-key c2d65ef2980f03f4f495bdebedeeae760496697880d61d106bb9a4e5cd2e0607 \
+  --aws-access-key-id ETaA2CadPcA7bAkLsML2PbTudXY8uRt2PDjCCwkvRv9s0FDCxWDXYc1SA1vKv8KbyCNsLY2AmAjJ92Vz5rgvsFCy
+
+{
+  "URL": "http://localhost:8084/presigned/obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ETaA2CadPcA7bAkLsML2PbTudXY8uRt2PDjCCwkvRv9s0FDCxWDXYc1SA1vKv8KbyCNsLY2AmAjJ92Vz5rgvsFCy%2F20220615%2Fru%2Fs3%2Faws4_request&X-Amz-Date=20220615T084455Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&X-Amz-Signature=ac92aecc3787eeed03922ea82af082091c806f1bb58a7101602ed21369815d04"
+}
+```
+
+### AWS CLI
+You can also can get the presigned URL (only for GET) using aws cli v2:
+
+```shell
+$ aws s3 --endpoint http://localhost:8084 presign s3://pregigned/obj 
+
+http://localhost:8084/pregigned/obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=6UpmiuYspPLMWfyhEKYmZQSsTGkFLS5MhQVdsda3fhz908Hw9eo9urTmaJtfvHMHUpY8SWAptk61bns2Js8f1M5tZ%2F20220615%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20220615T072348Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=b82c13952534b1bba699a718f2d42d135c2833a1e64030d4ce0e198af46551d4
 ```
