@@ -4,6 +4,7 @@
 REPO ?= $(shell go list -m)
 VERSION ?= $(shell git describe --tags 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 GO_VERSION ?= 1.17
+LINT_VERSION ?= 1.46.2
 BINDIR = bin
 
 # Binaries to build
@@ -15,7 +16,7 @@ REPO_BASENAME = $(shell basename `go list -m`)
 HUB_IMAGE ?= "nspccdev/$(REPO_BASENAME)"
 HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 
-.PHONY: help all dep docker/ clean format test cover lint docker/lint image-push image dirty-image
+.PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format image image-push dirty-image lint docker/lint version clean protoc
 
 # Make all binaries
 all: $(BINS)
@@ -64,8 +65,6 @@ cover:
 format:
 	@echo "⇒ Processing gofmt check"
 	@gofmt -s -w ./
-	@echo "⇒ Processing goimports check"
-	@goimports -w ./
 
 # Build clean Docker image
 image: dep
@@ -102,21 +101,11 @@ docker/lint:
 	-v `pwd`:/src \
 	-u `stat -c "%u:%g" .` \
 	--env HOME=/src \
-	golangci/golangci-lint:v1.40 bash -c 'cd /src/ && make lint'
+	golangci/golangci-lint:v$(LINT_VERSION) bash -c 'cd /src/ && make lint'
 
 # Show current version
 version:
 	@echo $(VERSION)
-
-# Show this help prompt
-help:
-	@echo '  Usage:'
-	@echo ''
-	@echo '    make <target>'
-	@echo ''
-	@echo '  Targets:'
-	@echo ''
-	@awk '/^#/{ comment = substr($$0,3) } comment && /^[a-zA-Z][a-zA-Z0-9_-]+ ?:/{ print "   ", $$1, comment }' $(MAKEFILE_LIST) | column -t -s ':' | grep -v 'IGNORE' | sort -u
 
 # Clean up
 clean:
