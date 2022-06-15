@@ -8,8 +8,9 @@ NeoFS S3 gateway provides API compatible with Amazon S3 cloud storage service.
 
 Or you can call `make` to build it from the cloned repository (the binary will
 end up in `bin/neofs-s3-gw` with authmate helper in `bin/neofs-authmate`).
+To build binaries in clean docker environment, call `make docker/all`.
 
-Notable make targets:
+Other notable make targets:
 
 ```
 dep          Check and ensure dependencies
