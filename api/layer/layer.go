@@ -92,9 +92,10 @@ type (
 
 	// ObjectVersion stores object version info.
 	ObjectVersion struct {
-		BktInfo    *data.BucketInfo
-		ObjectName string
-		VersionID  string
+		BktInfo               *data.BucketInfo
+		ObjectName            string
+		VersionID             string
+		NoErrorOnDeleteMarker bool
 	}
 
 	// RangeParams stores range header request parameters.
@@ -114,9 +115,8 @@ type (
 	}
 
 	DeleteObjectParams struct {
-		BktInfo     *data.BucketInfo
-		BktSettings *data.BucketSettings
-		Objects     []*VersionedObject
+		BktInfo *data.BucketInfo
+		Objects []*VersionedObject
 	}
 
 	// PutSettingsParams stores object copy request parameters.
@@ -474,15 +474,35 @@ func getRandomOID() (*oid.ID, error) {
 }
 
 // DeleteObject removes all objects with the passed nice name.
-func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if len(obj.VersionID) == 0 || obj.VersionID == UnversionedObjectVersionID {
+func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) *VersionedObject {
+	if len(obj.VersionID) == 0 {
+		obj.VersionID = UnversionedObjectVersionID
+	}
+	objVersion := &ObjectVersion{
+		BktInfo:               bkt,
+		ObjectName:            obj.Name,
+		VersionID:             obj.VersionID,
+		NoErrorOnDeleteMarker: true,
+	}
+
+	var nodeVersion *data.NodeVersion
+	nodeVersion, obj.Error = n.getNodeVersion(ctx, objVersion)
+
+	if obj.VersionID == UnversionedObjectVersionID {
+		if obj.Error == nil {
+			if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
+				return obj
+			}
+		} else if !errors.IsS3Error(obj.Error, errors.ErrNoSuchKey) {
+			return obj
+		}
+
 		randOID, err := getRandomOID()
 		if err != nil {
 			obj.Error = fmt.Errorf("couldn't get random oid: %w", err)
 			return obj
 		}
 
-		obj.DeleteMarkVersion = UnversionedObjectVersionID
 		newVersion := &data.NodeVersion{
 			BaseNodeVersion: data.BaseNodeVersion{
 				OID:      *randOID,
@@ -495,24 +515,21 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			IsUnversioned: true,
 		}
 
-		if len(obj.VersionID) == 0 && settings.VersioningEnabled {
-			newVersion.IsUnversioned = false
-			obj.DeleteMarkVersion = randOID.EncodeToString()
-		}
-
 		if obj.Error = n.treeService.AddVersion(ctx, &bkt.CID, newVersion); obj.Error != nil {
 			return obj
 		}
 
 		n.namesCache.Delete(bkt.Name + "/" + obj.Name)
 	} else {
-		versions, err := n.treeService.GetVersions(ctx, &bkt.CID, obj.Name)
-		if err != nil {
-			obj.Error = err
+		if obj.Error != nil {
 			return obj
 		}
 
-		if obj.DeleteMarkVersion, obj.Error = n.removeVersionIfFound(ctx, bkt, versions, obj); obj.Error != nil {
+		if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
+			return obj
+		}
+
+		if obj.Error = n.treeService.RemoveVersion(ctx, &bkt.CID, nodeVersion.ID); obj.Error != nil {
 			return obj
 		}
 	}
@@ -522,29 +539,18 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	return obj
 }
 
-func (n *layer) removeVersionIfFound(ctx context.Context, bkt *data.BucketInfo, versions []*data.NodeVersion, obj *VersionedObject) (string, error) {
-	for _, version := range versions {
-		if version.OID.EncodeToString() != obj.VersionID {
-			continue
-		}
-
-		var deleteMarkVersion string
-		if version.DeleteMarker != nil {
-			deleteMarkVersion = obj.VersionID
-		} else if err := n.objectDelete(ctx, bkt, version.OID); err != nil {
-			return deleteMarkVersion, err
-		}
-
-		return deleteMarkVersion, n.treeService.RemoveVersion(ctx, &bkt.CID, version.ID)
+func (n *layer) removeOldVersion(ctx context.Context, bkt *data.BucketInfo, nodeVersion *data.NodeVersion, obj *VersionedObject) (string, error) {
+	if nodeVersion.DeleteMarker != nil {
+		return obj.VersionID, nil
 	}
 
-	return "", errors.GetAPIError(errors.ErrNoSuchVersion)
+	return "", n.objectDelete(ctx, bkt, nodeVersion.OID)
 }
 
 // DeleteObjects from the storage.
 func (n *layer) DeleteObjects(ctx context.Context, p *DeleteObjectParams) ([]*VersionedObject, error) {
 	for i, obj := range p.Objects {
-		p.Objects[i] = n.deleteObject(ctx, p.BktInfo, p.BktSettings, obj)
+		p.Objects[i] = n.deleteObject(ctx, p.BktInfo, obj)
 	}
 
 	return p.Objects, nil

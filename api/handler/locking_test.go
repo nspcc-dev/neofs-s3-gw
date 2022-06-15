@@ -594,6 +594,6 @@ func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
 	if w.Code != status {
 		resp, err := io.ReadAll(w.Result().Body)
 		require.NoError(t, err)
-		require.Fail(t, string(resp))
+		require.Failf(t, "unexpected status", "expected: %d, actual: %d, resp: '%s'", status, w.Code, string(resp))
 	}
 }
