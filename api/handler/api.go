@@ -24,7 +24,7 @@ type (
 
 	// Config contains data which handler needs to keep.
 	Config struct {
-		DefaultPolicy      *netmap.PlacementPolicy
+		DefaultPolicy      netmap.PlacementPolicy
 		DefaultMaxAge      int
 		NotificatorEnabled bool
 	}

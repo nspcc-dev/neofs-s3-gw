@@ -145,7 +145,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 
 	idCnr, err := n.neoFS.CreateContainer(ctx, PrmContainerCreate{
 		Creator:              bktInfo.Owner,
-		Policy:               *p.Policy,
+		Policy:               p.Policy,
 		Name:                 p.Name,
 		SessionToken:         p.SessionToken,
 		AdditionalAttributes: attributes,
