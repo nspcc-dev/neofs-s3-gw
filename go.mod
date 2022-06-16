@@ -11,10 +11,11 @@ require (
 	github.com/nspcc-dev/neo-go v0.98.2
 	github.com/nspcc-dev/neofs-api-go/v2 v2.13.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.5
+	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.18.1
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
