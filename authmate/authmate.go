@@ -159,7 +159,7 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 
 	cnrID, err := a.neoFS.CreateContainer(ctx, prm)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create container in NeoFS: %w", err)
 	}
 
 	return cnrID, nil
