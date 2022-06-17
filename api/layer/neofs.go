@@ -7,9 +7,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
+	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -34,7 +34,7 @@ type PrmContainerCreate struct {
 	SessionToken *session.Container
 
 	// Basic ACL of the container.
-	BasicACL acl.BasicACL
+	BasicACL acl.Basic
 
 	// Attributes for optional parameters.
 	AdditionalAttributes [][2]string
