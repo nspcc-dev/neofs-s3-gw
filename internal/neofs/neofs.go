@@ -15,9 +15,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/acl"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
+	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -102,12 +102,14 @@ func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Contain
 	return res, nil
 }
 
+var basicACLZero acl.Basic
+
 // CreateContainer implements neofs.NeoFS interface method.
 //
 // If prm.BasicACL is zero, 'eacl-public-read-write' is used.
 func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (*cid.ID, error) {
-	if prm.BasicACL == 0 {
-		prm.BasicACL = acl.EACLPublicBasicRule
+	if prm.BasicACL == basicACLZero {
+		prm.BasicACL = acl.PublicRWExtended
 	}
 
 	// fill container structure
@@ -537,11 +539,16 @@ func (x *AuthmateNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (
 
 // CreateContainer implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (*cid.ID, error) {
+	basicACL := acl.Private
+	// allow reading objects to OTHERS in order to provide read access to S3 gateways
+	basicACL.AllowOp(acl.OpObjectGet, acl.RoleOthers)
+	basicACL.MakeSticky()
+
 	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
 		Creator:  prm.Owner,
 		Policy:   prm.Policy,
 		Name:     prm.FriendlyName,
-		BasicACL: 0b0011_1100_1000_1100_1000_1100_1100_1110, // 0x3C8C8CCE
+		BasicACL: basicACL,
 	})
 }
 
