@@ -135,17 +135,19 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name               string
-		Policy             netmap.PlacementPolicy
-		EACL               *eacl.Table
-		SessionToken       *session.Container
-		LocationConstraint string
-		ObjectLockEnabled  bool
+		Name                     string
+		Policy                   netmap.PlacementPolicy
+		EACL                     *eacl.Table
+		SessionContainerCreation *session.Container
+		SessionEACL              *session.Container
+		LocationConstraint       string
+		ObjectLockEnabled        bool
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {
-		BktInfo *data.BucketInfo
-		EACL    *eacl.Table
+		BktInfo      *data.BucketInfo
+		EACL         *eacl.Table
+		SessionToken *session.Container
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
@@ -368,7 +370,7 @@ func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*Bu
 
 // PutBucketACL puts bucket acl by name.
 func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) error {
-	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL)
+	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL, param.SessionToken)
 }
 
 // ListBuckets returns all user containers. The name of the bucket is a container
@@ -630,7 +632,7 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 		return nil, err
 	}
 
-	if p.SessionToken != nil && session.IssuedBy(*p.SessionToken, bktInfo.Owner) {
+	if p.SessionContainerCreation != nil && session.IssuedBy(*p.SessionContainerCreation, bktInfo.Owner) {
 		return nil, errors.GetAPIError(errors.ErrBucketAlreadyOwnedByYou)
 	}
 

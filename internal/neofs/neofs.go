@@ -137,7 +137,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	cnr := container.New(cnrOptions...)
-	cnr.SetSessionToken(prm.SessionToken)
 
 	if prm.Name != "" {
 		container.SetNativeName(cnr, prm.Name)
@@ -146,6 +145,10 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	var prmPut pool.PrmContainerPut
 	prmPut.SetContainer(*cnr)
 	prmPut.SetWaitParams(x.await)
+
+	if prm.SessionToken != nil {
+		prmPut.WithinSession(*prm.SessionToken)
+	}
 
 	// send request to save the container
 	idCnr, err := x.pool.PutContainer(ctx, prmPut)
@@ -170,10 +173,14 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table) error {
+func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error {
 	var prm pool.PrmContainerSetEACL
 	prm.SetTable(table)
 	prm.SetWaitParams(x.await)
+
+	if sessionToken != nil {
+		prm.WithinSession(*sessionToken)
+	}
 
 	err := x.pool.SetEACL(ctx, prm)
 	if err != nil {

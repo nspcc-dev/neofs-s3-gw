@@ -147,11 +147,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
 		}
-		newEaclTable.SetSessionToken(sessionTokenEACL)
 
 		p := &layer.PutBucketACLParams{
-			BktInfo: dstBktInfo,
-			EACL:    newEaclTable,
+			BktInfo:      dstBktInfo,
+			EACL:         newEaclTable,
+			SessionToken: sessionTokenEACL,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
