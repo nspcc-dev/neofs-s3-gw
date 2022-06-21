@@ -147,7 +147,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Creator:              bktInfo.Owner,
 		Policy:               p.Policy,
 		Name:                 p.Name,
-		SessionToken:         p.SessionToken,
+		SessionToken:         p.SessionContainerCreation,
 		AdditionalAttributes: attributes,
 	})
 	if err != nil {
@@ -156,7 +156,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 
 	bktInfo.CID = *idCnr
 
-	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL); err != nil {
+	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL, p.SessionEACL); err != nil {
 		return nil, err
 	}
 
@@ -170,15 +170,10 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	return bktInfo, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table) error {
+func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionToken *session.Container) error {
 	table.SetCID(idCnr)
 
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		table.SetSessionToken(boxData.Gate.SessionTokenForSetEACL())
-	}
-
-	return n.neoFS.SetContainerEACL(ctx, *table)
+	return n.neoFS.SetContainerEACL(ctx, *table, sessionToken)
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table, error) {

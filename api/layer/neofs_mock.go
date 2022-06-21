@@ -82,7 +82,6 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	}
 
 	cnr := container.New(opts...)
-	cnr.SetSessionToken(prm.SessionToken)
 
 	if prm.Name != "" {
 		container.SetNativeName(cnr, prm.Name)

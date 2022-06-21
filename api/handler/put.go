@@ -250,7 +250,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
 		}
-		newEaclTable.SetSessionToken(sessionTokenEACL)
 	}
 
 	if tagSet != nil {
@@ -262,8 +261,9 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if newEaclTable != nil {
 		p := &layer.PutBucketACLParams{
-			BktInfo: bktInfo,
-			EACL:    newEaclTable,
+			BktInfo:      bktInfo,
+			EACL:         newEaclTable,
+			SessionToken: sessionTokenEACL,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
@@ -382,11 +382,10 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if newEaclTable != nil {
-		newEaclTable.SetSessionToken(sessionTokenEACL)
-
 		p := &layer.PutBucketACLParams{
-			BktInfo: bktInfo,
-			EACL:    newEaclTable,
+			BktInfo:      bktInfo,
+			EACL:         newEaclTable,
+			SessionToken: sessionTokenEACL,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
@@ -609,16 +608,16 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	boxData, err := layer.GetBoxData(r.Context())
 	if err == nil {
 		policies = boxData.Policies
-		p.SessionToken = boxData.Gate.SessionTokenForPut()
-		p.EACL.SetSessionToken(boxData.Gate.SessionTokenForSetEACL())
+		p.SessionContainerCreation = boxData.Gate.SessionTokenForPut()
+		p.SessionEACL = boxData.Gate.SessionTokenForSetEACL()
 	}
 
-	if p.SessionToken == nil {
+	if p.SessionContainerCreation == nil {
 		h.logAndSendError(w, "couldn't find session token for put", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
 		return
 	}
 
-	if p.EACL.SessionToken() == nil {
+	if p.SessionEACL == nil {
 		h.logAndSendError(w, "couldn't find session token for setEACL", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
 		return
 	}

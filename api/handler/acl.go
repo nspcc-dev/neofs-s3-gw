@@ -236,11 +236,10 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 		return false, fmt.Errorf("could not translate ast to table: %w", err)
 	}
 
-	table.SetSessionToken(sessionToken)
-
 	p := &layer.PutBucketACLParams{
-		BktInfo: bktInfo,
-		EACL:    table,
+		BktInfo:      bktInfo,
+		EACL:         table,
+		SessionToken: sessionToken,
 	}
 
 	if err = h.obj.PutBucketACL(r.Context(), p); err != nil {

@@ -162,10 +162,11 @@ type NeoFS interface {
 	// prevented the containers from being listed.
 	UserContainers(context.Context, user.ID) ([]cid.ID, error)
 
-	// SetContainerEACL saves the eACL table of the container in NeoFS.
+	// SetContainerEACL saves the eACL table of the container in NeoFS. The
+	// extended ACL is modified within session if session token is not nil.
 	//
 	// It returns any error encountered which prevented the eACL from being saved.
-	SetContainerEACL(context.Context, eacl.Table) error
+	SetContainerEACL(context.Context, eacl.Table, *session.Container) error
 
 	// ContainerEACL reads the container eACL from NeoFS by the container ID.
 	//
