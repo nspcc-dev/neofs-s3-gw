@@ -180,12 +180,6 @@ func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table
 	return n.neoFS.ContainerEACL(ctx, idCnr)
 }
 
-func (n *layer) deleteContainer(ctx context.Context, idCnr cid.ID) error {
-	var sessionToken *session.Container
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForDelete()
-	}
-
+func (n *layer) deleteContainer(ctx context.Context, idCnr cid.ID, sessionToken *session.Container) error {
 	return n.neoFS.DeleteContainer(ctx, idCnr, sessionToken)
 }
