@@ -192,9 +192,9 @@ func EncodeToResponse(w http.ResponseWriter, response interface{}) error {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(xmlHeader); err != nil {
-		return err
+		return fmt.Errorf("write headers: %w", err)
 	} else if err = xml.NewEncoder(w).Encode(response); err != nil {
-		return err
+		return fmt.Errorf("encode xml response: %w", err)
 	}
 
 	return nil

@@ -24,7 +24,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 	)
 
 	if err := xml.NewDecoder(tee).Decode(cors); err != nil {
-		return err
+		return fmt.Errorf("xml decode cors: %w", err)
 	}
 
 	if cors.CORSRules == nil {
@@ -44,12 +44,11 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		Size:     int64(buf.Len()),
 	}
 
-	_, err := n.putSystemObjectIntoNeoFS(ctx, s)
-	if err != nil {
-		return err
+	if _, err := n.putSystemObjectIntoNeoFS(ctx, s); err != nil {
+		return fmt.Errorf("put system object: %w", err)
 	}
 
-	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, s.ObjName), cors); err != nil {
+	if err := n.systemCache.PutCORS(systemObjectKey(p.BktInfo, s.ObjName), cors); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 

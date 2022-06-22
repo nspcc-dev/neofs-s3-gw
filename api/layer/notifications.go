@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -20,7 +21,7 @@ type PutBucketNotificationConfigurationParams struct {
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
 	confXML, err := xml.Marshal(p.Configuration)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal notify configuration: %w", err)
 	}
 
 	s := &PutSystemObjectParams{
@@ -68,7 +69,7 @@ func (n *layer) getNotificationConf(ctx context.Context, bkt *data.BucketInfo, s
 	conf := &data.NotificationConfiguration{}
 
 	if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal notify configuration: %w", err)
 	}
 
 	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(bkt, sysName), conf); err != nil {

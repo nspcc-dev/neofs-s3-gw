@@ -189,7 +189,7 @@ func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPo
 	for locationConstraint, placementPolicy := range policy {
 		parsedPolicy, err := checkPolicy(placementPolicy)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("check placement policy: %w", err)
 		}
 
 		result = append(result, &accessbox.AccessBox_ContainerPolicy{
@@ -211,22 +211,22 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	policies, err := preparePolicy(options.ContainerPolicies)
 	if err != nil {
-		return err
+		return fmt.Errorf("prepare policies: %w", err)
 	}
 
 	lifetime.Iat, lifetime.Exp, err = a.neoFS.TimeToEpoch(ctx, time.Now().Add(options.Lifetime))
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch time to epoch: %w", err)
 	}
 
 	gatesData, err := createTokens(options, lifetime)
 	if err != nil {
-		return err
+		return fmt.Errorf("create tokens: %w", err)
 	}
 
 	box, secrets, err := accessbox.PackTokens(gatesData)
 	if err != nil {
-		return err
+		return fmt.Errorf("pack tokens: %w", err)
 	}
 
 	box.ContainerPolicy = policies
@@ -239,7 +239,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		zap.String("placement_policy", options.Container.PlacementPolicy))
 	id, err := a.checkContainer(ctx, options.Container, idOwner)
 	if err != nil {
-		return err
+		return fmt.Errorf("check container: %w", err)
 	}
 
 	a.log.Info("store bearer token into NeoFS",
@@ -283,7 +283,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		defer file.Close()
 		if _, err = file.WriteString(fmt.Sprintf("\n[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
 			profileName, accessKeyID, secrets.AccessKey)); err != nil {
-			return err
+			return fmt.Errorf("fails to write to file: %w", err)
 		}
 	}
 	return nil
@@ -369,7 +369,7 @@ func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetim
 	for _, gateKey := range gatesKeys {
 		tkn, err := buildBearerToken(key, table, lifetime, gateKey)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("build bearer token: %w", err)
 		}
 		bearerTokens = append(bearerTokens, tkn)
 	}
@@ -400,7 +400,7 @@ func buildSessionTokens(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []s
 		for i, ctx := range ctxs {
 			tkn, err := buildSessionToken(key, lifetime, ctx, gateKey)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("build session token: %w", err)
 			}
 			tkns[i] = tkn
 		}

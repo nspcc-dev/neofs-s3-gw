@@ -108,7 +108,7 @@ func (n *layer) putSystemObjectIntoNeoFS(ctx context.Context, p *PutSystemObject
 
 			attrs, err := n.attributesFromLock(ctx, p.Lock)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("get lock attributes: %w", err)
 			}
 
 			prm.Attributes = append(prm.Attributes, attrs...)
@@ -191,7 +191,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	cors := &data.CORSConfiguration{}
 
 	if err = xml.Unmarshal(obj.Payload(), &cors); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal cors: %w", err)
 	}
 
 	if err = n.systemCache.PutCORS(systemObjectKey(bkt, sysName), cors); err != nil {
@@ -262,7 +262,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		}
 		settings.IsNoneStatus = true
 	} else if err = json.Unmarshal(obj.Payload(), settings); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal settings: %w", err)
 	}
 
 	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {
@@ -308,7 +308,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 	if !lock.Until.IsZero() {
 		_, exp, err := n.neoFS.TimeToEpoch(ctx, lock.Until)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
 
 		attrs := [][2]string{

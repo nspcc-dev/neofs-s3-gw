@@ -340,7 +340,7 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwne
 func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInfo, error) {
 	name, err := url.QueryUnescape(name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unescape bucket name: %w", err)
 	}
 
 	if bktInfo := n.bucketCache.Get(name); bktInfo != nil {
@@ -360,7 +360,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*BucketACL, error) {
 	eACL, err := n.GetContainerEACL(ctx, bktInfo.CID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get container eacl: %w", err)
 	}
 
 	return &BucketACL{

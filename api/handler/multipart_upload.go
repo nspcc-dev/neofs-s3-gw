@@ -182,7 +182,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		UploadID: info.Headers[layer.UploadIDAttributeName],
 	}
 
-	if err := api.EncodeToResponse(w, resp); err != nil {
+	if err = api.EncodeToResponse(w, resp); err != nil {
 		h.logAndSendError(w, "could not encode InitiateMultipartUploadResponse to response", reqInfo, err, additional...)
 		return
 	}
@@ -360,7 +360,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	)
 
 	reqBody := new(CompleteMultipartUpload)
-	if err := xml.NewDecoder(r.Body).Decode(reqBody); err != nil {
+	if err = xml.NewDecoder(r.Body).Decode(reqBody); err != nil {
 		h.logAndSendError(w, "could not read complete multipart upload xml", reqInfo,
 			errors.GetAPIError(errors.ErrMalformedXML), additional...)
 		return
@@ -599,7 +599,7 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		}
 	)
 
-	if err := h.obj.AbortMultipartUpload(r.Context(), p); err != nil {
+	if err = h.obj.AbortMultipartUpload(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not abort multipart upload", reqInfo, err, additional...)
 		return
 	}

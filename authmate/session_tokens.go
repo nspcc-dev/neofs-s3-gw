@@ -25,7 +25,7 @@ func (c *sessionTokenContext) UnmarshalJSON(data []byte) (err error) {
 	var m sessionTokenModel
 
 	if err = json.Unmarshal(data, &m); err != nil {
-		return err
+		return fmt.Errorf("unmarshal session token context: %w", err)
 	}
 
 	switch m.Verb {

@@ -178,7 +178,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 
 	box, err := c.cli.GetBox(r.Context(), *addr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get box: %w", err)
 	}
 
 	clonedRequest := cloneRequest(r, authHdr)
@@ -220,7 +220,7 @@ func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
 
 	box, err := c.cli.GetBox(r.Context(), addr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get box: %w", err)
 	}
 
 	secret := box.Gate.AccessKey
@@ -340,12 +340,12 @@ func prepareForm(form *multipart.Form) error {
 			if len(v) > 0 {
 				field, err := v[0].Open()
 				if err != nil {
-					return err
+					return fmt.Errorf("file header open: %w", err)
 				}
 
 				data, err := io.ReadAll(field)
 				if err != nil {
-					return err
+					return fmt.Errorf("read field: %w", err)
 				}
 				form.Value[lowerKey] = []string{string(data)}
 			}

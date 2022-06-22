@@ -159,7 +159,7 @@ func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, er
 
 	key, err := keys.NewPublicKeyFromBytes(btoken.GetSignature().GetKey(), elliptic.P256())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("public key from bytes: %w", err)
 	}
 
 	return key, nil
@@ -186,7 +186,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
 		}
-	} else if err := xml.NewDecoder(r.Body).Decode(list); err != nil {
+	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
@@ -291,7 +291,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
 		}
-	} else if err := xml.NewDecoder(r.Body).Decode(list); err != nil {
+	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
@@ -399,7 +399,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	bktPolicy := &bucketPolicy{Bucket: reqInfo.BucketName}
-	if err := json.NewDecoder(r.Body).Decode(bktPolicy); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(bktPolicy); err != nil {
 		h.logAndSendError(w, "could not parse bucket policy", reqInfo, err)
 		return
 	}
@@ -437,13 +437,13 @@ func parseACLHeaders(header http.Header, key *keys.PublicKey) (*AccessControlPol
 	}
 
 	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, header, api.AmzGrantFullControl); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("add grantees full control: %w", err)
 	}
 	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, header, api.AmzGrantRead); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("add grantees read: %w", err)
 	}
 	if acp.AccessControlList, err = addGrantees(acp.AccessControlList, header, api.AmzGrantWrite); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("add grantees write: %w", err)
 	}
 
 	return acp, nil
@@ -457,12 +457,12 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 
 	permission, err := grantHdrToPermission(hdr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse header: %w", err)
 	}
 
 	grantees, err := parseGrantee(grant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse grantee: %w", err)
 	}
 
 	for _, grantee := range grantees {
@@ -502,7 +502,7 @@ func parseGrantee(grantees string) ([]*Grantee, error) {
 
 		grantee, err := formGrantee(split2[0], split2[1])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("form grantee: %w", err)
 		}
 		result = append(result, grantee)
 	}
@@ -779,7 +779,7 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 	for _, resource := range ast.Resources {
 		records, err := formRecords(resource.Operations, resource)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("form records: %w", err)
 		}
 		for _, rec := range records {
 			table.AddRecord(rec)
@@ -802,7 +802,7 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 			for _, user := range astOp.Users {
 				pk, err := keys.NewPublicKeyFromString(user)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("public key from string: %w", err)
 				}
 				eacl.AddFormedTarget(record, eacl.RoleUser, (ecdsa.PublicKey)(*pk))
 			}
@@ -811,7 +811,7 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 			if len(resource.Version) != 0 {
 				var id oid.ID
 				if err := id.DecodeString(resource.Version); err != nil {
-					return nil, err
+					return nil, fmt.Errorf("parse object version (oid): %w", err)
 				}
 				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
 			}
@@ -1256,7 +1256,7 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 
 	ownerKey, err := keys.NewPublicKeyFromString(acp.Owner.ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("public key from string: %w", err)
 	}
 
 	for _, grant := range acp.AccessControlList {
@@ -1269,7 +1269,7 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 
 		getRecord, err := getRecordFunction(grant.Grantee)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("record func from grantee: %w", err)
 		}
 		for _, op := range permissionToOperations(grant.Permission) {
 			table.AddRecord(getRecord(op))

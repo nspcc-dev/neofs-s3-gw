@@ -87,16 +87,16 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 
 	box, err := c.getAccessBox(ctx, addr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access box: %w", err)
 	}
 
 	cachedBox, err = box.GetBox(c.key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get box: %w", err)
 	}
 
 	if err = c.cache.Put(addr, cachedBox); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("put box into cache: %w", err)
 	}
 
 	return cachedBox, nil
@@ -111,7 +111,7 @@ func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.A
 	// decode access box
 	var box accessbox.AccessBox
 	if err = box.Unmarshal(data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarhal access box: %w", err)
 	}
 
 	return &box, nil
@@ -125,7 +125,7 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 	}
 	data, err := box.Marshal()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshall box: %w", err)
 	}
 
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
@@ -136,7 +136,7 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 		Payload:         data,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create object: %w", err)
 	}
 
 	var addr oid.Address

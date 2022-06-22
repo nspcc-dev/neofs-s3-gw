@@ -258,7 +258,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		h.log.Error("couldn't delete objects", fields...)
 	}
 
-	if err := api.EncodeToResponse(w, response); err != nil {
+	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "could not write response", reqInfo, err, zap.Array("objects", marshaler))
 		return
 	}

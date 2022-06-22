@@ -130,7 +130,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	// environment without hh disabling feature will ignore this attribute
 	// environment with hh disabling feature will set disabling = true if network config says so
 	if hhDisabled, err := isHomomorphicHashDisabled(ctx, x.pool); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("check homomorphic hash enabled: %w", err)
 	} else if hhDisabled {
 		cnrOptions = append(cnrOptions, container.WithAttribute(
 			"__NEOFS__DISABLE_HOMOMORPHIC_HASHING", "true"))
@@ -576,7 +576,7 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 func isHomomorphicHashDisabled(ctx context.Context, p *pool.Pool) (bool, error) {
 	ni, err := p.NetworkInfo(ctx)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("network info: %w", err)
 	}
 
 	// FIXME(@cthulhu-rider): parameter format hasn't been fixed in the protocol yet,

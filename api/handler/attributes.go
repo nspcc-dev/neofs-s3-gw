@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -176,7 +177,7 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 		case objectParts:
 			parts, err := formUploadAttributes(info, p.MaxParts, p.PartNumberMarker)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("form upload attributes: %w", err)
 			}
 			if parts != nil {
 				resp.ObjectParts = parts
@@ -210,7 +211,7 @@ func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectP
 			}
 			size, err := strconv.Atoi(nums[1])
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("parse part size: %w", err)
 			}
 			parts = append(parts, Part{PartNumber: num, Size: size})
 		}

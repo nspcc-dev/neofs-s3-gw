@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -153,7 +154,7 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 
 	conf, err := h.obj.GetBucketNotificationConfiguration(ctx, p.BktInfo)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get notification configuration: %w", err)
 	}
 	if conf.IsEmpty() {
 		return nil
