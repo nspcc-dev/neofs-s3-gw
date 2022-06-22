@@ -115,12 +115,12 @@ func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 
 	nc, err := nats.Connect(p.URL, ncopts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("connect to nats: %w", err)
 	}
 
 	js, err := nc.JetStream()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get jet stream: %w", err)
 	}
 
 	return &Controller{
@@ -141,7 +141,7 @@ func (c *Controller) Subscribe(ctx context.Context, topic string, handler layer.
 	c.mu.RUnlock()
 
 	if _, err := c.jsClient.AddStream(&nats.StreamConfig{Name: topic}); err != nil {
-		return err
+		return fmt.Errorf("add stream: %w", err)
 	}
 
 	if _, err := c.jsClient.ChanSubscribe(topic, ch); err != nil {

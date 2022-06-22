@@ -568,7 +568,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 		if err != nil {
 			return nil, err
 		}
-		if err := n.listsCache.Put(cacheKey, ids); err != nil {
+		if err = n.listsCache.Put(cacheKey, ids); err != nil {
 			n.log.Error("couldn't cache list of objects", zap.Error(err))
 		}
 	}

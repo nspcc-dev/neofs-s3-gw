@@ -101,7 +101,7 @@ func prepare() (context.Context, *zap.Logger) {
 	}
 
 	if log, err = zapConfig.Build(); err != nil {
-		panic(err)
+		panic(fmt.Errorf("create logger: %w", err))
 	}
 
 	return ctx, log
@@ -414,14 +414,14 @@ It will be ceil rounded to the nearest amount of epoch.`,
 			signer := v4.NewSigner(sess.Config.Credentials)
 			req, err := http.NewRequest(strings.ToUpper(methodFlag), fmt.Sprintf("%s/%s/%s", endpointFlag, bucketFlag, objectFlag), nil)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create new request: %w", err)
 			}
 
 			date := time.Now().UTC()
 			req.Header.Set(api.AmzDate, date.Format("20060102T150405Z"))
 
 			if _, err = signer.Presign(req, nil, "s3", *sess.Config.Region, lifetimeFlag, date); err != nil {
-				return err
+				return fmt.Errorf("presign: %w", err)
 			}
 
 			res := &struct{ URL string }{
@@ -447,7 +447,7 @@ func parsePolicies(val string) (authmate.ContainerPolicies, error) {
 
 	var policies authmate.ContainerPolicies
 	if err = json.Unmarshal(data, &policies); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal policies: %w", err)
 	}
 	if _, ok := policies[api.DefaultLocationConstraint]; ok {
 		return nil, fmt.Errorf("config overrides %s location constraint", api.DefaultLocationConstraint)
@@ -591,11 +591,11 @@ func createNeoFS(ctx context.Context, log *zap.Logger, key *ecdsa.PrivateKey, pe
 
 	p, err := pool.NewPool(prm)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create pool: %w", err)
 	}
 
 	if err = p.Dial(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
 	return neofs.NewAuthmateNeoFS(p), nil

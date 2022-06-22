@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -48,7 +49,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 		if client.IsErrContainerNotFound(err) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 		}
-		return nil, err
+		return nil, fmt.Errorf("get neofs container: %w", err)
 	}
 
 	info.Owner = *res.OwnerID()
@@ -151,13 +152,13 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		AdditionalAttributes: attributes,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create container: %w", err)
 	}
 
 	bktInfo.CID = *idCnr
 
 	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL, p.SessionEACL); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("set container eacl: %w", err)
 	}
 
 	if err = n.bucketCache.Put(bktInfo); err != nil {

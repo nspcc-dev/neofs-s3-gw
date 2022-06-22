@@ -44,9 +44,9 @@ func (r *BucketResolver) Resolve(ctx context.Context, name string) (*cid.ID, err
 		if r.next != nil {
 			return r.next.Resolve(ctx, name)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed resolve: %w", err)
 	}
-	return cnrID, err
+	return cnrID, nil
 }
 
 func NewResolver(order []string, cfg *Config) (*BucketResolver, error) {
@@ -56,7 +56,7 @@ func NewResolver(order []string, cfg *Config) (*BucketResolver, error) {
 
 	bucketResolver, err := newResolver(order[len(order)-1], cfg, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create resolver: %w", err)
 	}
 
 	for i := len(order) - 2; i >= 0; i-- {
@@ -65,7 +65,7 @@ func NewResolver(order []string, cfg *Config) (*BucketResolver, error) {
 
 		bucketResolver, err = newResolver(resolverName, cfg, next)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create resolver: %w", err)
 		}
 	}
 

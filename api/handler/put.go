@@ -113,7 +113,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 	)
 
 	if err := json.Unmarshal(data, &v); err != nil {
-		return err
+		return fmt.Errorf("unmarshal policy condition: %w", err)
 	}
 
 	switch v := v.(type) {
@@ -487,7 +487,7 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 	var newEaclTable *eacl.Table
 	key, err := h.bearerTokenIssuerKey(r.Context())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get bearer token issuer: %w", err)
 	}
 	objectACL, err := parseACLHeaders(r.Header, key)
 	if err != nil {

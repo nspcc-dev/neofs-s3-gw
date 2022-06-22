@@ -1,6 +1,9 @@
 package handler
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"fmt"
+)
 
 // ListBucketsResponse -- format for list buckets response.
 type ListBucketsResponse struct {
@@ -207,7 +210,7 @@ func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 	for _, t := range tokens {
 		if err := e.EncodeToken(t); err != nil {
-			return err
+			return fmt.Errorf("encode token: %w", err)
 		}
 	}
 

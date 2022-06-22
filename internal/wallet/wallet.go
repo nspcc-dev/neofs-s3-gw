@@ -28,7 +28,7 @@ func GetKeyFromPath(walletPath, addrStr string, password *string) (*keys.Private
 	}
 	w, err := wallet.NewWalletFromFile(walletPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse wallet: %w", err)
 	}
 
 	var addr util.Uint160

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -89,11 +91,13 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
+		h.log.Warn("get bucket info", zap.Error(err))
 		return
 	}
 
 	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
 	if err != nil {
+		h.log.Warn("get bucket cors", zap.Error(err))
 		return
 	}
 

@@ -422,8 +422,7 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) e
 	}
 
 	for _, info := range objects {
-		err := n.objectDelete(ctx, p.Bkt, info.ID)
-		if err != nil {
+		if err = n.objectDelete(ctx, p.Bkt, info.ID); err != nil {
 			return err
 		}
 	}

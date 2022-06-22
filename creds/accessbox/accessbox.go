@@ -99,7 +99,7 @@ func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	box := &AccessBox{}
 	ephemeralKey, err := keys.NewPrivateKey()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("create ephemeral key: %w", err)
 	}
 	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
 
@@ -143,7 +143,7 @@ func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 	for _, policy := range x.ContainerPolicy {
 		var cnrPolicy ContainerPolicy
 		if err := cnrPolicy.Policy.Unmarshal(policy.Policy); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unmarshal placement policy: %w", err)
 		}
 
 		cnrPolicy.LocationConstraint = policy.LocationConstraint
@@ -158,12 +158,12 @@ func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
 	tokens, err := x.GetTokens(owner)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get tokens: %w", err)
 	}
 
 	policy, err := x.GetPlacementPolicy()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get policy: %w", err)
 	}
 
 	return &Box{
@@ -187,7 +187,7 @@ func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateK
 
 		boxGate, err := encodeGate(ephemeralKey, gate.GateKey, tokens)
 		if err != nil {
-			return err
+			return fmt.Errorf("encode gate: %w", err)
 		}
 		x.Gates = append(x.Gates, boxGate)
 	}
@@ -197,12 +197,12 @@ func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateK
 func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens *Tokens) (*AccessBox_Gate, error) {
 	data, err := proto.Marshal(tokens)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encode tokens: %w", err)
 	}
 
 	encrypted, err := encrypt(ephemeralKey, ownerKey, data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ecrypt tokens: %w", err)
 	}
 
 	gate := new(AccessBox_Gate)
@@ -214,23 +214,23 @@ func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens 
 func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.PublicKey) (*GateData, error) {
 	data, err := decrypt(owner, sender, gate.Tokens)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decrypt tokens: %w", err)
 	}
 	tokens := new(Tokens)
-	if err := proto.Unmarshal(data, tokens); err != nil {
-		return nil, err
+	if err = proto.Unmarshal(data, tokens); err != nil {
+		return nil, fmt.Errorf("unmarshal tokens: %w", err)
 	}
 
 	var bearerTkn bearer.Token
 	if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal bearer token: %w", err)
 	}
 
 	sessionTkns := make([]*session.Container, len(tokens.SessionTokens))
 	for i, encSessionToken := range tokens.SessionTokens {
 		sessionTkn := new(session.Container)
-		if err := sessionTkn.Unmarshal(encSessionToken); err != nil {
-			return nil, err
+		if err = sessionTkn.Unmarshal(encSessionToken); err != nil {
+			return nil, fmt.Errorf("unmarshal session token: %w", err)
 		}
 		sessionTkns[i] = sessionTkn
 	}
@@ -268,12 +268,12 @@ func deriveKey(secret []byte) ([]byte, error) {
 func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
 	enc, err := getCipher(owner, sender)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get chiper: %w", err)
 	}
 
 	nonce := make([]byte, enc.NonceSize(), enc.NonceSize()+len(data)+enc.Overhead())
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
+	if _, err = rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("generate random nonce: %w", err)
 	}
 
 	return enc.Seal(nonce, nonce, data, nil), nil
@@ -282,7 +282,7 @@ func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 func decrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
 	dec, err := getCipher(owner, sender)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get chiper: %w", err)
 	}
 
 	if ld, ns := len(data), dec.NonceSize(); ld < ns {
@@ -296,12 +296,12 @@ func decrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey) (cipher.AEAD, error) {
 	secret, err := generateShared256(owner, sender)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generate shared key: %w", err)
 	}
 
 	key, err := deriveKey(secret)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("derive key: %w", err)
 	}
 
 	return chacha20poly1305.NewX(key)
