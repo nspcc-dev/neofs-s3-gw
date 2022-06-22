@@ -207,8 +207,11 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container) error {
 	var prm pool.PrmContainerDelete
 	prm.SetContainerID(id)
-	prm.SetSessionToken(*token)
 	prm.SetWaitParams(x.await)
+
+	if token != nil {
+		prm.SetSessionToken(*token)
+	}
 
 	err := x.pool.DeleteContainer(ctx, prm)
 	if err != nil {
