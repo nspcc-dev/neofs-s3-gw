@@ -490,6 +490,8 @@ func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams,
 			default:
 			}
 
+			// We have to make a copy of pointer to data.NodeVersion
+			// to get correct value in submitted task function.
 			func(node *data.NodeVersion) {
 				wg.Add(1)
 				err = pool.Submit(func() {
