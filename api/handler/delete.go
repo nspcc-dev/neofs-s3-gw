@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -271,7 +272,17 @@ func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{BktInfo: bktInfo}); err != nil {
+	var sessionToken *session.Container
+
+	boxData, err := layer.GetBoxData(r.Context())
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForDelete()
+	}
+
+	if err = h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{
+		BktInfo:      bktInfo,
+		SessionToken: sessionToken,
+	}); err != nil {
 		h.logAndSendError(w, "couldn't delete bucket", reqInfo, err)
 	}
 	w.WriteHeader(http.StatusNoContent)

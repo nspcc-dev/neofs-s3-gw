@@ -151,7 +151,8 @@ type (
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
-		BktInfo *data.BucketInfo
+		BktInfo      *data.BucketInfo
+		SessionToken *session.Container
 	}
 
 	// PutSystemObjectParams stores putSystemObject parameters.
@@ -658,5 +659,5 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	}
 
 	n.bucketCache.Delete(p.BktInfo.Name)
-	return n.deleteContainer(ctx, p.BktInfo.CID)
+	return n.deleteContainer(ctx, p.BktInfo.CID, p.SessionToken)
 }
