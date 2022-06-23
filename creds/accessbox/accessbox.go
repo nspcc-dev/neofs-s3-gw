@@ -271,7 +271,7 @@ func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 		return nil, fmt.Errorf("get chiper: %w", err)
 	}
 
-	nonce := make([]byte, enc.NonceSize(), enc.NonceSize()+len(data)+enc.Overhead())
+	nonce := make([]byte, enc.NonceSize())
 	if _, err = rand.Read(nonce); err != nil {
 		return nil, fmt.Errorf("generate random nonce: %w", err)
 	}
