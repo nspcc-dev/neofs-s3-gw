@@ -7,12 +7,14 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	objecttest "github.com/nspcc-dev/neofs-sdk-go/object/test"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func getTestConfig() *Config {
 	return &Config{
 		Size:     10,
 		Lifetime: 5 * time.Second,
+		Logger:   zap.NewExample(),
 	}
 }
 

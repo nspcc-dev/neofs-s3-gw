@@ -8,6 +8,7 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 const testingCacheLifetime = 5 * time.Second
@@ -17,6 +18,7 @@ func getTestObjectsListConfig() *Config {
 	return &Config{
 		Size:     testingCacheSize,
 		Lifetime: testingCacheLifetime,
+		Logger:   zap.NewExample(),
 	}
 }
 
