@@ -672,7 +672,25 @@ func triageExtendedObjects(allObjects []*data.ExtendedObjectInfo) (prefixes []st
 
 func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID, prefix, delimiter string) *data.ObjectInfo {
 	if objInfo := n.objCache.GetObject(newAddress(bktInfo.CID, obj)); objInfo != nil {
-		return objInfo
+		// that's the simplest solution
+		// consider doing something else
+		if !strings.HasPrefix(objInfo.Name, prefix) {
+			return nil
+		}
+		if len(delimiter) == 0 {
+			return objInfo
+		}
+		copiedObjInfo := *objInfo
+		tail := strings.TrimPrefix(copiedObjInfo.Name, prefix)
+		index := strings.Index(tail, delimiter)
+		if index >= 0 {
+			copiedObjInfo.IsDir = true
+			copiedObjInfo.Size = 0
+			copiedObjInfo.Headers = nil
+			copiedObjInfo.ContentType = ""
+			copiedObjInfo.Name = prefix + tail[:index+1]
+		}
+		return &copiedObjInfo
 	}
 
 	meta, err := n.objectHead(ctx, bktInfo, obj)
