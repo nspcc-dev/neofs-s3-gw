@@ -20,7 +20,7 @@ func TestConditionalHead(t *testing.T) {
 	require.NoError(t, err)
 
 	objName := "object"
-	createTestObject(ctx, t, tc, bktInfo, objName)
+	objInfo := createTestObject(ctx, t, tc, bktInfo, objName)
 
 	w, r := prepareTestRequest(t, bktName, objName, nil)
 	tc.Handler().HeadObjectHandler(w, r)
@@ -41,7 +41,8 @@ func TestConditionalHead(t *testing.T) {
 	assertStatus(t, w, http.StatusPreconditionFailed)
 
 	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfUnmodifiedSince, time.Now().UTC().Format(http.TimeFormat))
+	unmodifiedSince := objInfo.Created.Add(time.Minute)
+	r.Header.Set(api.IfUnmodifiedSince, unmodifiedSince.Format(http.TimeFormat))
 	tc.Handler().HeadObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
