@@ -53,15 +53,15 @@ func (tc *testContext) getObject(objectName, versionID string, needError bool) (
 	return extendedInfo.ObjectInfo, content.Bytes()
 }
 
-func (tc *testContext) deleteObject(objectName, versionID string) {
+func (tc *testContext) deleteObject(objectName, versionID string, settings *data.BucketSettings) {
 	p := &DeleteObjectParams{
-		BktInfo: tc.bktInfo,
+		BktInfo:  tc.bktInfo,
+		Settings: settings,
 		Objects: []*VersionedObject{
 			{Name: objectName, VersionID: versionID},
 		},
 	}
-	deletedObjects, err := tc.layer.DeleteObjects(tc.ctx, p)
-	require.NoError(tc.t, err)
+	deletedObjects := tc.layer.DeleteObjects(tc.ctx, p)
 	for _, obj := range deletedObjects {
 		require.NoError(tc.t, obj.Error)
 	}
@@ -230,7 +230,7 @@ func TestVersioningDeleteObject(t *testing.T) {
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
 
-	tc.deleteObject(tc.obj, "")
+	tc.deleteObject(tc.obj, "", settings)
 	tc.getObject(tc.obj, "", true)
 
 	tc.checkListObjects()
@@ -268,19 +268,19 @@ func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	objV3Content := []byte("content obj1 v3")
 	objV3Info := tc.putObject(objV3Content)
 
-	tc.deleteObject(tc.obj, objV2Info.Version())
+	tc.deleteObject(tc.obj, objV2Info.Version(), settings)
 	tc.getObject(tc.obj, objV2Info.Version(), true)
 
 	_, buffer3 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, objV3Content, buffer3)
 
-	tc.deleteObject(tc.obj, "")
+	tc.deleteObject(tc.obj, "", settings)
 	tc.getObject(tc.obj, "", true)
 
 	versions := tc.listVersions()
 	for _, ver := range versions.DeleteMarker {
 		if ver.IsLatest {
-			tc.deleteObject(tc.obj, ver.Object.Version())
+			tc.deleteObject(tc.obj, ver.Object.Version(), settings)
 		}
 	}
 
@@ -295,7 +295,10 @@ func TestNoVersioningDeleteObject(t *testing.T) {
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
 
-	tc.deleteObject(tc.obj, "")
+	settings, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
+	require.NoError(t, err)
+
+	tc.deleteObject(tc.obj, "", settings)
 	tc.getObject(tc.obj, "", true)
 	tc.checkListObjects()
 }

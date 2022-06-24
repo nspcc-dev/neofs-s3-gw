@@ -78,16 +78,14 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &layer.DeleteObjectParams{
-		BktInfo: bktInfo,
-		Objects: versionedObject,
+		BktInfo:  bktInfo,
+		Objects:  versionedObject,
+		Settings: bktSettings,
 	}
-	deletedObjects, err := h.obj.DeleteObjects(r.Context(), p)
+	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
 	deletedObject := deletedObjects[0]
-	if err == nil {
-		err = deletedObject.Error
-	}
-	if err != nil {
-		if isErrObjectLocked(err) {
+	if deletedObject.Error != nil {
+		if isErrObjectLocked(deletedObject.Error) {
 			h.logAndSendError(w, "object is locked", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
 			return
 		}
@@ -95,7 +93,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 			zap.String("request_id", reqInfo.RequestID),
 			zap.String("bucket_name", reqInfo.BucketName),
 			zap.String("object_name", reqInfo.ObjectName),
-			zap.Error(err))
+			zap.Error(deletedObject.Error))
 	}
 
 	var m *SendNotificationParams
@@ -198,6 +196,12 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
 	marshaler := zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, obj := range toRemove {
 			encoder.AppendString(obj.String())
@@ -206,14 +210,11 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	})
 
 	p := &layer.DeleteObjectParams{
-		BktInfo: bktInfo,
-		Objects: toRemove,
+		BktInfo:  bktInfo,
+		Objects:  toRemove,
+		Settings: bktSettings,
 	}
-	deletedObjects, err := h.obj.DeleteObjects(r.Context(), p)
-	if !requested.Quiet && err != nil {
-		h.logAndSendError(w, "couldn't delete objects", reqInfo, err)
-		return
-	}
+	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
 
 	var errs []error
 	for _, obj := range deletedObjects {
