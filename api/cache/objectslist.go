@@ -96,19 +96,11 @@ func (l *ObjectsListCache) GetVersions(key ObjectsListKey) []*data.NodeVersion {
 
 // Put puts a list of objects to cache.
 func (l *ObjectsListCache) Put(key ObjectsListKey, oids []oid.ID) error {
-	if len(oids) == 0 {
-		return fmt.Errorf("list is empty, cid: %s, prefix: %s", key.cid, key.prefix)
-	}
-
 	return l.cache.Set(key, oids)
 }
 
 // PutVersions puts a list of object versions to cache.
 func (l *ObjectsListCache) PutVersions(key ObjectsListKey, versions []*data.NodeVersion) error {
-	if len(versions) == 0 {
-		return fmt.Errorf("list versions is empty, cid: %s, prefix: %s", key.cid, key.prefix)
-	}
-
 	return l.cache.Set(key, versions)
 }
 
