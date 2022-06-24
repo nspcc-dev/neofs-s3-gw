@@ -1,142 +1,187 @@
 package handler
 
 import (
-	"context"
-	"io"
 	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	emptyVersion = ""
+)
+
 func TestDeleteObject(t *testing.T) {
-	ctx := context.Background()
 	tc := prepareHandlerContext(t)
 
-	bktName := "bucket-for-removal"
-	createTestBucket(ctx, t, tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(ctx, bktName)
-	require.NoError(t, err)
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
 
-	objName := "object"
-	objInfo := createTestObject(ctx, t, tc, bktInfo, objName)
+	checkFound(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	w, r := prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().DeleteObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNoContent)
-
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNotFound)
-
-	p := &layer.GetObjectParams{
-		BucketInfo: bktInfo,
-		ObjectInfo: objInfo,
-		Writer:     io.Discard,
-	}
-
-	err = tc.Layer().GetObject(ctx, p)
-	require.Error(t, err)
+	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo))
 }
 
 func TestDeleteObjectVersioned(t *testing.T) {
-	ctx := context.Background()
 	tc := prepareHandlerContext(t)
 
-	bktName := "bucket-for-removal"
-	createTestBucket(ctx, t, tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(ctx, bktName)
-	require.NoError(t, err)
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	bktInfo, objInfo := createVersionedBucketAndObject(t, tc, bktName, objName)
 
-	cfg := &VersioningConfiguration{Status: "Enabled"}
-	w, r := prepareTestRequest(t, bktName, "", cfg)
-	tc.Handler().PutBucketVersioningHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	checkFound(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	objName := "object"
-	objInfo := createTestObject(ctx, t, tc, bktInfo, objName)
+	checkFound(t, tc, bktName, objName, objInfo.Version())
+	deleteObject(t, tc, bktName, objName, objInfo.Version())
+	checkNotFound(t, tc, bktName, objName, objInfo.Version())
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object exists but shouldn't")
+}
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().DeleteObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNoContent)
+func TestRemoveDeleteMarker(t *testing.T) {
+	tc := prepareHandlerContext(t)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNotFound)
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	bktInfo, objInfo := createVersionedBucketAndObject(t, tc, bktName, objName)
 
-	query := make(url.Values)
-	query.Add(api.QueryVersionID, objInfo.Version())
+	checkFound(t, tc, bktName, objName, emptyVersion)
+	deleteMarkerVersion := deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	w, r = prepareTestFullRequest(t, bktName, objName, query, nil)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	checkFound(t, tc, bktName, objName, objInfo.Version())
+	deleteObject(t, tc, bktName, objName, deleteMarkerVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	w, r = prepareTestFullRequest(t, bktName, objName, query, nil)
-	r.URL.RawQuery = query.Encode()
-	tc.Handler().DeleteObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNoContent)
-
-	p := &layer.GetObjectParams{
-		BucketInfo: bktInfo,
-		ObjectInfo: objInfo,
-		Writer:     io.Discard,
-	}
-	err = tc.Layer().GetObject(ctx, p)
-	require.Error(t, err)
+	require.True(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object doesn't exist but should")
 }
 
 func TestDeleteObjectCombined(t *testing.T) {
-	ctx := context.Background()
 	tc := prepareHandlerContext(t)
 
-	bktName := "bucket-for-removal"
-	createTestBucket(ctx, t, tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(ctx, bktName)
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+
+	putBucketVersioning(t, tc, bktName, true)
+
+	checkFound(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
+
+	checkFound(t, tc, bktName, objName, objInfo.Version())
+
+	require.True(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object doesn't exist but should")
+}
+
+func TestDeleteObjectSuspended(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+
+	putBucketVersioning(t, tc, bktName, true)
+
+	checkFound(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
+
+	putBucketVersioning(t, tc, bktName, false)
+
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, objInfo.Version())
+
+	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object exists but shouldn't")
+}
+
+func TestDeleteMarkers(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	createTestBucket(tc.Context(), t, tc, bktName)
+	putBucketVersioning(t, tc, bktName, true)
+
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+
+	versions := listVersions(t, tc, bktName)
+	require.Len(t, versions.DeleteMarker, 3, "invalid delete markers length")
+	require.Len(t, versions.Version, 0, "versions must be empty")
+
+	require.Len(t, listOIDsFromMockedNeoFS(t, tc, bktName, objName), 0, "shouldn't be any object in neofs")
+}
+
+func createBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
+	createTestBucket(tc.Context(), t, tc, bktName)
+	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 
-	objName := "object"
-	objInfo := createTestObject(ctx, t, tc, bktInfo, objName)
+	objInfo := createTestObject(tc.Context(), t, tc, bktInfo, objName)
 
-	w, r := prepareTestRequest(t, bktName, objName, nil)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	return bktInfo, objInfo
+}
 
-	cfg := &VersioningConfiguration{Status: "Enabled"}
-	w, r = prepareTestRequest(t, bktName, objName, cfg)
+func createVersionedBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
+	createTestBucket(tc.Context(), t, tc, bktName)
+	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	require.NoError(t, err)
+	putBucketVersioning(t, tc, bktName, true)
+
+	objInfo := createTestObject(tc.Context(), t, tc, bktInfo, objName)
+
+	return bktInfo, objInfo
+}
+
+func putBucketVersioning(t *testing.T, tc *handlerContext, bktName string, enabled bool) {
+	cfg := &VersioningConfiguration{Status: "Suspended"}
+	if enabled {
+		cfg.Status = "Enabled"
+	}
+	w, r := prepareTestRequest(t, bktName, "", cfg)
 	tc.Handler().PutBucketVersioningHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
+}
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
+func deleteObject(t *testing.T, tc *handlerContext, bktName, objName, version string) string {
+	query := make(url.Values)
+	query.Add(api.QueryVersionID, version)
+
+	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
 	tc.Handler().DeleteObjectHandler(w, r)
 	assertStatus(t, w, http.StatusNoContent)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
+	return w.Header().Get(api.AmzVersionID)
+}
+
+func checkNotFound(t *testing.T, tc *handlerContext, bktName, objName, version string) {
+	query := make(url.Values)
+	query.Add(api.QueryVersionID, version)
+
+	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
 	tc.Handler().HeadObjectHandler(w, r)
 	assertStatus(t, w, http.StatusNotFound)
+}
 
+func checkFound(t *testing.T, tc *handlerContext, bktName, objName, version string) {
 	query := make(url.Values)
-	query.Add(api.QueryVersionID, objInfo.Version())
+	query.Add(api.QueryVersionID, version)
 
-	w, r = prepareTestFullRequest(t, bktName, objName, query, nil)
+	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
 	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNotFound) // because we remove null version
+	assertStatus(t, w, http.StatusOK)
+}
 
-	p := &layer.GetObjectParams{
-		BucketInfo: bktInfo,
-		ObjectInfo: objInfo,
-		Writer:     io.Discard,
-	}
-	err = tc.Layer().GetObject(ctx, p)
-	require.Error(t, err)
+func listVersions(t *testing.T, tc *handlerContext, bktName string) *ListObjectsVersionsResponse {
+	w, r := prepareTestRequest(t, bktName, "", nil)
+	tc.Handler().ListBucketObjectVersionsHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+	res := &ListObjectsVersionsResponse{}
+	parseTestResponse(t, w, res)
+	return res
 }
