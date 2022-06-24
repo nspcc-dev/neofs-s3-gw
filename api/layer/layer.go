@@ -659,5 +659,5 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	}
 
 	n.bucketCache.Delete(p.BktInfo.Name)
-	return n.deleteContainer(ctx, p.BktInfo.CID, p.SessionToken)
+	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken)
 }

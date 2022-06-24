@@ -179,7 +179,3 @@ func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *
 func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table, error) {
 	return n.neoFS.ContainerEACL(ctx, idCnr)
 }
-
-func (n *layer) deleteContainer(ctx context.Context, idCnr cid.ID, sessionToken *session.Container) error {
-	return n.neoFS.DeleteContainer(ctx, idCnr, sessionToken)
-}
