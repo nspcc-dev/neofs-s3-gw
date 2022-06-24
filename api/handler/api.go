@@ -44,7 +44,9 @@ func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config
 		return nil, errors.New("empty logger")
 	}
 
-	if cfg.NotificatorEnabled && notificator == nil {
+	if !cfg.NotificatorEnabled {
+		log.Warn("notificator is disabled, s3 won't produce notification events")
+	} else if notificator == nil {
 		return nil, errors.New("empty notificator")
 	}
 

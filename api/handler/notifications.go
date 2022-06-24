@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
-	"go.uber.org/zap"
 )
 
 type (
@@ -147,7 +146,6 @@ func (h *handler) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 
 func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationParams) error {
 	if !h.cfg.NotificatorEnabled {
-		h.log.Debug("could not send notification because notificator is disabled", zap.String("event", p.Event))
 		return nil
 	}
 
