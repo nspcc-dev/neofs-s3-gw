@@ -228,10 +228,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		HashSum: partInfo.ETag,
 	}
 
-	if err = n.objCache.PutObject(objInfo); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
-
 	return objInfo, nil
 }
 
@@ -335,6 +331,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 	}
 
+	var multipartObjetSize int64
 	parts := make([]*data.PartInfo, 0, len(p.Parts))
 
 	var completedPartsHeader strings.Builder
@@ -348,6 +345,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			return nil, nil, errors.GetAPIError(errors.ErrEntityTooSmall)
 		}
 		parts = append(parts, partInfo)
+		multipartObjetSize += partInfo.Size
 
 		partInfoStr := partInfo.ToHeaderString()
 		if i != len(p.Parts)-1 {
@@ -388,6 +386,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		Object:  p.Info.Key,
 		Reader:  r,
 		Header:  initMetadata,
+		Size:    multipartObjetSize,
 	})
 	if err != nil {
 		n.log.Error("could not put a completed object (multipart upload)",
