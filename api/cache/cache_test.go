@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cidtest "github.com/nspcc-dev/neofs-sdk-go/container/id/test"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
@@ -72,19 +71,20 @@ func TestObjectCacheType(t *testing.T) {
 	cache := New(DefaultObjectsConfig(logger))
 
 	addr := oidtest.Address()
-	obj := object.New()
-	obj.SetContainerID(addr.Container())
-	obj.SetID(addr.Object())
+	objInfo := &data.ObjectInfo{
+		ID:  addr.Object(),
+		CID: addr.Container(),
+	}
 
-	err := cache.Put(*obj)
+	err := cache.PutObject(objInfo)
 	require.NoError(t, err)
-	val := cache.Get(addr)
-	require.Equal(t, obj, val)
+	val := cache.GetObject(addr)
+	require.Equal(t, objInfo, val)
 	require.Equal(t, 0, observedLog.Len())
 
 	err = cache.cache.Set(addr.EncodeToString(), "tmp")
 	require.NoError(t, err)
-	assertInvalidCacheEntry(t, cache.Get(addr), observedLog)
+	assertInvalidCacheEntry(t, cache.GetObject(addr), observedLog)
 }
 
 func TestObjectsListCacheType(t *testing.T) {
