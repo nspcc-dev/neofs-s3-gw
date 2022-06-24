@@ -20,14 +20,16 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 type handlerContext struct {
-	h  *handler
-	tp *layer.TestNeoFS
+	h       *handler
+	tp      *layer.TestNeoFS
+	context context.Context
 }
 
 func (hc *handlerContext) Handler() *handler {
@@ -40,6 +42,10 @@ func (hc *handlerContext) MockedPool() *layer.TestNeoFS {
 
 func (hc *handlerContext) Layer() layer.Client {
 	return hc.h.obj
+}
+
+func (hc *handlerContext) Context() context.Context {
+	return hc.context
 }
 
 func prepareHandlerContext(t *testing.T) *handlerContext {
@@ -68,8 +74,9 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	}
 
 	return &handlerContext{
-		h:  h,
-		tp: tp,
+		h:       h,
+		tp:      tp,
+		context: context.Background(),
 	}
 }
 
@@ -163,4 +170,30 @@ func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body i
 	assertStatus(t, response, http.StatusOK)
 	err := xml.NewDecoder(response.Result().Body).Decode(body)
 	require.NoError(t, err)
+}
+
+func existInMockedNeoFS(tc *handlerContext, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) bool {
+	p := &layer.GetObjectParams{
+		BucketInfo: bktInfo,
+		ObjectInfo: objInfo,
+		Writer:     io.Discard,
+	}
+
+	return tc.Layer().GetObject(tc.Context(), p) == nil
+}
+
+func listOIDsFromMockedNeoFS(t *testing.T, tc *handlerContext, bktName, objectName string) []oid.ID {
+	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	require.NoError(t, err)
+
+	p := layer.PrmObjectSelect{
+		Container: bktInfo.CID,
+		ExactAttribute: [2]string{
+			object.AttributeFileName, objectName,
+		},
+	}
+	ids, err := tc.MockedPool().SelectObjects(tc.Context(), p)
+	require.NoError(t, err)
+
+	return ids
 }
