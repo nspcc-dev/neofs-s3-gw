@@ -238,8 +238,8 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ObjectInfo, error) {
 	if addr := n.namesCache.Get(bkt.Name + "/" + objectName); addr != nil {
-		if headInfo := n.objCache.Get(*addr); headInfo != nil {
-			return objInfoFromMeta(bkt, headInfo), nil
+		if objInfo := n.objCache.GetObject(*addr); objInfo != nil {
+			return objInfo, nil
 		}
 	}
 
@@ -259,14 +259,13 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 	if err != nil {
 		return nil, err
 	}
-	if err = n.objCache.Put(*meta); err != nil {
-		n.log.Warn("couldn't put meta to objects cache",
+	objInfo := objInfoFromMeta(bkt, meta)
+	if err = n.objCache.PutObject(objInfo); err != nil {
+		n.log.Warn("couldn't put object info to cache",
 			zap.Stringer("object id", node.OID),
 			zap.Stringer("bucket id", bkt.CID),
 			zap.Error(err))
 	}
-
-	objInfo := objInfoFromMeta(bkt, meta)
 	if err = n.namesCache.Put(objInfo.NiceName(), objInfo.Address()); err != nil {
 		n.log.Warn("couldn't put obj address to head cache",
 			zap.String("obj nice name", objInfo.NiceName()),
@@ -304,8 +303,8 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		}
 	}
 
-	if headInfo := n.objCache.Get(newAddress(bkt.CID, foundVersion.OID)); headInfo != nil {
-		return objInfoFromMeta(bkt, headInfo), nil
+	if objInfo := n.objCache.GetObject(newAddress(bkt.CID, foundVersion.OID)); objInfo != nil {
+		return objInfo, nil
 	}
 
 	meta, err := n.objectHead(ctx, bkt, foundVersion.OID)
@@ -317,7 +316,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 	}
 
 	objInfo := objInfoFromMeta(bkt, meta)
-	if err = n.objCache.Put(*meta); err != nil {
+	if err = n.objCache.PutObject(objInfo); err != nil {
 		n.log.Warn("couldn't put obj to object cache",
 			zap.String("bucket name", objInfo.Bucket),
 			zap.Stringer("bucket cid", objInfo.CID),
@@ -436,6 +435,10 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 		}
 	}
 
+	if len(nodeVersions) == 0 {
+		return nil, nil, nil
+	}
+
 	sort.Slice(nodeVersions, func(i, j int) bool {
 		return nodeVersions[i].FilePath < nodeVersions[j].FilePath
 	})
@@ -511,12 +514,10 @@ func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams,
 				wg.Add(1)
 				err = pool.Submit(func() {
 					defer wg.Done()
-					if obj := n.objectFromObjectsCacheOrNeoFS(ctx, p.Bucket, node.OID); obj != nil {
-						if oi := objectInfoFromMeta(p.Bucket, obj, p.Prefix, p.Delimiter); oi != nil {
-							select {
-							case <-ctx.Done():
-							case objCh <- oi:
-							}
+					if oi := n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node.OID, p.Prefix, p.Delimiter); oi != nil {
+						select {
+						case <-ctx.Done():
+						case objCh <- oi:
 						}
 					}
 				})
@@ -562,12 +563,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 			oi.Created = nodeVersion.DeleteMarker.Created
 			oi.IsDeleteMarker = true
 		} else {
-			obj := n.objectFromObjectsCacheOrNeoFS(ctx, bkt, nodeVersion.OID)
-			if obj == nil {
-				continue
-			}
-			oi = objectInfoFromMeta(bkt, obj, prefix, delimiter)
-			if oi == nil {
+			if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, bkt, nodeVersion.OID, prefix, delimiter); oi == nil {
 				continue
 			}
 		}
@@ -657,23 +653,23 @@ func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInf
 	return settings.VersioningEnabled
 }
 
-func (n *layer) objectFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID) *object.Object {
-	var (
-		err  error
-		meta = n.objCache.Get(newAddress(bktInfo.CID, obj))
-	)
-	if meta == nil {
-		meta, err = n.objectHead(ctx, bktInfo, obj)
-		if err != nil {
-			n.log.Warn("could not fetch object meta", zap.Error(err))
-			return nil
-		}
-		if err = n.objCache.Put(*meta); err != nil {
-			n.log.Error("couldn't cache an object", zap.Error(err))
-		}
+func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID, prefix, delimiter string) *data.ObjectInfo {
+	if objInfo := n.objCache.GetObject(newAddress(bktInfo.CID, obj)); objInfo != nil {
+		return objInfo
 	}
 
-	return meta
+	meta, err := n.objectHead(ctx, bktInfo, obj)
+	if err != nil {
+		n.log.Warn("could not fetch object meta", zap.Error(err))
+		return nil
+	}
+
+	objInfo := objectInfoFromMeta(bktInfo, meta, prefix, delimiter)
+	if err = n.objCache.PutObject(objInfo); err != nil {
+		n.log.Warn("couldn't cache an object", zap.Error(err))
+	}
+
+	return objInfo
 }
 
 func (n *layer) transformNeofsError(ctx context.Context, err error) error {
