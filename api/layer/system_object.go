@@ -36,18 +36,19 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 	}
 
 	if newLock.Retention != nil {
-		if lockInfo.RetentionOID != nil {
-			if lockInfo.IsCompliance {
+		if lockInfo.IsRetentionSet() {
+			if lockInfo.IsCompliance() {
 				return fmt.Errorf("you cannot change compliance mode")
 			}
 			if !newLock.Retention.ByPassedGovernance {
 				return fmt.Errorf("you cannot bypass governence mode")
 			}
 
-			if len(lockInfo.UntilDate) > 0 {
-				parsedTime, err := time.Parse(time.RFC3339, lockInfo.UntilDate)
+			untilDate := lockInfo.UntilDate()
+			if len(untilDate) > 0 {
+				parsedTime, err := time.Parse(time.RFC3339, untilDate)
 				if err != nil {
-					return fmt.Errorf("couldn't parse time '%s': %w", lockInfo.UntilDate, err)
+					return fmt.Errorf("couldn't parse time '%s': %w", untilDate, err)
 				}
 				if parsedTime.After(newLock.Retention.Until) {
 					return fmt.Errorf("you couldn't short the until date")
@@ -55,24 +56,26 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 			}
 		}
 		lock := &data.ObjectLock{Retention: newLock.Retention}
-		if lockInfo.RetentionOID, err = n.putLockObject(ctx, objVersion.BktInfo, versionNode.OID, lock); err != nil {
+		retentionOID, err := n.putLockObject(ctx, objVersion.BktInfo, versionNode.OID, lock)
+		if err != nil {
 			return err
 		}
-		lockInfo.IsCompliance = newLock.Retention.IsCompliance
-		lockInfo.UntilDate = newLock.Retention.Until.UTC().Format(time.RFC3339)
+		lockInfo.SetRetention(retentionOID, newLock.Retention.Until.UTC().Format(time.RFC3339), newLock.Retention.IsCompliance)
 	}
 
 	if newLock.LegalHold != nil {
-		if newLock.LegalHold.Enabled && lockInfo.LegalHoldOID == nil {
+		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
 			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			if lockInfo.LegalHoldOID, err = n.putLockObject(ctx, objVersion.BktInfo, versionNode.OID, lock); err != nil {
+			legalHoldOID, err := n.putLockObject(ctx, objVersion.BktInfo, versionNode.OID, lock)
+			if err != nil {
 				return err
 			}
-		} else if !newLock.LegalHold.Enabled && lockInfo.LegalHoldOID != nil {
-			if err = n.objectDelete(ctx, objVersion.BktInfo, *lockInfo.LegalHoldOID); err != nil {
-				return fmt.Errorf("couldn't delete lock object '%s' to remove legal hold: %w", lockInfo.LegalHoldOID.EncodeToString(), err)
+			lockInfo.SetLegalHold(legalHoldOID)
+		} else if !newLock.LegalHold.Enabled && lockInfo.IsLegalHoldSet() {
+			if err = n.objectDelete(ctx, objVersion.BktInfo, lockInfo.LegalHold()); err != nil {
+				return fmt.Errorf("couldn't delete lock object '%s' to remove legal hold: %w", lockInfo.LegalHold().EncodeToString(), err)
 			}
-			lockInfo.LegalHoldOID = nil
+			lockInfo.ResetLegalHold()
 		}
 	}
 
@@ -87,7 +90,7 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 	return nil
 }
 
-func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock) (*oid.ID, error) {
+func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock) (oid.ID, error) {
 	prm := PrmObjectCreate{
 		Container: bktInfo.CID,
 		Creator:   bktInfo.Owner,
@@ -97,7 +100,7 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	var err error
 	prm.Attributes, err = n.attributesFromLock(ctx, lock)
 	if err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 
 	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
@@ -134,15 +137,16 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 		return cors, nil
 	}
 	objID, err := n.treeService.GetBucketCORS(ctx, bkt.CID)
-	if err != nil {
+	objIDNotFound := errorsStd.Is(err, ErrNodeNotFound)
+	if err != nil && !objIDNotFound {
 		return nil, err
 	}
 
-	if objID == nil {
+	if objIDNotFound {
 		return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
 	}
 
-	obj, err := n.objectGet(ctx, bkt, *objID)
+	obj, err := n.objectGet(ctx, bkt, objID)
 	if err != nil {
 		return nil, err
 	}

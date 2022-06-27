@@ -36,7 +36,7 @@ func TestObjectLockAttributes(t *testing.T) {
 	foundLock, err := tc.layer.GetLockInfo(tc.ctx, p)
 	require.NoError(t, err)
 
-	lockObj := tc.getObjectByID(*foundLock.RetentionOID)
+	lockObj := tc.getObjectByID(foundLock.Retention())
 	require.NotNil(t, lockObj)
 
 	expEpoch := false

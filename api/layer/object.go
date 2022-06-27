@@ -189,7 +189,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		return nil, err
 	}
 
-	newVersion.OID = *id
+	newVersion.OID = id
 	if err = n.treeService.AddVersion(ctx, p.BktInfo.CID, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
@@ -209,7 +209,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	objInfo := &data.ObjectInfo{
-		ID:  *id,
+		ID:  id,
 		CID: p.BktInfo.CID,
 
 		Owner:       own,
@@ -344,7 +344,7 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 
 // objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
 // Returns object ID and payload sha256 hash.
-func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (*oid.ID, []byte, error) {
+func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (oid.ID, []byte, error) {
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 	hash := sha256.New()
 	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {

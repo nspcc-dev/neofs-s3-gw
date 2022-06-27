@@ -55,7 +55,7 @@ type NeoFS interface {
 	//
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the object from being created.
-	CreateObject(context.Context, PrmObjectCreate) (*oid.ID, error)
+	CreateObject(context.Context, PrmObjectCreate) (oid.ID, error)
 
 	// ReadObjectPayload reads payload of the object from NeoFS network by address
 	// into memory.
@@ -140,7 +140,7 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 	}
 
 	var addr oid.Address
-	addr.SetObject(*idObj)
+	addr.SetObject(idObj)
 	addr.SetContainer(idCnr)
 
 	return &addr, nil

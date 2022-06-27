@@ -462,15 +462,15 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 	})
 }
 
-func getRandomOID() (*oid.ID, error) {
+func getRandomOID() (oid.ID, error) {
 	b := [32]byte{}
 	if _, err := rand.Read(b[:]); err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 
 	var objID oid.ID
 	objID.SetSHA256(b)
-	return &objID, nil
+	return objID, nil
 }
 
 // DeleteObject removes all objects with the passed nice name.
@@ -505,7 +505,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 
 		newVersion := &data.NodeVersion{
 			BaseNodeVersion: data.BaseNodeVersion{
-				OID:      *randOID,
+				OID:      randOID,
 				FilePath: obj.Name,
 			},
 			DeleteMarker: &data.DeleteMarkerInfo{

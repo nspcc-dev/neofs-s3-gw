@@ -120,12 +120,12 @@ func (h *handler) setLockingHeaders(bktInfo *data.BucketInfo, lockInfo *data.Loc
 	legalHold := &data.LegalHold{Status: legalHoldOff}
 	retention := &data.Retention{Mode: governanceMode}
 
-	if lockInfo.LegalHoldOID != nil {
+	if lockInfo.IsLegalHoldSet() {
 		legalHold.Status = legalHoldOn
 	}
-	if lockInfo.RetentionOID != nil {
-		retention.RetainUntilDate = lockInfo.UntilDate
-		if lockInfo.IsCompliance {
+	if lockInfo.IsRetentionSet() {
+		retention.RetainUntilDate = lockInfo.UntilDate()
+		if lockInfo.IsCompliance() {
 			retention.Mode = complianceMode
 		}
 	}

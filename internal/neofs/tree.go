@@ -300,20 +300,20 @@ func (c *TreeClient) PutSettingsNode(ctx context.Context, cnrID cid.ID, settings
 	return c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
 }
 
-func (c *TreeClient) GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
+func (c *TreeClient) GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, cnrID, []string{notifConfFileName}, []string{oidKV})
 	if err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 
-	return &node.ObjID, nil
+	return node.ObjID, nil
 }
 
-func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error) {
+func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID oid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, cnrID, []string{notifConfFileName}, []string{oidKV})
 	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
-		return nil, fmt.Errorf("couldn't get node: %w", err)
+		return oid.ID{}, fmt.Errorf("couldn't get node: %w", err)
 	}
 
 	meta := make(map[string]string)
@@ -321,27 +321,29 @@ func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, cnrID
 	meta[oidKV] = objID.EncodeToString()
 
 	if isErrNotFound {
-		_, err = c.addNode(ctx, cnrID, systemTree, 0, meta)
-		return nil, err
+		if _, err = c.addNode(ctx, cnrID, systemTree, 0, meta); err != nil {
+			return oid.ID{}, err
+		}
+		return oid.ID{}, layer.ErrNoNodeToRemove
 	}
 
-	return &node.ObjID, c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
+	return node.ObjID, c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
 }
 
-func (c *TreeClient) GetBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
+func (c *TreeClient) GetBucketCORS(ctx context.Context, cnrID cid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, cnrID, []string{corsFilename}, []string{oidKV})
 	if err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 
-	return &node.ObjID, nil
+	return node.ObjID, nil
 }
 
-func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error) {
+func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID cid.ID, objID oid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, cnrID, []string{corsFilename}, []string{oidKV})
 	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
-		return nil, fmt.Errorf("couldn't get node: %w", err)
+		return oid.ID{}, fmt.Errorf("couldn't get node: %w", err)
 	}
 
 	meta := make(map[string]string)
@@ -349,24 +351,26 @@ func (c *TreeClient) PutBucketCORS(ctx context.Context, cnrID cid.ID, objID *oid
 	meta[oidKV] = objID.EncodeToString()
 
 	if isErrNotFound {
-		_, err = c.addNode(ctx, cnrID, systemTree, 0, meta)
-		return nil, err
+		if _, err = c.addNode(ctx, cnrID, systemTree, 0, meta); err != nil {
+			return oid.ID{}, err
+		}
+		return oid.ID{}, layer.ErrNoNodeToRemove
 	}
 
-	return &node.ObjID, c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
+	return node.ObjID, c.moveNode(ctx, cnrID, systemTree, node.ID, 0, meta)
 }
 
-func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
+func (c *TreeClient) DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, cnrID, []string{corsFilename}, []string{oidKV})
 	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
-		return nil, err
+		return oid.ID{}, err
 	}
 
 	if node != nil {
-		return &node.ObjID, c.removeNode(ctx, cnrID, systemTree, node.ID)
+		return node.ObjID, c.removeNode(ctx, cnrID, systemTree, node.ID)
 	}
 
-	return nil, nil
+	return oid.ID{}, layer.ErrNoNodeToRemove
 }
 
 func (c *TreeClient) GetObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
@@ -881,10 +885,10 @@ func (c *TreeClient) GetMultipartUpload(ctx context.Context, cnrID cid.ID, objec
 	return nil, layer.ErrNodeNotFound
 }
 
-func (c *TreeClient) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
+func (c *TreeClient) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error) {
 	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 1)
 	if err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 
 	meta := map[string]string{
@@ -906,14 +910,16 @@ func (c *TreeClient) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID 
 		}
 		if partInfo.Number == info.Number {
 			foundPartID = part.GetNodeId()
-			oldObjIDToDelete = &partInfo.OID
+			oldObjIDToDelete = partInfo.OID
 			break
 		}
 	}
 
-	if oldObjIDToDelete == nil {
-		_, err = c.addNode(ctx, cnrID, systemTree, multipartNodeID, meta)
-		return nil, err
+	if foundPartID != multipartNodeID {
+		if _, err = c.addNode(ctx, cnrID, systemTree, multipartNodeID, meta); err != nil {
+			return oid.ID{}, err
+		}
+		return oid.ID{}, layer.ErrNoNodeToRemove
 	}
 
 	return oldObjIDToDelete, c.moveNode(ctx, cnrID, systemTree, foundPartID, multipartNodeID, meta)
@@ -947,23 +953,23 @@ func (c *TreeClient) DeleteMultipartUpload(ctx context.Context, cnrID cid.ID, mu
 func (c *TreeClient) PutLock(ctx context.Context, cnrID cid.ID, nodeID uint64, lock *data.LockInfo) error {
 	meta := map[string]string{isLockKV: "true"}
 
-	if lock.LegalHoldOID != nil {
-		meta[legalHoldOIDKV] = lock.LegalHoldOID.EncodeToString()
+	if lock.IsLegalHoldSet() {
+		meta[legalHoldOIDKV] = lock.LegalHold().EncodeToString()
 	}
-	if lock.RetentionOID != nil {
-		meta[retentionOIDKV] = lock.RetentionOID.EncodeToString()
-		meta[untilDateKV] = lock.UntilDate
-		if lock.IsCompliance {
+	if lock.IsRetentionSet() {
+		meta[retentionOIDKV] = lock.Retention().EncodeToString()
+		meta[untilDateKV] = lock.UntilDate()
+		if lock.IsCompliance() {
 			meta[isComplianceKV] = "true"
 		}
 	}
 
-	if lock.ID == 0 {
+	if lock.ID() == 0 {
 		_, err := c.addNode(ctx, cnrID, versionTree, nodeID, meta)
 		return err
 	}
 
-	return c.moveNode(ctx, cnrID, versionTree, lock.ID, nodeID, meta)
+	return c.moveNode(ctx, cnrID, versionTree, lock.ID(), nodeID, meta)
 }
 
 func (c *TreeClient) GetLock(ctx context.Context, cnrID cid.ID, nodeID uint64) (*data.LockInfo, error) {
@@ -976,18 +982,17 @@ func (c *TreeClient) GetLock(ctx context.Context, cnrID cid.ID, nodeID uint64) (
 }
 
 func getLock(lockNode *TreeNode) (*data.LockInfo, error) {
-	lockInfo := &data.LockInfo{}
 	if lockNode == nil {
-		return lockInfo, nil
+		return &data.LockInfo{}, nil
 	}
-	lockInfo.ID = lockNode.ID
+	lockInfo := data.NewLockInfo(lockNode.ID)
 
 	if legalHold, ok := lockNode.Get(legalHoldOIDKV); ok {
 		var legalHoldOID oid.ID
 		if err := legalHoldOID.DecodeString(legalHold); err != nil {
 			return nil, fmt.Errorf("invalid legal hold object id: %w", err)
 		}
-		lockInfo.LegalHoldOID = &legalHoldOID
+		lockInfo.SetLegalHold(legalHoldOID)
 	}
 
 	if retention, ok := lockNode.Get(retentionOIDKV); ok {
@@ -995,11 +1000,10 @@ func getLock(lockNode *TreeNode) (*data.LockInfo, error) {
 		if err := retentionOID.DecodeString(retention); err != nil {
 			return nil, fmt.Errorf("invalid retention object id: %w", err)
 		}
-		lockInfo.RetentionOID = &retentionOID
+		_, isCompliance := lockNode.Get(isComplianceKV)
+		untilDate, _ := lockNode.Get(untilDateKV)
+		lockInfo.SetRetention(retentionOID, untilDate, isCompliance)
 	}
-
-	_, lockInfo.IsCompliance = lockNode.Get(isComplianceKV)
-	lockInfo.UntilDate, _ = lockNode.Get(untilDateKV)
 
 	return lockInfo, nil
 }
