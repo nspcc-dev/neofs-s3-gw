@@ -67,7 +67,7 @@ type NeoFS interface {
 	//
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the container from being created.
-	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)
+	CreateContainer(context.Context, PrmContainerCreate) (cid.ID, error)
 
 	// TimeToEpoch computes the current epoch and the epoch that corresponds to the provided time.
 	// Note:
@@ -108,7 +108,7 @@ type (
 
 	// ContainerOptions groups parameters of auth container to put the secret into.
 	ContainerOptions struct {
-		ID              *cid.ID
+		ID              cid.ID
 		FriendlyName    string
 		PlacementPolicy string
 	}
@@ -141,17 +141,16 @@ type (
 	}
 )
 
-func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner user.ID) (*cid.ID, error) {
-	if opts.ID != nil {
-		// check that the container exists
-		return opts.ID, a.neoFS.ContainerExists(ctx, *opts.ID)
+func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner user.ID) (cid.ID, error) {
+	if !opts.ID.Equals(cid.ID{}) {
+		return opts.ID, a.neoFS.ContainerExists(ctx, opts.ID)
 	}
 
 	var prm PrmContainerCreate
 
 	err := prm.Policy.DecodeString(opts.PlacementPolicy)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build placement policy: %w", err)
+		return cid.ID{}, fmt.Errorf("failed to build placement policy: %w", err)
 	}
 
 	prm.Owner = idOwner
@@ -159,7 +158,7 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 
 	cnrID, err := a.neoFS.CreateContainer(ctx, prm)
 	if err != nil {
-		return nil, fmt.Errorf("create container in NeoFS: %w", err)
+		return cid.ID{}, fmt.Errorf("create container in NeoFS: %w", err)
 	}
 
 	return cnrID, nil
@@ -247,7 +246,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	addr, err := tokens.
 		New(a.neoFS, secrets.EphemeralKey, cache.DefaultAccessBoxConfig(a.log)).
-		Put(ctx, *id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
+		Put(ctx, id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}
@@ -379,9 +378,7 @@ func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetim
 func buildSessionToken(key *keys.PrivateKey, lifetime lifetimeOptions, ctx sessionTokenContext, gateKey *keys.PublicKey) (*session.Container, error) {
 	tok := new(session.Container)
 	tok.ForVerb(ctx.verb)
-	if ctx.containerID != nil {
-		tok.AppliedTo(*ctx.containerID)
-	}
+	tok.AppliedTo(ctx.containerID)
 
 	tok.SetID(uuid.New())
 	tok.SetAuthKey((*neofsecdsa.PublicKey)(gateKey))

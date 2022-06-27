@@ -40,7 +40,7 @@ type BaseNodeVersion struct {
 }
 
 type ObjectTaggingInfo struct {
-	CnrID     *cid.ID
+	CnrID     cid.ID
 	ObjName   string
 	VersionID string
 }

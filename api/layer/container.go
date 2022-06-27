@@ -146,7 +146,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		return nil, fmt.Errorf("create container: %w", err)
 	}
 
-	bktInfo.CID = *idCnr
+	bktInfo.CID = idCnr
 
 	if err = n.setContainerEACLTable(ctx, bktInfo.CID, p.EACL, p.SessionEACL); err != nil {
 		return nil, fmt.Errorf("set container eacl: %w", err)

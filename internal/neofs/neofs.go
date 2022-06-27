@@ -106,7 +106,7 @@ var basicACLZero acl.Basic
 // CreateContainer implements neofs.NeoFS interface method.
 //
 // If prm.BasicACL is zero, 'eacl-public-read-write' is used.
-func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (*cid.ID, error) {
+func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (cid.ID, error) {
 	if prm.BasicACL == basicACLZero {
 		prm.BasicACL = acl.PublicRWExtended
 	}
@@ -132,7 +132,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 
 	err := pool.SyncContainerWithNetwork(ctx, &cnr, x.pool)
 	if err != nil {
-		return nil, fmt.Errorf("sync container with the network state: %w", err)
+		return cid.ID{}, fmt.Errorf("sync container with the network state: %w", err)
 	}
 
 	var prmPut pool.PrmContainerPut
@@ -146,10 +146,10 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	// send request to save the container
 	idCnr, err := x.pool.PutContainer(ctx, prmPut)
 	if err != nil {
-		return nil, fmt.Errorf("save container via connection pool: %w", err)
+		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
 
-	return idCnr, nil
+	return *idCnr, nil
 }
 
 // UserContainers implements neofs.NeoFS interface method.
@@ -539,7 +539,7 @@ func (x *AuthmateNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (
 }
 
 // CreateContainer implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (*cid.ID, error) {
+func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (cid.ID, error) {
 	basicACL := acl.Private
 	// allow reading objects to OTHERS in order to provide read access to S3 gateways
 	basicACL.AllowOp(acl.OpObjectGet, acl.RoleOthers)

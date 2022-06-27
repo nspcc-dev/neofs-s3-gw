@@ -48,7 +48,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return fmt.Errorf("put system object: %w", err)
 	}
 
-	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, &p.BktInfo.CID, objID)
+	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, p.BktInfo.CID, objID)
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
-	objID, err := n.treeService.DeleteBucketCORS(ctx, &bktInfo.CID)
+	objID, err := n.treeService.DeleteBucketCORS(ctx, bktInfo.CID)
 	if err != nil {
 		return err
 	}

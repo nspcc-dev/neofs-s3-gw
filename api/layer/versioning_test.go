@@ -171,7 +171,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
 			Owner: *usertest.ID(),
-			CID:   *bktID,
+			CID:   bktID,
 		},
 		obj:       "obj1",
 		t:         t,
