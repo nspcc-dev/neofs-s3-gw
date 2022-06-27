@@ -19,7 +19,7 @@ type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
 		GetBox(context.Context, oid.Address) (*accessbox.Box, error)
-		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (*oid.Address, error)
+		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (oid.Address, error)
 	}
 
 	cred struct {
@@ -117,15 +117,15 @@ func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.A
 	return &box, nil
 }
 
-func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (*oid.Address, error) {
+func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (oid.Address, error) {
 	if len(keys) == 0 {
-		return nil, ErrEmptyPublicKeys
+		return oid.Address{}, ErrEmptyPublicKeys
 	} else if box == nil {
-		return nil, ErrEmptyBearerToken
+		return oid.Address{}, ErrEmptyBearerToken
 	}
 	data, err := box.Marshal()
 	if err != nil {
-		return nil, fmt.Errorf("marshall box: %w", err)
+		return oid.Address{}, fmt.Errorf("marshall box: %w", err)
 	}
 
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
@@ -136,12 +136,12 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 		Payload:         data,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create object: %w", err)
+		return oid.Address{}, fmt.Errorf("create object: %w", err)
 	}
 
 	var addr oid.Address
 	addr.SetObject(idObj)
 	addr.SetContainer(idCnr)
 
-	return &addr, nil
+	return addr, nil
 }
