@@ -26,7 +26,7 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 		return err
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, &cnrID, versionNode.ID)
+	lockInfo, err := n.treeService.GetLock(ctx, cnrID, versionNode.ID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
@@ -76,7 +76,7 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 		}
 	}
 
-	if err = n.treeService.PutLock(ctx, &cnrID, versionNode.ID, lockInfo); err != nil {
+	if err = n.treeService.PutLock(ctx, cnrID, versionNode.ID, lockInfo); err != nil {
 		return fmt.Errorf("couldn't put lock into tree: %w", err)
 	}
 
@@ -114,7 +114,7 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		return nil, err
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, &objVersion.BktInfo.CID, versionNode.ID)
+	lockInfo, err := n.treeService.GetLock(ctx, objVersion.BktInfo.CID, versionNode.ID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
 	}
-	objID, err := n.treeService.GetBucketCORS(ctx, &bkt.CID)
+	objID, err := n.treeService.GetBucketCORS(ctx, bkt.CID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 		objID, _ := obj.ID()
 		n.log.Warn("couldn't put system meta to objects cache",
 			zap.Stringer("object id", &objID),
-			zap.Stringer("bucket id", bkt.CID),
+			zap.String("bucket id", bkt.CID.EncodeToString()),
 			zap.Error(err))
 	}
 
@@ -180,7 +180,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
-	settings, err := n.treeService.GetSettingsNode(ctx, &bktInfo.CID)
+	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo.CID)
 	if err != nil {
 		if !errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, err
@@ -191,7 +191,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {
 		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("bucket id", bktInfo.CID),
+			zap.String("bucket id", bktInfo.CID.EncodeToString()),
 			zap.Error(err))
 	}
 
@@ -199,7 +199,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 }
 
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	if err := n.treeService.PutSettingsNode(ctx, &p.BktInfo.CID, p.Settings); err != nil {
+	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo.CID, p.Settings); err != nil {
 		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 

@@ -153,11 +153,11 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		}
 	}
 
-	return n.treeService.CreateMultipartUpload(ctx, &p.Info.Bkt.CID, info)
+	return n.treeService.CreateMultipartUpload(ctx, p.Info.Bkt.CID, info)
 }
 
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, error) {
-	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, &p.Info.Bkt.CID, p.Info.Key, p.Info.UploadID)
+	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt.CID, p.Info.Key, p.Info.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
 			return "", errors.GetAPIError(errors.ErrNoSuchUpload)
@@ -204,7 +204,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Created:  time.Now(),
 	}
 
-	oldPartID, err := n.treeService.AddPart(ctx, &bktInfo.CID, multipartInfo.ID, partInfo)
+	oldPartID, err := n.treeService.AddPart(ctx, bktInfo.CID, multipartInfo.ID, partInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 }
 
 func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error) {
-	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, &p.Info.Bkt.CID, p.Info.Key, p.Info.UploadID)
+	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt.CID, p.Info.Key, p.Info.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
@@ -403,14 +403,14 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		if err = n.objectDelete(ctx, p.Info.Bkt, partInfo.OID); err != nil {
 			n.log.Warn("could not delete upload part",
 				zap.Stringer("object id", &partInfo.OID),
-				zap.Stringer("bucket id", &p.Info.Bkt.CID),
+				zap.Stringer("bucket id", p.Info.Bkt.CID),
 				zap.Error(err))
 		}
 		addr.SetObject(partInfo.OID)
 		n.objCache.Delete(addr)
 	}
 
-	return uploadData, obj, n.treeService.DeleteMultipartUpload(ctx, &p.Info.Bkt.CID, multipartInfo.ID)
+	return uploadData, obj, n.treeService.DeleteMultipartUpload(ctx, p.Info.Bkt.CID, multipartInfo.ID)
 }
 
 func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error) {
@@ -419,7 +419,7 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 		return &result, nil
 	}
 
-	multipartInfos, err := n.treeService.GetMultipartUploadsByPrefix(ctx, &p.Bkt.CID, p.Prefix)
+	multipartInfos, err := n.treeService.GetMultipartUploadsByPrefix(ctx, p.Bkt.CID, p.Prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +486,7 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) e
 		}
 	}
 
-	return n.treeService.DeleteMultipartUpload(ctx, &p.Bkt.CID, multipartInfo.ID)
+	return n.treeService.DeleteMultipartUpload(ctx, p.Bkt.CID, multipartInfo.ID)
 }
 
 func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsInfo, error) {
@@ -534,7 +534,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 }
 
 func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.MultipartInfo, map[int]*data.PartInfo, error) {
-	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, &p.Bkt.CID, p.Key, p.UploadID)
+	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Bkt.CID, p.Key, p.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
 			return nil, nil, errors.GetAPIError(errors.ErrNoSuchUpload)
@@ -542,7 +542,7 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.
 		return nil, nil, err
 	}
 
-	parts, err := n.treeService.GetParts(ctx, &p.Bkt.CID, multipartInfo.ID)
+	parts, err := n.treeService.GetParts(ctx, p.Bkt.CID, multipartInfo.ID)
 	if err != nil {
 		return nil, nil, err
 	}

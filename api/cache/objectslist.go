@@ -122,7 +122,7 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 }
 
 // CreateObjectsListCacheKey returns ObjectsListKey with the given CID, prefix and latestOnly flag.
-func CreateObjectsListCacheKey(cnr *cid.ID, prefix string, latestOnly bool) ObjectsListKey {
+func CreateObjectsListCacheKey(cnr cid.ID, prefix string, latestOnly bool) ObjectsListKey {
 	p := ObjectsListKey{
 		cid:        cnr.EncodeToString(),
 		prefix:     prefix,

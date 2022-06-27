@@ -190,7 +190,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	newVersion.OID = *id
-	if err = n.treeService.AddVersion(ctx, &p.BktInfo.CID, newVersion); err != nil {
+	if err = n.treeService.AddVersion(ctx, p.BktInfo.CID, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
 
@@ -243,7 +243,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		}
 	}
 
-	node, err := n.treeService.GetLatestVersion(ctx, &bkt.CID, objectName)
+	node, err := n.treeService.GetLatestVersion(ctx, bkt.CID, objectName)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
@@ -279,7 +279,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 	var err error
 	var foundVersion *data.NodeVersion
 	if p.VersionID == UnversionedObjectVersionID {
-		foundVersion, err = n.treeService.GetUnversioned(ctx, &bkt.CID, p.Object)
+		foundVersion, err = n.treeService.GetUnversioned(ctx, bkt.CID, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
@@ -287,7 +287,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 			return nil, err
 		}
 	} else {
-		versions, err := n.treeService.GetVersions(ctx, &bkt.CID, p.Object)
+		versions, err := n.treeService.GetVersions(ctx, bkt.CID, p.Object)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't get versions: %w", err)
 		}
@@ -422,11 +422,11 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 		return nil, nil, nil
 	}
 
-	cacheKey := cache.CreateObjectsListCacheKey(&p.Bucket.CID, p.Prefix, true)
+	cacheKey := cache.CreateObjectsListCacheKey(p.Bucket.CID, p.Prefix, true)
 	nodeVersions := n.listsCache.GetVersions(cacheKey)
 
 	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetLatestVersionsByPrefix(ctx, &p.Bucket.CID, p.Prefix)
+		nodeVersions, err = n.treeService.GetLatestVersionsByPrefix(ctx, p.Bucket.CID, p.Prefix)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -538,11 +538,11 @@ func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams,
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string][]*data.ExtendedObjectInfo, error) {
 	var err error
 
-	cacheKey := cache.CreateObjectsListCacheKey(&bkt.CID, prefix, false)
+	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix, false)
 	nodeVersions := n.listsCache.GetVersions(cacheKey)
 
 	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, &bkt.CID, prefix)
+		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt.CID, prefix)
 		if err != nil {
 			return nil, err
 		}
