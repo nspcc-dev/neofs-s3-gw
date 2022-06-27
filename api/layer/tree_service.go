@@ -16,19 +16,34 @@ type TreeService interface {
 
 	// GetSettingsNode retrieves the settings node from the tree service and form data.BucketSettings.
 	//
-	// If node is not found returns ErrNodeNotFound error.
+	// If tree node is not found returns ErrNodeNotFound error.
 	GetSettingsNode(context.Context, cid.ID) (*data.BucketSettings, error)
 
-	GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (*oid.ID, error)
-	// PutNotificationConfigurationNode puts a node to a system tree
-	// and returns objectID of a previous notif config which must be deleted in NeoFS
-	PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error)
+	// GetNotificationConfigurationNode gets an object id that corresponds to object with bucket CORS.
+	//
+	// If tree node is not found returns ErrNodeNotFound error.
+	GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (oid.ID, error)
 
-	GetBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error)
-	// PutBucketCORS puts a node to a system tree and returns objectID of a previous cors config which must be deleted in NeoFS
-	PutBucketCORS(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error)
-	// DeleteBucketCORS removes a node from a system tree and returns objID which must be deleted in NeoFS
-	DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error)
+	// PutNotificationConfigurationNode puts a node to a system tree
+	// and returns objectID of a previous notif config which must be deleted in NeoFS.
+	//
+	// If object id to remove is not found returns ErrNoNodeToRemove error.
+	PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID oid.ID) (oid.ID, error)
+
+	// GetBucketCORS gets an object id that corresponds to object with bucket CORS.
+	//
+	// If object id is not found returns ErrNodeNotFound error.
+	GetBucketCORS(ctx context.Context, cnrID cid.ID) (oid.ID, error)
+
+	// PutBucketCORS puts a node to a system tree and returns objectID of a previous cors config which must be deleted in NeoFS.
+	//
+	// If object id to remove is not found returns ErrNoNodeToRemove error.
+	PutBucketCORS(ctx context.Context, cnrID cid.ID, objID oid.ID) (oid.ID, error)
+
+	// DeleteBucketCORS removes a node from a system tree and returns objID which must be deleted in NeoFS.
+	//
+	// If object id to remove is not found returns ErrNoNodeToRemove error.
+	DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (oid.ID, error)
 
 	GetObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) (map[string]string, error)
 	PutObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error
@@ -56,8 +71,9 @@ type TreeService interface {
 
 	// AddPart puts a node to a system tree as a child of appropriate multipart upload
 	// and returns objectID of a previous part which must be deleted in NeoFS.
-	// If a part is being added for the first time, the previous part ID will be nil.
-	AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error)
+	//
+	// If object id to remove is not found returns ErrNoNodeToRemove error.
+	AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error)
 	GetParts(ctx context.Context, cnrID cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error)
 
 	// Compound methods for optimizations
@@ -66,5 +82,10 @@ type TreeService interface {
 	GetObjectTaggingAndLock(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error)
 }
 
-// ErrNodeNotFound is returned from Tree service in case of not found error.
-var ErrNodeNotFound = errors.New("not found")
+var (
+	// ErrNodeNotFound is returned from Tree service in case of not found error.
+	ErrNodeNotFound = errors.New("not found")
+
+	// ErrNoNodeToRemove is returned from Tree service in case of the lack of node with OID to remove.
+	ErrNoNodeToRemove = errors.New("no node to remove")
+)

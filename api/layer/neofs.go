@@ -146,7 +146,7 @@ type NeoFS interface {
 	//
 	// Created container is public with enabled ACL extension.
 	//
-	// It returns exactly one non-nil value. It returns any error encountered which
+	// It returns exactly one non-zero value. It returns any error encountered which
 	// prevented the container from being created.
 	CreateContainer(context.Context, PrmContainerCreate) (cid.ID, error)
 
@@ -213,9 +213,9 @@ type NeoFS interface {
 	//
 	// It returns ErrAccessDenied on write access violation.
 	//
-	// It returns exactly one non-nil value. It returns any error encountered which
+	// It returns exactly one non-zero value. It returns any error encountered which
 	// prevented the container from being created.
-	CreateObject(context.Context, PrmObjectCreate) (*oid.ID, error)
+	CreateObject(context.Context, PrmObjectCreate) (oid.ID, error)
 
 	// DeleteObject marks the object to be removed from the NeoFS container by identifier.
 	// Successful return does not guarantee actual removal.

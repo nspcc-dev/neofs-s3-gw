@@ -81,23 +81,23 @@ func (t *TreeServiceMock) GetSettingsNode(_ context.Context, id cid.ID) (*data.B
 	return settings, nil
 }
 
-func (t *TreeServiceMock) GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID oid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) GetBucketCORS(ctx context.Context, cnrID cid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutBucketCORS(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) PutBucketCORS(ctx context.Context, cnrID cid.ID, objID oid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
@@ -294,14 +294,14 @@ func (t *TreeServiceMock) GetMultipartUpload(_ context.Context, cnrID cid.ID, ob
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
+func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error) {
 	multipartInfo, err := t.GetMultipartUpload(ctx, cnrID, info.Key, info.UploadID)
 	if err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 
 	if multipartInfo.ID != multipartNodeID {
-		return nil, fmt.Errorf("invalid multipart info id")
+		return oid.ID{}, fmt.Errorf("invalid multipart info id")
 	}
 
 	partsMap, ok := t.parts[info.UploadID]
@@ -312,7 +312,7 @@ func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID cid.ID, multipartNo
 	partsMap[info.Number] = info
 
 	t.parts[info.UploadID] = partsMap
-	return nil, nil
+	return oid.ID{}, nil
 }
 
 func (t *TreeServiceMock) GetParts(_ context.Context, cnrID cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {

@@ -212,7 +212,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 }
 
 // CreateObject implements neofs.NeoFS interface method.
-func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (*oid.ID, error) {
+func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oid.ID, error) {
 	attrNum := len(prm.Attributes) + 1 // + creation time
 
 	if prm.Filename != "" {
@@ -267,12 +267,12 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (*o
 	if err != nil {
 		reason, ok := isErrAccessDenied(err)
 		if ok {
-			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+			return oid.ID{}, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 		}
-		return nil, fmt.Errorf("save object via connection pool: %w", err)
+		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
-	return idObj, nil
+	return *idObj, nil
 }
 
 // SelectObjects implements neofs.NeoFS interface method.
@@ -562,7 +562,7 @@ func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr oid.Address)
 }
 
 // CreateObject implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (*oid.ID, error) {
+func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (oid.ID, error) {
 	return x.neoFS.CreateObject(ctx, layer.PrmObjectCreate{
 		Creator:   prm.Creator,
 		Container: prm.Container,
