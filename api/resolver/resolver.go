@@ -29,22 +29,22 @@ type Config struct {
 
 type BucketResolver struct {
 	Name    string
-	resolve func(context.Context, string) (*cid.ID, error)
+	resolve func(context.Context, string) (cid.ID, error)
 
 	next *BucketResolver
 }
 
-func (r *BucketResolver) SetResolveFunc(fn func(context.Context, string) (*cid.ID, error)) {
+func (r *BucketResolver) SetResolveFunc(fn func(context.Context, string) (cid.ID, error)) {
 	r.resolve = fn
 }
 
-func (r *BucketResolver) Resolve(ctx context.Context, name string) (*cid.ID, error) {
+func (r *BucketResolver) Resolve(ctx context.Context, name string) (cid.ID, error) {
 	cnrID, err := r.resolve(ctx, name)
 	if err != nil {
 		if r.next != nil {
 			return r.next.Resolve(ctx, name)
 		}
-		return nil, err
+		return cid.ID{}, err
 	}
 	return cnrID, err
 }
@@ -90,18 +90,18 @@ func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) 
 
 	var dns ns.DNS
 
-	resolveFunc := func(ctx context.Context, name string) (*cid.ID, error) {
+	resolveFunc := func(ctx context.Context, name string) (cid.ID, error) {
 		domain, err := neoFS.SystemDNS(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("read system DNS parameter of the NeoFS: %w", err)
+			return cid.ID{}, fmt.Errorf("read system DNS parameter of the NeoFS: %w", err)
 		}
 
 		domain = name + "." + domain
 		cnrID, err := dns.ResolveContainerName(domain)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't resolve container '%s' as '%s': %w", name, domain, err)
+			return cid.ID{}, fmt.Errorf("couldn't resolve container '%s' as '%s': %w", name, domain, err)
 		}
-		return &cnrID, nil
+		return cnrID, nil
 	}
 
 	return &BucketResolver{
@@ -123,12 +123,12 @@ func NewNNSResolver(address string, next *BucketResolver) (*BucketResolver, erro
 		return nil, fmt.Errorf("dial %s: %w", address, err)
 	}
 
-	resolveFunc := func(_ context.Context, name string) (*cid.ID, error) {
+	resolveFunc := func(_ context.Context, name string) (cid.ID, error) {
 		cnrID, err := nns.ResolveContainerName(name)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't resolve container '%s': %w", name, err)
+			return cid.ID{}, fmt.Errorf("couldn't resolve container '%s': %w", name, err)
 		}
-		return &cnrID, nil
+		return cnrID, nil
 	}
 
 	return &BucketResolver{

@@ -50,7 +50,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	tp := layer.NewTestNeoFS()
 
 	testResolver := &resolver.BucketResolver{Name: "test_resolver"}
-	testResolver.SetResolveFunc(func(_ context.Context, name string) (*cid.ID, error) {
+	testResolver.SetResolveFunc(func(_ context.Context, name string) (cid.ID, error) {
 		return tp.ContainerID(name)
 	})
 
@@ -90,7 +90,7 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 	var ownerID user.ID
 
 	bktInfo := &data.BucketInfo{
-		CID:               *cnrID,
+		CID:               cnrID,
 		Name:              bktName,
 		ObjectLockEnabled: true,
 		Owner:             ownerID,

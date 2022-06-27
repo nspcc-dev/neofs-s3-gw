@@ -55,19 +55,19 @@ func (t *TestNeoFS) AddObject(key string, obj *object.Object) {
 	t.objects[key] = obj
 }
 
-func (t *TestNeoFS) ContainerID(name string) (*cid.ID, error) {
+func (t *TestNeoFS) ContainerID(name string) (cid.ID, error) {
 	for id, cnr := range t.containers {
 		for _, attr := range cnr.Attributes() {
 			if attr.Key() == container.AttributeName && attr.Value() == name {
 				var cnrID cid.ID
-				return &cnrID, cnrID.DecodeString(id)
+				return cnrID, cnrID.DecodeString(id)
 			}
 		}
 	}
-	return nil, fmt.Errorf("not found")
+	return cid.ID{}, fmt.Errorf("not found")
 }
 
-func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (*cid.ID, error) {
+func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (cid.ID, error) {
 	opts := []container.Option{
 		container.WithOwnerID(&prm.Creator),
 		container.WithPolicy(&prm.Policy),
@@ -92,14 +92,14 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return nil, err
+		return cid.ID{}, err
 	}
 
 	var id cid.ID
 	id.SetSHA256(sha256.Sum256(b))
 	t.containers[id.EncodeToString()] = cnr
 
-	return &id, nil
+	return id, nil
 }
 
 func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {

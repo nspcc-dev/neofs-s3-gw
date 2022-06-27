@@ -28,7 +28,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 	}
 	objVersion.VersionID = version.OID.EncodeToString()
 
-	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, &objVersion.BktInfo.CID, version)
+	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo.CID, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, nil, errors.GetAPIError(errors.ErrNoSuchKey)
