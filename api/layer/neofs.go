@@ -148,7 +148,7 @@ type NeoFS interface {
 	//
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the container from being created.
-	CreateContainer(context.Context, PrmContainerCreate) (*cid.ID, error)
+	CreateContainer(context.Context, PrmContainerCreate) (cid.ID, error)
 
 	// Container reads a container from NeoFS by ID.
 	//

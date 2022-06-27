@@ -664,7 +664,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
 			h.logAndSendError(w, "couldn't enable bucket versioning", reqInfo, err,
-				zap.Stringer("container_id", bktInfo.CID))
+				zap.String("container_id", bktInfo.CID.EncodeToString()))
 			return
 		}
 	}

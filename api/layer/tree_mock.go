@@ -20,38 +20,38 @@ type TreeServiceMock struct {
 	parts      map[string]map[int]*data.PartInfo
 }
 
-func (t *TreeServiceMock) GetObjectTaggingAndLock(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
+func (t *TreeServiceMock) GetObjectTaggingAndLock(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
 	// TODO implement object tagging
 	lock, err := t.GetLock(ctx, cnrID, objVersion.ID)
 	return nil, lock, err
 }
 
-func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
+func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
+func (t *TreeServiceMock) PutObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) DeleteObjectTagging(ctx context.Context, cnrID *cid.ID, objVersion *data.NodeVersion) error {
+func (t *TreeServiceMock) DeleteObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error) {
+func (t *TreeServiceMock) GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[string]string, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error {
+func (t *TreeServiceMock) PutBucketTagging(ctx context.Context, cnrID cid.ID, tagSet map[string]string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error {
+func (t *TreeServiceMock) DeleteBucketTagging(ctx context.Context, cnrID cid.ID) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -67,12 +67,12 @@ func NewTreeService() *TreeServiceMock {
 	}
 }
 
-func (t *TreeServiceMock) PutSettingsNode(_ context.Context, id *cid.ID, settings *data.BucketSettings) error {
+func (t *TreeServiceMock) PutSettingsNode(_ context.Context, id cid.ID, settings *data.BucketSettings) error {
 	t.settings[id.EncodeToString()] = settings
 	return nil
 }
 
-func (t *TreeServiceMock) GetSettingsNode(_ context.Context, id *cid.ID) (*data.BucketSettings, error) {
+func (t *TreeServiceMock) GetSettingsNode(_ context.Context, id cid.ID) (*data.BucketSettings, error) {
 	settings, ok := t.settings[id.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -81,27 +81,27 @@ func (t *TreeServiceMock) GetSettingsNode(_ context.Context, id *cid.ID) (*data.
 	return settings, nil
 }
 
-func (t *TreeServiceMock) GetNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) GetNotificationConfigurationNode(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutNotificationConfigurationNode(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) PutNotificationConfigurationNode(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) GetBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutBucketCORS(ctx context.Context, cnrID *cid.ID, objID *oid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) PutBucketCORS(ctx context.Context, cnrID cid.ID, objID *oid.ID) (*oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) DeleteBucketCORS(ctx context.Context, cnrID *cid.ID) (*oid.ID, error) {
+func (t *TreeServiceMock) DeleteBucketCORS(ctx context.Context, cnrID cid.ID) (*oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetVersions(_ context.Context, cnrID *cid.ID, objectName string) ([]*data.NodeVersion, error) {
+func (t *TreeServiceMock) GetVersions(_ context.Context, cnrID cid.ID, objectName string) ([]*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -115,7 +115,7 @@ func (t *TreeServiceMock) GetVersions(_ context.Context, cnrID *cid.ID, objectNa
 	return versions, nil
 }
 
-func (t *TreeServiceMock) GetLatestVersion(_ context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
+func (t *TreeServiceMock) GetLatestVersion(_ context.Context, cnrID cid.ID, objectName string) (*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -137,7 +137,7 @@ func (t *TreeServiceMock) GetLatestVersion(_ context.Context, cnrID *cid.ID, obj
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
+func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID cid.ID, prefix string) ([]*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -162,7 +162,7 @@ func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, cnrID *ci
 	return result, nil
 }
 
-func (t *TreeServiceMock) GetUnversioned(_ context.Context, cnrID *cid.ID, objectName string) (*data.NodeVersion, error) {
+func (t *TreeServiceMock) GetUnversioned(_ context.Context, cnrID cid.ID, objectName string) (*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -182,7 +182,7 @@ func (t *TreeServiceMock) GetUnversioned(_ context.Context, cnrID *cid.ID, objec
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, newVersion *data.NodeVersion) error {
+func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID cid.ID, newVersion *data.NodeVersion) error {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		t.versions[cnrID.EncodeToString()] = map[string][]*data.NodeVersion{
@@ -222,7 +222,7 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID *cid.ID, newVersio
 	return nil
 }
 
-func (t *TreeServiceMock) RemoveVersion(_ context.Context, cnrID *cid.ID, nodeID uint64) error {
+func (t *TreeServiceMock) RemoveVersion(_ context.Context, cnrID cid.ID, nodeID uint64) error {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return ErrNodeNotFound
@@ -240,7 +240,7 @@ func (t *TreeServiceMock) RemoveVersion(_ context.Context, cnrID *cid.ID, nodeID
 	return ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, cnrID *cid.ID, prefix string) ([]*data.NodeVersion, error) {
+func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, cnrID cid.ID, prefix string) ([]*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		return nil, nil
@@ -256,7 +256,7 @@ func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, cnrID *cid.I
 	return result, nil
 }
 
-func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, cnrID *cid.ID, info *data.MultipartInfo) error {
+func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, cnrID cid.ID, info *data.MultipartInfo) error {
 	cnrMultipartsMap, ok := t.multiparts[cnrID.EncodeToString()]
 	if !ok {
 		t.multiparts[cnrID.EncodeToString()] = map[string][]*data.MultipartInfo{
@@ -274,11 +274,11 @@ func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, cnrID *cid.ID
 	return nil
 }
 
-func (t *TreeServiceMock) GetMultipartUploadsByPrefix(ctx context.Context, cnrID *cid.ID, prefix string) ([]*data.MultipartInfo, error) {
+func (t *TreeServiceMock) GetMultipartUploadsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.MultipartInfo, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetMultipartUpload(_ context.Context, cnrID *cid.ID, objectName, uploadID string) (*data.MultipartInfo, error) {
+func (t *TreeServiceMock) GetMultipartUpload(_ context.Context, cnrID cid.ID, objectName, uploadID string) (*data.MultipartInfo, error) {
 	cnrMultipartsMap, ok := t.multiparts[cnrID.EncodeToString()]
 	if !ok {
 		return nil, ErrNodeNotFound
@@ -294,7 +294,7 @@ func (t *TreeServiceMock) GetMultipartUpload(_ context.Context, cnrID *cid.ID, o
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID *cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
+func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete *oid.ID, err error) {
 	multipartInfo, err := t.GetMultipartUpload(ctx, cnrID, info.Key, info.UploadID)
 	if err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (t *TreeServiceMock) AddPart(ctx context.Context, cnrID *cid.ID, multipartN
 	return nil, nil
 }
 
-func (t *TreeServiceMock) GetParts(_ context.Context, cnrID *cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
+func (t *TreeServiceMock) GetParts(_ context.Context, cnrID cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
 	cnrMultipartsMap := t.multiparts[cnrID.EncodeToString()]
 
 	var foundMultipart *data.MultipartInfo
@@ -343,7 +343,7 @@ LOOP:
 	return result, nil
 }
 
-func (t *TreeServiceMock) DeleteMultipartUpload(_ context.Context, cnrID *cid.ID, multipartNodeID uint64) error {
+func (t *TreeServiceMock) DeleteMultipartUpload(_ context.Context, cnrID cid.ID, multipartNodeID uint64) error {
 	cnrMultipartsMap := t.multiparts[cnrID.EncodeToString()]
 
 	var uploadID string
@@ -367,7 +367,7 @@ LOOP:
 	return nil
 }
 
-func (t *TreeServiceMock) PutLock(ctx context.Context, cnrID *cid.ID, nodeID uint64, lock *data.LockInfo) error {
+func (t *TreeServiceMock) PutLock(ctx context.Context, cnrID cid.ID, nodeID uint64, lock *data.LockInfo) error {
 	cnrLockMap, ok := t.locks[cnrID.EncodeToString()]
 	if !ok {
 		t.locks[cnrID.EncodeToString()] = map[uint64]*data.LockInfo{
@@ -381,7 +381,7 @@ func (t *TreeServiceMock) PutLock(ctx context.Context, cnrID *cid.ID, nodeID uin
 	return nil
 }
 
-func (t *TreeServiceMock) GetLock(ctx context.Context, cnrID *cid.ID, nodeID uint64) (*data.LockInfo, error) {
+func (t *TreeServiceMock) GetLock(ctx context.Context, cnrID cid.ID, nodeID uint64) (*data.LockInfo, error) {
 	cnrLockMap, ok := t.locks[cnrID.EncodeToString()]
 	if !ok {
 		return nil, nil

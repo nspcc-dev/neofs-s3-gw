@@ -105,7 +105,7 @@ func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Contain
 // CreateContainer implements neofs.NeoFS interface method.
 //
 // If prm.BasicACL is zero, 'eacl-public-read-write' is used.
-func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (*cid.ID, error) {
+func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (cid.ID, error) {
 	if prm.BasicACL == 0 {
 		prm.BasicACL = acl.EACLPublicBasicRule
 	}
@@ -130,7 +130,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	// environment without hh disabling feature will ignore this attribute
 	// environment with hh disabling feature will set disabling = true if network config says so
 	if hhDisabled, err := isHomomorphicHashDisabled(ctx, x.pool); err != nil {
-		return nil, err
+		return cid.ID{}, err
 	} else if hhDisabled {
 		cnrOptions = append(cnrOptions, container.WithAttribute(
 			"__NEOFS__DISABLE_HOMOMORPHIC_HASHING", "true"))
@@ -150,10 +150,10 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	// send request to save the container
 	idCnr, err := x.pool.PutContainer(ctx, prmPut)
 	if err != nil {
-		return nil, fmt.Errorf("save container via connection pool: %w", err)
+		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
 
-	return idCnr, nil
+	return *idCnr, nil
 }
 
 // UserContainers implements neofs.NeoFS interface method.
@@ -536,7 +536,7 @@ func (x *AuthmateNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (
 }
 
 // CreateContainer implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (*cid.ID, error) {
+func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (cid.ID, error) {
 	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
 		Creator:  prm.Owner,
 		Policy:   prm.Policy,

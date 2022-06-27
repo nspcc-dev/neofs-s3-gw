@@ -37,7 +37,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return err
 	}
 
-	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, &p.BktInfo.CID, objID)
+	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo.CID, objID)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		return conf, nil
 	}
 
-	objID, err := n.treeService.GetNotificationConfigurationNode(ctx, &bktInfo.CID)
+	objID, err := n.treeService.GetNotificationConfigurationNode(ctx, bktInfo.CID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}

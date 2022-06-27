@@ -217,9 +217,9 @@ type (
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
 		PutLockInfo(ctx context.Context, p *ObjectVersion, lock *data.ObjectLock) error
 
-		GetBucketTagging(ctx context.Context, cnrID *cid.ID) (map[string]string, error)
-		PutBucketTagging(ctx context.Context, cnrID *cid.ID, tagSet map[string]string) error
-		DeleteBucketTagging(ctx context.Context, cnrID *cid.ID) error
+		GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[string]string, error)
+		PutBucketTagging(ctx context.Context, cnrID cid.ID, tagSet map[string]string) error
+		DeleteBucketTagging(ctx context.Context, cnrID cid.ID) error
 
 		GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error)
 		PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) error
@@ -360,7 +360,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 		return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
 	}
 
-	return n.containerInfo(ctx, *containerID)
+	return n.containerInfo(ctx, containerID)
 }
 
 // GetBucketACL returns bucket acl info by name.
@@ -512,7 +512,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 			IsUnversioned: true,
 		}
 
-		if obj.Error = n.treeService.AddVersion(ctx, &bkt.CID, newVersion); obj.Error != nil {
+		if obj.Error = n.treeService.AddVersion(ctx, bkt.CID, newVersion); obj.Error != nil {
 			return obj
 		}
 
@@ -526,7 +526,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, obj *Ver
 			return obj
 		}
 
-		if obj.Error = n.treeService.RemoveVersion(ctx, &bkt.CID, nodeVersion.ID); obj.Error != nil {
+		if obj.Error = n.treeService.RemoveVersion(ctx, bkt.CID, nodeVersion.ID); obj.Error != nil {
 			return obj
 		}
 	}
@@ -569,13 +569,13 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 	return nil, errors.GetAPIError(errors.ErrBucketAlreadyExists)
 }
 
-func (n *layer) ResolveBucket(ctx context.Context, name string) (*cid.ID, error) {
+func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
 	var cnrID cid.ID
 	if err := cnrID.DecodeString(name); err != nil {
 		return n.resolver.Resolve(ctx, name)
 	}
 
-	return &cnrID, nil
+	return cnrID, nil
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {

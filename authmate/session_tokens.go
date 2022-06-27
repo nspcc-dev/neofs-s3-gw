@@ -17,7 +17,7 @@ type (
 
 	sessionTokenContext struct {
 		verb        session.ContainerVerb
-		containerID *cid.ID
+		containerID cid.ID
 	}
 )
 
@@ -40,7 +40,6 @@ func (c *sessionTokenContext) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	if len(m.ContainerID) > 0 {
-		c.containerID = new(cid.ID)
 		return c.containerID.DecodeString(m.ContainerID)
 	}
 
