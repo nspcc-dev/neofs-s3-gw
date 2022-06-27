@@ -198,18 +198,19 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Key:      p.Info.Key,
 		UploadID: p.Info.UploadID,
 		Number:   p.PartNumber,
-		OID:      *id,
+		OID:      id,
 		Size:     p.Size,
 		ETag:     hex.EncodeToString(hash),
 		Created:  time.Now(),
 	}
 
 	oldPartID, err := n.treeService.AddPart(ctx, bktInfo.CID, multipartInfo.ID, partInfo)
-	if err != nil {
+	oldPartIDNotFound := stderrors.Is(err, ErrNoNodeToRemove)
+	if err != nil && !oldPartIDNotFound {
 		return nil, err
 	}
-	if oldPartID != nil {
-		if err = n.objectDelete(ctx, bktInfo, *oldPartID); err != nil {
+	if !oldPartIDNotFound {
+		if err = n.objectDelete(ctx, bktInfo, oldPartID); err != nil {
 			n.log.Error("couldn't delete old part object", zap.Error(err),
 				zap.String("cnrID", bktInfo.CID.EncodeToString()),
 				zap.String("bucket name", bktInfo.Name),
@@ -218,7 +219,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	objInfo := &data.ObjectInfo{
-		ID:  *id,
+		ID:  id,
 		CID: bktInfo.CID,
 
 		Owner:   bktInfo.Owner,

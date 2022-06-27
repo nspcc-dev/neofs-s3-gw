@@ -184,10 +184,10 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPar
 	return nil, fmt.Errorf("object not found %s", addr)
 }
 
-func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.ID, error) {
+func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return nil, err
+		return oid.ID{}, err
 	}
 	var id oid.ID
 	id.SetSHA256(sha256.Sum256(b))
@@ -225,7 +225,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.I
 	if prm.Payload != nil {
 		all, err := io.ReadAll(prm.Payload)
 		if err != nil {
-			return nil, err
+			return oid.ID{}, err
 		}
 		obj.SetPayload(all)
 		obj.SetPayloadSize(uint64(len(all)))
@@ -239,7 +239,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (*oid.I
 
 	addr := newAddress(cnrID, objID)
 	t.objects[addr.EncodeToString()] = obj
-	return &objID, nil
+	return objID, nil
 }
 
 func (t *TestNeoFS) DeleteObject(_ context.Context, prm PrmObjectDelete) error {

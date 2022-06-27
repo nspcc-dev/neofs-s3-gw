@@ -75,9 +75,61 @@ func (p *PartInfo) ToHeaderString() string {
 
 // LockInfo is lock information to create appropriate tree node.
 type LockInfo struct {
-	ID           uint64
-	LegalHoldOID *oid.ID
-	RetentionOID *oid.ID
-	UntilDate    string
-	IsCompliance bool
+	id uint64
+
+	legalHoldOID oid.ID
+	setLegalHold bool
+
+	retentionOID oid.ID
+	setRetention bool
+	untilDate    string
+	isCompliance bool
+}
+
+func NewLockInfo(id uint64) *LockInfo {
+	return &LockInfo{id: id}
+}
+
+func (l LockInfo) ID() uint64 {
+	return l.id
+}
+
+func (l *LockInfo) SetLegalHold(objID oid.ID) {
+	l.legalHoldOID = objID
+	l.setLegalHold = true
+}
+
+func (l *LockInfo) ResetLegalHold() {
+	l.setLegalHold = false
+}
+
+func (l LockInfo) LegalHold() oid.ID {
+	return l.legalHoldOID
+}
+
+func (l LockInfo) IsLegalHoldSet() bool {
+	return l.setLegalHold
+}
+
+func (l *LockInfo) SetRetention(objID oid.ID, until string, isCompliance bool) {
+	l.retentionOID = objID
+	l.setRetention = true
+	l.untilDate = until
+	l.isCompliance = isCompliance
+}
+
+func (l LockInfo) IsRetentionSet() bool {
+	return l.setRetention
+}
+
+func (l LockInfo) Retention() oid.ID {
+	return l.retentionOID
+}
+
+func (l LockInfo) UntilDate() string {
+	return l.untilDate
+}
+
+func (l LockInfo) IsCompliance() bool {
+	return l.isCompliance
 }
