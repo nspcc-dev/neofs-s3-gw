@@ -174,7 +174,7 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	legalHold := &data.LegalHold{Status: legalHoldOff}
-	if lockInfo.LegalHoldOID != nil {
+	if lockInfo.IsLegalHoldSet() {
 		legalHold.Status = legalHoldOn
 	}
 
@@ -248,16 +248,16 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if lockInfo.RetentionOID == nil {
+	if !lockInfo.IsRetentionSet() {
 		h.logAndSendError(w, "retention lock isn't set", reqInfo, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey))
 		return
 	}
 
 	retention := &data.Retention{
 		Mode:            governanceMode,
-		RetainUntilDate: lockInfo.UntilDate,
+		RetainUntilDate: lockInfo.UntilDate(),
 	}
-	if lockInfo.IsCompliance {
+	if lockInfo.IsCompliance() {
 		retention.Mode = complianceMode
 	}
 
