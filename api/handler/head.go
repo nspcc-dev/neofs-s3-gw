@@ -26,12 +26,7 @@ func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
 }
 
 func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		err  error
-		info *data.ObjectInfo
-
-		reqInfo = api.GetReqInfo(r.Context())
-	)
+	reqInfo := api.GetReqInfo(r.Context())
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
@@ -51,10 +46,12 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
-		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
+	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
+		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
+	info := extendedInfo.ObjectInfo
 
 	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
@@ -67,7 +64,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID:  info.Version(),
 	}
 
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
+	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
