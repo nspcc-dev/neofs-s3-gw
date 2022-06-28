@@ -88,6 +88,7 @@ AmazonS3 s3Client = AmazonS3ClientBuilder.standard()
 
 - [Configuration](./docs/configuration.md)
 - [NeoFS S3 AuthMate](./docs/authmate.md)
+- [NeoFS Tree service](./docs/tree_service.md)
 - [AWS CLI basic usage](./docs/aws_cli.md)
 - [AWS S3 API compatibility](./docs/aws_s3_compat.md)
 - [AWS S3 Compatibility test results](./docs/s3_test_results.md)
