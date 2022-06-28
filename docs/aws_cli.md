@@ -6,7 +6,7 @@
 
 To configure basic settings that the AWS CLI uses to interact with the Gateway, follow the steps below:
 
-1. issue a secret with neofs-authmate tool (see [NeoFS Authmate] (#neofs-authmate))
+1. issue a secret with neofs-s3-authmate tool (see [NeoFS S3 Authmate](./authmate.md))
 2. execute the command
 ```
 $ aws configure
