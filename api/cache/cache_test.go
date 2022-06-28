@@ -26,7 +26,7 @@ func TestAccessBoxCacheType(t *testing.T) {
 	require.Equal(t, box, val)
 	require.Equal(t, 0, observedLog.Len())
 
-	err = cache.cache.Set(addr.EncodeToString(), "tmp")
+	err = cache.cache.Set(addr, "tmp")
 	require.NoError(t, err)
 	assertInvalidCacheEntry(t, cache.Get(addr), observedLog)
 }
@@ -82,7 +82,7 @@ func TestObjectCacheType(t *testing.T) {
 	require.Equal(t, objInfo, val)
 	require.Equal(t, 0, observedLog.Len())
 
-	err = cache.cache.Set(addr.EncodeToString(), "tmp")
+	err = cache.cache.Set(addr, "tmp")
 	require.NoError(t, err)
 	assertInvalidCacheEntry(t, cache.GetObject(addr), observedLog)
 }
@@ -92,7 +92,7 @@ func TestObjectsListCacheType(t *testing.T) {
 	cache := NewObjectsListCache(DefaultObjectsListConfig(logger))
 
 	cnrID := cidtest.ID()
-	key := ObjectsListKey{cid: cnrID.EncodeToString(), prefix: "obj"}
+	key := ObjectsListKey{cid: cnrID, prefix: "obj"}
 	objIDs := []oid.ID{oidtest.ID()}
 
 	err := cache.Put(key, objIDs)
