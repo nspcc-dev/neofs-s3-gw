@@ -221,10 +221,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	return objInfo, nil
 }
 
-func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ObjectInfo, error) {
+func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ExtendedObjectInfo, error) {
 	if addr := n.namesCache.Get(bkt.Name + "/" + objectName); addr != nil {
 		if objInfo := n.objCache.GetObject(*addr); objInfo != nil {
-			return objInfo, nil
+			return &data.ExtendedObjectInfo{ObjectInfo: objInfo}, nil
 		}
 	}
 
@@ -257,10 +257,14 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 			zap.Error(err))
 	}
 
-	return objInfo, nil
+	return &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: node,
+		IsLatest:    true,
+	}, nil
 }
 
-func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ObjectInfo, error) {
+func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
 	var err error
 	var foundVersion *data.NodeVersion
 	if p.VersionID == UnversionedObjectVersionID {
@@ -289,7 +293,10 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 	}
 
 	if objInfo := n.objCache.GetObject(newAddress(bkt.CID, foundVersion.OID)); objInfo != nil {
-		return objInfo, nil
+		return &data.ExtendedObjectInfo{
+			ObjectInfo:  objInfo,
+			NodeVersion: foundVersion,
+		}, nil
 	}
 
 	meta, err := n.objectHead(ctx, bkt, foundVersion.OID)
@@ -310,7 +317,10 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 			zap.Error(err))
 	}
 
-	return objInfo, nil
+	return &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: foundVersion,
+	}, nil
 }
 
 // objectDelete puts tombstone object into neofs.
