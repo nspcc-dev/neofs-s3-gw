@@ -40,7 +40,7 @@ func New(config *Config) *ObjectsCache {
 
 // GetObject returns a cached object info.
 func (o *ObjectsCache) GetObject(address oid.Address) *data.ObjectInfo {
-	entry, err := o.cache.Get(address.EncodeToString())
+	entry, err := o.cache.Get(address)
 	if err != nil {
 		return nil
 	}
@@ -57,12 +57,10 @@ func (o *ObjectsCache) GetObject(address oid.Address) *data.ObjectInfo {
 
 // PutObject puts an object info to cache.
 func (o *ObjectsCache) PutObject(obj *data.ObjectInfo) error {
-	cnrID := obj.CID.EncodeToString()
-	objID := obj.ID.EncodeToString()
-	return o.cache.Set(cnrID+"/"+objID, obj)
+	return o.cache.Set(obj.Address(), obj)
 }
 
 // Delete deletes an object from cache.
 func (o *ObjectsCache) Delete(address oid.Address) bool {
-	return o.cache.Remove(address.EncodeToString())
+	return o.cache.Remove(address)
 }

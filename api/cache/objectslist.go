@@ -34,7 +34,7 @@ type (
 
 	// ObjectsListKey is a key to find a ObjectsListCache's entry.
 	ObjectsListKey struct {
-		cid        string
+		cid        cid.ID
 		prefix     string
 		latestOnly bool
 	}
@@ -106,7 +106,6 @@ func (l *ObjectsListCache) PutVersions(key ObjectsListKey, versions []*data.Node
 
 // CleanCacheEntriesContainingObject deletes entries containing specified object.
 func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, cnr cid.ID) {
-	cidStr := cnr.EncodeToString()
 	keys := l.cache.Keys(true)
 	for _, key := range keys {
 		k, ok := key.(ObjectsListKey)
@@ -115,7 +114,7 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 				zap.String("expected", fmt.Sprintf("%T", k)))
 			continue
 		}
-		if cidStr == k.cid && strings.HasPrefix(objectName, k.prefix) {
+		if cnr.Equals(k.cid) && strings.HasPrefix(objectName, k.prefix) {
 			l.cache.Remove(k)
 		}
 	}
@@ -124,7 +123,7 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 // CreateObjectsListCacheKey returns ObjectsListKey with the given CID, prefix and latestOnly flag.
 func CreateObjectsListCacheKey(cnr cid.ID, prefix string, latestOnly bool) ObjectsListKey {
 	p := ObjectsListKey{
-		cid:        cnr.EncodeToString(),
+		cid:        cnr,
 		prefix:     prefix,
 		latestOnly: latestOnly,
 	}

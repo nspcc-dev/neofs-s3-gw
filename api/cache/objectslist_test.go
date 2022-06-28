@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	cidtest "github.com/nspcc-dev/neofs-sdk-go/container/id/test"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
@@ -22,9 +22,9 @@ func getTestObjectsListConfig() *Config {
 
 func TestObjectsListCache(t *testing.T) {
 	var (
-		listSize = 10
-		ids      []oid.ID
-		userKey  = "key"
+		listSize        = 10
+		ids             []oid.ID
+		cidKey, cidKey2 = cidtest.ID(), cidtest.ID()
 	)
 
 	for i := 0; i < listSize; i++ {
@@ -35,7 +35,7 @@ func TestObjectsListCache(t *testing.T) {
 		var (
 			config   = getTestObjectsListConfig()
 			cache    = NewObjectsListCache(config)
-			cacheKey = ObjectsListKey{cid: userKey}
+			cacheKey = ObjectsListKey{cid: cidKey}
 		)
 
 		err := cache.Put(cacheKey, ids)
@@ -52,7 +52,7 @@ func TestObjectsListCache(t *testing.T) {
 	t.Run("get cache with empty prefix", func(t *testing.T) {
 		var (
 			cache    = NewObjectsListCache(getTestObjectsListConfig())
-			cacheKey = ObjectsListKey{cid: userKey}
+			cacheKey = ObjectsListKey{cid: cidKey}
 		)
 		err := cache.Put(cacheKey, ids)
 		require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestObjectsListCache(t *testing.T) {
 
 	t.Run("get cache with prefix", func(t *testing.T) {
 		cacheKey := ObjectsListKey{
-			cid:    userKey,
+			cid:    cidKey,
 			prefix: "dir",
 		}
 
@@ -86,12 +86,12 @@ func TestObjectsListCache(t *testing.T) {
 	t.Run("get cache with other prefix", func(t *testing.T) {
 		var (
 			cacheKey = ObjectsListKey{
-				cid:    userKey,
+				cid:    cidKey,
 				prefix: "dir",
 			}
 
 			newKey = ObjectsListKey{
-				cid:    "key",
+				cid:    cidKey,
 				prefix: "obj",
 			}
 		)
@@ -107,10 +107,10 @@ func TestObjectsListCache(t *testing.T) {
 	t.Run("get cache with non-existing key", func(t *testing.T) {
 		var (
 			cacheKey = ObjectsListKey{
-				cid: userKey,
+				cid: cidKey,
 			}
 			newKey = ObjectsListKey{
-				cid: "asdf",
+				cid: cidKey2,
 			}
 		)
 
@@ -125,13 +125,13 @@ func TestObjectsListCache(t *testing.T) {
 
 func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	var (
-		id   cid.ID
+		id   = cidtest.ID()
 		oids = []oid.ID{oidtest.ID()}
 		keys []ObjectsListKey
 	)
 
 	for _, p := range []string{"", "dir/", "dir/lol/"} {
-		keys = append(keys, ObjectsListKey{cid: id.EncodeToString(), prefix: p})
+		keys = append(keys, ObjectsListKey{cid: id, prefix: p})
 	}
 
 	t.Run("put object to the root of the bucket", func(t *testing.T) {
