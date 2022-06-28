@@ -50,7 +50,7 @@ func NewAccessBoxCache(config *Config) *AccessBoxCache {
 
 // Get returns a cached object.
 func (o *AccessBoxCache) Get(address oid.Address) *accessbox.Box {
-	entry, err := o.cache.Get(address.EncodeToString())
+	entry, err := o.cache.Get(address)
 	if err != nil {
 		return nil
 	}
@@ -67,5 +67,5 @@ func (o *AccessBoxCache) Get(address oid.Address) *accessbox.Box {
 
 // Put stores an object to cache.
 func (o *AccessBoxCache) Put(address oid.Address, box *accessbox.Box) error {
-	return o.cache.Set(address.EncodeToString(), box)
+	return o.cache.Set(address, box)
 }
