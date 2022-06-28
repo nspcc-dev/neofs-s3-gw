@@ -66,12 +66,7 @@ var validAttributes = map[string]struct{}{
 }
 
 func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		err  error
-		info *data.ObjectInfo
-
-		reqInfo = api.GetReqInfo(r.Context())
-	)
+	reqInfo := api.GetReqInfo(r.Context())
 
 	params, err := parseGetObjectAttributeArgs(r)
 	if err != nil {
@@ -91,10 +86,12 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		VersionID: params.VersionID,
 	}
 
-	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
+	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
 	}
+	info := extendedInfo.ObjectInfo
 
 	if err = checkPreconditions(info, params.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)

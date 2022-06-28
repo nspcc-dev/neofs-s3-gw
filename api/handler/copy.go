@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -34,8 +33,6 @@ func path2BucketObject(path string) (bucket, prefix string) {
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		versionID        string
-		err              error
-		info             *data.ObjectInfo
 		metadata         map[string]string
 		sessionTokenEACL *session.Container
 
@@ -92,10 +89,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
+	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
+	info := extendedInfo.ObjectInfo
 
 	if err = checkPreconditions(info, args.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed))
