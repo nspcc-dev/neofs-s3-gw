@@ -98,8 +98,6 @@ func writeHeaders(h http.Header, info *data.ObjectInfo, tagSetLength int) {
 
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err    error
-		info   *data.ObjectInfo
 		params *layer.RangeParams
 
 		reqInfo = api.GetReqInfo(r.Context())
@@ -123,10 +121,12 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	if info, err = h.obj.GetObjectInfo(r.Context(), p); err != nil {
+	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
+	info := extendedInfo.ObjectInfo
 
 	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
@@ -144,7 +144,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID:  info.Version(),
 	}
 
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
+	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return

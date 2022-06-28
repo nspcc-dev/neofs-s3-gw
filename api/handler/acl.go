@@ -307,7 +307,7 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.Version())); err != nil {
+	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.ObjectInfo.Version())); err != nil {
 		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
@@ -363,7 +363,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: versionID,
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
@@ -377,7 +377,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	if updated {
 		s := &SendNotificationParams{
 			Event:   EventObjectACLPut,
-			ObjInfo: objInfo,
+			ObjInfo: extendedInfo.ObjectInfo,
 			BktInfo: bktInfo,
 			ReqInfo: reqInfo,
 		}

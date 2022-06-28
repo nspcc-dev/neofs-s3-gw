@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectVersion) (map[string]string, *data.LockInfo, error) {
+func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectVersion, nodeVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
 	var (
 		err  error
 		tags map[string]string
@@ -22,13 +22,14 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		return tags, lockInfo, nil
 	}
 
-	version, err := n.getNodeVersion(ctx, objVersion)
-	if err != nil {
-		return nil, nil, err
+	if nodeVersion == nil {
+		nodeVersion, err = n.getNodeVersion(ctx, objVersion)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	objVersion.VersionID = version.OID.EncodeToString()
 
-	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo.CID, version)
+	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo.CID, nodeVersion)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, nil, errors.GetAPIError(errors.ErrNoSuchKey)
