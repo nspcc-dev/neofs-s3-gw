@@ -1,4 +1,4 @@
-# NeoFS AuthMate
+# NeoFS S3 AuthMate
 
 Authmate is a tool to create gateway AWS credentials. AWS users
 are authenticated with access key IDs and secrets, while NeoFS users are
@@ -105,7 +105,7 @@ You can issue a secret using the parameters above only. The tool will
 
 E.g.:
 ```shell
-$ neofs-authmate issue-secret --wallet wallet.json \
+$ neofs-s3-authmate issue-secret --wallet wallet.json \
  --peer 192.168.130.71:8080 \
  --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf\
  --gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967
@@ -141,7 +141,7 @@ Creation of bearer tokens is mandatory.
 
 Rules for a bearer token can be set via parameter `--bearer-rules` (json-string and file path allowed):
 ```shell
-$ neofs-authmate issue-secret --wallet wallet.json \
+$ neofs-s3-authmate issue-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
 --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
 --bearer-rules bearer-rules.json  
@@ -195,7 +195,7 @@ If bearer rules are not set, a token will be auto-generated with a value:
 With a session token, there are 3 options: 
 1. append `--session-tokens` parameter with your custom rules in json format (as a string or file path). E.g.:
 ```shell
-$ neofs-authmate issue-secret --wallet wallet.json \
+$ neofs-s3-authmate issue-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
 --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
 --session-tokens session.json
@@ -253,7 +253,7 @@ and the other (for `gate-wallet.json`) interactively:
 
 ```shell
 $ AUTHMATE_WALLET_PASSPHRASE=some-pwd \
-neofs-authmate obtain-secret --wallet wallet.json \
+neofs-s3-authmate obtain-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
 --gate-wallet gate-wallet.json \
 --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
@@ -272,7 +272,7 @@ using AWS credentials from `~/.aws/credentials` (you can specify profile using t
 with the following command:
 
 ```shell
-$ neofs-authmate generate-presigned-url --endpoint http://localhost:8084 \
+$ neofs-s3-authmate generate-presigned-url --endpoint http://localhost:8084 \
   --method get --bucket presigned --object obj --lifetime 30s
   
 {
@@ -283,7 +283,7 @@ $ neofs-authmate generate-presigned-url --endpoint http://localhost:8084 \
 You can also provide credential explicitly:
 
 ```shell
-$ neofs-authmate generate-presigned-url --endpoint http://localhost:8084 \
+$ neofs-s3-authmate generate-presigned-url --endpoint http://localhost:8084 \
   --method put --bucket presigned --object obj --lifetime 12h \
   --region ru --aws-secret-access-key c2d65ef2980f03f4f495bdebedeeae760496697880d61d106bb9a4e5cd2e0607 \
   --aws-access-key-id ETaA2CadPcA7bAkLsML2PbTudXY8uRt2PDjCCwkvRv9s0FDCxWDXYc1SA1vKv8KbyCNsLY2AmAjJ92Vz5rgvsFCy

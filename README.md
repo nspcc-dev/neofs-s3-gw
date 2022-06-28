@@ -7,7 +7,7 @@ NeoFS S3 gateway provides API compatible with Amazon S3 cloud storage service.
 ```go get -u github.com/nspcc-dev/neofs-s3-gw```
 
 Or you can call `make` to build it from the cloned repository (the binary will
-end up in `bin/neofs-s3-gw` with authmate helper in `bin/neofs-authmate`).
+end up in `bin/neofs-s3-gw` with authmate helper in `bin/neofs-s3-authmate`).
 To build binaries in clean docker environment, call `make docker/all`.
 
 Other notable make targets:
@@ -87,7 +87,7 @@ AmazonS3 s3Client = AmazonS3ClientBuilder.standard()
 ## Documentation
 
 - [Configuration](./docs/configuration.md)
-- [NeoFS AuthMate](./docs/authmate.md)
+- [NeoFS S3 AuthMate](./docs/authmate.md)
 - [AWS CLI basic usage](./docs/aws_cli.md)
 - [AWS S3 API compatibility](./docs/aws_s3_compat.md)
 - [AWS S3 Compatibility test results](./docs/s3_test_results.md)

@@ -19,7 +19,7 @@ FROM scratch
 WORKDIR /
 
 COPY --from=builder /src/bin/neofs-s3-gw /bin/neofs-s3-gw
-COPY --from=builder /src/bin/neofs-authmate /bin/neofs-authmate
+COPY --from=builder /src/bin/neofs-s3-authmate /bin/neofs-s3-authmate
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 ENTRYPOINT ["/bin/neofs-s3-gw"]
