@@ -20,6 +20,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -73,13 +74,15 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 
 func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktName string) {
 	_, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
-		Name: bktName,
+		Creator: *usertest.ID(),
+		Name:    bktName,
 	})
 	require.NoError(t, err)
 }
 
 func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
 	cnrID, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
+		Creator:              *usertest.ID(),
 		Name:                 bktName,
 		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
 	})
