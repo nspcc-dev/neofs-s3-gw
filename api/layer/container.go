@@ -52,31 +52,21 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 		return nil, fmt.Errorf("get neofs container: %w", err)
 	}
 
-	info.Owner = *res.OwnerID()
+	cnr := *res
 
-	for _, attr := range res.Attributes() {
-		switch key, val := attr.Key(), attr.Value(); key {
-		case container.AttributeName:
-			info.Name = val
-		case container.AttributeTimestamp:
-			unix, err := strconv.ParseInt(attr.Value(), 10, 64)
-			if err != nil {
-				log.Error("could not parse container creation time",
-					zap.String("created_at", val), zap.Error(err))
+	info.Owner = cnr.Owner()
+	info.Name = container.Name(cnr)
+	info.Created = container.CreatedAt(cnr)
+	info.LocationConstraint = cnr.Attribute(attributeLocationConstraint)
 
-				continue
-			}
+	attrLockEnabled := cnr.Attribute(AttributeLockEnabled)
 
-			info.Created = time.Unix(unix, 0)
-		case attributeLocationConstraint:
-			info.LocationConstraint = val
-		case AttributeLockEnabled:
-			info.ObjectLockEnabled, err = strconv.ParseBool(val)
-			if err != nil {
-				log.Error("could not parse container object lock enabled attribute",
-					zap.String("lock_enabled", val), zap.Error(err))
-			}
-		}
+	info.ObjectLockEnabled, err = strconv.ParseBool(attrLockEnabled)
+	if err != nil {
+		log.Error("could not parse container object lock enabled attribute",
+			zap.String("lock_enabled", attrLockEnabled),
+			zap.Error(err),
+		)
 	}
 
 	if err = n.bucketCache.Put(info); err != nil {

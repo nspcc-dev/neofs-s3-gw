@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -55,36 +54,35 @@ func (t *TestNeoFS) AddObject(key string, obj *object.Object) {
 
 func (t *TestNeoFS) ContainerID(name string) (*cid.ID, error) {
 	for id, cnr := range t.containers {
-		for _, attr := range cnr.Attributes() {
-			if attr.Key() == container.AttributeName && attr.Value() == name {
-				var cnrID cid.ID
-				return &cnrID, cnrID.DecodeString(id)
-			}
+		if container.Name(*cnr) == name {
+			var cnrID cid.ID
+			return &cnrID, cnrID.DecodeString(id)
 		}
 	}
 	return nil, fmt.Errorf("not found")
 }
 
 func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (*cid.ID, error) {
-	opts := []container.Option{
-		container.WithOwnerID(&prm.Creator),
-		container.WithPolicy(&prm.Policy),
-		container.WithCustomBasicACL(prm.BasicACL),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
+	var cnr container.Container
+	cnr.Init()
+	cnr.SetOwner(prm.Creator)
+	cnr.SetPlacementPolicy(prm.Policy)
+	cnr.SetBasicACL(prm.BasicACL)
+	container.SetCreationTime(&cnr, time.Now())
+
+	if prm.Name != "" {
+		container.SetName(&cnr, prm.Name)
+	}
+
+	for i := range prm.AdditionalAttributes {
+		cnr.SetAttribute(prm.AdditionalAttributes[i][0], prm.AdditionalAttributes[i][1])
 	}
 
 	if prm.Name != "" {
-		opts = append(opts, container.WithAttribute(container.AttributeName, prm.Name))
-	}
+		var d container.Domain
+		d.SetName(prm.Name)
 
-	for _, attr := range prm.AdditionalAttributes {
-		opts = append(opts, container.WithAttribute(attr[0], attr[1]))
-	}
-
-	cnr := container.New(opts...)
-
-	if prm.Name != "" {
-		container.SetNativeName(cnr, prm.Name)
+		container.WriteDomain(&cnr, d)
 	}
 
 	b := make([]byte, 32)
@@ -94,7 +92,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 
 	var id cid.ID
 	id.SetSHA256(sha256.Sum256(b))
-	t.containers[id.EncodeToString()] = cnr
+	t.containers[id.EncodeToString()] = &cnr
 
 	return &id, nil
 }

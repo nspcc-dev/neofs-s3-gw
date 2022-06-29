@@ -9,8 +9,8 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/nspcc-dev/neo-go v0.98.2
-	github.com/nspcc-dev/neofs-api-go/v2 v2.12.3-0.20220621170933-dd233c3fbc84
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.4.0.20220628114722-ab4d1e34a8ac
+	github.com/nspcc-dev/neofs-api-go/v2 v2.12.3-0.20220630100506-c6f7ab3ef1bf
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.4.0.20220704082116-2ad89085a341
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1

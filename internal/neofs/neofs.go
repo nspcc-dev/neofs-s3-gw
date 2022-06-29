@@ -112,20 +112,19 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		prm.BasicACL = acl.PublicRWExtended
 	}
 
-	// fill container structure
-	cnrOptions := []container.Option{
-		container.WithPolicy(&prm.Policy),
-		container.WithOwnerID(&prm.Creator),
-		container.WithCustomBasicACL(prm.BasicACL),
-		container.WithAttribute(container.AttributeTimestamp, strconv.FormatInt(time.Now().Unix(), 10)),
-	}
+	var cnr container.Container
+	cnr.Init()
+	cnr.SetPlacementPolicy(prm.Policy)
+	cnr.SetOwner(prm.Creator)
+	cnr.SetBasicACL(prm.BasicACL)
+	container.SetCreationTime(&cnr, time.Now())
 
 	if prm.Name != "" {
-		cnrOptions = append(cnrOptions, container.WithAttribute(container.AttributeName, prm.Name))
+		container.SetName(&cnr, prm.Name)
 	}
 
-	for _, attr := range prm.AdditionalAttributes {
-		cnrOptions = append(cnrOptions, container.WithAttribute(attr[0], attr[1]))
+	for i := range prm.AdditionalAttributes {
+		cnr.SetAttribute(prm.AdditionalAttributes[i][0], prm.AdditionalAttributes[i][1])
 	}
 
 	// https://github.com/nspcc-dev/neofs-s3-gw/issues/435
@@ -134,18 +133,18 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	if hhDisabled, err := isHomomorphicHashDisabled(ctx, x.pool); err != nil {
 		return nil, fmt.Errorf("check homomorphic hash enabled: %w", err)
 	} else if hhDisabled {
-		cnrOptions = append(cnrOptions, container.WithAttribute(
-			"__NEOFS__DISABLE_HOMOMORPHIC_HASHING", "true"))
+		container.DisableHomomorphicHashing(&cnr)
 	}
 
-	cnr := container.New(cnrOptions...)
-
 	if prm.Name != "" {
-		container.SetNativeName(cnr, prm.Name)
+		var d container.Domain
+		d.SetName(prm.Name)
+
+		container.WriteDomain(&cnr, d)
 	}
 
 	var prmPut pool.PrmContainerPut
-	prmPut.SetContainer(*cnr)
+	prmPut.SetContainer(cnr)
 	prmPut.SetWaitParams(x.await)
 
 	if prm.SessionToken != nil {
