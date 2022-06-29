@@ -69,18 +69,20 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(info.ContentType) == 0 {
-		buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
-		getParams := &layer.GetObjectParams{
-			ObjectInfo: info,
-			Writer:     buffer,
-			Range:      getRangeToDetectContentType(info.Size),
-			BucketInfo: bktInfo,
+		if info.ContentType = layer.MimeByFileName(info.Name); len(info.ContentType) == 0 {
+			buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
+			getParams := &layer.GetObjectParams{
+				ObjectInfo: info,
+				Writer:     buffer,
+				Range:      getRangeToDetectContentType(info.Size),
+				BucketInfo: bktInfo,
+			}
+			if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+				h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", info.ID))
+				return
+			}
+			info.ContentType = http.DetectContentType(buffer.Bytes())
 		}
-		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
-			h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", info.ID))
-			return
-		}
-		info.ContentType = http.DetectContentType(buffer.Bytes())
 	}
 
 	if err = h.setLockingHeaders(r.Context(), bktInfo, info, w.Header()); err != nil {

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -155,6 +157,15 @@ func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID o
 	return res.Head, nil
 }
 
+// MimeByFileName detect mime type by filename extension.
+func MimeByFileName(name string) string {
+	ext := filepath.Ext(name)
+	if len(ext) == 0 {
+		return ""
+	}
+	return mime.TypeByExtension(ext)
+}
+
 // PutObject stores object into NeoFS, took payload from io.Reader.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
 	own := n.Owner(ctx)
@@ -169,11 +180,15 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	r := p.Reader
 	if r != nil {
 		if len(p.Header[api.ContentType]) == 0 {
-			d := newDetector(r)
-			if contentType, err := d.Detect(); err == nil {
+			if contentType := MimeByFileName(p.Object); len(contentType) == 0 {
+				d := newDetector(r)
+				if contentType, err = d.Detect(); err == nil {
+					p.Header[api.ContentType] = contentType
+				}
+				r = d.MultiReader()
+			} else {
 				p.Header[api.ContentType] = contentType
 			}
-			r = d.MultiReader()
 		}
 	}
 
