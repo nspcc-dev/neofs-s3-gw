@@ -71,18 +71,15 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	container.SetCreationTime(&cnr, time.Now())
 
 	if prm.Name != "" {
+		var d container.Domain
+		d.SetName(prm.Name)
+
+		container.WriteDomain(&cnr, d)
 		container.SetName(&cnr, prm.Name)
 	}
 
 	for i := range prm.AdditionalAttributes {
 		cnr.SetAttribute(prm.AdditionalAttributes[i][0], prm.AdditionalAttributes[i][1])
-	}
-
-	if prm.Name != "" {
-		var d container.Domain
-		d.SetName(prm.Name)
-
-		container.WriteDomain(&cnr, d)
 	}
 
 	b := make([]byte, 32)

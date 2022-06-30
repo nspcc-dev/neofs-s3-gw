@@ -120,6 +120,10 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	container.SetCreationTime(&cnr, time.Now())
 
 	if prm.Name != "" {
+		var d container.Domain
+		d.SetName(prm.Name)
+
+		container.WriteDomain(&cnr, d)
 		container.SetName(&cnr, prm.Name)
 	}
 
@@ -134,13 +138,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		return nil, fmt.Errorf("check homomorphic hash enabled: %w", err)
 	} else if hhDisabled {
 		container.DisableHomomorphicHashing(&cnr)
-	}
-
-	if prm.Name != "" {
-		var d container.Domain
-		d.SetName(prm.Name)
-
-		container.WriteDomain(&cnr, d)
 	}
 
 	var prmPut pool.PrmContainerPut
