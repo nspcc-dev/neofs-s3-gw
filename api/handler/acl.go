@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -467,7 +468,7 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 
 	for _, grantee := range grantees {
 		if grantee.Type == acpAmazonCustomerByEmail || (grantee.Type == acpGroup && grantee.URI != allUsersGroup) {
-			return nil, fmt.Errorf("unsupported grantee: %v", grantee)
+			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		list = append(list, &Grant{
@@ -1017,7 +1018,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 
 	for _, grant := range acl.AccessControlList {
 		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
-			return nil, fmt.Errorf("unsupported grantee: %v", grant.Grantee)
+			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		role := eacl.RoleUser
@@ -1049,7 +1050,7 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 
 	for _, grant := range acl.AccessControlList {
 		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
-			return nil, fmt.Errorf("unsupported grantee: %v", grant.Grantee)
+			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		user := grant.Grantee.ID
@@ -1261,7 +1262,7 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 
 	for _, grant := range acp.AccessControlList {
 		if !isValidGrant(grant) {
-			return nil, fmt.Errorf("unsupported grantee: %v", grant.Grantee)
+			return nil, stderrors.New("unsupported grantee")
 		}
 		if grant.Grantee.ID == acp.Owner.ID {
 			found = true
