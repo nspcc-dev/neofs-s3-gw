@@ -44,6 +44,23 @@ func TestDeleteObjectVersioned(t *testing.T) {
 	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object exists but shouldn't")
 }
 
+func TestDeleteObjectUnversioned(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-removal-unversioned", "object-to-delete-unversioned"
+	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+
+	checkFound(t, tc, bktName, objName, emptyVersion)
+	deleteObject(t, tc, bktName, objName, emptyVersion)
+	checkNotFound(t, tc, bktName, objName, emptyVersion)
+
+	versions := listVersions(t, tc, bktName)
+	require.Len(t, versions.DeleteMarker, 0, "delete markers must be empty")
+	require.Len(t, versions.Version, 0, "versions must be empty")
+
+	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object exists but shouldn't")
+}
+
 func TestRemoveDeleteMarker(t *testing.T) {
 	tc := prepareHandlerContext(t)
 

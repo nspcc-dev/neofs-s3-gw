@@ -475,7 +475,7 @@ func getRandomOID() (oid.ID, error) {
 }
 
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if len(obj.VersionID) != 0 {
+	if len(obj.VersionID) != 0 || settings.IsNoneStatus {
 		var nodeVersion *data.NodeVersion
 		if nodeVersion, obj.Error = n.getNodeVersionToDelete(ctx, bkt, obj); obj.Error != nil {
 			return obj
