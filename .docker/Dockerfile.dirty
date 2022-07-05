@@ -1,0 +1,9 @@
+FROM alpine AS neofs-s3-gw
+RUN apk add --no-cache bash ca-certificates
+
+WORKDIR /
+
+COPY /bin/neofs-s3-gw /bin/neofs-s3-gw
+COPY /bin/neofs-s3-authmate /bin/neofs-s3-authmate
+
+ENTRYPOINT ["/bin/neofs-s3-gw"]
