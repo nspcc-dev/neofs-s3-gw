@@ -73,7 +73,7 @@ func TestRemoveDeleteMarker(t *testing.T) {
 
 	checkFound(t, tc, bktName, objName, objInfo.Version())
 	deleteObject(t, tc, bktName, objName, deleteMarkerVersion)
-	checkNotFound(t, tc, bktName, objName, emptyVersion)
+	checkFound(t, tc, bktName, objName, emptyVersion)
 
 	require.True(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object doesn't exist but should")
 }
@@ -152,6 +152,24 @@ func TestDeleteObjectFromListCache(t *testing.T) {
 	require.Len(t, versions.Contents, 0)
 
 	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo))
+}
+
+func TestDeleteObjectCheckMarkerReturn(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	createVersionedBucketAndObject(t, tc, bktName, objName)
+
+	deleteMarker := deleteObject(t, tc, bktName, objName, emptyVersion)
+
+	versions := listVersions(t, tc, bktName)
+	require.Len(t, versions.DeleteMarker, 1)
+	require.Equal(t, deleteMarker, versions.DeleteMarker[0].VersionID)
+
+	deleteMarker2 := deleteObject(t, tc, bktName, objName, deleteMarker)
+	versions = listVersions(t, tc, bktName)
+	require.Len(t, versions.DeleteMarker, 0)
+	require.Equal(t, deleteMarker, deleteMarker2)
 }
 
 func createBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {

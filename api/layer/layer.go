@@ -514,6 +514,9 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		obj.Error = fmt.Errorf("couldn't get random oid: %w", err)
 		return obj
 	}
+
+	obj.DeleteMarkVersion = randOID.EncodeToString()
+
 	newVersion = &data.NodeVersion{
 		BaseNodeVersion: data.BaseNodeVersion{
 			OID:      randOID,
