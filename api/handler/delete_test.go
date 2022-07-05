@@ -134,6 +134,26 @@ func TestDeleteMarkers(t *testing.T) {
 	require.Len(t, listOIDsFromMockedNeoFS(t, tc, bktName, objName), 0, "shouldn't be any object in neofs")
 }
 
+func TestDeleteObjectFromListCache(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	bktInfo, objInfo := createVersionedBucketAndObject(t, tc, bktName, objName)
+
+	versions := listObjectsV1(t, tc, bktName)
+	require.Len(t, versions.Contents, 1)
+
+	checkFound(t, tc, bktName, objName, objInfo.Version())
+	deleteObject(t, tc, bktName, objName, objInfo.Version())
+	checkNotFound(t, tc, bktName, objName, objInfo.Version())
+
+	// check cache is clean after object removal
+	versions = listObjectsV1(t, tc, bktName)
+	require.Len(t, versions.Contents, 0)
+
+	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo))
+}
+
 func createBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
 	createTestBucket(tc.Context(), t, tc, bktName)
 	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
@@ -199,6 +219,15 @@ func listVersions(t *testing.T, tc *handlerContext, bktName string) *ListObjects
 	tc.Handler().ListBucketObjectVersionsHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 	res := &ListObjectsVersionsResponse{}
+	parseTestResponse(t, w, res)
+	return res
+}
+
+func listObjectsV1(t *testing.T, tc *handlerContext, bktName string) *ListObjectsV1Response {
+	w, r := prepareTestRequest(t, bktName, "", nil)
+	tc.Handler().ListObjectsV1Handler(w, r)
+	assertStatus(t, w, http.StatusOK)
+	res := &ListObjectsV1Response{}
 	parseTestResponse(t, w, res)
 	return res
 }

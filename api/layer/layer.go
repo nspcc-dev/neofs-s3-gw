@@ -486,6 +486,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		obj.Error = n.treeService.RemoveVersion(ctx, bkt.CID, nodeVersion.ID)
+		n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 		return obj
 	}
 
@@ -528,7 +529,9 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	if obj.Error = n.treeService.AddVersion(ctx, bkt.CID, newVersion); obj.Error != nil {
 		return obj
 	}
+
 	n.namesCache.Delete(bkt.Name + "/" + obj.Name)
+	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 
 	return obj
 }
