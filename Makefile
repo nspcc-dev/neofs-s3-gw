@@ -2,7 +2,7 @@
 
 # Common variables
 REPO ?= $(shell go list -m)
-VERSION ?= $(shell git describe --tags 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
+VERSION ?= $(shell git describe --tags --dirty --always 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 GO_VERSION ?= 1.17
 LINT_VERSION ?= 1.46.2
 BINDIR = bin
@@ -67,13 +67,13 @@ format:
 	@gofmt -s -w ./
 
 # Build clean Docker image
-image: dep
+image:
 	@echo "⇒ Build NeoFS S3 Gateway docker image "
 	@docker build \
 		--build-arg REPO=$(REPO) \
 		--build-arg VERSION=$(VERSION) \
 		--rm \
-		-f Dockerfile \
+		-f .docker/Dockerfile \
 		-t $(HUB_IMAGE):$(HUB_TAG) .
 
 # Push Docker image to the hub
@@ -88,7 +88,7 @@ dirty-image:
 		--build-arg REPO=$(REPO) \
 		--build-arg VERSION=$(VERSION) \
 		--rm \
-		-f Dockerfile.dirty \
+		-f .docker/Dockerfile.dirty \
 		-t $(HUB_IMAGE)-dirty:$(HUB_TAG) .
 
 # Run linters
