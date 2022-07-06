@@ -394,7 +394,7 @@ func TestRemoveUsers(t *testing.T) {
 			Bucket: "bucket",
 		},
 		Operations: []*astOperation{{
-			Users:  []string{"user1", "user3"},
+			Users:  []string{"user1", "user3", "user4"},
 			Role:   eacl.RoleUser,
 			Op:     eacl.OperationPut,
 			Action: eacl.ActionAllow,
@@ -407,11 +407,10 @@ func TestRemoveUsers(t *testing.T) {
 		Action: eacl.ActionAllow,
 	}
 
-	removeUsers(resource, op, []string{"user1", "user2"})
+	removeUsers(resource, op, []string{"user1", "user2", "user4"})
 
 	require.Equal(t, len(resource.Operations), 1)
-	require.Equal(t, resource.Name(), resource.Name())
-	require.Equal(t, resource.Operations[0].Users, []string{"user3"})
+	require.Equal(t, []string{"user3"}, resource.Operations[0].Users)
 }
 
 func TestBucketAclToPolicy(t *testing.T) {

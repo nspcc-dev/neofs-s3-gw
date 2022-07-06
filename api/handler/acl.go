@@ -751,14 +751,13 @@ func addUsers(resource *astResource, astO *astOperation, users []string) {
 func removeUsers(resource *astResource, astOperation *astOperation, users []string) {
 	for _, astOp := range resource.Operations {
 		if astOp.Role == astOperation.Role && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
-			ind := 0
+			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
-				if containsStr(users, user) {
-					astOp.Users = append(astOp.Users[:ind], astOp.Users[ind+1:]...)
-				} else {
-					ind++
+				if !containsStr(users, user) {
+					filteredUsers = append(filteredUsers, user)
 				}
 			}
+			astOp.Users = filteredUsers
 			return
 		}
 	}
