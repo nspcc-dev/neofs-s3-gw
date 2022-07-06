@@ -38,8 +38,7 @@ func TestTableToAst(t *testing.T) {
 	record2 := eacl.NewRecord()
 	record2.SetAction(eacl.ActionDeny)
 	record2.SetOperation(eacl.OperationPut)
-	eacl.AddFormedTarget(record2, eacl.RoleUser, *(*ecdsa.PublicKey)(key.PublicKey()))
-	eacl.AddFormedTarget(record2, eacl.RoleUser, *(*ecdsa.PublicKey)(key2.PublicKey()))
+	eacl.AddFormedTarget(record2, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()), *((*ecdsa.PublicKey)(key2.PublicKey())))
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
 	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
 	table.AddRecord(record2)
@@ -49,9 +48,9 @@ func TestTableToAst(t *testing.T) {
 			{
 				resourceInfo: resourceInfo{Bucket: "bucketName"},
 				Operations: []*astOperation{{
-					Role:   eacl.RoleOthers,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionAllow,
+					IsGroupGrantee: true,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionAllow,
 				}}},
 			{
 				resourceInfo: resourceInfo{
@@ -64,9 +63,9 @@ func TestTableToAst(t *testing.T) {
 						hex.EncodeToString(key.PublicKey().Bytes()),
 						hex.EncodeToString(key2.PublicKey().Bytes()),
 					},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionDeny,
+					IsGroupGrantee: false,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionDeny,
 				}}},
 		},
 	}
@@ -112,9 +111,9 @@ func TestPolicyToAst(t *testing.T) {
 					Bucket: "bucketName",
 				},
 				Operations: []*astOperation{{
-					Role:   eacl.RoleOthers,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionAllow,
+					IsGroupGrantee: true,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionAllow,
 				}},
 			},
 			{
@@ -122,7 +121,7 @@ func TestPolicyToAst(t *testing.T) {
 					Bucket: "bucketName",
 					Object: "object",
 				},
-				Operations: getReadOps(key, eacl.RoleUser, eacl.ActionDeny),
+				Operations: getReadOps(key, false, eacl.ActionDeny),
 			},
 		},
 	}
@@ -139,15 +138,15 @@ func TestPolicyToAst(t *testing.T) {
 	}
 }
 
-func getReadOps(key *keys.PrivateKey, role eacl.Role, action eacl.Action) []*astOperation {
+func getReadOps(key *keys.PrivateKey, groupGrantee bool, action eacl.Action) []*astOperation {
 	var result []*astOperation
 
 	for _, op := range readOps {
 		result = append(result, &astOperation{
-			Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
-			Role:   role,
-			Op:     op,
-			Action: action,
+			Users:          []string{hex.EncodeToString(key.PublicKey().Bytes())},
+			IsGroupGrantee: groupGrantee,
+			Op:             op,
+			Action:         action,
 		})
 	}
 
@@ -166,10 +165,10 @@ func TestMergeAstUnModified(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionDeny,
+					Users:          []string{hex.EncodeToString(key.PublicKey().Bytes())},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionDeny,
 				}},
 			},
 		},
@@ -182,9 +181,9 @@ func TestMergeAstUnModified(t *testing.T) {
 					Bucket: "bucket",
 				},
 				Operations: []*astOperation{{
-					Role:   eacl.RoleOthers,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionAllow,
+					IsGroupGrantee: true,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionAllow,
 				}},
 			},
 			child.Resources[0],
@@ -205,14 +204,14 @@ func TestMergeAstModified(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Role:   eacl.RoleOthers,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionDeny,
+					IsGroupGrantee: true,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionDeny,
 				}, {
-					Users:  []string{"user2"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionDeny,
+					Users:          []string{"user2"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionDeny,
 				}},
 			},
 		},
@@ -226,10 +225,10 @@ func TestMergeAstModified(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{"user1"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionDeny,
+					Users:          []string{"user1"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionDeny,
 				}},
 			},
 		},
@@ -245,10 +244,10 @@ func TestMergeAstModified(t *testing.T) {
 				Operations: []*astOperation{
 					child.Resources[0].Operations[0],
 					{
-						Users:  []string{"user1", "user2"},
-						Role:   eacl.RoleUser,
-						Op:     eacl.OperationGet,
-						Action: eacl.ActionDeny,
+						Users:          []string{"user1", "user2"},
+						IsGroupGrantee: false,
+						Op:             eacl.OperationGet,
+						Action:         eacl.ActionDeny,
 					},
 				},
 			},
@@ -269,15 +268,15 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{"user1"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionDeny,
+					Users:          []string{"user1"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionDeny,
 				}, {
-					Users:  []string{"user3"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionAllow,
+					Users:          []string{"user3"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionAllow,
 				}},
 			},
 		},
@@ -291,20 +290,20 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{"user1"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionAllow,
+					Users:          []string{"user1"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionAllow,
 				}, {
-					Users:  []string{"user2"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionDeny,
+					Users:          []string{"user2"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionDeny,
 				}, {
-					Users:  []string{"user3"},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionDeny,
+					Users:          []string{"user3"},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionDeny,
 				}},
 			},
 		},
@@ -319,15 +318,15 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 				},
 				Operations: []*astOperation{
 					{
-						Users:  []string{"user2", "user1"},
-						Role:   eacl.RoleUser,
-						Op:     eacl.OperationPut,
-						Action: eacl.ActionDeny,
+						Users:          []string{"user2", "user1"},
+						IsGroupGrantee: false,
+						Op:             eacl.OperationPut,
+						Action:         eacl.ActionDeny,
 					}, {
-						Users:  []string{"user3"},
-						Role:   eacl.RoleUser,
-						Op:     eacl.OperationGet,
-						Action: eacl.ActionAllow,
+						Users:          []string{"user3"},
+						IsGroupGrantee: false,
+						Op:             eacl.OperationGet,
+						Action:         eacl.ActionAllow,
 					},
 				},
 			},
@@ -350,10 +349,10 @@ func TestAstToTable(t *testing.T) {
 					Bucket: "bucketName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
-					Role:   eacl.RoleUser,
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionAllow,
+					Users:          []string{hex.EncodeToString(key.PublicKey().Bytes())},
+					IsGroupGrantee: false,
+					Op:             eacl.OperationPut,
+					Action:         eacl.ActionAllow,
 				}},
 			},
 			{
@@ -362,9 +361,9 @@ func TestAstToTable(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Role:   eacl.RoleOthers,
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionDeny,
+					IsGroupGrantee: true,
+					Op:             eacl.OperationGet,
+					Action:         eacl.ActionDeny,
 				}},
 			},
 		},
@@ -374,7 +373,7 @@ func TestAstToTable(t *testing.T) {
 	record := eacl.NewRecord()
 	record.SetAction(eacl.ActionAllow)
 	record.SetOperation(eacl.OperationPut)
-	eacl.AddFormedTarget(record, eacl.RoleUser, *(*ecdsa.PublicKey)(key.PublicKey()))
+	eacl.AddFormedTarget(record, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
 	expectedTable.AddRecord(record)
 	record2 := eacl.NewRecord()
 	record2.SetAction(eacl.ActionDeny)
@@ -394,17 +393,17 @@ func TestRemoveUsers(t *testing.T) {
 			Bucket: "bucket",
 		},
 		Operations: []*astOperation{{
-			Users:  []string{"user1", "user3", "user4"},
-			Role:   eacl.RoleUser,
-			Op:     eacl.OperationPut,
-			Action: eacl.ActionAllow,
+			Users:          []string{"user1", "user3", "user4"},
+			IsGroupGrantee: false,
+			Op:             eacl.OperationPut,
+			Action:         eacl.ActionAllow,
 		}},
 	}
 
 	op := &astOperation{
-		Role:   eacl.RoleUser,
-		Op:     eacl.OperationPut,
-		Action: eacl.ActionAllow,
+		IsGroupGrantee: false,
+		Op:             eacl.OperationPut,
+		Action:         eacl.ActionAllow,
 	}
 
 	removeUsers(resource, op, []string{"user1", "user2", "user4"})
@@ -783,9 +782,9 @@ func TestObjectAclToAst(t *testing.T) {
 			hex.EncodeToString(key.PublicKey().Bytes()),
 			hex.EncodeToString(key2.PublicKey().Bytes()),
 		},
-			Role:   eacl.RoleUser,
-			Op:     op,
-			Action: eacl.ActionAllow,
+			IsGroupGrantee: false,
+			Op:             op,
+			Action:         eacl.ActionAllow,
 		}
 		operations = append(operations, astOp)
 	}
@@ -846,9 +845,9 @@ func TestBucketAclToAst(t *testing.T) {
 		astOp := &astOperation{Users: []string{
 			hex.EncodeToString(key.PublicKey().Bytes()),
 		},
-			Role:   eacl.RoleUser,
-			Op:     op,
-			Action: eacl.ActionAllow,
+			IsGroupGrantee: false,
+			Op:             op,
+			Action:         eacl.ActionAllow,
 		}
 		operations = append(operations, astOp)
 	}
@@ -857,17 +856,17 @@ func TestBucketAclToAst(t *testing.T) {
 			hex.EncodeToString(key.PublicKey().Bytes()),
 			hex.EncodeToString(key2.PublicKey().Bytes()),
 		},
-			Role:   eacl.RoleUser,
-			Op:     op,
-			Action: eacl.ActionAllow,
+			IsGroupGrantee: false,
+			Op:             op,
+			Action:         eacl.ActionAllow,
 		}
 		operations = append(operations, astOp)
 	}
 	for _, op := range readOps {
 		astOp := &astOperation{
-			Role:   eacl.RoleOthers,
-			Op:     op,
-			Action: eacl.ActionAllow,
+			IsGroupGrantee: true,
+			Op:             op,
+			Action:         eacl.ActionAllow,
 		}
 		operations = append(operations, astOp)
 	}
