@@ -440,9 +440,16 @@ func parsePolicies(val string) (authmate.ContainerPolicies, error) {
 	if val == "" {
 		return nil, nil
 	}
-	data, err := os.ReadFile(val)
-	if err != nil {
+
+	var (
 		data = []byte(val)
+		err  error
+	)
+
+	if !json.Valid(data) {
+		if data, err = os.ReadFile(val); err != nil {
+			return nil, fmt.Errorf("coudln't read json file or its content is invalid")
+		}
 	}
 
 	var policies authmate.ContainerPolicies
