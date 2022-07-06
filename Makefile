@@ -109,6 +109,7 @@ version:
 
 # Clean up
 clean:
+	rm -rf .cache
 	rm -rf $(BINDIR)
 
 protoc:
