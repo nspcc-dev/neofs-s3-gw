@@ -800,15 +800,15 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 		if astOp.IsGroupGrantee() {
 			eacl.AddFormedTarget(record, eacl.RoleOthers)
 		} else {
-			// TODO(av): optimize target
+			targetKeys := make([]ecdsa.PublicKey, 0, len(astOp.Users))
 			for _, user := range astOp.Users {
 				pk, err := keys.NewPublicKeyFromString(user)
 				if err != nil {
 					return nil, fmt.Errorf("public key from string: %w", err)
 				}
-				// Unknown role is used, because it is ignored when keys are set
-				eacl.AddFormedTarget(record, eacl.RoleUnknown, (ecdsa.PublicKey)(*pk))
+				targetKeys = append(targetKeys, (ecdsa.PublicKey)(*pk))
 			}
+			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
 		}
 		if len(resource.Object) != 0 {
 			if len(resource.Version) != 0 {
