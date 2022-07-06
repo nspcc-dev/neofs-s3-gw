@@ -122,10 +122,13 @@ func (r *resourceInfo) IsBucket() bool {
 }
 
 type astOperation struct {
-	Users          []string
-	IsGroupGrantee bool
-	Op             eacl.Operation
-	Action         eacl.Action
+	Users  []string
+	Op     eacl.Operation
+	Action eacl.Action
+}
+
+func (a astOperation) IsGroupGrantee() bool {
+	return len(a.Users) == 0
 }
 
 func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
@@ -618,14 +621,14 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 			switch len(ops) {
 			case 2:
 				// potential inconsistency
-				if astOp.IsGroupGrantee {
+				if groupGrantee := astOp.IsGroupGrantee(); groupGrantee {
 					// it is not likely (such state must be detected early)
 					// inconsistency
 					action := eacl.ActionAllow
 					if astOp.Action == eacl.ActionAllow {
 						action = eacl.ActionDeny
 					}
-					removeAstOp(parentResource, astOp.IsGroupGrantee, astOp.Op, action)
+					removeAstOp(parentResource, groupGrantee, astOp.Op, action)
 					updated = true
 					continue
 				}
@@ -641,15 +644,12 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 				if handleRemoveOperations(parentResource, astOp, opToDelete) {
 					updated = true
 				}
-				if !opToDelete.IsGroupGrantee && len(opToDelete.Users) == 0 {
-					removeAstOp(parentResource, opToDelete.IsGroupGrantee, opToDelete.Op, opToDelete.Action)
-				}
 			case 1:
 				if astOp.Action != ops[0].Action {
 					// potential inconsistency
-					if astOp.IsGroupGrantee {
+					if groupGrantee := astOp.IsGroupGrantee(); groupGrantee {
 						// inconsistency
-						removeAstOp(parentResource, astOp.IsGroupGrantee, astOp.Op, ops[0].Action)
+						removeAstOp(parentResource, groupGrantee, astOp.Op, ops[0].Action)
 						parentResource.Operations = append(parentResource.Operations, astOp)
 						updated = true
 						continue
@@ -657,9 +657,6 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 
 					if handleRemoveOperations(parentResource, astOp, ops[0]) {
 						updated = true
-					}
-					if !ops[0].IsGroupGrantee && len(ops[0].Users) == 0 {
-						removeAstOp(parentResource, ops[0].IsGroupGrantee, ops[0].Op, ops[0].Action)
 					}
 					parentResource.Operations = append(parentResource.Operations, astOp)
 					continue
@@ -723,7 +720,7 @@ func containsStr(list []string, element string) bool {
 func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
 	var res []*astOperation
 	for _, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee == childOp.IsGroupGrantee && astOp.Op == childOp.Op {
+		if astOp.IsGroupGrantee() == childOp.IsGroupGrantee() && astOp.Op == childOp.Op {
 			res = append(res, astOp)
 		}
 	}
@@ -732,7 +729,7 @@ func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
 
 func removeAstOp(resource *astResource, group bool, op eacl.Operation, action eacl.Action) {
 	for i, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee == group && astOp.Op == op && astOp.Action == action {
+		if astOp.IsGroupGrantee() == group && astOp.Op == op && astOp.Action == action {
 			resource.Operations = append(resource.Operations[:i], resource.Operations[i+1:]...)
 			return
 		}
@@ -741,7 +738,7 @@ func removeAstOp(resource *astResource, group bool, op eacl.Operation, action ea
 
 func addUsers(resource *astResource, astO *astOperation, users []string) {
 	for _, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee == astO.IsGroupGrantee && astOp.Op == astO.Op && astOp.Action == astO.Action {
+		if astOp.IsGroupGrantee() == astO.IsGroupGrantee() && astOp.Op == astO.Op && astOp.Action == astO.Action {
 			astOp.Users = append(astO.Users, users...)
 			return
 		}
@@ -749,15 +746,19 @@ func addUsers(resource *astResource, astO *astOperation, users []string) {
 }
 
 func removeUsers(resource *astResource, astOperation *astOperation, users []string) {
-	for _, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee == astOperation.IsGroupGrantee && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
+	for ind, astOp := range resource.Operations {
+		if !astOp.IsGroupGrantee() && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
 			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
 				if !containsStr(users, user) {
 					filteredUsers = append(filteredUsers, user)
 				}
 			}
-			astOp.Users = filteredUsers
+			if len(filteredUsers) == 0 { // remove ast resource
+				resource.Operations = append(resource.Operations[:ind], resource.Operations[ind+1:]...)
+			} else {
+				astOp.Users = filteredUsers
+			}
 			return
 		}
 	}
@@ -796,7 +797,7 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 		record := eacl.NewRecord()
 		record.SetOperation(astOp.Op)
 		record.SetAction(astOp.Action)
-		if astOp.IsGroupGrantee {
+		if astOp.IsGroupGrantee() {
 			eacl.AddFormedTarget(record, eacl.RoleOthers)
 		} else {
 			// TODO(av): optimize target
@@ -832,7 +833,7 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 	)
 
 	for _, astOp := range operations {
-		if astOp.Op == rec.Operation() && astOp.IsGroupGrantee == groupTarget {
+		if astOp.Op == rec.Operation() && astOp.IsGroupGrantee() == groupTarget {
 			found = astOp
 		}
 	}
@@ -845,9 +846,8 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 		}
 	} else {
 		astOperation := &astOperation{
-			IsGroupGrantee: groupTarget,
-			Op:             rec.Operation(),
-			Action:         rec.Action(),
+			Op:     rec.Operation(),
+			Action: rec.Action(),
 		}
 		if !groupTarget {
 			for _, key := range target.BinaryKeys() {
@@ -922,7 +922,7 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 	userOpsMap := make(map[string][]eacl.Operation)
 
 	for _, op := range list {
-		if !op.IsGroupGrantee {
+		if !op.IsGroupGrantee() {
 			for _, user := range op.Users {
 				userOps := userOpsMap[user]
 				userOps = append(userOps, op.Op)
@@ -976,7 +976,7 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee bool, action eacl.Action) []*astOperation {
 	var found *astOperation
 	for _, astop := range list {
-		if astop.Op == op && astop.IsGroupGrantee == groupGrantee {
+		if astop.Op == op && astop.IsGroupGrantee() == groupGrantee {
 			found = astop
 		}
 	}
@@ -987,9 +987,8 @@ func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee 
 		}
 	} else {
 		astoperation := &astOperation{
-			IsGroupGrantee: groupGrantee,
-			Op:             op,
-			Action:         action,
+			Op:     op,
+			Action: action,
 		}
 		if !groupGrantee {
 			astoperation.Users = append(astoperation.Users, userID)
