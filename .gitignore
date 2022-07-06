@@ -8,6 +8,7 @@ vendor
 # tempfiles
 .DS_Store
 *~
+.cache
 
 # binary
 bin/
