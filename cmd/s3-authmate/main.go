@@ -185,7 +185,7 @@ func issueSecret() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:        "bearer-rules",
-				Usage:       "rules for bearer token as plain json string",
+				Usage:       "rules for bearer token (filepath or a plain json string are allowed)",
 				Required:    false,
 				Destination: &eaclRulesFlag,
 			},
@@ -448,7 +448,7 @@ func parsePolicies(val string) (authmate.ContainerPolicies, error) {
 
 	if !json.Valid(data) {
 		if data, err = os.ReadFile(val); err != nil {
-			return nil, fmt.Errorf("coudln't read json file or its content is invalid")
+			return nil, fmt.Errorf("coudln't read json file or provided json is invalid")
 		}
 	}
 
@@ -478,7 +478,7 @@ func getJSONRules(val string) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("coudln't read json file or its content is invalid")
+	return nil, fmt.Errorf("coudln't read json file or provided json is invalid")
 }
 
 // getSessionRules reads json session rules.
