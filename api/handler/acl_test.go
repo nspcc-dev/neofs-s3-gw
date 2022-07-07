@@ -38,6 +38,7 @@ func TestTableToAst(t *testing.T) {
 	record2 := eacl.NewRecord()
 	record2.SetAction(eacl.ActionDeny)
 	record2.SetOperation(eacl.OperationPut)
+	// Unknown role is used, because it is ignored when keys are set
 	eacl.AddFormedTarget(record2, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()), *((*ecdsa.PublicKey)(key2.PublicKey())))
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
 	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
@@ -360,6 +361,7 @@ func TestAstToTable(t *testing.T) {
 	record := eacl.NewRecord()
 	record.SetAction(eacl.ActionAllow)
 	record.SetOperation(eacl.OperationPut)
+	// Unknown role is used, because it is ignored when keys are set
 	eacl.AddFormedTarget(record, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
 	expectedTable.AddRecord(record)
 	record2 := eacl.NewRecord()

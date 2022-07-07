@@ -808,6 +808,7 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 				}
 				targetKeys = append(targetKeys, (ecdsa.PublicKey)(*pk))
 			}
+			// Unknown role is used, because it is ignored when keys are set
 			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
 		}
 		if len(resource.Object) != 0 {
