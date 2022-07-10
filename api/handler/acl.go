@@ -784,7 +784,7 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 	table := eacl.NewTable()
 
 	for i := len(ast.Resources) - 1; i >= 0; i-- {
-		records, err := formRecords(ast.Resources[i].Operations, ast.Resources[i])
+		records, err := formRecords(ast.Resources[i])
 		if err != nil {
 			return nil, fmt.Errorf("form records: %w", err)
 		}
@@ -796,10 +796,10 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 	return table, nil
 }
 
-func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Record, error) {
+func formRecords(resource *astResource) ([]*eacl.Record, error) {
 	var res []*eacl.Record
 
-	for _, astOp := range operations {
+	for _, astOp := range resource.Operations {
 		record := eacl.NewRecord()
 		record.SetOperation(astOp.Op)
 		record.SetAction(astOp.Action)
