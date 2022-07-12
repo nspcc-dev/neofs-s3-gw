@@ -818,8 +818,9 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 					return nil, fmt.Errorf("parse object version (oid): %w", err)
 				}
 				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
+			} else {
+				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
 			}
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
 		}
 		res = append(res, record)
 	}
@@ -883,7 +884,17 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			if !ok {
 				r = &astResource{resourceInfo: resourceInfo{Bucket: bktPolicy.Bucket}}
 				if trimmedResource != bktPolicy.Bucket {
-					r.Object = strings.TrimPrefix(trimmedResource, bktPolicy.Bucket+"/")
+					versionedObject := strings.TrimPrefix(trimmedResource, bktPolicy.Bucket+"/")
+					objVersion := strings.Split(versionedObject, ":")
+					if len(objVersion) <= 2 {
+						r.Object = objVersion[0]
+						if len(objVersion) == 2 {
+							r.Version = objVersion[1]
+						}
+					} else {
+						r.Object = strings.Join(objVersion[:len(objVersion)-1], ":")
+						r.Version = objVersion[len(objVersion)-1]
+					}
 				}
 			}
 			for _, action := range state.Action {
@@ -1068,6 +1079,7 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 
 	return &bucketPolicy{
 		Statement: results,
+		Bucket:    resInfo.Bucket,
 	}, nil
 }
 

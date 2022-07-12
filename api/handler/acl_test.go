@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -444,6 +445,7 @@ func TestBucketAclToPolicy(t *testing.T) {
 	}
 
 	expectedPolicy := &bucketPolicy{
+		Bucket: resInfo.Bucket,
 		Statement: []statement{
 			{
 				Effect: "Allow",
@@ -452,12 +454,14 @@ func TestBucketAclToPolicy(t *testing.T) {
 				},
 				Action:   []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:PutObject", "s3:DeleteObject"},
 				Resource: []string{arnAwsPrefix + resInfo.Name()},
-			}, {
+			},
+			{
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
 				Action:    []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads"},
 				Resource:  []string{arnAwsPrefix + resInfo.Name()},
-			}, {
+			},
+			{
 				Effect: "Allow",
 				Principal: principal{
 					CanonicalUser: id2,
@@ -514,6 +518,7 @@ func TestObjectAclToPolicy(t *testing.T) {
 	}
 
 	expectedPolicy := &bucketPolicy{
+		Bucket: resInfo.Bucket,
 		Statement: []statement{
 			{
 				Effect: "Allow",
@@ -530,7 +535,8 @@ func TestObjectAclToPolicy(t *testing.T) {
 				},
 				Action:   []string{"s3:GetObject", "s3:GetObjectVersion"},
 				Resource: []string{arnAwsPrefix + resInfo.Name()},
-			}, {
+			},
+			{
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
 				Action:    []string{"s3:GetObject", "s3:GetObjectVersion"},
@@ -542,6 +548,104 @@ func TestObjectAclToPolicy(t *testing.T) {
 	actualPolicy, err := aclToPolicy(acl, resInfo)
 	require.NoError(t, err)
 	require.Equal(t, expectedPolicy, actualPolicy)
+}
+
+func TestObjectWithVersionAclToTable(t *testing.T) {
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	id := hex.EncodeToString(key.PublicKey().Bytes())
+
+	acl := &AccessControlPolicy{
+		Owner: Owner{
+			ID:          id,
+			DisplayName: "user1",
+		},
+		AccessControlList: []*Grant{{
+			Grantee: &Grantee{
+				ID:   id,
+				Type: acpCanonicalUser,
+			},
+			Permission: aclFullControl,
+		}},
+	}
+
+	resInfoObject := &resourceInfo{
+		Bucket: "bucketName",
+		Object: "object",
+	}
+	expectedTable := allowedTableForObject(t, key, resInfoObject)
+	actualTable := tableFromACL(t, acl, resInfoObject)
+	checkTables(t, expectedTable, actualTable)
+
+	resInfoObjectVersion := &resourceInfo{
+		Bucket:  "bucketName",
+		Object:  "objectVersion",
+		Version: "Gfrct4Afhio8pCGCCKVNTf1kyexQjMBeaUfvDtQCkAvg",
+	}
+	expectedTable = allowedTableForObject(t, key, resInfoObjectVersion)
+	actualTable = tableFromACL(t, acl, resInfoObjectVersion)
+	checkTables(t, expectedTable, actualTable)
+}
+
+func allowedTableForObject(t *testing.T, key *keys.PrivateKey, resInfo *resourceInfo) *eacl.Table {
+	var isVersion bool
+	var objID oid.ID
+	if resInfo.Version != "" {
+		isVersion = true
+		err := objID.DecodeString(resInfo.Version)
+		require.NoError(t, err)
+	}
+
+	expectedTable := eacl.NewTable()
+	for _, op := range readOps {
+		record := getAllowRecord(op, key.PublicKey())
+		if isVersion {
+			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+		} else {
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resInfo.Object)
+		}
+		expectedTable.AddRecord(record)
+	}
+
+	return expectedTable
+}
+
+func tableFromACL(t *testing.T, acl *AccessControlPolicy, resInfo *resourceInfo) *eacl.Table {
+	actualPolicy, err := aclToPolicy(acl, resInfo)
+	require.NoError(t, err)
+	actualAst, err := policyToAst(actualPolicy)
+	require.NoError(t, err)
+	actualTable, err := astToTable(actualAst)
+	require.NoError(t, err)
+	return actualTable
+}
+
+func checkTables(t *testing.T, expectedTable, actualTable *eacl.Table) {
+	require.Equal(t, len(expectedTable.Records()), len(actualTable.Records()), "different number of records")
+	for i, record := range expectedTable.Records() {
+		actRecord := actualTable.Records()[i]
+
+		require.Equal(t, len(record.Targets()), len(actRecord.Targets()), "different number of targets")
+		for j, target := range record.Targets() {
+			actTarget := actRecord.Targets()[j]
+
+			expected := fmt.Sprintf("%s %v", target.Role().String(), target.BinaryKeys())
+			actual := fmt.Sprintf("%s %v", actTarget.Role().String(), actTarget.BinaryKeys())
+			require.Equalf(t, target, actTarget, "want: '%s'\ngot: '%s'", expected, actual)
+		}
+
+		require.Equal(t, len(record.Filters()), len(actRecord.Filters()), "different number of filters")
+		for j, filter := range record.Filters() {
+			actFilter := actRecord.Filters()[j]
+
+			expected := fmt.Sprintf("%s:%s %s %s", filter.From().String(), filter.Key(), filter.Matcher().String(), filter.Value())
+			actual := fmt.Sprintf("%s:%s %s %s", actFilter.From().String(), actFilter.Key(), actFilter.Matcher().String(), actFilter.Value())
+			require.Equalf(t, filter, actFilter, "want: '%s'\ngot: '%s'", expected, actual)
+		}
+
+		require.Equal(t, record.Action().String(), actRecord.Action().String())
+		require.Equal(t, record.Operation().String(), actRecord.Operation().String())
+	}
 }
 
 func TestParseCannedACLHeaders(t *testing.T) {
