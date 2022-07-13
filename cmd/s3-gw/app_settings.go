@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -259,7 +260,7 @@ func newSettings() *viper.Viper {
 
 		os.Exit(0)
 	case versionFlag != nil && *versionFlag:
-		fmt.Printf("NeoFS S3 gateway %s\n", version.Version)
+		fmt.Printf("NeoFS S3 Gateway\nVersion: %s\nGoVersion: %s\n", version.Version, runtime.Version())
 		os.Exit(0)
 	}
 

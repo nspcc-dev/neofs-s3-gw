@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -109,11 +110,14 @@ func prepare() (context.Context, *zap.Logger) {
 
 func main() {
 	app := &cli.App{
-		Name:     "NeoFS gate authentication manager",
+		Name:     "NeoFS S3 Authmate",
 		Usage:    "Helps manage delegated access via gates to data stored in NeoFS network",
 		Version:  version.Version,
 		Flags:    appFlags(),
 		Commands: appCommands(),
+	}
+	cli.VersionPrinter = func(c *cli.Context) {
+		fmt.Printf("%s\nVersion: %s\nGoVersion: %s\n", c.App.Name, c.App.Version, runtime.Version())
 	}
 
 	viper.AutomaticEnv()
