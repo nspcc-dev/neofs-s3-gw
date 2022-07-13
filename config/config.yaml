@@ -85,7 +85,7 @@ cache:
 
 nats:
   enabled: true
-  endpoint: nats://127.0.0.1:4222
+  endpoint: nats://localhost:4222
   timeout: 30s
   cert_file: /path/to/cert
   key_file: /path/to/key
