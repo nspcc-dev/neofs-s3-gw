@@ -60,13 +60,14 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 	info.LocationConstraint = cnr.Attribute(attributeLocationConstraint)
 
 	attrLockEnabled := cnr.Attribute(AttributeLockEnabled)
-
-	info.ObjectLockEnabled, err = strconv.ParseBool(attrLockEnabled)
-	if err != nil {
-		log.Error("could not parse container object lock enabled attribute",
-			zap.String("lock_enabled", attrLockEnabled),
-			zap.Error(err),
-		)
+	if len(attrLockEnabled) > 0 {
+		info.ObjectLockEnabled, err = strconv.ParseBool(attrLockEnabled)
+		if err != nil {
+			log.Error("could not parse container object lock enabled attribute",
+				zap.String("lock_enabled", attrLockEnabled),
+				zap.Error(err),
+			)
+		}
 	}
 
 	if err = n.bucketCache.Put(info); err != nil {
