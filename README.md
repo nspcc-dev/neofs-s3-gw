@@ -92,3 +92,6 @@ AmazonS3 s3Client = AmazonS3ClientBuilder.standard()
 - [AWS S3 API compatibility](./docs/aws_s3_compat.md)
 - [AWS S3 Compatibility test results](./docs/s3_test_results.md)
 
+## Credits 
+
+Please see [CREDITS](CREDITS.md) for details.
