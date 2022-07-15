@@ -268,8 +268,20 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.ObjectName)); err != nil {
-		h.logAndSendError(w, "something went wrong", reqInfo, err)
+	prm := &layer.HeadObjectParams{
+		BktInfo:   bktInfo,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), prm)
+	if err != nil {
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, objInfo.Version())); err != nil {
+		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
 
@@ -811,16 +823,14 @@ func formRecords(operations []*astOperation, resource *astResource) ([]*eacl.Rec
 			// Unknown role is used, because it is ignored when keys are set
 			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
 		}
-		if len(resource.Object) != 0 {
-			if len(resource.Version) != 0 {
-				var id oid.ID
-				if err := id.DecodeString(resource.Version); err != nil {
-					return nil, fmt.Errorf("parse object version (oid): %w", err)
-				}
-				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
-			} else {
-				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
+		if len(resource.Version) != 0 {
+			var id oid.ID
+			if err := id.DecodeString(resource.Version); err != nil {
+				return nil, fmt.Errorf("parse object version (oid): %w", err)
 			}
+			record.AddObjectIDFilter(eacl.MatchStringEqual, id)
+		} else if len(resource.Object) != 0 {
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
 		}
 		res = append(res, record)
 	}
@@ -1161,7 +1171,7 @@ func isWriteOperation(op eacl.Operation) bool {
 	return op == eacl.OperationDelete || op == eacl.OperationPut
 }
 
-func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectName string) *AccessControlPolicy {
+func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectVersion string) *AccessControlPolicy {
 	res := &AccessControlPolicy{
 		Owner: Owner{
 			ID:          bucketACL.Info.Owner.String(),
@@ -1177,11 +1187,11 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectName string)
 			continue
 		}
 
-		if objectName != "" {
+		if objectVersion != "" {
 			var found bool
 			for _, filter := range record.Filters() {
 				if filter.Matcher() == eacl.MatchStringEqual &&
-					filter.Key() == object.AttributeFileName && filter.Value() == objectName {
+					(filter.Key() == v2acl.FilterObjectID && filter.Value() == objectVersion) {
 					found = true
 				}
 			}
