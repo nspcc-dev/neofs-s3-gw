@@ -10,6 +10,8 @@ import (
 	stderrors "errors"
 	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -92,6 +94,11 @@ type principal struct {
 	CanonicalUser string `json:"CanonicalUser,omitempty"`
 }
 
+type orderedAstResource struct {
+	Index    int
+	Resource *astResource
+}
+
 type ast struct {
 	Resources []*astResource
 }
@@ -131,6 +138,23 @@ func (a astOperation) IsGroupGrantee() bool {
 	return len(a.Users) == 0
 }
 
+const (
+	serviceRecordResourceKey    = "Resource"
+	serviceRecordGroupLengthKey = "GroupLength"
+)
+
+type ServiceRecord struct {
+	Resource           string
+	GroupRecordsLength int
+}
+
+func (s ServiceRecord) ToEACLRecord() *eacl.Record {
+	serviceRecord := eacl.NewRecord()
+	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordResourceKey, s.Resource)
+	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordGroupLengthKey, strconv.Itoa(s.GroupRecordsLength))
+	return serviceRecord
+}
+
 func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
@@ -146,7 +170,7 @@ func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeBucketACL(bucketACL)); err != nil {
+	if err = api.EncodeToResponse(w, h.encodeBucketACL(bktInfo.Name, bucketACL)); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
 	}
@@ -268,8 +292,20 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.ObjectName)); err != nil {
-		h.logAndSendError(w, "something went wrong", reqInfo, err)
+	prm := &layer.HeadObjectParams{
+		BktInfo:   bktInfo,
+		Object:    reqInfo.ObjectName,
+		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), prm)
+	if err != nil {
+		h.logAndSendError(w, "could not object info", reqInfo, err)
+		return
+	}
+
+	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.Version())); err != nil {
+		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
 
@@ -566,49 +602,85 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 }
 
 func tableToAst(table *eacl.Table, bktName string) *ast {
-	result := &ast{}
-	metResources := make(map[string]int)
+	resourceMap := make(map[string]orderedAstResource)
 
-	for i := len(table.Records()) - 1; i >= 0; i-- {
-		resName := bktName
-		var objectName string
-		var version string
-		record := table.Records()[i]
-		for _, filter := range record.Filters() {
-			if filter.Matcher() == eacl.MatchStringEqual {
-				if filter.Key() == object.AttributeFileName {
-					objectName = filter.Value()
-					resName += "/" + objectName
-				} else if filter.Key() == v2acl.FilterObjectID {
-					version = filter.Value()
-					resName += "/" + version
-				}
-			}
-		}
-		idx, ok := metResources[resName]
-		if !ok {
-			resource := &astResource{resourceInfo: resourceInfo{
-				Bucket:  bktName,
-				Object:  objectName,
-				Version: version,
-			}}
-			result.Resources = append(result.Resources, resource)
-			idx = len(result.Resources) - 1
-			metResources[resName] = idx
-		}
+	var groupRecordsLeft int
+	var currentResource orderedAstResource
+	for i, record := range table.Records() {
+		if serviceRec := tryServiceRecord(record); serviceRec != nil {
+			resInfo := resourceInfoFromName(serviceRec.Resource, bktName)
+			groupRecordsLeft = serviceRec.GroupRecordsLength
 
-		for _, target := range record.Targets() {
-			result.Resources[idx].Operations = addToList(result.Resources[idx].Operations, record, target)
+			currentResource = getResourceOrCreate(resourceMap, i, resInfo)
+			resourceMap[resInfo.Name()] = currentResource
+		} else if groupRecordsLeft != 0 {
+			groupRecordsLeft--
+			addOperationsAndUpdateMap(currentResource, record, resourceMap)
+		} else {
+			resInfo := resInfoFromFilters(bktName, record.Filters())
+			resource := getResourceOrCreate(resourceMap, i, resInfo)
+			addOperationsAndUpdateMap(resource, record, resourceMap)
 		}
 	}
 
-	for _, res := range result.Resources {
-		for i, j := 0, len(res.Operations)-1; i < j; i, j = i+1, j-1 {
-			res.Operations[i], res.Operations[j] = res.Operations[j], res.Operations[i]
+	return &ast{
+		Resources: formReverseOrderResources(resourceMap),
+	}
+}
+
+func formReverseOrderResources(resourceMap map[string]orderedAstResource) []*astResource {
+	orderedResources := make([]orderedAstResource, 0, len(resourceMap))
+	for _, resource := range resourceMap {
+		orderedResources = append(orderedResources, resource)
+	}
+	sort.Slice(orderedResources, func(i, j int) bool {
+		return orderedResources[i].Index >= orderedResources[j].Index // reverse order
+	})
+
+	result := make([]*astResource, len(orderedResources))
+	for i, ordered := range orderedResources {
+		res := ordered.Resource
+		for j, k := 0, len(res.Operations)-1; j < k; j, k = j+1, k-1 {
+			res.Operations[j], res.Operations[k] = res.Operations[k], res.Operations[j]
 		}
+
+		result[i] = res
 	}
 
 	return result
+}
+
+func addOperationsAndUpdateMap(orderedRes orderedAstResource, record eacl.Record, resMap map[string]orderedAstResource) {
+	for _, target := range record.Targets() {
+		orderedRes.Resource.Operations = addToList(orderedRes.Resource.Operations, record, target)
+	}
+	resMap[orderedRes.Resource.Name()] = orderedRes
+}
+
+func getResourceOrCreate(resMap map[string]orderedAstResource, index int, resInfo resourceInfo) orderedAstResource {
+	resource, ok := resMap[resInfo.Name()]
+	if !ok {
+		resource = orderedAstResource{
+			Index:    index,
+			Resource: &astResource{resourceInfo: resInfo},
+		}
+	}
+	return resource
+}
+
+func resInfoFromFilters(bucketName string, filters []eacl.Filter) resourceInfo {
+	resInfo := resourceInfo{Bucket: bucketName}
+	for _, filter := range filters {
+		if filter.Matcher() == eacl.MatchStringEqual {
+			if filter.Key() == object.AttributeFileName {
+				resInfo.Object = filter.Value()
+			} else if filter.Key() == v2acl.FilterObjectID {
+				resInfo.Version = filter.Value()
+			}
+		}
+	}
+
+	return resInfo
 }
 
 func mergeAst(parent, child *ast) (*ast, bool) {
@@ -788,6 +860,13 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 		if err != nil {
 			return nil, fmt.Errorf("form records: %w", err)
 		}
+
+		serviceRecord := ServiceRecord{
+			Resource:           ast.Resources[i].Name(),
+			GroupRecordsLength: len(records),
+		}
+		table.AddRecord(serviceRecord.ToEACLRecord())
+
 		for _, rec := range records {
 			table.AddRecord(rec)
 		}
@@ -796,10 +875,36 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 	return table, nil
 }
 
+func tryServiceRecord(record eacl.Record) *ServiceRecord {
+	if record.Action() != eacl.ActionUnknown || len(record.Targets()) != 0 ||
+		len(record.Filters()) != 2 {
+		return nil
+	}
+
+	resourceFilter := record.Filters()[0]
+	recordsFilter := record.Filters()[1]
+	if resourceFilter.From() != eacl.HeaderFromService || recordsFilter.From() != eacl.HeaderFromService ||
+		resourceFilter.Matcher() != eacl.MatchUnknown || recordsFilter.Matcher() != eacl.MatchUnknown ||
+		resourceFilter.Key() != serviceRecordResourceKey || recordsFilter.Key() != serviceRecordGroupLengthKey {
+		return nil
+	}
+
+	groupLength, err := strconv.Atoi(recordsFilter.Value())
+	if err != nil {
+		return nil
+	}
+
+	return &ServiceRecord{
+		Resource:           resourceFilter.Value(),
+		GroupRecordsLength: groupLength,
+	}
+}
+
 func formRecords(resource *astResource) ([]*eacl.Record, error) {
 	var res []*eacl.Record
 
-	for _, astOp := range resource.Operations {
+	for i := len(resource.Operations) - 1; i >= 0; i-- {
+		astOp := resource.Operations[i]
 		record := eacl.NewRecord()
 		record.SetOperation(astOp.Op)
 		record.SetAction(astOp.Action)
@@ -888,19 +993,8 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
 			r, ok := rr[trimmedResource]
 			if !ok {
-				r = &astResource{resourceInfo: resourceInfo{Bucket: bktPolicy.Bucket}}
-				if trimmedResource != bktPolicy.Bucket {
-					versionedObject := strings.TrimPrefix(trimmedResource, bktPolicy.Bucket+"/")
-					objVersion := strings.Split(versionedObject, ":")
-					if len(objVersion) <= 2 {
-						r.Object = objVersion[0]
-						if len(objVersion) == 2 {
-							r.Version = objVersion[1]
-						}
-					} else {
-						r.Object = strings.Join(objVersion[:len(objVersion)-1], ":")
-						r.Version = objVersion[len(objVersion)-1]
-					}
+				r = &astResource{
+					resourceInfo: resourceInfoFromName(trimmedResource, bktPolicy.Bucket),
 				}
 			}
 			for _, action := range state.Action {
@@ -919,6 +1013,25 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 	}
 
 	return res, nil
+}
+
+func resourceInfoFromName(name, bucketName string) resourceInfo {
+	resInfo := resourceInfo{Bucket: bucketName}
+	if name != bucketName {
+		versionedObject := strings.TrimPrefix(name, bucketName+"/")
+		objVersion := strings.Split(versionedObject, ":")
+		if len(objVersion) <= 2 {
+			resInfo.Object = objVersion[0]
+			if len(objVersion) == 2 {
+				resInfo.Version = objVersion[1]
+			}
+		} else {
+			resInfo.Object = strings.Join(objVersion[:len(objVersion)-1], ":")
+			resInfo.Version = objVersion[len(objVersion)-1]
+		}
+	}
+
+	return resInfo
 }
 
 func astToPolicy(ast *ast) *bucketPolicy {
@@ -1167,7 +1280,7 @@ func isWriteOperation(op eacl.Operation) bool {
 	return op == eacl.OperationDelete || op == eacl.OperationPut
 }
 
-func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectName string) *AccessControlPolicy {
+func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
 	res := &AccessControlPolicy{
 		Owner: Owner{
 			ID:          bucketACL.Info.Owner.String(),
@@ -1177,38 +1290,27 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectName string)
 
 	m := make(map[string][]eacl.Operation)
 
-	for _, record := range bucketACL.EACL.Records() {
-		if len(record.Targets()) != 1 {
-			h.log.Warn("some acl not fully mapped")
+	astList := tableToAst(bucketACL.EACL, bucketName)
+
+	for _, resource := range astList.Resources {
+		if resource.Version != objectVersion {
 			continue
 		}
 
-		if objectName != "" {
-			var found bool
-			for _, filter := range record.Filters() {
-				if filter.Matcher() == eacl.MatchStringEqual &&
-					filter.Key() == object.AttributeFileName && filter.Value() == objectName {
-					found = true
-				}
-			}
-			if !found {
+		for _, op := range resource.Operations {
+			if op.Action != eacl.ActionAllow {
 				continue
 			}
-		}
 
-		target := record.Targets()[0]
-		if target.Role() == eacl.RoleOthers {
-			if record.Action() == eacl.ActionAllow {
-				list := append(m[allUsersGroup], record.Operation())
+			if len(op.Users) == 0 {
+				list := append(m[allUsersGroup], op.Op)
 				m[allUsersGroup] = list
+			} else {
+				for _, user := range op.Users {
+					list := append(m[user], op.Op)
+					m[user] = list
+				}
 			}
-			continue
-		}
-
-		for _, key := range target.BinaryKeys() {
-			id := hex.EncodeToString(key)
-			list := append(m[id], record.Operation())
-			m[id] = list
 		}
 	}
 
@@ -1254,8 +1356,8 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, objectName string)
 	return res
 }
 
-func (h *handler) encodeBucketACL(bucketACL *layer.BucketACL) *AccessControlPolicy {
-	return h.encodeObjectACL(bucketACL, "")
+func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicy {
+	return h.encodeObjectACL(bucketACL, bucketName, "")
 }
 
 func contains(list []eacl.Operation, op eacl.Operation) bool {
