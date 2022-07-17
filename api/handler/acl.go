@@ -783,8 +783,8 @@ func getParentResource(parent *ast, resource *astResource) *astResource {
 func astToTable(ast *ast) (*eacl.Table, error) {
 	table := eacl.NewTable()
 
-	for _, resource := range ast.Resources {
-		records, err := formRecords(resource.Operations, resource)
+	for i := len(ast.Resources) - 1; i >= 0; i-- {
+		records, err := formRecords(ast.Resources[i].Operations, ast.Resources[i])
 		if err != nil {
 			return nil, fmt.Errorf("form records: %w", err)
 		}
