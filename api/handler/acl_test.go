@@ -257,6 +257,286 @@ func TestMergeAstModified(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
+func TestMergeAppended(t *testing.T) {
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	users := []string{hex.EncodeToString(key.PublicKey().Bytes())}
+
+	parent := &ast{
+		Resources: []*astResource{
+			{
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+				},
+				Operations: []*astOperation{
+					{
+						Users:  users,
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionDeny,
+					},
+					{
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionDeny,
+					},
+					{
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionDeny,
+					},
+				},
+			},
+		},
+	}
+
+	child := &ast{
+		Resources: []*astResource{
+			{
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
+				Operations: []*astOperation{
+					{
+						Users:  users,
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionAllow,
+					},
+				},
+			},
+		},
+	}
+
+	expected := &ast{
+		Resources: []*astResource{
+			{
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+				},
+				Operations: []*astOperation{
+					{
+						Users:  users,
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionDeny,
+					},
+					{
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionDeny,
+					},
+					{
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionDeny,
+					},
+				},
+			},
+			{
+				resourceInfo: resourceInfo{
+					Bucket: "bucket",
+					Object: "objectName",
+				},
+				Operations: []*astOperation{
+					{
+						Users:  users,
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Users:  users,
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationPut,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationDelete,
+						Action: eacl.ActionAllow,
+					},
+				},
+			},
+		},
+	}
+	actual, updated := mergeAst(parent, child)
+	require.True(t, updated)
+	require.Equal(t, expected, actual)
+}
+
+func TestOrder(t *testing.T) {
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	users := []string{hex.EncodeToString(key.PublicKey().Bytes())}
+	targetUser := eacl.NewTarget()
+	targetUser.SetBinaryKeys([][]byte{key.PublicKey().Bytes()})
+	targetOther := eacl.NewTarget()
+	targetOther.SetRole(eacl.RoleOthers)
+	bucketName := "bucket"
+	objectName := "objectName"
+
+	expectedAst := &ast{
+		Resources: []*astResource{
+			{
+				resourceInfo: resourceInfo{
+					Bucket: bucketName,
+				},
+				Operations: []*astOperation{
+					{
+						Users:  users,
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionDeny,
+					},
+				},
+			},
+			{
+				resourceInfo: resourceInfo{
+					Bucket: bucketName,
+					Object: objectName,
+				},
+				Operations: []*astOperation{
+					{
+						Users:  users,
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionAllow,
+					},
+					{
+						Op:     eacl.OperationGet,
+						Action: eacl.ActionDeny,
+					},
+				},
+			},
+		},
+	}
+
+	record1 := eacl.NewRecord()
+	record1.SetOperation(eacl.OperationGet)
+	record1.SetAction(eacl.ActionAllow)
+	record1.SetTargets(*targetUser)
+	record1.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, objectName)
+	record2 := eacl.NewRecord()
+	record2.SetOperation(eacl.OperationGet)
+	record2.SetAction(eacl.ActionDeny)
+	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, objectName)
+	record2.SetTargets(*targetOther)
+	record3 := eacl.NewRecord()
+	record3.SetOperation(eacl.OperationGet)
+	record3.SetAction(eacl.ActionAllow)
+	record3.SetTargets(*targetUser)
+	record4 := eacl.NewRecord()
+	record4.SetOperation(eacl.OperationGet)
+	record4.SetAction(eacl.ActionDeny)
+	record4.SetTargets(*targetOther)
+
+	expectedEacl := eacl.NewTable()
+	expectedEacl.AddRecord(record1)
+	expectedEacl.AddRecord(record2)
+	expectedEacl.AddRecord(record3)
+	expectedEacl.AddRecord(record4)
+
+	t.Run("astToTable order and vice versa", func(t *testing.T) {
+		actualEacl, err := astToTable(expectedAst)
+		require.NoError(t, err)
+		require.Equal(t, expectedEacl, actualEacl)
+
+		actualAst := tableToAst(actualEacl, bucketName)
+		require.Equal(t, expectedAst, actualAst)
+	})
+
+	t.Run("tableToAst order and vice versa", func(t *testing.T) {
+		actualAst := tableToAst(expectedEacl, bucketName)
+		require.Equal(t, expectedAst, actualAst)
+
+		actualEacl, err := astToTable(actualAst)
+		require.NoError(t, err)
+		require.Equal(t, expectedEacl, actualEacl)
+	})
+
+	t.Run("append a resource", func(t *testing.T) {
+		childName := "child"
+		child := &ast{Resources: []*astResource{{
+			resourceInfo: resourceInfo{
+				Bucket: bucketName,
+				Object: childName,
+			},
+			Operations: []*astOperation{{Op: eacl.OperationDelete, Action: eacl.ActionDeny}}}},
+		}
+
+		childRecord := eacl.NewRecord()
+		childRecord.SetOperation(eacl.OperationDelete)
+		childRecord.SetAction(eacl.ActionDeny)
+		childRecord.SetTargets(*targetOther)
+		childRecord.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, childName)
+
+		mergedAst, updated := mergeAst(expectedAst, child)
+		require.True(t, updated)
+
+		mergedEacl, err := astToTable(mergedAst)
+		require.NoError(t, err)
+
+		require.Equal(t, *childRecord, mergedEacl.Records()[0])
+	})
+}
+
 func TestMergeAstModifiedConflict(t *testing.T) {
 	child := &ast{
 		Resources: []*astResource{
@@ -360,16 +640,17 @@ func TestAstToTable(t *testing.T) {
 
 	expectedTable := eacl.NewTable()
 	record := eacl.NewRecord()
-	record.SetAction(eacl.ActionAllow)
-	record.SetOperation(eacl.OperationPut)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
+	record.SetAction(eacl.ActionDeny)
+	record.SetOperation(eacl.OperationGet)
+	eacl.AddFormedTarget(record, eacl.RoleOthers)
+	record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
 	expectedTable.AddRecord(record)
+
 	record2 := eacl.NewRecord()
-	record2.SetAction(eacl.ActionDeny)
-	record2.SetOperation(eacl.OperationGet)
-	eacl.AddFormedTarget(record2, eacl.RoleOthers)
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
+	record2.SetAction(eacl.ActionAllow)
+	record2.SetOperation(eacl.OperationPut)
+	// Unknown role is used, because it is ignored when keys are set
+	eacl.AddFormedTarget(record2, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
 	expectedTable.AddRecord(record2)
 
 	actualTable, err := astToTable(ast)
