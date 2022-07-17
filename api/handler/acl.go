@@ -566,13 +566,14 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 }
 
 func tableToAst(table *eacl.Table, bktName string) *ast {
-	res := &ast{}
-	rr := make(map[string]*astResource)
+	result := &ast{}
+	metResources := make(map[string]int)
 
-	for _, record := range table.Records() {
+	for i := len(table.Records()) - 1; i >= 0; i-- {
 		resName := bktName
 		var objectName string
 		var version string
+		record := table.Records()[i]
 		for _, filter := range record.Filters() {
 			if filter.Matcher() == eacl.MatchStringEqual {
 				if filter.Key() == object.AttributeFileName {
@@ -584,25 +585,30 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 				}
 			}
 		}
-		r, ok := rr[resName]
+		idx, ok := metResources[resName]
 		if !ok {
-			r = &astResource{resourceInfo: resourceInfo{
+			resource := &astResource{resourceInfo: resourceInfo{
 				Bucket:  bktName,
 				Object:  objectName,
 				Version: version,
 			}}
+			result.Resources = append(result.Resources, resource)
+			idx = len(result.Resources) - 1
+			metResources[resName] = idx
 		}
+
 		for _, target := range record.Targets() {
-			r.Operations = addToList(r.Operations, record, target)
+			result.Resources[idx].Operations = addToList(result.Resources[idx].Operations, record, target)
 		}
-		rr[resName] = r
 	}
 
-	for _, val := range rr {
-		res.Resources = append(res.Resources, val)
+	for _, res := range result.Resources {
+		for i, j := 0, len(res.Operations)-1; i < j; i, j = i+1, j-1 {
+			res.Operations[i], res.Operations[j] = res.Operations[j], res.Operations[i]
+		}
 	}
 
-	return res
+	return result
 }
 
 func mergeAst(parent, child *ast) (*ast, bool) {
