@@ -41,18 +41,22 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	p := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get("versionId"),
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	if err = h.obj.PutObjectTagging(r.Context(), p, tagSet); err != nil {
+	nodeVersion, err := h.obj.PutObjectTagging(r.Context(), p, tagSet)
+	if err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
 
 	s := &SendNotificationParams{
 		Event: EventObjectTaggingPut,
-		ObjInfo: &data.ObjectInfo{
-			Name: reqInfo.ObjectName,
+		NotificationInfo: &data.NotificationInfo{
+			Name:    nodeVersion.FilePath,
+			Size:    nodeVersion.Size,
+			Version: nodeVersion.OID.EncodeToString(),
+			HashSum: nodeVersion.ETag,
 		},
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,
@@ -111,18 +115,22 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 	p := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get("versionId"),
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
+	nodeVersion, err := h.obj.DeleteObjectTagging(r.Context(), p)
+	if err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
 	}
 
 	s := &SendNotificationParams{
 		Event: EventObjectTaggingDelete,
-		ObjInfo: &data.ObjectInfo{
-			Name: reqInfo.ObjectName,
+		NotificationInfo: &data.NotificationInfo{
+			Name:    nodeVersion.FilePath,
+			Size:    nodeVersion.Size,
+			Version: nodeVersion.OID.EncodeToString(),
+			HashSum: nodeVersion.ETag,
 		},
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,

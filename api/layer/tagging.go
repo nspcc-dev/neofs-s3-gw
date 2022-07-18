@@ -42,45 +42,45 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 	return p.VersionID, tags, nil
 }
 
-func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) error {
+func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) (*data.NodeVersion, error) {
 	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p.VersionID = version.OID.EncodeToString()
 
 	err = n.treeService.PutObjectTagging(ctx, p.BktInfo.CID, version, tagSet)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return errors.GetAPIError(errors.ErrNoSuchKey)
+			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 		}
-		return err
+		return nil, err
 	}
 
 	if err = n.systemCache.PutTagging(objectTaggingCacheKey(p), tagSet); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
-	return nil
+	return version, nil
 }
 
-func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
+func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*data.NodeVersion, error) {
 	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = n.treeService.DeleteObjectTagging(ctx, p.BktInfo.CID, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return errors.GetAPIError(errors.ErrNoSuchKey)
+			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 		}
-		return err
+		return nil, err
 	}
 
 	n.systemCache.Delete(objectTaggingCacheKey(p))
 
-	return nil
+	return version, nil
 }
 
 func (n *layer) GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[string]string, error) {

@@ -236,10 +236,10 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s := &SendNotificationParams{
-		Event:   EventObjectCreatedPut,
-		ObjInfo: info,
-		BktInfo: bktInfo,
-		ReqInfo: reqInfo,
+		Event:            EventObjectCreatedPut,
+		NotificationInfo: data.NotificationInfoFromObject(info),
+		BktInfo:          bktInfo,
+		ReqInfo:          reqInfo,
 	}
 	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
@@ -259,7 +259,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID:  info.Version(),
 	}
 	if tagSet != nil {
-		if err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
+		if _, err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
@@ -358,10 +358,10 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s := &SendNotificationParams{
-		Event:   EventObjectCreatedPost,
-		ObjInfo: info,
-		BktInfo: bktInfo,
-		ReqInfo: reqInfo,
+		Event:            EventObjectCreatedPost,
+		NotificationInfo: data.NotificationInfoFromObject(info),
+		BktInfo:          bktInfo,
+		ReqInfo:          reqInfo,
 	}
 	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
@@ -386,7 +386,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tagSet != nil {
-		if err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
+		if _, err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
