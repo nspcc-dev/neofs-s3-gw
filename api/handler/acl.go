@@ -334,10 +334,10 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if updated {
 		s := &SendNotificationParams{
-			Event:   EventObjectACLPut,
-			ObjInfo: extendedInfo.ObjectInfo,
-			BktInfo: bktInfo,
-			ReqInfo: reqInfo,
+			Event:            EventObjectACLPut,
+			NotificationInfo: data.NotificationInfoFromObject(extendedInfo.ObjectInfo),
+			BktInfo:          bktInfo,
+			ReqInfo:          reqInfo,
 		}
 		if err = h.sendNotifications(r.Context(), s); err != nil {
 			h.log.Error("couldn't send notification: %w", zap.Error(err))
