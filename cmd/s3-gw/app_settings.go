@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	defaultRebalanceInterval  = 15 * time.Second
+	defaultRebalanceInterval  = 60 * time.Second
 	defaultHealthcheckTimeout = 15 * time.Second
-	defaultConnectTimeout     = 30 * time.Second
+	defaultConnectTimeout     = 10 * time.Second
 	defaultShutdownTimeout    = 15 * time.Second
 
 	defaultMaxClientsCount    = 100
