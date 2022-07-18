@@ -45,11 +45,11 @@ metrics: false
 pprof: false
 
 # Timeout to connect to a node
-connect_timeout: 30s
+connect_timeout: 10s
 # Timeout to check node health during rebalance
 healthcheck_timeout: 15s
 # Interval to check node health
-rebalance_interval: 15s
+rebalance_interval: 60s
 
 # Limits for processing of clients' requests
 max_clients_count: 100

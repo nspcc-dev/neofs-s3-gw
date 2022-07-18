@@ -146,9 +146,9 @@ resolve_order:
 metrics: false
 pprof: false
 
-connect_timeout: 30s
+connect_timeout: 10s
 healthcheck_timeout: 15s
-rebalance_interval: 15s
+rebalance_interval: 60s
 
 max_clients_count: 100
 max_clients_deadline: 30s
@@ -164,9 +164,9 @@ default_policy: REP 3
 | `resolve_order`        | `[]string` | `[dns]`        | Order of bucket name resolvers to use.                                                                                                                                                                            |
 | `metrics`              | `bool`     | `false`        | Flag to enable and expose the prometheus metrics.                                                                                                                                                                 |
 | `pprof`                | `bool`     | `false`        | Flag to enable the profiler.                                                                                                                                                                                      |
-| `connect_timeout`      | `duration` | `30s`          | Timeout to connect to a node.                                                                                                                                                                                     |
+| `connect_timeout`      | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
 | `healthcheck_timeout`  | `duration` | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
-| `rebalance_interval`   | `duration` | `15s`          | Interval to check node health.                                                                                                                                                                                    |
+| `rebalance_interval`   | `duration` | `60s`          | Interval to check node health.                                                                                                                                                                                    |
 | `max_clients_count`    | `int`      | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
 | `max_clients_deadline` | `duration` | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
 | `default_policy`       | `string`   | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
