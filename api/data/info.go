@@ -47,6 +47,14 @@ type (
 		Headers     map[string]string
 	}
 
+	// NotificationInfo store info to send s3 notification.
+	NotificationInfo struct {
+		Name    string
+		Version string
+		Size    int64
+		HashSum string
+	}
+
 	// BucketSettings stores settings such as versioning.
 	BucketSettings struct {
 		Versioning        string                   `json:"versioning"`
@@ -69,6 +77,16 @@ type (
 		MaxAgeSeconds  int      `xml:"MaxAgeSeconds,omitempty" json:"MaxAgeSeconds,omitempty"`
 	}
 )
+
+// NotificationInfoFromObject creates new NotificationInfo from ObjectInfo.
+func NotificationInfoFromObject(objInfo *ObjectInfo) *NotificationInfo {
+	return &NotificationInfo{
+		Name:    objInfo.Name,
+		Version: objInfo.Version(),
+		Size:    objInfo.Size,
+		HashSum: objInfo.HashSum,
+	}
+}
 
 // SettingsObjectName is a system name for a bucket settings file.
 func (b *BucketInfo) SettingsObjectName() string { return bktSettingsObject }

@@ -33,6 +33,7 @@ type (
 		ID        uint64
 		ObjID     oid.ID
 		TimeStamp uint64
+		Size      int64
 		Meta      map[string]string
 	}
 
@@ -112,26 +113,31 @@ type NodeResponse interface {
 }
 
 func newTreeNode(nodeInfo NodeResponse) (*TreeNode, error) {
-	var objID oid.ID
-	meta := make(map[string]string, len(nodeInfo.GetMeta()))
-
-	for _, kv := range nodeInfo.GetMeta() {
-		if kv.GetKey() == oidKV {
-			if err := objID.DecodeString(string(kv.GetValue())); err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		meta[kv.GetKey()] = string(kv.GetValue())
+	treeNode := &TreeNode{
+		ID:        nodeInfo.GetNodeId(),
+		TimeStamp: nodeInfo.GetTimestamp(),
+		Meta:      make(map[string]string, len(nodeInfo.GetMeta())),
 	}
 
-	return &TreeNode{
-		ID:        nodeInfo.GetNodeId(),
-		ObjID:     objID,
-		TimeStamp: nodeInfo.GetTimestamp(),
-		Meta:      meta,
-	}, nil
+	for _, kv := range nodeInfo.GetMeta() {
+		switch kv.GetKey() {
+		case oidKV:
+			if err := treeNode.ObjID.DecodeString(string(kv.GetValue())); err != nil {
+				return nil, err
+			}
+		case sizeKV:
+			if sizeStr := string(kv.GetValue()); len(sizeStr) > 0 {
+				var err error
+				if treeNode.Size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil {
+					return nil, fmt.Errorf("invalid size value '%s': %w", sizeStr, err)
+				}
+			}
+		default:
+			treeNode.Meta[kv.GetKey()] = string(kv.GetValue())
+		}
+	}
+
+	return treeNode, nil
 }
 
 func (n *TreeNode) Get(key string) (string, bool) {
@@ -160,12 +166,15 @@ func newNodeVersion(filePath string, node NodeResponse) (*data.NodeVersion, erro
 func newNodeVersionFromTreeNode(filePath string, treeNode *TreeNode) *data.NodeVersion {
 	_, isUnversioned := treeNode.Get(isUnversionedKV)
 	_, isDeleteMarker := treeNode.Get(isDeleteMarkerKV)
+	eTag, _ := treeNode.Get(etagKV)
 
 	version := &data.NodeVersion{
 		BaseNodeVersion: data.BaseNodeVersion{
 			ID:        treeNode.ID,
 			OID:       treeNode.ObjID,
 			Timestamp: treeNode.TimeStamp,
+			ETag:      eTag,
+			Size:      treeNode.Size,
 			FilePath:  filePath,
 		},
 		IsUnversioned: isUnversioned,
@@ -528,7 +537,7 @@ func (c *TreeClient) GetVersions(ctx context.Context, cnrID cid.ID, filepath str
 }
 
 func (c *TreeClient) GetLatestVersion(ctx context.Context, cnrID cid.ID, objectName string) (*data.NodeVersion, error) {
-	meta := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
+	meta := []string{oidKV, isUnversionedKV, isDeleteMarkerKV, etagKV, sizeKV}
 	path := pathFromName(objectName)
 
 	p := &getNodesParams{
@@ -1034,6 +1043,13 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 		fileNameKV: path[len(path)-1],
 	}
 
+	if version.Size > 0 {
+		meta[sizeKV] = strconv.FormatInt(version.Size, 10)
+	}
+	if len(version.ETag) > 0 {
+		meta[etagKV] = version.ETag
+	}
+
 	if version.DeleteMarker != nil {
 		meta[isDeleteMarkerKV] = "true"
 		meta[ownerKV] = version.DeleteMarker.Owner.EncodeToString()
@@ -1062,7 +1078,7 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 }
 
 func (c *TreeClient) getVersions(ctx context.Context, cnrID cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*data.NodeVersion, error) {
-	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV}
+	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV, etagKV, sizeKV}
 	path := pathFromName(filepath)
 	p := &getNodesParams{
 		CnrID:      cnrID,

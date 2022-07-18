@@ -17,11 +17,11 @@ import (
 
 type (
 	SendNotificationParams struct {
-		Event   string
-		ObjInfo *data.ObjectInfo
-		BktInfo *data.BucketInfo
-		ReqInfo *api.ReqInfo
-		User    string
+		Event            string
+		NotificationInfo *data.NotificationInfo
+		BktInfo          *data.BucketInfo
+		ReqInfo          *api.ReqInfo
+		User             string
 	}
 
 	NotificationConfiguration struct {
@@ -163,7 +163,7 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 		p.User = bearer.ResolveIssuer(*box.Gate.BearerToken).EncodeToString()
 	}
 
-	topics := filterSubjects(conf, p.Event, p.ObjInfo.Name)
+	topics := filterSubjects(conf, p.Event, p.NotificationInfo.Name)
 
 	return h.notificator.SendNotifications(topics, p)
 }
