@@ -226,8 +226,8 @@ type (
 		DeleteBucketTagging(ctx context.Context, cnrID cid.ID) error
 
 		GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error)
-		PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) error
-		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
+		PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) (*data.NodeVersion, error)
+		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*data.NodeVersion, error)
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error)
 

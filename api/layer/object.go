@@ -155,8 +155,11 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	newVersion := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{FilePath: p.Object},
-		IsUnversioned:   !bktSettings.VersioningEnabled(),
+		BaseNodeVersion: data.BaseNodeVersion{
+			FilePath: p.Object,
+			Size:     p.Size,
+		},
+		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 
 	r := p.Reader
@@ -194,6 +197,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	newVersion.OID = id
+	newVersion.ETag = hex.EncodeToString(hash)
 	if err = n.treeService.AddVersion(ctx, p.BktInfo.CID, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
@@ -223,7 +227,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		Created:     time.Now(),
 		Headers:     p.Header,
 		ContentType: p.Header[api.ContentType],
-		HashSum:     hex.EncodeToString(hash),
+		HashSum:     newVersion.ETag,
 	}
 
 	if err = n.objCache.PutObject(objInfo); err != nil {

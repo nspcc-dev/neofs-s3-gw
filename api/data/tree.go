@@ -36,6 +36,8 @@ type BaseNodeVersion struct {
 	ID        uint64
 	OID       oid.ID
 	Timestamp uint64
+	Size      int64
+	ETag      string
 	FilePath  string
 }
 

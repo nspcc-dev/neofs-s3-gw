@@ -101,7 +101,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if bktSettings.VersioningEnabled() && len(versionID) == 0 {
 		m = &SendNotificationParams{
 			Event: EventObjectRemovedDeleteMarkerCreated,
-			ObjInfo: &data.ObjectInfo{
+			NotificationInfo: &data.NotificationInfo{
 				Name:    reqInfo.ObjectName,
 				HashSum: deletedObject.DeleteMarkerEtag,
 			},
@@ -118,9 +118,9 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 		m = &SendNotificationParams{
 			Event: EventObjectRemovedDelete,
-			ObjInfo: &data.ObjectInfo{
-				Name: reqInfo.ObjectName,
-				ID:   objID,
+			NotificationInfo: &data.NotificationInfo{
+				Name:    reqInfo.ObjectName,
+				Version: objID.EncodeToString(),
 			},
 			BktInfo: bktInfo,
 			ReqInfo: reqInfo,

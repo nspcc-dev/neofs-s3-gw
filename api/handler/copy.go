@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -165,10 +166,10 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		zap.Stringer("object_id", info.ID))
 
 	s := &SendNotificationParams{
-		Event:   EventObjectCreatedCopy,
-		ObjInfo: info,
-		BktInfo: dstBktInfo,
-		ReqInfo: reqInfo,
+		Event:            EventObjectCreatedCopy,
+		NotificationInfo: data.NotificationInfoFromObject(info),
+		BktInfo:          dstBktInfo,
+		ReqInfo:          reqInfo,
 	}
 	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))

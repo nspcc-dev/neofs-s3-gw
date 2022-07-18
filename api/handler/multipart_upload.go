@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -364,7 +365,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			ObjectName: objInfo.Name,
 			VersionID:  objInfo.Version(),
 		}
-		if err = h.obj.PutObjectTagging(r.Context(), t, uploadData.TagSet); err != nil {
+		if _, err = h.obj.PutObjectTagging(r.Context(), t, uploadData.TagSet); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
 			return
 		}
@@ -398,10 +399,10 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	s := &SendNotificationParams{
-		Event:   EventObjectCreatedCompleteMultipartUpload,
-		ObjInfo: objInfo,
-		BktInfo: bktInfo,
-		ReqInfo: reqInfo,
+		Event:            EventObjectCreatedCompleteMultipartUpload,
+		NotificationInfo: data.NotificationInfoFromObject(objInfo),
+		BktInfo:          bktInfo,
+		ReqInfo:          reqInfo,
 	}
 	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
