@@ -47,7 +47,7 @@ type (
 )
 
 const (
-	versioningEnabledKV = "VersioningEnabled"
+	versioningKV        = "Versioning"
 	lockConfigurationKV = "LockConfiguration"
 	oidKV               = "OID"
 	fileNameKV          = "FileName"
@@ -260,18 +260,15 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 }
 
 func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID cid.ID) (*data.BucketSettings, error) {
-	keysToReturn := []string{versioningEnabledKV, lockConfigurationKV}
+	keysToReturn := []string{versioningKV, lockConfigurationKV}
 	node, err := c.getSystemNode(ctx, cnrID, []string{settingsFileName}, keysToReturn)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't get node: %w", err)
 	}
 
-	settings := &data.BucketSettings{}
-
-	if versioningEnabledValue, ok := node.Get(versioningEnabledKV); ok {
-		if settings.VersioningEnabled, err = strconv.ParseBool(versioningEnabledValue); err != nil {
-			return nil, fmt.Errorf("settings node: invalid versioning: %w", err)
-		}
+	settings := &data.BucketSettings{Versioning: data.VerUnversioned}
+	if versioningValue, ok := node.Get(versioningKV); ok {
+		settings.Versioning = versioningValue
 	}
 
 	if lockConfigurationValue, ok := node.Get(lockConfigurationKV); ok {
@@ -1158,7 +1155,7 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 	results := make(map[string]string, 3)
 
 	results[fileNameKV] = settingsFileName
-	results[versioningEnabledKV] = strconv.FormatBool(settings.VersioningEnabled)
+	results[versioningKV] = settings.Versioning
 	results[lockConfigurationKV] = encodeLockConfiguration(settings.LockConfiguration)
 
 	return results

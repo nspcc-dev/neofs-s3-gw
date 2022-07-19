@@ -189,8 +189,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		if !errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, err
 		}
-		settings = &data.BucketSettings{}
-		settings.IsNoneStatus = true
+		settings = &data.BucketSettings{Versioning: data.VerUnversioned}
 	}
 
 	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {

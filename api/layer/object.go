@@ -138,10 +138,14 @@ func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID o
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
 	own := n.Owner(ctx)
 
-	versioningEnabled := n.isVersioningEnabled(ctx, p.BktInfo)
+	bktSettings, err := n.GetBucketSettings(ctx, p.BktInfo)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
+	}
+
 	newVersion := &data.NodeVersion{
 		BaseNodeVersion: data.BaseNodeVersion{FilePath: p.Object},
-		IsUnversioned:   !versioningEnabled,
+		IsUnversioned:   !bktSettings.VersioningEnabled(),
 	}
 
 	r := p.Reader
@@ -636,16 +640,6 @@ func triageExtendedObjects(allObjects []*data.ExtendedObjectInfo) (prefixes []st
 	}
 
 	return
-}
-
-func (n *layer) isVersioningEnabled(ctx context.Context, bktInfo *data.BucketInfo) bool {
-	settings, err := n.GetBucketSettings(ctx, bktInfo)
-	if err != nil {
-		n.log.Warn("couldn't get versioning settings object", zap.Error(err))
-		return false
-	}
-
-	return settings.VersioningEnabled
 }
 
 func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID, prefix, delimiter string) *data.ObjectInfo {

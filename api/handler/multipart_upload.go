@@ -418,7 +418,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		Key:    objInfo.Name,
 	}
 
-	if bktSettings.VersioningEnabled {
+	if bktSettings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, objInfo.Version())
 	}
 
