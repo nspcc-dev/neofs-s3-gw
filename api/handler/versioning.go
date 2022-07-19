@@ -33,15 +33,18 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	settings.VersioningEnabled = configuration.Status == "Enabled"
-	settings.IsNoneStatus = false
+	if configuration.Status != data.VerEnabled && configuration.Status != data.VerSuspended {
+		h.logAndSendError(w, "invalid versioning configuration", reqInfo, err)
+		return
+	}
+	settings.Versioning = configuration.Status
 
 	p := &layer.PutSettingsParams{
 		BktInfo:  bktInfo,
 		Settings: settings,
 	}
 
-	if !p.Settings.VersioningEnabled && bktInfo.ObjectLockEnabled {
+	if p.Settings.VersioningSuspended() && bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, fmt.Errorf("object lock is enabled"))
 		return
 	}
@@ -77,13 +80,9 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 func formVersioningConfiguration(settings *data.BucketSettings) *VersioningConfiguration {
 	res := &VersioningConfiguration{}
-	if settings.IsNoneStatus {
-		return res
+	if !settings.Unversioned() {
+		res.Status = settings.Versioning
 	}
-	if settings.VersioningEnabled {
-		res.Status = "Enabled"
-	} else {
-		res.Status = "Suspended"
-	}
+
 	return res
 }

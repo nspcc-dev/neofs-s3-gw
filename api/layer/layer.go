@@ -475,7 +475,7 @@ func getRandomOID() (oid.ID, error) {
 }
 
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if len(obj.VersionID) != 0 || settings.IsNoneStatus {
+	if len(obj.VersionID) != 0 || settings.Unversioned() {
 		var nodeVersion *data.NodeVersion
 		if nodeVersion, obj.Error = n.getNodeVersionToDelete(ctx, bkt, obj); obj.Error != nil {
 			return obj
@@ -492,7 +492,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 
 	var newVersion *data.NodeVersion
 
-	if !settings.VersioningEnabled {
+	if settings.VersioningSuspended() {
 		obj.VersionID = UnversionedObjectVersionID
 
 		var nodeVersion *data.NodeVersion
@@ -526,7 +526,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			Created: time.Now(),
 			Owner:   n.Owner(ctx),
 		},
-		IsUnversioned: !settings.VersioningEnabled,
+		IsUnversioned: settings.VersioningSuspended(),
 	}
 
 	if obj.Error = n.treeService.AddVersion(ctx, bkt.CID, newVersion); obj.Error != nil {

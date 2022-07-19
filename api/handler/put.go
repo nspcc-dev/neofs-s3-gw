@@ -277,7 +277,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if settings.VersioningEnabled {
+	if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, info.Version())
 	}
 
@@ -407,7 +407,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 
 	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
-	} else if settings.VersioningEnabled {
+	} else if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, info.Version())
 	}
 
@@ -659,7 +659,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if p.ObjectLockEnabled {
 		sp := &layer.PutSettingsParams{
 			BktInfo:  bktInfo,
-			Settings: &data.BucketSettings{VersioningEnabled: true},
+			Settings: &data.BucketSettings{Versioning: data.VerEnabled},
 		}
 		if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
 			h.logAndSendError(w, "couldn't enable bucket versioning", reqInfo, err,
