@@ -13,6 +13,10 @@ const (
 	bktSettingsObject                  = ".s3-settings"
 	bktCORSConfigurationObject         = ".s3-cors"
 	bktNotificationConfigurationObject = ".s3-notifications"
+
+	VerUnversioned = "Unversioned"
+	VerEnabled     = "Enabled"
+	VerSuspended   = "Suspended"
 )
 
 type (
@@ -45,8 +49,7 @@ type (
 
 	// BucketSettings stores settings such as versioning.
 	BucketSettings struct {
-		IsNoneStatus      bool
-		VersioningEnabled bool                     `json:"versioning_enabled"`
+		Versioning        string                   `json:"versioning"`
 		LockConfiguration *ObjectLockConfiguration `json:"lock_configuration"`
 	}
 
@@ -90,4 +93,16 @@ func (o *ObjectInfo) Address() oid.Address {
 	addr.SetObject(o.ID)
 
 	return addr
+}
+
+func (b BucketSettings) Unversioned() bool {
+	return b.Versioning == VerUnversioned
+}
+
+func (b BucketSettings) VersioningEnabled() bool {
+	return b.Versioning == VerEnabled
+}
+
+func (b BucketSettings) VersioningSuspended() bool {
+	return b.Versioning == VerSuspended
 }
