@@ -324,7 +324,7 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 			bktSettings, err := hc.Layer().GetBucketSettings(ctx, bktInfo)
 			require.NoError(t, err)
 			actualConf := bktSettings.LockConfiguration
-			require.True(t, bktSettings.VersioningEnabled)
+			require.True(t, bktSettings.VersioningEnabled())
 			require.Equal(t, tc.configuration.ObjectLockEnabled, actualConf.ObjectLockEnabled)
 			require.Equal(t, tc.configuration.Rule, actualConf.Rule)
 		})

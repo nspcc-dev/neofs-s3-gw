@@ -183,7 +183,7 @@ func TestSimpleVersioning(t *testing.T) {
 	tc := prepareContext(t)
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{VersioningEnabled: true},
+		Settings: &data.BucketSettings{Versioning: data.VerEnabled},
 	})
 	require.NoError(t, err)
 
@@ -220,7 +220,7 @@ func TestSimpleNoVersioning(t *testing.T) {
 
 func TestVersioningDeleteObject(t *testing.T) {
 	tc := prepareContext(t)
-	settings := &data.BucketSettings{VersioningEnabled: true}
+	settings := &data.BucketSettings{Versioning: data.VerEnabled}
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
 		Settings: settings,
@@ -242,7 +242,7 @@ func TestGetUnversioned(t *testing.T) {
 	objContent := []byte("content obj1 v1")
 	objInfo := tc.putObject(objContent)
 
-	settings := &data.BucketSettings{VersioningEnabled: false}
+	settings := &data.BucketSettings{Versioning: data.VerUnversioned}
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
 		Settings: settings,
@@ -256,7 +256,7 @@ func TestGetUnversioned(t *testing.T) {
 
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	tc := prepareContext(t)
-	settings := &data.BucketSettings{VersioningEnabled: true}
+	settings := &data.BucketSettings{Versioning: data.VerEnabled}
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
 		Settings: settings,
