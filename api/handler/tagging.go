@@ -91,7 +91,7 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if settings.VersioningEnabled {
+	if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, versionID)
 	}
 	if err = api.EncodeToResponse(w, encodeTagging(tagSet)); err != nil {
