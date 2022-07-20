@@ -150,8 +150,11 @@ type ServiceRecord struct {
 
 func (s ServiceRecord) ToEACLRecord() *eacl.Record {
 	serviceRecord := eacl.NewRecord()
+	serviceRecord.SetAction(eacl.ActionAllow)
+	serviceRecord.SetOperation(eacl.OperationGet)
 	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordResourceKey, s.Resource)
 	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordGroupLengthKey, strconv.Itoa(s.GroupRecordsLength))
+	eacl.AddFormedTarget(serviceRecord, eacl.RoleSystem)
 	return serviceRecord
 }
 
@@ -876,8 +879,13 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 }
 
 func tryServiceRecord(record eacl.Record) *ServiceRecord {
-	if record.Action() != eacl.ActionUnknown || len(record.Targets()) != 0 ||
-		len(record.Filters()) != 2 {
+	if record.Action() != eacl.ActionAllow || record.Operation() != eacl.OperationGet ||
+		len(record.Targets()) != 1 || len(record.Filters()) != 2 {
+		return nil
+	}
+
+	target := record.Targets()[0]
+	if target.Role() != eacl.RoleSystem {
 		return nil
 	}
 
