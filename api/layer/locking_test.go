@@ -12,7 +12,7 @@ func TestObjectLockAttributes(t *testing.T) {
 	tc := prepareContext(t)
 	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
 		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{Versioning: data.VerEnabled},
+		Settings: &data.BucketSettings{Versioning: data.VersioningEnabled},
 	})
 	require.NoError(t, err)
 
