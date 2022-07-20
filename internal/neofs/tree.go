@@ -266,7 +266,7 @@ func (c *TreeClient) GetSettingsNode(ctx context.Context, cnrID cid.ID) (*data.B
 		return nil, fmt.Errorf("couldn't get node: %w", err)
 	}
 
-	settings := &data.BucketSettings{Versioning: data.VerUnversioned}
+	settings := &data.BucketSettings{Versioning: data.VersioningUnversioned}
 	if versioningValue, ok := node.Get(versioningKV); ok {
 		settings.Versioning = versioningValue
 	}

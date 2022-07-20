@@ -106,7 +106,7 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 	sp := &layer.PutSettingsParams{
 		BktInfo: bktInfo,
 		Settings: &data.BucketSettings{
-			Versioning:        data.VerEnabled,
+			Versioning:        data.VersioningEnabled,
 			LockConfiguration: conf,
 		},
 	}
