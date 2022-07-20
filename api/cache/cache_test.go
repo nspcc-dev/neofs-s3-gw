@@ -153,7 +153,7 @@ func TestSettingsCacheType(t *testing.T) {
 	cache := NewSystemCache(DefaultSystemConfig(logger))
 
 	key := "key"
-	settings := &data.BucketSettings{Versioning: data.VerEnabled}
+	settings := &data.BucketSettings{Versioning: data.VersioningEnabled}
 
 	err := cache.PutSettings(key, settings)
 	require.NoError(t, err)

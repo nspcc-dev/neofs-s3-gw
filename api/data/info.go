@@ -14,9 +14,9 @@ const (
 	bktCORSConfigurationObject         = ".s3-cors"
 	bktNotificationConfigurationObject = ".s3-notifications"
 
-	VerUnversioned = "Unversioned"
-	VerEnabled     = "Enabled"
-	VerSuspended   = "Suspended"
+	VersioningUnversioned = "Unversioned"
+	VersioningEnabled     = "Enabled"
+	VersioningSuspended   = "Suspended"
 )
 
 type (
@@ -96,13 +96,13 @@ func (o *ObjectInfo) Address() oid.Address {
 }
 
 func (b BucketSettings) Unversioned() bool {
-	return b.Versioning == VerUnversioned
+	return b.Versioning == VersioningUnversioned
 }
 
 func (b BucketSettings) VersioningEnabled() bool {
-	return b.Versioning == VerEnabled
+	return b.Versioning == VersioningEnabled
 }
 
 func (b BucketSettings) VersioningSuspended() bool {
-	return b.Versioning == VerSuspended
+	return b.Versioning == VersioningSuspended
 }
