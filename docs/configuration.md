@@ -138,7 +138,7 @@ address: NfgHwwTi3wHAS8aFAN243C5vGbkYDpqLHP
 
 listen_address: 0.0.0.0:8084
 
-rpc_endpoint: http://node4.neofs:40332
+rpc_endpoint: http://morph-chain.neofs.devenv:30333
 resolve_order:
   - nns
   - dns
