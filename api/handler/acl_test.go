@@ -862,7 +862,7 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 		Bucket: "bucketName",
 		Object: "object",
 	}
-	expectedTable := allowedTableForObject(t, key, resInfoObject)
+	expectedTable := allowedTableForPrivateObject(t, key, resInfoObject)
 	actualTable := tableFromACL(t, acl, resInfoObject)
 	checkTables(t, expectedTable, actualTable)
 
@@ -871,12 +871,12 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 		Object:  "objectVersion",
 		Version: "Gfrct4Afhio8pCGCCKVNTf1kyexQjMBeaUfvDtQCkAvg",
 	}
-	expectedTable = allowedTableForObject(t, key, resInfoObjectVersion)
+	expectedTable = allowedTableForPrivateObject(t, key, resInfoObjectVersion)
 	actualTable = tableFromACL(t, acl, resInfoObjectVersion)
 	checkTables(t, expectedTable, actualTable)
 }
 
-func allowedTableForObject(t *testing.T, key *keys.PrivateKey, resInfo *resourceInfo) *eacl.Table {
+func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *resourceInfo) *eacl.Table {
 	var isVersion bool
 	var objID oid.ID
 	if resInfo.Version != "" {
@@ -886,12 +886,22 @@ func allowedTableForObject(t *testing.T, key *keys.PrivateKey, resInfo *resource
 	}
 
 	expectedTable := eacl.NewTable()
-	serviceRec := &ServiceRecord{Resource: resInfo.Name(), GroupRecordsLength: len(readOps)}
+	serviceRec := &ServiceRecord{Resource: resInfo.Name(), GroupRecordsLength: len(readOps) * 2}
 	expectedTable.AddRecord(serviceRec.ToEACLRecord())
 
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
 		record := getAllowRecord(op, key.PublicKey())
+		if isVersion {
+			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+		} else {
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resInfo.Object)
+		}
+		expectedTable.AddRecord(record)
+	}
+	for i := len(readOps) - 1; i >= 0; i-- {
+		op := readOps[i]
+		record := getOthersRecord(op, eacl.ActionDeny)
 		if isVersion {
 			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
 		} else {
