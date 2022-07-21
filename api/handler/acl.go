@@ -1149,6 +1149,19 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 		ops = append(ops, writeOps...)
 	}
 
+	// Expect to have at least 1 full control grant for owner which is set in
+	// parseACLHeaders(). If there is no other grants, then user sets private
+	// canned ACL, which is processed in this branch.
+	if len(acl.AccessControlList) < 2 {
+		for _, op := range ops {
+			operation := &astOperation{
+				Op:     op,
+				Action: eacl.ActionDeny,
+			}
+			resource.Operations = append(resource.Operations, operation)
+		}
+	}
+
 	for _, op := range ops {
 		operation := &astOperation{
 			Users:  []string{acl.Owner.ID},
