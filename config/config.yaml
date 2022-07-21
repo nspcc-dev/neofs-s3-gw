@@ -36,7 +36,7 @@ logger:
   level: debug
 
 # RPC endpoint and order of resolving of bucket names
-rpc_endpoint: http://node4.neofs:40332
+rpc_endpoint: http://morph-chain.neofs.devenv:30333
 resolve_order:
   - nns
 
