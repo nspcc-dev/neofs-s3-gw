@@ -1190,6 +1190,13 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 		getAllowStatement(resInfo, acl.Owner.ID, aclFullControl),
 	}
 
+	// Expect to have at least 1 full control grant for owner which is set in
+	// parseACLHeaders(). If there is no other grants, then user sets private
+	// canned ACL, which is processed in this branch.
+	if len(acl.AccessControlList) < 2 {
+		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, aclFullControl)}, results...)
+	}
+
 	for _, grant := range acl.AccessControlList {
 		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
@@ -1213,6 +1220,23 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
 	state := statement{
 		Effect: "Allow",
+		Principal: principal{
+			CanonicalUser: id,
+		},
+		Action:   getActions(permission, resInfo.IsBucket()),
+		Resource: []string{arnAwsPrefix + resInfo.Name()},
+	}
+
+	if id == allUsersWildcard {
+		state.Principal = principal{AWS: allUsersWildcard}
+	}
+
+	return state
+}
+
+func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+	state := statement{
+		Effect: "Deny",
 		Principal: principal{
 			CanonicalUser: id,
 		},
