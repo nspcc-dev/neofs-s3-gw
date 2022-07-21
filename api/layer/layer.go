@@ -590,11 +590,11 @@ func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) 
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
-	objects, _, err := n.getLatestObjectsVersions(ctx, allObjectParams{Bucket: p.BktInfo, MaxKeys: 1})
+	nodeVersions, err := n.bucketNodeVersions(ctx, p.BktInfo, "")
 	if err != nil {
 		return err
 	}
-	if len(objects) != 0 {
+	if len(nodeVersions) != 0 {
 		return errors.GetAPIError(errors.ErrBucketNotEmpty)
 	}
 

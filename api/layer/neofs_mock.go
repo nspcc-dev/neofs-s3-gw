@@ -17,6 +17,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -100,6 +101,12 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	t.containers[id.EncodeToString()] = cnr
 
 	return id, nil
+}
+
+func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.Container) error {
+	delete(t.containers, cnrID.EncodeToString())
+
+	return nil
 }
 
 func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {

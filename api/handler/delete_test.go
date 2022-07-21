@@ -14,6 +14,20 @@ const (
 	emptyVersion = ""
 )
 
+func TestDeleteBucket(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-removal", "object-to-delete"
+	_, objInfo := createVersionedBucketAndObject(t, tc, bktName, objName)
+
+	deleteMarker := deleteObject(t, tc, bktName, objName, emptyVersion)
+	deleteBucket(t, tc, bktName, http.StatusConflict)
+	deleteObject(t, tc, bktName, objName, objInfo.Version())
+	deleteBucket(t, tc, bktName, http.StatusConflict)
+	deleteObject(t, tc, bktName, objName, deleteMarker)
+	deleteBucket(t, tc, bktName, http.StatusNoContent)
+}
+
 func TestDeleteObject(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
@@ -212,6 +226,12 @@ func deleteObject(t *testing.T, tc *handlerContext, bktName, objName, version st
 	assertStatus(t, w, http.StatusNoContent)
 
 	return w.Header().Get(api.AmzVersionID)
+}
+
+func deleteBucket(t *testing.T, tc *handlerContext, bktName string, code int) {
+	w, r := prepareTestRequest(t, bktName, "", nil)
+	tc.Handler().DeleteBucketHandler(w, r)
+	assertStatus(t, w, code)
 }
 
 func checkNotFound(t *testing.T, tc *handlerContext, bktName, objName, version string) {

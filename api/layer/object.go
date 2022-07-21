@@ -538,7 +538,7 @@ func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams,
 	return objCh, nil
 }
 
-func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string][]*data.ExtendedObjectInfo, error) {
+func (n *layer) bucketNodeVersions(ctx context.Context, bkt *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
 	var err error
 
 	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix, false)
@@ -547,11 +547,20 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	if nodeVersions == nil {
 		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt.CID, prefix)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get all versions from tree service: %w", err)
 		}
 		if err = n.listsCache.PutVersions(cacheKey, nodeVersions); err != nil {
 			n.log.Error("couldn't cache list of objects", zap.Error(err))
 		}
+	}
+
+	return nodeVersions, nil
+}
+
+func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string][]*data.ExtendedObjectInfo, error) {
+	nodeVersions, err := n.bucketNodeVersions(ctx, bkt, prefix)
+	if err != nil {
+		return nil, err
 	}
 
 	versions := make(map[string][]*data.ExtendedObjectInfo, len(nodeVersions))
