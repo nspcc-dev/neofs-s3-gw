@@ -35,6 +35,8 @@ type (
 		obj layer.Client
 		api api.Handler
 
+		metrics GateMetricsCollector
+
 		maxClients api.MaxClients
 
 		webDone chan struct{}
@@ -44,6 +46,10 @@ type (
 	tlsConfig struct {
 		KeyFile  string
 		CertFile string
+	}
+
+	GateMetricsCollector interface {
+		SetHealth(int32)
 	}
 )
 
@@ -56,6 +62,8 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		ctr    auth.Center
 		obj    layer.Client
 		nc     *notifications.Controller
+
+		gateMetrics GateMetricsCollector
 
 		prmPool pool.InitParameters
 
@@ -180,6 +188,10 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("could not initialize API handler", zap.Error(err))
 	}
 
+	if v.GetBool(cfgEnableMetrics) {
+		gateMetrics = newGateMetrics()
+	}
+
 	return &App{
 		ctr: ctr,
 		log: l,
@@ -187,6 +199,8 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		obj: obj,
 		tls: tls,
 		api: caller,
+
+		metrics: gateMetrics,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -215,6 +229,10 @@ func (a *App) Wait() {
 		zap.String("version", version.Version),
 	)
 
+	if a.metrics != nil {
+		a.metrics.SetHealth(1)
+	}
+
 	<-a.webDone // wait for web-server to be stopped
 
 	a.log.Info("application finished")
@@ -238,7 +256,6 @@ func (a *App) Server(ctx context.Context) {
 	router := newS3Router()
 
 	// Attach app-specific routes:
-	//	attachHealthy(router, a.cli)
 	attachMetrics(router, a.cfg, a.log)
 	attachProfiler(router, a.cfg, a.log)
 

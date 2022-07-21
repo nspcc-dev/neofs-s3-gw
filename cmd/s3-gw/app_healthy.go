@@ -1,46 +1,46 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
-
-	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 )
-
-// Healthy is a health check interface.
-type Healthy interface {
-	Status() error
-}
 
 const (
-	healthyState       = "NeoFS S3 Gateway is "
-	hdrContentType     = "Content-Type"
-	defaultContentType = "text/plain; charset=utf-8"
+	namespace      = "neofs_s3_gw"
+	stateSubsystem = "state"
 )
 
-//nolint:deadcode,unused // TODO
-func attachHealthy(r *mux.Router, h Healthy) {
-	healthy := r.PathPrefix(systemPath + "/-").
-		Subrouter().
-		StrictSlash(true)
+type GateMetrics struct {
+	stateMetrics
+}
 
-	healthy.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(hdrContentType, defaultContentType)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintln(w, healthyState+"ready")
-	})
+type stateMetrics struct {
+	healthCheck prometheus.Gauge
+}
 
-	healthy.HandleFunc("/healthy", func(w http.ResponseWriter, r *http.Request) {
-		code := http.StatusOK
-		msg := "healthy"
+func newGateMetrics() *GateMetrics {
+	stateMetric := newStateMetrics()
+	stateMetric.register()
 
-		if err := h.Status(); err != nil {
-			msg = "unhealthy: " + err.Error()
-			code = http.StatusBadRequest
-		}
+	return &GateMetrics{
+		stateMetrics: stateMetric,
+	}
+}
 
-		w.Header().Set(hdrContentType, defaultContentType)
-		w.WriteHeader(code)
-		_, _ = fmt.Fprintln(w, healthyState+msg)
-	})
+func newStateMetrics() stateMetrics {
+	return stateMetrics{
+		healthCheck: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: stateSubsystem,
+			Name:      "health",
+			Help:      "Current S3 gateway state",
+		}),
+	}
+}
+
+func (m stateMetrics) register() {
+	prometheus.MustRegister(m.healthCheck)
+}
+
+func (m stateMetrics) SetHealth(s int32) {
+	m.healthCheck.Set(float64(s))
 }
