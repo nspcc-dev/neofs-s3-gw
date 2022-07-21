@@ -573,22 +573,7 @@ func pathFromName(objectName string) []string {
 }
 
 func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.NodeVersion, error) {
-	subTreeNodes, commonPrefix, err := c.getSubTreeByPrefix(ctx, cnrID, versionTree, prefix)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []*data.NodeVersion
-	for _, node := range subTreeNodes {
-		latestNodes, err := c.getSubTreeVersions(ctx, cnrID, node.GetNodeId(), commonPrefix, true)
-		if err != nil {
-			return nil, err
-		}
-
-		result = append(result, latestNodes...)
-	}
-
-	return result, nil
+	return c.getVersionsByPrefix(ctx, cnrID, prefix, true)
 }
 
 func (c *TreeClient) determinePrefixNode(ctx context.Context, cnrID cid.ID, treeID, prefix string) (uint64, string, error) {
@@ -640,7 +625,7 @@ func (c *TreeClient) getPrefixNodeID(ctx context.Context, cnrID cid.ID, treeID s
 	return intermediateNodes[0], nil
 }
 
-func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID cid.ID, treeID, prefix string) ([]*tree.GetSubTreeResponse_Body, string, error) {
+func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID cid.ID, treeID, prefix string, latestOnly bool) ([]*tree.GetSubTreeResponse_Body, string, error) {
 	rootID, tailPrefix, err := c.determinePrefixNode(ctx, cnrID, treeID, prefix)
 	if err != nil {
 		if errors.Is(err, layer.ErrNodeNotFound) {
@@ -657,24 +642,44 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID cid.ID, treeI
 		return nil, "", err
 	}
 
-	result := make([]*tree.GetSubTreeResponse_Body, 0, len(subTree))
+	nodesMap := make(map[string][]*tree.GetSubTreeResponse_Body, len(subTree))
 	for _, node := range subTree {
-		if node.GetNodeId() != rootID && hasPrefix(node, tailPrefix) {
-			result = append(result, node)
+		if node.GetNodeId() == rootID {
+			continue
 		}
+
+		fileName := getFilename(node)
+		if !strings.HasPrefix(fileName, tailPrefix) {
+			continue
+		}
+
+		nodes := nodesMap[fileName]
+
+		if !latestOnly {
+			nodes = append(nodes, node)
+		} else if len(nodes) == 0 || node.GetTimestamp() > nodes[0].GetTimestamp() {
+			nodes = []*tree.GetSubTreeResponse_Body{node}
+		}
+
+		nodesMap[fileName] = nodes
+	}
+
+	result := make([]*tree.GetSubTreeResponse_Body, 0, len(subTree))
+	for _, nodes := range nodesMap {
+		result = append(result, nodes...)
 	}
 
 	return result, strings.TrimSuffix(prefix, tailPrefix), nil
 }
 
-func hasPrefix(node *tree.GetSubTreeResponse_Body, prefix string) bool {
+func getFilename(node *tree.GetSubTreeResponse_Body) string {
 	for _, kv := range node.GetMeta() {
 		if kv.GetKey() == fileNameKV {
-			return strings.HasPrefix(string(kv.GetValue()), prefix)
+			return string(kv.GetValue())
 		}
 	}
 
-	return false
+	return ""
 }
 
 func isIntermediate(node *tree.GetNodeByPathResponse_Info) bool {
@@ -775,14 +780,18 @@ func formLatestNodeKey(parentID uint64, fileName string) string {
 }
 
 func (c *TreeClient) GetAllVersionsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.NodeVersion, error) {
-	prefixNodes, headPrefix, err := c.getSubTreeByPrefix(ctx, cnrID, versionTree, prefix)
+	return c.getVersionsByPrefix(ctx, cnrID, prefix, false)
+}
+
+func (c *TreeClient) getVersionsByPrefix(ctx context.Context, cnrID cid.ID, prefix string, latestOnly bool) ([]*data.NodeVersion, error) {
+	prefixNodes, headPrefix, err := c.getSubTreeByPrefix(ctx, cnrID, versionTree, prefix, latestOnly)
 	if err != nil {
 		return nil, err
 	}
 
 	var result []*data.NodeVersion
 	for _, node := range prefixNodes {
-		versions, err := c.getSubTreeVersions(ctx, cnrID, node.GetNodeId(), headPrefix, false)
+		versions, err := c.getSubTreeVersions(ctx, cnrID, node.GetNodeId(), headPrefix, latestOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -829,7 +838,7 @@ func (c *TreeClient) CreateMultipartUpload(ctx context.Context, cnrID cid.ID, in
 }
 
 func (c *TreeClient) GetMultipartUploadsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.MultipartInfo, error) {
-	subTreeNodes, _, err := c.getSubTreeByPrefix(ctx, cnrID, systemTree, prefix)
+	subTreeNodes, _, err := c.getSubTreeByPrefix(ctx, cnrID, systemTree, prefix, false)
 	if err != nil {
 		return nil, err
 	}
