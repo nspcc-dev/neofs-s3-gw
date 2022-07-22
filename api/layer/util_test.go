@@ -72,7 +72,7 @@ func newTestInfo(obj oid.ID, bkt *data.BucketInfo, name string, isDir bool) *dat
 	return info
 }
 
-func Test_objectInfoFromMeta(t *testing.T) {
+func Test_objectInfoName(t *testing.T) {
 	var uid user.ID
 	var id oid.ID
 	var containerID cid.ID
@@ -158,7 +158,7 @@ func Test_objectInfoFromMeta(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			info := objectInfoFromMeta(bkt, tc.object, tc.prefix, tc.delimiter)
+			info := processObjectInfoName(objectInfoFromMeta(bkt, tc.object), tc.prefix, tc.delimiter)
 			require.Equal(t, tc.result, info)
 		})
 	}

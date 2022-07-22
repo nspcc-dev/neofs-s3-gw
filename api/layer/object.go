@@ -267,7 +267,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 	if err != nil {
 		return nil, err
 	}
-	objInfo := objInfoFromMeta(bkt, meta)
+	objInfo := objectInfoFromMeta(bkt, meta)
 	if err = n.objCache.PutObject(objInfo); err != nil {
 		n.log.Warn("couldn't put object info to cache",
 			zap.Stringer("object id", node.OID),
@@ -330,7 +330,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		return nil, err
 	}
 
-	objInfo := objInfoFromMeta(bkt, meta)
+	objInfo := objectInfoFromMeta(bkt, meta)
 	if err = n.objCache.PutObject(objInfo); err != nil {
 		n.log.Warn("couldn't put obj to object cache",
 			zap.String("bucket name", objInfo.Bucket),
@@ -670,41 +670,23 @@ func triageExtendedObjects(allObjects []*data.ExtendedObjectInfo) (prefixes []st
 	return
 }
 
-func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID, prefix, delimiter string) *data.ObjectInfo {
-	if objInfo := n.objCache.GetObject(newAddress(bktInfo.CID, obj)); objInfo != nil {
-		// that's the simplest solution
-		// consider doing something else
-		if !strings.HasPrefix(objInfo.Name, prefix) {
+func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID, prefix, delimiter string) (oi *data.ObjectInfo) {
+	oi = n.objCache.GetObject(newAddress(bktInfo.CID, obj))
+
+	if oi == nil {
+		meta, err := n.objectHead(ctx, bktInfo, obj)
+		if err != nil {
+			n.log.Warn("could not fetch object meta", zap.Error(err))
 			return nil
 		}
-		if len(delimiter) == 0 {
-			return objInfo
+
+		oi = objectInfoFromMeta(bktInfo, meta)
+		if err = n.objCache.PutObject(oi); err != nil {
+			n.log.Warn("couldn't cache an object", zap.Error(err))
 		}
-		copiedObjInfo := *objInfo
-		tail := strings.TrimPrefix(copiedObjInfo.Name, prefix)
-		index := strings.Index(tail, delimiter)
-		if index >= 0 {
-			copiedObjInfo.IsDir = true
-			copiedObjInfo.Size = 0
-			copiedObjInfo.Headers = nil
-			copiedObjInfo.ContentType = ""
-			copiedObjInfo.Name = prefix + tail[:index+1]
-		}
-		return &copiedObjInfo
 	}
 
-	meta, err := n.objectHead(ctx, bktInfo, obj)
-	if err != nil {
-		n.log.Warn("could not fetch object meta", zap.Error(err))
-		return nil
-	}
-
-	objInfo := objectInfoFromMeta(bktInfo, meta, prefix, delimiter)
-	if err = n.objCache.PutObject(objInfo); err != nil {
-		n.log.Warn("couldn't cache an object", zap.Error(err))
-	}
-
-	return objInfo
+	return processObjectInfoName(oi, prefix, delimiter)
 }
 
 func (n *layer) transformNeofsError(ctx context.Context, err error) error {
