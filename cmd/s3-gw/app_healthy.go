@@ -22,12 +22,12 @@ func newGateMetrics() *GateMetrics {
 	stateMetric.register()
 
 	return &GateMetrics{
-		stateMetrics: stateMetric,
+		stateMetrics: *stateMetric,
 	}
 }
 
-func newStateMetrics() stateMetrics {
-	return stateMetrics{
+func newStateMetrics() *stateMetrics {
+	return &stateMetrics{
 		healthCheck: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: stateSubsystem,
