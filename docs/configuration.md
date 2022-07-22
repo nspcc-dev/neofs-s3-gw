@@ -127,6 +127,7 @@ There are some custom types used for brevity:
 | `peers`    | [Nodes configuration](#peers-section)   |
 | `tls`      | [TLS configuration](#tls-section)       |
 | `logger`   | [Logger configuration](#logger-section) |
+| `tree`     | [Tree configuration](#tree-section)     |
 | `cache`    | [Cache configuration](#cache-section)   |
 | `nats`     | [NATS configuration](#nats-section)     |
 | `cors`     | [CORS configuration](#cors-section)     |
@@ -236,6 +237,17 @@ logger:
 | Parameter | Type     | Default value | Description                                                                                        |
 |-----------|----------|---------------|----------------------------------------------------------------------------------------------------|
 | `level`   | `string` | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. |
+
+### `tree` section
+
+```yaml
+tree:
+  service: s01.neofs.devenv:8080
+```
+
+| Parameter | Type     | Default value | Description                                                                                                |
+|-----------|----------|---------------|------------------------------------------------------------------------------------------------------------|
+| `service` | `string` |               | Endpoint of the tree service. Must be provided. Can be one of the node address (from the `peers` section). |
 
 ### `cache` section
 
