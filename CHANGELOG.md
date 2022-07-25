@@ -2,6 +2,42 @@
 
 This document outlines major changes between releases.
 
+## [0.22.0] - 2022-07-25
+
+Tree service support
+
+### Fixed
+- Error logging (#450)
+- Default bucket location constraint (#463)
+- Suspended versioning status (#462)
+- CodeQL warnings (#489, #522, #539)
+- Bearer token behaviour with non-owned buckets (#459)
+- ACL issues (#495, #553, #571, #573, #574, #580)
+- Authmate policy parsing (#558)
+
+### Added
+- Public key output in authmate issue-secret command (#482)
+- Support of conditional headers (#484)
+- Cache type cast error logging (#465)
+- `docker/*` target in Makefile (#471)
+- Pre signed requests (#529)
+- Tagging and ACL notifications (#361) 
+- AWSv4 signer package to improve compatibility with S3 clients (#528)
+- Extension mimetype detector (#289)
+- Default params documentation (#592)
+- Health metric (#600)
+- Parallel object listing (#525)
+- Tree service (see commit links from #609)
+
+### Changed
+- Reduce number of network requests (#439, #441)
+- Renamed authmate to s3-authmate (#518)
+- Version output (#578)
+- Improved error messages (#539)
+
+### Removed
+- `layer/neofs` package (#438)
+
 ## [0.21.1] - 2022-05-16
 
 ### Changed
@@ -210,3 +246,4 @@ releases.
 [0.20.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.19.0...v0.20.0
 [0.21.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.20.0...v0.21.0
 [0.21.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.0...v0.21.1
+[0.22.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.1...v0.22.0
