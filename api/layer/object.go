@@ -471,8 +471,11 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	objects = make([]*data.ObjectInfo, 0, p.MaxKeys)
 
 	for obj := range objOutCh {
-		if len(objects) == p.MaxKeys { // todo reconsider stop condition
-			next = obj
+		// TODO (@kirillovdenis) : #612, #525 reconsider stop condition
+		// currently we handle 3 more items to reduce the likelihood of missing the last object in batch
+		// (potentially we can miss it because of pool of workers)
+		if len(objects) == p.MaxKeys+3 {
+			//next = obj
 			break
 		}
 		objects = append(objects, obj)
@@ -481,6 +484,11 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	sort.Slice(objects, func(i, j int) bool {
 		return objects[i].Name < objects[j].Name
 	})
+
+	if len(objects) > p.MaxKeys {
+		next = objects[p.MaxKeys]
+		objects = objects[:p.MaxKeys]
+	}
 
 	return
 }

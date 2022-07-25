@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -72,4 +74,49 @@ func TestListObjectNullVersions(t *testing.T) {
 
 	require.Len(t, result.Version, 2)
 	require.Equal(t, layer.UnversionedObjectVersionID, result.Version[1].VersionID)
+}
+
+func TestS3CompatibilityBucketListV2BothContinuationTokenStartAfter(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName := "bucket-for-listing"
+	objects := []string{"bar", "baz", "foo", "quxx"}
+	bktInfo, _ := createBucketAndObject(t, tc, bktName, objects[0])
+
+	for _, objName := range objects[1:] {
+		createTestObject(tc.Context(), t, tc, bktInfo, objName)
+	}
+
+	listV2Response1 := listObjectsV2(t, tc, bktName, "bar", "", 1)
+	nextContinuationToken := listV2Response1.NextContinuationToken
+	require.Equal(t, "baz", listV2Response1.Contents[0].Key)
+
+	listV2Response2 := listObjectsV2(t, tc, bktName, "bar", nextContinuationToken, -1)
+
+	require.Equal(t, nextContinuationToken, listV2Response2.ContinuationToken)
+	require.Equal(t, "bar", listV2Response2.StartAfter)
+	require.False(t, listV2Response2.IsTruncated)
+
+	require.Equal(t, "foo", listV2Response2.Contents[0].Key)
+	require.Equal(t, "quxx", listV2Response2.Contents[1].Key)
+}
+
+func listObjectsV2(t *testing.T, tc *handlerContext, bktName, startAfter, continuationToken string, maxKeys int) *ListObjectsV2Response {
+	query := make(url.Values)
+	if len(startAfter) != 0 {
+		query.Add("start-after", startAfter)
+	}
+	if len(continuationToken) != 0 {
+		query.Add("continuation-token", continuationToken)
+	}
+	if maxKeys != -1 {
+		query.Add("max-keys", strconv.Itoa(maxKeys))
+	}
+
+	w, r := prepareTestFullRequest(t, bktName, "", query, nil)
+	tc.Handler().ListObjectsV2Handler(w, r)
+	assertStatus(t, w, http.StatusOK)
+	res := &ListObjectsV2Response{}
+	parseTestResponse(t, w, res)
+	return res
 }
