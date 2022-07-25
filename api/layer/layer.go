@@ -467,7 +467,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	if len(obj.VersionID) != 0 || settings.Unversioned() {
 		var nodeVersion *data.NodeVersion
 		if nodeVersion, obj.Error = n.getNodeVersionToDelete(ctx, bkt, obj); obj.Error != nil {
-			return obj
+			return dismissNotFoundError(obj)
 		}
 
 		if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
@@ -486,14 +486,10 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 
 		var nodeVersion *data.NodeVersion
 		if nodeVersion, obj.Error = n.getNodeVersionToDelete(ctx, bkt, obj); obj.Error != nil {
-			return obj
+			return dismissNotFoundError(obj)
 		}
 
-		if obj.Error == nil {
-			if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
-				return obj
-			}
-		} else if !errors.IsS3Error(obj.Error, errors.ErrNoSuchKey) {
+		if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
 			return obj
 		}
 	}
@@ -524,6 +520,15 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 
 	n.namesCache.Delete(bkt.Name + "/" + obj.Name)
 	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
+
+	return obj
+}
+
+func dismissNotFoundError(obj *VersionedObject) *VersionedObject {
+	if errors.IsS3Error(obj.Error, errors.ErrNoSuchKey) ||
+		errors.IsS3Error(obj.Error, errors.ErrNoSuchVersion) {
+		obj.Error = nil
+	}
 
 	return obj
 }
