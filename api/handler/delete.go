@@ -87,13 +87,10 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if deletedObject.Error != nil {
 		if isErrObjectLocked(deletedObject.Error) {
 			h.logAndSendError(w, "object is locked", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
-			return
+		} else {
+			h.logAndSendError(w, "could not delete object", reqInfo, deletedObject.Error)
 		}
-		h.log.Error("could not delete object",
-			zap.String("request_id", reqInfo.RequestID),
-			zap.String("bucket_name", reqInfo.BucketName),
-			zap.String("object_name", reqInfo.ObjectName),
-			zap.Error(deletedObject.Error))
+		return
 	}
 
 	var m *SendNotificationParams
@@ -131,9 +128,14 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
+	if deletedObject.VersionID != "" {
+		w.Header().Set(api.AmzVersionID, deletedObject.VersionID)
+	}
 	if deletedObject.DeleteMarkVersion != "" {
 		w.Header().Set(api.AmzDeleteMarker, strconv.FormatBool(true))
-		w.Header().Set(api.AmzVersionID, deletedObject.DeleteMarkVersion)
+		if deletedObject.VersionID == "" {
+			w.Header().Set(api.AmzVersionID, deletedObject.DeleteMarkVersion)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
