@@ -78,10 +78,13 @@ const ( // Settings.
 	cfgMaxClientsDeadline = "max_clients_deadline"
 
 	// Metrics / Profiler / Web.
-	cfgEnableMetrics  = "metrics"
-	cfgEnableProfiler = "pprof"
-	cfgListenAddress  = "listen_address"
-	cfgListenDomains  = "listen_domains"
+	cfgPrometheusEnabled = "prometheus.enabled"
+	cfgPrometheusAddress = "prometheus.address"
+	cfgPProfEnabled      = "pprof.enabled"
+	cfgPProfAddress      = "pprof.address"
+
+	cfgListenAddress = "listen_address"
+	cfgListenDomains = "listen_domains"
 
 	// Peers.
 	cfgPeers = "peers"
@@ -101,6 +104,8 @@ const ( // Settings.
 	cmdHelp    = "help"
 	cmdVersion = "version"
 	cmdConfig  = "config"
+	cmdPProf   = "pprof"
+	cmdMetrics = "metrics"
 
 	// envPrefix is an environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
@@ -173,8 +178,8 @@ func newSettings() *viper.Viper {
 	flags.SetOutput(os.Stdout)
 	flags.SortFlags = false
 
-	flags.Bool(cfgEnableProfiler, false, "enable pprof")
-	flags.Bool(cfgEnableMetrics, false, "enable prometheus metrics")
+	flags.Bool(cmdPProf, false, "enable pprof")
+	flags.Bool(cmdMetrics, false, "enable prometheus metrics")
 
 	help := flags.BoolP(cmdHelp, "h", false, "show help")
 	versionFlag := flags.BoolP(cmdVersion, "v", false, "show version")
@@ -205,6 +210,17 @@ func newSettings() *viper.Viper {
 
 	// logger:
 	v.SetDefault(cfgLoggerLevel, "debug")
+
+	v.SetDefault(cfgPProfAddress, "localhost:8085")
+	v.SetDefault(cfgPrometheusAddress, "localhost:8086")
+
+	// Binding flags
+	if err := v.BindPFlag(cfgPProfEnabled, flags.Lookup(cmdPProf)); err != nil {
+		panic(err)
+	}
+	if err := v.BindPFlag(cfgPrometheusEnabled, flags.Lookup(cmdMetrics)); err != nil {
+		panic(err)
+	}
 
 	if err := v.BindPFlags(flags); err != nil {
 		panic(err)

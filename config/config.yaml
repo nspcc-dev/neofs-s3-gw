@@ -45,8 +45,13 @@ resolve_order:
   - nns
 
 # Metrics
-metrics: false
-pprof: false
+pprof:
+  enabled: true
+  address: localhost:8085
+
+prometheus:
+  enabled: true
+  address: localhost:8086
 
 # Timeout to connect to a node
 connect_timeout: 10s
