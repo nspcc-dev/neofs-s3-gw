@@ -165,17 +165,6 @@ type (
 		SessionToken *session.Container
 	}
 
-	// PutSystemObjectParams stores putSystemObject parameters.
-	PutSystemObjectParams struct {
-		BktInfo  *data.BucketInfo
-		ObjName  string
-		Metadata map[string]string
-		Prefix   string
-		Reader   io.Reader
-		Size     int64
-		Lock     *data.ObjectLock
-	}
-
 	// ListObjectVersionsParams stores list objects versions parameters.
 	ListObjectVersionsParams struct {
 		BktInfo         *data.BucketInfo
