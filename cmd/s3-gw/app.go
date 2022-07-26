@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
@@ -188,7 +189,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		l.Fatal("could not initialize API handler", zap.Error(err))
 	}
 
-	if v.GetBool(cfgEnableMetrics) {
+	if v.GetBool(cfgPrometheusEnabled) {
 		gateMetrics = newGateMetrics()
 	}
 
@@ -253,12 +254,10 @@ func (a *App) Server(ctx context.Context) {
 			zap.Error(err))
 	}
 
-	router := newS3Router()
+	pprof := NewPprofService(a.cfg, a.log)
+	prometheus := NewPrometheusService(a.cfg, a.log)
 
-	// Attach app-specific routes:
-	attachMetrics(router, a.cfg, a.log)
-	attachProfiler(router, a.cfg, a.log)
-
+	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	// Attach S3 API:
 	domains := fetchDomains(a.cfg)
 	a.log.Info("fetch domains, prepare to use API",
@@ -268,6 +267,9 @@ func (a *App) Server(ctx context.Context) {
 	// Use mux.Router as http.Handler
 	srv.Handler = router
 	srv.ErrorLog = zap.NewStdLog(a.log)
+
+	go pprof.Start()
+	go prometheus.Start()
 
 	go func() {
 		a.log.Info("starting server",
@@ -298,6 +300,8 @@ func (a *App) Server(ctx context.Context) {
 
 	a.log.Info("stopping server",
 		zap.Error(srv.Shutdown(ctx)))
+	pprof.ShutDown(ctx)
+	prometheus.ShutDown(ctx)
 
 	close(a.webDone)
 }

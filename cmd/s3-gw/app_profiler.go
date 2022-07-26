@@ -1,32 +1,34 @@
 package main
 
 import (
+	"net/http"
 	"net/http/pprof"
 
-	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
-func attachProfiler(r *mux.Router, v *viper.Viper, l *zap.Logger) {
-	if !v.GetBool(cfgEnableProfiler) {
-		return
-	}
-
-	l.Info("enable profiler")
-
-	profiler := r.PathPrefix(systemPath + "/debug/pprof").
-		Subrouter().
-		StrictSlash(true)
-
-	profiler.HandleFunc("/", pprof.Index)
-	profiler.HandleFunc("/cmdline", pprof.Cmdline)
-	profiler.HandleFunc("/profile", pprof.Profile)
-	profiler.HandleFunc("/symbol", pprof.Symbol)
-	profiler.HandleFunc("/trace", pprof.Trace)
+// NewPprofService creates a new service for gathering pprof metrics.
+func NewPprofService(v *viper.Viper, l *zap.Logger) *Service {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/debug/pprof/", pprof.Index)
+	handler.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	handler.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	handler.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	handler.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	// Manually add support for paths linked to by index page at /debug/pprof/
 	for _, item := range []string{"allocs", "block", "heap", "goroutine", "mutex", "threadcreate"} {
-		profiler.Handle("/"+item, pprof.Handler(item))
+		handler.Handle("/debug/pprof/"+item, pprof.Handler(item))
+	}
+
+	return &Service{
+		Server: &http.Server{
+			Addr:    v.GetString(cfgPProfAddress),
+			Handler: handler,
+		},
+		enabled:     v.GetBool(cfgPProfEnabled),
+		serviceType: "Pprof",
+		log:         l.With(zap.String("service", "Pprof")),
 	}
 }

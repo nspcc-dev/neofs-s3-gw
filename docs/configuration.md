@@ -120,17 +120,19 @@ There are some custom types used for brevity:
 
 ### Structure
 
-| Section    | Description                             |
-|------------|-----------------------------------------|
-| no section | [General parameters](#general-section)  |
-| `wallet`   | [Wallet configuration](#wallet-section) |
-| `peers`    | [Nodes configuration](#peers-section)   |
-| `tls`      | [TLS configuration](#tls-section)       |
-| `logger`   | [Logger configuration](#logger-section) |
-| `tree`     | [Tree configuration](#tree-section)     |
-| `cache`    | [Cache configuration](#cache-section)   |
-| `nats`     | [NATS configuration](#nats-section)     |
-| `cors`     | [CORS configuration](#cors-section)     |
+| Section      | Description                                     |
+|--------------|-------------------------------------------------|
+| no section   | [General parameters](#general-section)          |
+| `wallet`     | [Wallet configuration](#wallet-section)         |
+| `peers`      | [Nodes configuration](#peers-section)           |
+| `tls`        | [TLS configuration](#tls-section)               |
+| `logger`     | [Logger configuration](#logger-section)         |
+| `tree`       | [Tree configuration](#tree-section)             |
+| `cache`      | [Cache configuration](#cache-section)           |
+| `nats`       | [NATS configuration](#nats-section)             |
+| `cors`       | [CORS configuration](#cors-section)             |
+| `pprof`      | [Pprof configuration](#pprof-section)           |
+| `prometheus` | [Prometheus configuration](#prometheus-section) |
 
 ### General section
 
@@ -143,9 +145,6 @@ rpc_endpoint: http://morph-chain.neofs.devenv:30333
 resolve_order:
   - nns
   - dns
-
-metrics: false
-pprof: false
 
 connect_timeout: 10s
 healthcheck_timeout: 15s
@@ -162,9 +161,7 @@ default_policy: REP 3
 | `address`              | `string`   |                | Account address to get from wallet. If omitted default one will be used.                                                                                                                                          |
 | `listen_address`       | `string`   | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
 | `rpc_endpoint`         | `string`   |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
-| `resolve_order`        | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |
-| `metrics`              | `bool`     | `false`        | Flag to enable and expose the prometheus metrics.                                                                                                                                                                 |
-| `pprof`                | `bool`     | `false`        | Flag to enable the profiler.                                                                                                                                                                                      |
+| `resolve_order`        | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
 | `connect_timeout`      | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
 | `healthcheck_timeout`  | `duration` | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
 | `rebalance_interval`   | `duration` | `60s`          | Interval to check node health.                                                                                                                                                                                    |
@@ -335,3 +332,32 @@ cors:
 |-------------------|-------|---------------|------------------------------------------------------|
 | `default_max_age` | `int` | `600`         | Value of `Access-Control-Max-Age` header in seconds. |
 
+# `pprof` section
+
+Contains configuration for the `pprof` profiler.
+
+```yaml
+pprof:
+  enabled: true
+  address: localhost:8085
+```
+
+| Parameter | Type     | Default value    | Description                             |
+|-----------|----------|------------------|-----------------------------------------|
+| `enabled` | `bool`   | `false`          | Flag to enable the service.             |
+| `address` | `string` | `localhost:8085` | Address that service listener binds to. |
+
+# `prometheus` section
+
+Contains configuration for the `prometheus` metrics service.
+
+```yaml
+prometheus:
+  enabled: true
+  address: localhost:8086
+```
+
+| Parameter | Type     | Default value    | Description                             |
+|-----------|----------|------------------|-----------------------------------------|
+| `enabled` | `bool`   | `false`          | Flag to enable the service.             |
+| `address` | `string` | `localhost:8086` | Address that service listener binds to. |
