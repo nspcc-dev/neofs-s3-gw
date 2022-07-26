@@ -655,10 +655,17 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID cid.ID, treeI
 
 		nodes := nodesMap[fileName]
 
-		if !latestOnly {
-			nodes = append(nodes, node)
-		} else if len(nodes) == 0 || node.GetTimestamp() > nodes[0].GetTimestamp() {
+		// Add all nodes if flag latestOnly is false.
+		// Add all intermediate nodes (actually should be exactly one intermediate node with the same name)
+		// and only latest leaf (object) nodes. To do this store and replace last leaf (object) node in nodes[0]
+		if len(nodes) == 0 {
 			nodes = []*tree.GetSubTreeResponse_Body{node}
+		} else if !latestOnly || isIntermediate(node) {
+			nodes = append(nodes, node)
+		} else if isIntermediate(nodes[0]) {
+			nodes = append([]*tree.GetSubTreeResponse_Body{node}, nodes...)
+		} else if node.GetTimestamp() > nodes[0].GetTimestamp() {
+			nodes[0] = node
 		}
 
 		nodesMap[fileName] = nodes
@@ -682,7 +689,7 @@ func getFilename(node *tree.GetSubTreeResponse_Body) string {
 	return ""
 }
 
-func isIntermediate(node *tree.GetNodeByPathResponse_Info) bool {
+func isIntermediate(node NodeResponse) bool {
 	if len(node.GetMeta()) != 1 {
 		return false
 	}
