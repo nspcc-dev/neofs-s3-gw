@@ -613,7 +613,8 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 }
 
 func IsSystemHeader(key string) bool {
-	return strings.HasPrefix(key, "S3-")
+	_, ok := api.SystemMetadata[key]
+	return ok || strings.HasPrefix(key, api.NeoFSSystemMetadataPrefix)
 }
 
 func shouldSkip(node *data.NodeVersion, p allObjectParams, existed map[string]struct{}) bool {
