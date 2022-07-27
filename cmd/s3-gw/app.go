@@ -196,7 +196,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	if v.GetBool(cfgPrometheusEnabled) {
-		gateMetrics = newGateMetrics()
+		gateMetrics = newGateMetrics(neofs.NewPoolStatistic(conns))
 	}
 
 	return &App{
