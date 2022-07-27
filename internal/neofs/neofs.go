@@ -543,7 +543,6 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 	basicACL := acl.Private
 	// allow reading objects to OTHERS in order to provide read access to S3 gateways
 	basicACL.AllowOp(acl.OpObjectGet, acl.RoleOthers)
-	basicACL.MakeSticky()
 
 	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
 		Creator:  prm.Owner,
