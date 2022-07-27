@@ -579,3 +579,18 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 		Payload: bytes.NewReader(prm.Payload),
 	})
 }
+
+// PoolStatistic is a mediator which implements authmate.NeoFS through pool.Pool.
+type PoolStatistic struct {
+	pool *pool.Pool
+}
+
+// NewPoolStatistic creates new PoolStatistic using provided pool.Pool.
+func NewPoolStatistic(p *pool.Pool) *PoolStatistic {
+	return &PoolStatistic{pool: p}
+}
+
+// Statistic implements interface method.
+func (x *PoolStatistic) Statistic() pool.Statistic {
+	return x.pool.Statistic()
+}
