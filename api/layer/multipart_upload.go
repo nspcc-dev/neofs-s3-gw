@@ -13,7 +13,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/internal/misc"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -391,7 +390,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	})
 	if err != nil {
 		n.log.Error("could not put a completed object (multipart upload)",
-			zap.String("uploadID", misc.SanitizeString(p.Info.UploadID)),
+			zap.String("uploadID", p.Info.UploadID),
 			zap.String("uploadKey", p.Info.Key),
 			zap.Error(err))
 
