@@ -34,7 +34,7 @@ Minimalistic S3 gateway setup needs:
    `S3_GW_PEERS_<N>_WEIGHT` environment variables (gateway supports multiple
    NeoFS nodes with weighted load balancing).
  * a wallet used to fetch key and communicate with NeoFS nodes
-   Passed via `--wallet` parameter or `S3_GW_WALLET` environment variable.
+   Passed via `--wallet` parameter or `S3_GW_WALLET_PATH` environment variable.
 
 These two commands are functionally equivalent, they run the gate with one
 backend node, some keys and otherwise default settings:

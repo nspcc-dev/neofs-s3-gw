@@ -137,8 +137,6 @@ There are some custom types used for brevity:
 ### General section
 
 ```yaml
-address: NfgHwwTi3wHAS8aFAN243C5vGbkYDpqLHP
-
 listen_address: 0.0.0.0:8084
 
 rpc_endpoint: http://morph-chain.neofs.devenv:30333
@@ -159,7 +157,6 @@ default_policy: REP 3
 
 | Parameter              | Type       | Default value  | Description                                                                                                                                                                                                       |
 |------------------------|------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `address`              | `string`   |                | Account address to get from wallet. If omitted default one will be used.                                                                                                                                          |
 | `listen_address`       | `string`   | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
 | `rpc_endpoint`         | `string`   |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
 | `resolve_order`        | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
@@ -175,12 +172,16 @@ default_policy: REP 3
 
 ```yaml
 wallet:
-  passphrase: "password"
+   path: /path/to/wallet.json # Path to wallet
+   passphrase: "" # Passphrase to decrypt wallet.
+   address: NfgHwwTi3wHAS8aFAN243C5vGbkYDpqLHP
 ```
 
-| Parameter    | Type     | Default value | Description                   |
-|--------------|----------|---------------|-------------------------------|
-| `passphrase` | `string` |               | Passphrase to decrypt wallet. |
+| Parameter    | Type     | Default value | Description                                                               |
+|--------------|----------|---------------|---------------------------------------------------------------------------|
+| `path`       | `string` |               | Path to wallet                                                            |
+| `passphrase` | `string` |               | Passphrase to decrypt wallet.                                             |
+| `address`    | `string` |               | Account address to get from wallet. If omitted default one will be used.  |
 
 ### `peers` section
 

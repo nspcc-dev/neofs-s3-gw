@@ -102,7 +102,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	password := wallet.GetPassword(v, cfgWalletPassphrase)
-	if key, err = wallet.GetKeyFromPath(v.GetString(cfgWallet), v.GetString(cfgAddress), password); err != nil {
+	if key, err = wallet.GetKeyFromPath(v.GetString(cfgWalletPath), v.GetString(cfgWalletAddress), password); err != nil {
 		l.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
