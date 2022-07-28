@@ -34,9 +34,11 @@ const ( // Settings.
 	cfgLoggerLevel = "logger.level"
 
 	// Wallet.
-	cfgWallet           = "wallet"
-	cfgAddress          = "address"
+	cfgWalletPath       = "wallet.path"
+	cfgWalletAddress    = "wallet.address"
 	cfgWalletPassphrase = "wallet.passphrase"
+	cmdWallet           = "wallet"
+	cmdAddress          = "address"
 
 	// HTTPS/TLS.
 	cfgTLSKeyFile  = "tls.key_file"
@@ -187,8 +189,8 @@ func newSettings() *viper.Viper {
 	help := flags.BoolP(cmdHelp, "h", false, "show help")
 	versionFlag := flags.BoolP(cmdVersion, "v", false, "show version")
 
-	flags.StringP(cfgWallet, "w", "", `path to the wallet`)
-	flags.String(cfgAddress, "", `address of wallet account`)
+	flags.StringP(cmdWallet, "w", "", `path to the wallet`)
+	flags.String(cmdAddress, "", `address of wallet account`)
 	config := flags.String(cmdConfig, "", "config path")
 
 	flags.Duration(cfgHealthcheckTimeout, defaultHealthcheckTimeout, "set timeout to check node health during rebalance")
@@ -229,6 +231,13 @@ func newSettings() *viper.Viper {
 	}
 
 	if err := v.BindPFlags(flags); err != nil {
+		panic(err)
+	}
+
+	if err := v.BindPFlag(cfgWalletPath, flags.Lookup(cmdWallet)); err != nil {
+		panic(err)
+	}
+	if err := v.BindPFlag(cfgWalletAddress, flags.Lookup(cmdAddress)); err != nil {
 		panic(err)
 	}
 

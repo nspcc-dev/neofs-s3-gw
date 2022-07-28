@@ -1,9 +1,8 @@
 # Wallet address, path to the wallet must be set as cli parameter or environment variable
 wallet:
-  passphrase: "" # Passphrase to decrypt wallet.
-
-# Account address. If omitted default one will be used.
-address: NfgHwwTi3wHAS8aFAN243C5vGbkYDpqLHP
+  path: /path/to/wallet.json # Path to wallet
+  passphrase: "" # Passphrase to decrypt wallet. If you're using a wallet without a password, place '' here.
+  address: NfgHwwTi3wHAS8aFAN243C5vGbkYDpqLHP # Account address. If omitted default one will be used.
 
 # Nodes configuration
 # This configuration makes the gateway use the first node (grpc://s01.neofs.devenv:8080)
