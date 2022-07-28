@@ -271,8 +271,13 @@ func newSettings() *viper.Viper {
 				continue
 			}
 
+			defaultValue := v.GetString(keys[i])
+			if len(defaultValue) == 0 {
+				continue
+			}
+
 			k := strings.Replace(keys[i], ".", "_", -1)
-			fmt.Printf("%s_%s = %v\n", envPrefix, strings.ToUpper(k), v.Get(keys[i]))
+			fmt.Printf("%s_%s = %s\n", envPrefix, strings.ToUpper(k), defaultValue)
 		}
 
 		fmt.Println()
