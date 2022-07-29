@@ -74,6 +74,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 
 		maxClientsCount    = defaultMaxClientsCount
 		maxClientsDeadline = defaultMaxClientsDeadline
+		poolErrorThreshold = defaultPoolErrorThreshold
 	)
 
 	if v := v.GetDuration(cfgConnectTimeout); v > 0 {
@@ -96,6 +97,10 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 		reBalance = v
 	}
 
+	if v := v.GetUint32(cfgPoolErrorThreshold); v > 0 {
+		poolErrorThreshold = v
+	}
+
 	password := wallet.GetPassword(v, cfgWalletPassphrase)
 	if key, err = wallet.GetKeyFromPath(v.GetString(cfgWallet), v.GetString(cfgAddress), password); err != nil {
 		l.Fatal("could not load NeoFS private key", zap.Error(err))
@@ -114,6 +119,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	prmPool.SetKey(&key.PrivateKey)
 	prmPool.SetNodeDialTimeout(conTimeout)
 	prmPool.SetHealthcheckTimeout(hckTimeout)
+	prmPool.SetErrorThreshold(poolErrorThreshold)
 	prmPool.SetClientRebalanceInterval(reBalance)
 	for _, peer := range fetchPeers(l, v) {
 		prmPool.AddNode(peer)
