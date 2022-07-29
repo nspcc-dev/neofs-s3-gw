@@ -23,6 +23,8 @@ const (
 	defaultConnectTimeout     = 10 * time.Second
 	defaultShutdownTimeout    = 15 * time.Second
 
+	defaultPoolErrorThreshold uint32 = 100
+
 	defaultMaxClientsCount    = 100
 	defaultMaxClientsDeadline = time.Second * 30
 )
@@ -40,10 +42,11 @@ const ( // Settings.
 	cfgTLSKeyFile  = "tls.key_file"
 	cfgTLSCertFile = "tls.cert_file"
 
-	// Timeouts.
+	// Pool config.
 	cfgConnectTimeout     = "connect_timeout"
 	cfgHealthcheckTimeout = "healthcheck_timeout"
 	cfgRebalanceInterval  = "rebalance_interval"
+	cfgPoolErrorThreshold = "pool_error_threshold"
 
 	// Caching.
 	cfgObjectsCacheLifetime     = "cache.objects.lifetime"
@@ -210,6 +213,9 @@ func newSettings() *viper.Viper {
 
 	// logger:
 	v.SetDefault(cfgLoggerLevel, "debug")
+
+	// pool:
+	v.SetDefault(cfgPoolErrorThreshold, defaultPoolErrorThreshold)
 
 	v.SetDefault(cfgPProfAddress, "localhost:8085")
 	v.SetDefault(cfgPrometheusAddress, "localhost:8086")

@@ -149,6 +149,7 @@ resolve_order:
 connect_timeout: 10s
 healthcheck_timeout: 15s
 rebalance_interval: 60s
+pool_error_threshold: 100
 
 max_clients_count: 100
 max_clients_deadline: 30s
@@ -165,6 +166,7 @@ default_policy: REP 3
 | `connect_timeout`      | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
 | `healthcheck_timeout`  | `duration` | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
 | `rebalance_interval`   | `duration` | `60s`          | Interval to check node health.                                                                                                                                                                                    |
+| `pool_error_threshold` | `uint32`   | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
 | `max_clients_count`    | `int`      | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
 | `max_clients_deadline` | `duration` | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
 | `default_policy`       | `string`   | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
