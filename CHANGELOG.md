@@ -2,6 +2,28 @@
 
 This document outlines major changes between releases.
 
+## [0.23.0] - 2022-08-01
+
+### Fixed
+- System metadata are filtered now (#619)
+- List objects in corner cases (#612, #627)
+- Correct removal of a deleted object (#610)
+- Bucket creation could lead to "no healthy client" error (#636)
+
+### Added
+- New param to configure pool error threshold (#633)
+
+### Changed
+- Pprof and prometheus metrics configuration (#591)
+- Don't set sticky bit in authmate container (#540)
+- Updated compatibility table (#638)
+- Rely on string sanitizing from zap (#498)
+
+### Updating from v0.22.0
+1. To enable pprof use `pprof.enabled` instead of `pprof` in config. 
+To enable prometheus metrics use `prometheus.enabled` instead of `metrics` in config. 
+If you are using the command line flags you can skip this step.
+
 ## [0.22.0] - 2022-07-25
 
 Tree service support
@@ -247,3 +269,4 @@ releases.
 [0.21.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.20.0...v0.21.0
 [0.21.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.0...v0.21.1
 [0.22.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.1...v0.22.0
+[0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
