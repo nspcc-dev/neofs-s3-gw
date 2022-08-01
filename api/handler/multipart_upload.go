@@ -137,14 +137,24 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
 	p.Header = parseMetadata(r)
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		p.Header[api.ContentType] = contentType
 	}
 
 	if err = h.obj.CreateMultipartUpload(r.Context(), p); err != nil {
-		h.logAndSendError(w, "could not upload a part", reqInfo, err, additional...)
+		h.logAndSendError(w, "could create multipart upload", reqInfo, err, additional...)
 		return
+	}
+
+	if p.Info.Encryption.Enabled() {
+		addSSECHeaders(w.Header(), r.Header)
 	}
 
 	resp := InitiateMultipartUploadResponse{
@@ -210,10 +220,20 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		Reader:     r.Body,
 	}
 
+	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
 	hash, err := h.obj.UploadPart(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not upload a part", reqInfo, err, additional...)
 		return
+	}
+
+	if p.Info.Encryption.Enabled() {
+		addSSECHeaders(w.Header(), r.Header)
 	}
 
 	w.Header().Set(api.ETag, hash)
@@ -301,6 +321,17 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		Range:      srcRange,
 	}
 
+	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
+	if err = p.Info.Encryption.MatchObjectEncryption(srcInfo.EncryptionInfo); err != nil {
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		return
+	}
+
 	info, err := h.obj.UploadPartCopy(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not upload part copy", reqInfo, err, additional...)
@@ -310,6 +341,10 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	response := UploadPartCopyResponse{
 		ETag:         info.HashSum,
 		LastModified: info.Created.UTC().Format(time.RFC3339),
+	}
+
+	if p.Info.Encryption.Enabled() {
+		addSSECHeaders(w.Header(), r.Header)
 	}
 
 	if err = api.EncodeToResponse(w, response); err != nil {
@@ -353,6 +388,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		Info:  uploadInfo,
 		Parts: reqBody.Parts,
 	}
+
 	uploadData, objInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
 	if err != nil {
 		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err, additional...)
@@ -522,6 +558,12 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 		PartNumberMarker: partNumberMarker,
 	}
 
+	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
 	list, err := h.obj.ListParts(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not list parts", reqInfo, err, additional...)
@@ -549,6 +591,12 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		UploadID: uploadID,
 		Bkt:      bktInfo,
 		Key:      reqInfo.ObjectName,
+	}
+
+	p.Encryption, err = formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
 	}
 
 	if err = h.obj.AbortMultipartUpload(r.Context(), p); err != nil {

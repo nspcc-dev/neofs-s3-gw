@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/sio"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -36,9 +37,10 @@ const (
 
 type (
 	UploadInfoParams struct {
-		UploadID string
-		Bkt      *data.BucketInfo
-		Key      string
+		UploadID   string
+		Bkt        *data.BucketInfo
+		Key        string
+		Encryption EncryptionParams
 	}
 
 	CreateMultipartParams struct {
@@ -75,6 +77,11 @@ type (
 	CompletedPart struct {
 		ETag       string
 		PartNumber int
+	}
+
+	EncryptedPart struct {
+		Part
+		EncryptedSize int64
 	}
 
 	Part struct {
@@ -152,6 +159,12 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		}
 	}
 
+	if p.Info.Encryption.Enabled() {
+		if err := addEncryptionHeaders(info.Meta, p.Info.Encryption); err != nil {
+			return fmt.Errorf("add encryption header: %w", err)
+		}
+	}
+
 	return n.treeService.CreateMultipartUpload(ctx, p.Info.Bkt.CID, info)
 }
 
@@ -177,12 +190,29 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 }
 
 func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadPartParams) (*data.ObjectInfo, error) {
+	encInfo := formEncryptionInfo(multipartInfo.Meta)
+	if err := p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
+		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
+		return nil, errors.GetAPIError(errors.ErrInvalidEncryptionParameters)
+	}
+
 	bktInfo := p.Info.Bkt
 	prm := PrmObjectCreate{
 		Container:  bktInfo.CID,
 		Creator:    bktInfo.Owner,
 		Attributes: make([][2]string, 2),
 		Payload:    p.Reader,
+	}
+
+	decSize := p.Size
+	if p.Info.Encryption.Enabled() {
+		r, encSize, err := encryptionReader(p.Reader, uint64(p.Size), p.Info.Encryption.Key())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ecnrypted reader: %w", err)
+		}
+		prm.Attributes = append(prm.Attributes, [2]string{AttributeDecryptedSize, strconv.FormatInt(p.Size, 10)})
+		prm.Payload = r
+		p.Size = int64(encSize)
 	}
 
 	prm.Attributes[0][0], prm.Attributes[0][1] = UploadIDAttributeName, p.Info.UploadID
@@ -198,7 +228,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		UploadID: p.Info.UploadID,
 		Number:   p.PartNumber,
 		OID:      id,
-		Size:     p.Size,
+		Size:     decSize,
 		ETag:     hex.EncodeToString(hash),
 		Created:  time.Now(),
 	}
@@ -326,12 +356,14 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	if err != nil {
 		return nil, nil, err
 	}
+	encInfo := formEncryptionInfo(multipartInfo.Meta)
 
 	if len(partsInfo) < len(p.Parts) {
 		return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
 	}
 
 	var multipartObjetSize int64
+	var encMultipartObjectSize uint64
 	parts := make([]*data.PartInfo, 0, len(p.Parts))
 
 	var completedPartsHeader strings.Builder
@@ -345,7 +377,15 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			return nil, nil, errors.GetAPIError(errors.ErrEntityTooSmall)
 		}
 		parts = append(parts, partInfo)
-		multipartObjetSize += partInfo.Size
+		multipartObjetSize += partInfo.Size // even if encryption is enabled size is actual (decrypted)
+
+		if encInfo.Enabled {
+			encPartSize, err := sio.EncryptedSize(uint64(partInfo.Size))
+			if err != nil {
+				return nil, nil, fmt.Errorf("compute encrypted size: %w", err)
+			}
+			encMultipartObjectSize += encPartSize
+		}
 
 		partInfoStr := partInfo.ToHeaderString()
 		if i != len(p.Parts)-1 {
@@ -373,6 +413,14 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 	}
 
+	if encInfo.Enabled {
+		initMetadata[AttributeEncryptionAlgorithm] = encInfo.Algorithm
+		initMetadata[AttributeHMACKey] = encInfo.HMACKey
+		initMetadata[AttributeHMACSalt] = encInfo.HMACSalt
+		initMetadata[AttributeDecryptedSize] = strconv.FormatInt(multipartObjetSize, 10)
+		multipartObjetSize = int64(encMultipartObjectSize)
+	}
+
 	r := &multiObjectReader{
 		ctx:   ctx,
 		layer: n,
@@ -382,11 +430,12 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	r.prm.bktInfo = p.Info.Bkt
 
 	obj, err := n.PutObject(ctx, &PutObjectParams{
-		BktInfo: p.Info.Bkt,
-		Object:  p.Info.Key,
-		Reader:  r,
-		Header:  initMetadata,
-		Size:    multipartObjetSize,
+		BktInfo:    p.Info.Bkt,
+		Object:     p.Info.Key,
+		Reader:     r,
+		Header:     initMetadata,
+		Size:       multipartObjetSize,
+		Encryption: p.Info.Encryption,
 	})
 	if err != nil {
 		n.log.Error("could not put a completed object (multipart upload)",
@@ -494,6 +543,12 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	multipartInfo, partsInfo, err := n.getUploadParts(ctx, p.Info)
 	if err != nil {
 		return nil, err
+	}
+
+	encInfo := formEncryptionInfo(multipartInfo.Meta)
+	if err = p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
+		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
+		return nil, errors.GetAPIError(errors.ErrInvalidEncryptionParameters)
 	}
 
 	res.Owner = multipartInfo.Owner

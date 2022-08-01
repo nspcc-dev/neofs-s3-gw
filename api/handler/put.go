@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -209,12 +210,19 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		metadata[api.Expires] = expires
 	}
 
+	encryption, err := formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
 	params := &layer.PutObjectParams{
-		BktInfo: bktInfo,
-		Object:  reqInfo.ObjectName,
-		Reader:  r.Body,
-		Size:    r.ContentLength,
-		Header:  metadata,
+		BktInfo:    bktInfo,
+		Object:     reqInfo.ObjectName,
+		Reader:     r.Body,
+		Size:       r.ContentLength,
+		Header:     metadata,
+		Encryption: encryption,
 	}
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
@@ -280,9 +288,50 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, info.VersionID())
 	}
+	if encryption.Enabled() {
+		addSSECHeaders(w.Header(), r.Header)
+	}
 
 	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func formEncryptionParams(header http.Header) (enc layer.EncryptionParams, err error) {
+	sseCustomerAlgorithm := header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
+	sseCustomerKey := header.Get(api.AmzServerSideEncryptionCustomerKey)
+	sseCustomerKeyMD5 := header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
+
+	if len(sseCustomerAlgorithm) == 0 && len(sseCustomerKey) == 0 && len(sseCustomerKeyMD5) == 0 {
+		return
+	}
+
+	if sseCustomerAlgorithm != layer.AESEncryptionAlgorithm {
+		return enc, errors.GetAPIError(errors.ErrInvalidEncryptionAlgorithm)
+	}
+
+	key, err := base64.StdEncoding.DecodeString(sseCustomerKey)
+	if err != nil {
+		return enc, errors.GetAPIError(errors.ErrInvalidSSECustomerKey)
+	}
+
+	if len(key) != layer.AESKeySize {
+		return enc, errors.GetAPIError(errors.ErrInvalidSSECustomerKey)
+	}
+
+	keyMD5, err := base64.StdEncoding.DecodeString(sseCustomerKeyMD5)
+	if err != nil {
+		return enc, errors.GetAPIError(errors.ErrSSECustomerKeyMD5Mismatch)
+	}
+
+	md5Sum := md5.Sum(key)
+	if !bytes.Equal(md5Sum[:], keyMD5) {
+		return enc, errors.GetAPIError(errors.ErrSSECustomerKeyMD5Mismatch)
+	}
+
+	var aesKey layer.AES256Key
+	copy(aesKey[:], key)
+
+	return layer.NewEncryptionParams(aesKey), nil
 }
 
 func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {

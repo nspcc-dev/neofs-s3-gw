@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"go.uber.org/zap"
 )
 
 type (
@@ -92,6 +93,17 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	info := extendedInfo.ObjectInfo
+
+	encryption, err := formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
+	if err = encryption.MatchObjectEncryption(info.EncryptionInfo); err != nil {
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		return
+	}
 
 	if err = checkPreconditions(info, params.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)

@@ -57,6 +57,10 @@ const (
 	AmzMaxParts                  = "X-Amz-Max-Parts"
 	AmzPartNumberMarker          = "X-Amz-Part-Number-Marker"
 
+	AmzServerSideEncryptionCustomerAlgorithm = "x-amz-server-side-encryption-customer-algorithm"
+	AmzServerSideEncryptionCustomerKey       = "x-amz-server-side-encryption-customer-key"
+	AmzServerSideEncryptionCustomerKeyMD5    = "x-amz-server-side-encryption-customer-key-MD5"
+
 	ContainerID = "X-Container-Id"
 
 	AccessControlAllowOrigin      = "Access-Control-Allow-Origin"

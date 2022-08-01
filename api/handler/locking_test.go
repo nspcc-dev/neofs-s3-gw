@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -588,12 +587,4 @@ func assertRetentionApproximate(t *testing.T, w *httptest.ResponseRecorder, rete
 	require.NoError(t, err)
 
 	require.InDelta(t, expectedUntil.Unix(), actualUntil.Unix(), delta)
-}
-
-func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
-	if w.Code != status {
-		resp, err := io.ReadAll(w.Result().Body)
-		require.NoError(t, err)
-		require.Failf(t, "unexpected status", "expected: %d, actual: %d, resp: '%s'", status, w.Code, string(resp))
-	}
 }

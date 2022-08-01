@@ -244,9 +244,7 @@ func TestDeleteObjectCheckMarkerReturn(t *testing.T) {
 }
 
 func createBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
-	createTestBucket(tc.Context(), t, tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
-	require.NoError(t, err)
+	bktInfo := createTestBucket(tc.Context(), t, tc, bktName)
 
 	objInfo := createTestObject(tc.Context(), t, tc, bktInfo, objName)
 

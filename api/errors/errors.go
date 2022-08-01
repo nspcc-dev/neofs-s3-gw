@@ -141,6 +141,7 @@ const (
 	ErrSSEEncryptedObject
 	ErrInvalidEncryptionParameters
 	ErrInvalidSSECustomerAlgorithm
+	ErrInvalidEncryptionAlgorithm
 	ErrInvalidSSECustomerKey
 	ErrMissingSSECustomerKey
 	ErrMissingSSECustomerKeyMD5
@@ -1009,6 +1010,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrInvalidSSECustomerAlgorithm,
 		Code:           "InvalidArgument",
 		Description:    "Requests specifying Server Side Encryption with Customer provided keys must provide a valid encryption algorithm.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidEncryptionAlgorithm: {
+		ErrCode:        ErrInvalidEncryptionAlgorithm,
+		Code:           "InvalidArgument",
+		Description:    "The encryption request that you specified is not valid. The valid value is AES256.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidSSECustomerKey: {
