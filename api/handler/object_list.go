@@ -272,34 +272,34 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 	}
 
 	for _, ver := range info.Version {
-		versionID := ver.Object.Version()
-		if ver.IsUnversioned {
+		versionID := ver.ObjectInfo.Version()
+		if ver.NodeVersion.IsUnversioned {
 			versionID = layer.UnversionedObjectVersionID
 		}
 		res.Version = append(res.Version, ObjectVersionResponse{
 			IsLatest:     ver.IsLatest,
-			Key:          ver.Object.Name,
-			LastModified: ver.Object.Created.UTC().Format(time.RFC3339),
+			Key:          ver.ObjectInfo.Name,
+			LastModified: ver.ObjectInfo.Created.UTC().Format(time.RFC3339),
 			Owner: Owner{
-				ID:          ver.Object.Owner.String(),
-				DisplayName: ver.Object.Owner.String(),
+				ID:          ver.ObjectInfo.Owner.String(),
+				DisplayName: ver.ObjectInfo.Owner.String(),
 			},
-			Size:      ver.Object.Size,
+			Size:      ver.ObjectInfo.Size,
 			VersionID: versionID,
-			ETag:      ver.Object.HashSum,
+			ETag:      ver.ObjectInfo.HashSum,
 		})
 	}
 	// this loop is not starting till versioning is not implemented
 	for _, del := range info.DeleteMarker {
 		res.DeleteMarker = append(res.DeleteMarker, DeleteMarkerEntry{
 			IsLatest:     del.IsLatest,
-			Key:          del.Object.Name,
-			LastModified: del.Object.Created.UTC().Format(time.RFC3339),
+			Key:          del.ObjectInfo.Name,
+			LastModified: del.ObjectInfo.Created.UTC().Format(time.RFC3339),
 			Owner: Owner{
-				ID:          del.Object.Owner.String(),
-				DisplayName: del.Object.Owner.String(),
+				ID:          del.ObjectInfo.Owner.String(),
+				DisplayName: del.ObjectInfo.Owner.String(),
 			},
-			VersionID: del.Object.Version(),
+			VersionID: del.ObjectInfo.Version(),
 		})
 	}
 

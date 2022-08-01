@@ -35,13 +35,6 @@ type (
 		NextContinuationToken string
 	}
 
-	// ObjectVersionInfo stores info about objects versions.
-	ObjectVersionInfo struct {
-		Object        *data.ObjectInfo
-		IsLatest      bool
-		IsUnversioned bool
-	}
-
 	// ListObjectVersionsInfo stores info and list of objects versions.
 	ListObjectVersionsInfo struct {
 		CommonPrefixes      []string
@@ -49,8 +42,8 @@ type (
 		KeyMarker           string
 		NextKeyMarker       string
 		NextVersionIDMarker string
-		Version             []*ObjectVersionInfo
-		DeleteMarker        []*ObjectVersionInfo
+		Version             []*data.ExtendedObjectInfo
+		DeleteMarker        []*data.ExtendedObjectInfo
 		VersionIDMarker     string
 	}
 )

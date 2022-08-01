@@ -59,29 +59,20 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 		res.VersionIDMarker = allObjects[p.MaxKeys-1].ObjectInfo.Version()
 	}
 
-	objects := make([]*ObjectVersionInfo, len(allObjects))
-	for i, obj := range allObjects {
-		objects[i] = &ObjectVersionInfo{
-			Object:        obj.ObjectInfo,
-			IsUnversioned: obj.NodeVersion.IsUnversioned,
-			IsLatest:      obj.IsLatest,
-		}
-	}
-
-	res.Version, res.DeleteMarker = triageVersions(objects)
+	res.Version, res.DeleteMarker = triageVersions(allObjects)
 	return res, nil
 }
 
-func triageVersions(objVersions []*ObjectVersionInfo) ([]*ObjectVersionInfo, []*ObjectVersionInfo) {
+func triageVersions(objVersions []*data.ExtendedObjectInfo) ([]*data.ExtendedObjectInfo, []*data.ExtendedObjectInfo) {
 	if len(objVersions) == 0 {
 		return nil, nil
 	}
 
-	var resVersion []*ObjectVersionInfo
-	var resDelMarkVersions []*ObjectVersionInfo
+	var resVersion []*data.ExtendedObjectInfo
+	var resDelMarkVersions []*data.ExtendedObjectInfo
 
 	for _, version := range objVersions {
-		if version.Object.IsDeleteMarker {
+		if version.NodeVersion.DeleteMarker != nil {
 			resDelMarkVersions = append(resDelMarkVersions, version)
 		} else {
 			resVersion = append(resVersion, version)
