@@ -10,10 +10,12 @@ import (
 	"mime"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/minio/sio"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -145,6 +147,42 @@ func MimeByFileName(name string) string {
 	return mime.TypeByExtension(ext)
 }
 
+func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, error) {
+	encSize, err := sio.EncryptedSize(size)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to compute enc size: %w", err)
+	}
+
+	r, err = sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, MaxVersion: sio.Version20, Key: key, CipherSuites: []byte{sio.AES_256_GCM}})
+	if err != nil {
+		return nil, 0, fmt.Errorf("couldn't create encrypter: %w", err)
+	}
+
+	return r, encSize, nil
+}
+
+func parseCompletedPartHeader(hdr string) (*Part, error) {
+	// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum
+	partInfo := strings.Split(hdr, "-")
+	if len(partInfo) != 3 {
+		return nil, fmt.Errorf("invalid completed part header")
+	}
+	num, err := strconv.Atoi(partInfo[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid completed part number '%s': %w", partInfo[0], err)
+	}
+	size, err := strconv.Atoi(partInfo[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid completed part size '%s': %w", partInfo[1], err)
+	}
+
+	return &Part{
+		ETag:       partInfo[2],
+		PartNumber: num,
+		Size:       int64(size),
+	}, nil
+}
+
 // PutObject stores object into NeoFS, took payload from io.Reader.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
 	own := n.Owner(ctx)
@@ -163,6 +201,19 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	r := p.Reader
+	if p.Encryption.Enabled() {
+		p.Header[AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
+			return nil, fmt.Errorf("add encryption header: %w", err)
+		}
+
+		var encSize uint64
+		if r, encSize, err = encryptionReader(p.Reader, uint64(p.Size), p.Encryption.Key()); err != nil {
+			return nil, fmt.Errorf("create encrypter: %w", err)
+		}
+		p.Size = int64(encSize)
+	}
+
 	if r != nil {
 		if len(p.Header[api.ContentType]) == 0 {
 			if contentType := MimeByFileName(p.Object); len(contentType) == 0 {
@@ -217,8 +268,9 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	objInfo := &data.ObjectInfo{
-		ID:  id,
-		CID: p.BktInfo.CID,
+		ID:             id,
+		CID:            p.BktInfo.CID,
+		EncryptionInfo: formEncryptionInfo(p.Header),
 
 		Owner:       own,
 		Bucket:      p.BktInfo.Name,

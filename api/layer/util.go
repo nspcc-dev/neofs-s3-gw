@@ -83,9 +83,10 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 	objID, _ := meta.ID()
 	payloadChecksum, _ := meta.PayloadChecksum()
 	return &data.ObjectInfo{
-		ID:    objID,
-		CID:   bkt.CID,
-		IsDir: false,
+		ID:             objID,
+		CID:            bkt.CID,
+		IsDir:          false,
+		EncryptionInfo: formEncryptionInfo(headers),
 
 		Bucket:      bkt.Name,
 		Name:        filenameFromObject(meta),
@@ -96,6 +97,28 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		Size:        int64(meta.PayloadSize()),
 		HashSum:     hex.EncodeToString(payloadChecksum.Value()),
 	}
+}
+
+func formEncryptionInfo(headers map[string]string) data.EncryptionInfo {
+	algorithm := headers[AttributeEncryptionAlgorithm]
+	return data.EncryptionInfo{
+		Enabled:   len(algorithm) > 0,
+		Algorithm: algorithm,
+		HMACKey:   headers[AttributeHMACKey],
+		HMACSalt:  headers[AttributeHMACSalt],
+	}
+}
+
+func addEncryptionHeaders(meta map[string]string, enc EncryptionParams) error {
+	meta[AttributeEncryptionAlgorithm] = AESEncryptionAlgorithm
+	hmacKey, hmacSalt, err := enc.HMAC()
+	if err != nil {
+		return fmt.Errorf("get hmac: %w", err)
+	}
+	meta[AttributeHMACKey] = hex.EncodeToString(hmacKey)
+	meta[AttributeHMACSalt] = hex.EncodeToString(hmacSalt)
+
+	return nil
 }
 
 // processObjectInfoName fixes name in objectInfo structure based on prefix and

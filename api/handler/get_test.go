@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -143,4 +146,43 @@ func TestPreconditions(t *testing.T) {
 			require.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestGetRange(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-range", "object-to-range"
+	createTestBucket(tc.Context(), t, tc, bktName)
+
+	content := "123456789abcdef"
+	putObjectContent(t, tc, bktName, objName, content)
+
+	full := getObjectRange(t, tc, bktName, objName, 0, len(content)-1)
+	require.Equal(t, content, string(full))
+
+	beginning := getObjectRange(t, tc, bktName, objName, 0, 3)
+	require.Equal(t, content[:4], string(beginning))
+
+	middle := getObjectRange(t, tc, bktName, objName, 5, 10)
+	require.Equal(t, "6789ab", string(middle))
+
+	end := getObjectRange(t, tc, bktName, objName, 10, 15)
+	require.Equal(t, "bcdef", string(end))
+}
+
+func putObjectContent(t *testing.T, tc *handlerContext, bktName, objName, content string) {
+	body := bytes.NewReader([]byte(content))
+	w, r := prepareTestPayloadRequest(bktName, objName, body)
+	tc.Handler().PutObjectHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+}
+
+func getObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, start, end int) []byte {
+	w, r := prepareTestRequest(t, bktName, objName, nil)
+	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	tc.Handler().GetObjectHandler(w, r)
+	assertStatus(t, w, http.StatusPartialContent)
+	content, err := io.ReadAll(w.Result().Body)
+	require.NoError(t, err)
+	return content
 }

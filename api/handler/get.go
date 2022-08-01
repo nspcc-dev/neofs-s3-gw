@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"go.uber.org/zap"
 )
 
 type conditionalArgs struct {
@@ -71,13 +72,25 @@ func overrideResponseHeaders(h http.Header, query url.Values) {
 	}
 }
 
-func writeHeaders(h http.Header, extendedInfo *data.ExtendedObjectInfo, tagSetLength int, isBucketUnversioned bool) {
+func addSSECHeaders(responseHeader http.Header, requestHeader http.Header) {
+	responseHeader.Set(api.AmzServerSideEncryptionCustomerAlgorithm, requestHeader.Get(api.AmzServerSideEncryptionCustomerAlgorithm))
+	responseHeader.Set(api.AmzServerSideEncryptionCustomerKeyMD5, requestHeader.Get(api.AmzServerSideEncryptionCustomerKeyMD5))
+}
+
+func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.ExtendedObjectInfo, tagSetLength int, isBucketUnversioned bool) {
 	info := extendedInfo.ObjectInfo
 	if len(info.ContentType) > 0 && h.Get(api.ContentType) == "" {
 		h.Set(api.ContentType, info.ContentType)
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
-	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
+
+	if info.IsEncrypted() {
+		h.Set(api.ContentLength, info.Headers[layer.AttributeDecryptedSize])
+		addSSECHeaders(h, requestHeader)
+	} else {
+		h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
+	}
+
 	h.Set(api.ETag, info.HashSum)
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
@@ -137,7 +150,26 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if params, err = fetchRangeHeader(r.Header, uint64(info.Size)); err != nil {
+	encryption, err := formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
+	if err = encryption.MatchObjectEncryption(info.EncryptionInfo); err != nil {
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		return
+	}
+
+	fullSize := info.Size
+	if encryption.Enabled() {
+		if fullSize, err = strconv.ParseInt(info.Headers[layer.AttributeDecryptedSize], 10, 64); err != nil {
+			h.logAndSendError(w, "invalid decrypted size header", reqInfo, errors.GetAPIError(errors.ErrBadRequest))
+			return
+		}
+	}
+
+	if params, err = fetchRangeHeader(r.Header, uint64(fullSize)); err != nil {
 		h.logAndSendError(w, "could not parse range header", reqInfo, err)
 		return
 	}
@@ -169,7 +201,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), extendedInfo, len(tagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, extendedInfo, len(tagSet), bktSettings.Unversioned())
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
 	} else {
@@ -181,6 +213,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Writer:     w,
 		Range:      params,
 		BucketInfo: bktInfo,
+		Encryption: encryption,
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)

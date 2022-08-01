@@ -81,12 +81,16 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	}
 }
 
-func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktName string) {
+func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktName string) *data.BucketInfo {
 	_, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
 		Creator: *usertest.ID(),
 		Name:    bktName,
 	})
 	require.NoError(t, err)
+
+	bktInfo, err := h.Layer().GetBucketInfo(ctx, bktName)
+	require.NoError(t, err)
+	return bktInfo
 }
 
 func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
@@ -149,8 +153,12 @@ func prepareTestFullRequest(t *testing.T, bktName, objName string, query url.Val
 	rawBody, err := xml.Marshal(body)
 	require.NoError(t, err)
 
+	return prepareTestRequestWithQuery(bktName, objName, query, rawBody)
+}
+
+func prepareTestRequestWithQuery(bktName, objName string, query url.Values, body []byte) (*httptest.ResponseRecorder, *http.Request) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(rawBody))
+	r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(body))
 	r.URL.RawQuery = query.Encode()
 
 	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
@@ -199,4 +207,18 @@ func listOIDsFromMockedNeoFS(t *testing.T, tc *handlerContext, bktName, objectNa
 	require.NoError(t, err)
 
 	return ids
+}
+
+func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
+	if w.Code != status {
+		resp, err := io.ReadAll(w.Result().Body)
+		require.NoError(t, err)
+		require.Failf(t, "unexpected status", "expected: %d, actual: %d, resp: '%s'", status, w.Code, string(resp))
+	}
+}
+
+func readResponse(t *testing.T, w *httptest.ResponseRecorder, status int, model interface{}) {
+	assertStatus(t, w, status)
+	err := xml.NewDecoder(w.Result().Body).Decode(model)
+	require.NoError(t, err)
 }

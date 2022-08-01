@@ -53,6 +53,17 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	info := extendedInfo.ObjectInfo
 
+	encryption, err := formEncryptionParams(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
+	if err = encryption.MatchObjectEncryption(info.EncryptionInfo); err != nil {
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		return
+	}
+
 	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
 		return
@@ -98,7 +109,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), extendedInfo, len(tagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, extendedInfo, len(tagSet), bktSettings.Unversioned())
 	w.WriteHeader(http.StatusOK)
 }
 

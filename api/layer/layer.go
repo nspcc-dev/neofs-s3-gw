@@ -1,14 +1,22 @@
 package layer
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	errorsStd "errors"
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/minio/sio"
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -81,6 +89,7 @@ type (
 		ObjectInfo *data.ObjectInfo
 		BucketInfo *data.BucketInfo
 		Writer     io.Writer
+		Encryption EncryptionParams
 	}
 
 	// HeadObjectParams stores object head request parameters.
@@ -104,14 +113,23 @@ type (
 		End   uint64
 	}
 
+	// AES256Key is a key for encryption.
+	AES256Key [32]byte
+
+	EncryptionParams struct {
+		enabled     bool
+		customerKey AES256Key
+	}
+
 	// PutObjectParams stores object put request parameters.
 	PutObjectParams struct {
-		BktInfo *data.BucketInfo
-		Object  string
-		Size    int64
-		Reader  io.Reader
-		Header  map[string]string
-		Lock    *data.ObjectLock
+		BktInfo    *data.BucketInfo
+		Object     string
+		Size       int64
+		Reader     io.Reader
+		Header     map[string]string
+		Lock       *data.ObjectLock
+		Encryption EncryptionParams
 	}
 
 	DeleteObjectParams struct {
@@ -142,6 +160,7 @@ type (
 		Header     map[string]string
 		Range      *RangeParams
 		Lock       *data.ObjectLock
+		Encryption EncryptionParams
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
@@ -249,6 +268,13 @@ type (
 
 const (
 	tagPrefix = "S3-Tag-"
+
+	AESEncryptionAlgorithm       = "AES256"
+	AESKeySize                   = 32
+	AttributeEncryptionAlgorithm = api.NeoFSSystemMetadataPrefix + "Algorithm"
+	AttributeDecryptedSize       = api.NeoFSSystemMetadataPrefix + "Decrypted-Size"
+	AttributeHMACSalt            = api.NeoFSSystemMetadataPrefix + "HMAC-Salt"
+	AttributeHMACKey             = api.NeoFSSystemMetadataPrefix + "HMAC-Key"
 )
 
 func (t *VersionedObject) String() string {
@@ -257,6 +283,72 @@ func (t *VersionedObject) String() string {
 
 func (f MsgHandlerFunc) HandleMessage(ctx context.Context, msg *nats.Msg) error {
 	return f(ctx, msg)
+}
+
+// NewEncryptionParams create new params to encrypt with provided key.
+func NewEncryptionParams(key AES256Key) EncryptionParams {
+	return EncryptionParams{
+		enabled:     true,
+		customerKey: key,
+	}
+}
+
+// Key returns encryption key as slice.
+func (p EncryptionParams) Key() []byte {
+	return p.customerKey[:]
+}
+
+// AESKey returns encryption key.
+func (p EncryptionParams) AESKey() AES256Key {
+	return p.customerKey
+}
+
+// Enabled returns true if key isn't empty.
+func (p EncryptionParams) Enabled() bool {
+	return p.enabled
+}
+
+// HMAC compute salted HMAC.
+func (p EncryptionParams) HMAC() ([]byte, []byte, error) {
+	mac := hmac.New(sha256.New, p.Key())
+
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, nil, errorsStd.New("failed to init create salt")
+	}
+
+	mac.Write(salt)
+	return mac.Sum(nil), salt, nil
+}
+
+// MatchObjectEncryption check if encryption params are valid for provided object.
+func (p EncryptionParams) MatchObjectEncryption(encInfo data.EncryptionInfo) error {
+	if p.Enabled() != encInfo.Enabled {
+		return errorsStd.New("invalid encryption view")
+	}
+
+	if !encInfo.Enabled {
+		return nil
+	}
+
+	hmacSalt, err := hex.DecodeString(encInfo.HMACSalt)
+	if err != nil {
+		return fmt.Errorf("invalid hmacSalt '%s': %w", encInfo.HMACSalt, err)
+	}
+
+	hmacKey, err := hex.DecodeString(encInfo.HMACKey)
+	if err != nil {
+		return fmt.Errorf("invalid hmacKey '%s': %w", encInfo.HMACKey, err)
+	}
+
+	mac := hmac.New(sha256.New, p.Key())
+	mac.Write(hmacSalt)
+	expectedHmacKey := mac.Sum(nil)
+	if !bytes.Equal(expectedHmacKey, hmacKey) {
+		return errorsStd.New("mismatched hmac key")
+	}
+
+	return nil
 }
 
 // DefaultCachesConfigs returns filled configs.
@@ -381,6 +473,253 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 	return n.containerList(ctx)
 }
 
+func formEncryptedParts(header string) ([]EncryptedPart, error) {
+	partInfos := strings.Split(header, ",")
+	result := make([]EncryptedPart, len(partInfos))
+
+	for i, partInfo := range partInfos {
+		part, err := parseCompletedPartHeader(partInfo)
+		if err != nil {
+			return nil, err
+		}
+
+		encPartSize, err := sio.EncryptedSize(uint64(part.Size))
+		if err != nil {
+			return nil, fmt.Errorf("compute encrypted size: %w", err)
+		}
+
+		result[i] = EncryptedPart{
+			Part:          *part,
+			EncryptedSize: int64(encPartSize),
+		}
+	}
+
+	return result, nil
+}
+
+type decrypter struct {
+	reader      io.Reader
+	decReader   io.Reader
+	parts       []EncryptedPart
+	currentPart int
+	encryption  EncryptionParams
+
+	rangeParam *RangeParams
+
+	partDataRemain  int64
+	encPartRangeLen int64
+
+	seqNumber uint64
+	decLen    int64
+	skipLen   uint64
+
+	ln  uint64
+	off uint64
+}
+
+func (d decrypter) decLength() int64 {
+	return d.decLen
+}
+
+func (d decrypter) encLength() uint64 {
+	return d.ln
+}
+
+func (d decrypter) encOffset() uint64 {
+	return d.off
+}
+
+func getDecryptReader(p *GetObjectParams) (*decrypter, error) {
+	if !p.Encryption.Enabled() {
+		return nil, errorsStd.New("couldn't create decrypter with disabled encryption")
+	}
+
+	rangeParam := p.Range
+
+	var err error
+	var parts []EncryptedPart
+	header := p.ObjectInfo.Headers[UploadCompletedParts]
+	if len(header) != 0 {
+		parts, err = formEncryptedParts(header)
+		if err != nil {
+			return nil, fmt.Errorf("form parts: %w", err)
+		}
+		if rangeParam == nil {
+			decSizeHeader := p.ObjectInfo.Headers[AttributeDecryptedSize]
+			size, err := strconv.ParseUint(decSizeHeader, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse dec size header '%s': %w", decSizeHeader, err)
+			}
+			rangeParam = &RangeParams{
+				Start: 0,
+				End:   size - 1,
+			}
+		}
+	} else {
+		decSize, err := sio.DecryptedSize(uint64(p.ObjectInfo.Size))
+		if err != nil {
+			return nil, fmt.Errorf("compute decrypted size: %w", err)
+		}
+
+		parts = []EncryptedPart{{
+			Part:          Part{Size: int64(decSize)},
+			EncryptedSize: p.ObjectInfo.Size,
+		}}
+	}
+
+	if rangeParam != nil && rangeParam.Start > rangeParam.End {
+		return nil, fmt.Errorf("invalid range: %d %d", rangeParam.Start, rangeParam.End)
+	}
+
+	decReader := &decrypter{
+		parts:      parts,
+		rangeParam: rangeParam,
+		encryption: p.Encryption,
+	}
+
+	decReader.initRangeParams()
+
+	return decReader, nil
+}
+
+const (
+	blockSize     = 1 << 16 // 64KB
+	fullBlockSize = blockSize + 32
+)
+
+func (d *decrypter) initRangeParams() {
+	d.partDataRemain = d.parts[d.currentPart].Size
+	d.encPartRangeLen = d.parts[d.currentPart].EncryptedSize
+	if d.rangeParam == nil {
+		d.decLen = d.partDataRemain
+		d.ln = uint64(d.encPartRangeLen)
+		return
+	}
+
+	start, end := d.rangeParam.Start, d.rangeParam.End
+
+	var sum, encSum uint64
+	var partStart int
+	for i, part := range d.parts {
+		if start < sum+uint64(part.Size) {
+			partStart = i
+			break
+		}
+		sum += uint64(part.Size)
+		encSum += uint64(part.EncryptedSize)
+	}
+
+	d.skipLen = (start - sum) % blockSize
+	d.seqNumber = (start - sum) / blockSize
+	encOffPart := d.seqNumber * fullBlockSize
+	d.off = encSum + encOffPart
+	d.encPartRangeLen = d.encPartRangeLen - int64(encOffPart)
+	d.partDataRemain = d.partDataRemain + int64(sum-start)
+
+	var partEnd int
+	for i, part := range d.parts[partStart:] {
+		index := partStart + i
+		if end < sum+uint64(part.Size) {
+			partEnd = index
+			break
+		}
+		sum += uint64(part.Size)
+		encSum += uint64(part.EncryptedSize)
+	}
+
+	payloadPartEnd := (end - sum) / blockSize
+	endEnc := encSum + (payloadPartEnd+1)*fullBlockSize
+
+	endPartEnc := encSum + uint64(d.parts[partEnd].EncryptedSize)
+	if endPartEnc < endEnc {
+		endEnc = endPartEnc
+	}
+	d.ln = endEnc - d.off
+	d.decLen = int64(end - start + 1)
+
+	if int64(d.ln) < d.encPartRangeLen {
+		d.encPartRangeLen = int64(d.ln)
+	}
+	if d.decLen < d.partDataRemain {
+		d.partDataRemain = d.decLen
+	}
+}
+
+func (d *decrypter) updateRangeParams() {
+	d.partDataRemain = d.parts[d.currentPart].Size
+	d.encPartRangeLen = d.parts[d.currentPart].EncryptedSize
+	d.seqNumber = 0
+	d.skipLen = 0
+}
+
+func (d *decrypter) Read(p []byte) (int, error) {
+	if int64(len(p)) < d.partDataRemain {
+		n, err := d.decReader.Read(p)
+		if err != nil {
+			return n, err
+		}
+		d.partDataRemain -= int64(n)
+		return n, nil
+	}
+
+	n1, err := io.ReadFull(d.decReader, p[:d.partDataRemain])
+	if err != nil {
+		return n1, err
+	}
+
+	d.currentPart++
+	if d.currentPart == len(d.parts) {
+		return n1, io.EOF
+	}
+
+	d.updateRangeParams()
+
+	err = d.initNextDecReader()
+	if err != nil {
+		return n1, err
+	}
+
+	n2, err := d.decReader.Read(p[n1:])
+	if err != nil {
+		return n1 + n2, err
+	}
+
+	d.partDataRemain -= int64(n2)
+
+	return n1 + n2, nil
+}
+
+func (d *decrypter) SetReader(r io.Reader) error {
+	d.reader = r
+	return d.initNextDecReader()
+}
+
+func (d *decrypter) initNextDecReader() error {
+	if d.reader == nil {
+		return errorsStd.New("reader isn't set")
+	}
+
+	r, err := sio.DecryptReader(io.LimitReader(d.reader, d.encPartRangeLen),
+		sio.Config{
+			MinVersion:     sio.Version20,
+			SequenceNumber: uint32(d.seqNumber),
+			Key:            d.encryption.Key(),
+			CipherSuites:   []byte{sio.AES_256_GCM},
+		})
+	if err != nil {
+		return fmt.Errorf("couldn't create decrypter: %w", err)
+	}
+
+	if d.skipLen > 0 {
+		if _, err = io.CopyN(io.Discard, r, int64(d.skipLen)); err != nil {
+			return fmt.Errorf("couldn't skip some bytes: %w", err)
+		}
+	}
+	d.decReader = r
+
+	return nil
+}
+
 // GetObject from storage.
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var params getParams
@@ -388,13 +727,23 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	params.oid = p.ObjectInfo.ID
 	params.bktInfo = p.BucketInfo
 
-	if p.Range != nil {
-		if p.Range.Start > p.Range.End {
-			panic("invalid range")
+	var decReader *decrypter
+	if p.Encryption.Enabled() {
+		var err error
+		decReader, err = getDecryptReader(p)
+		if err != nil {
+			return fmt.Errorf("creating decrypter: %w", err)
 		}
-
-		params.off = p.Range.Start
-		params.ln = p.Range.End - p.Range.Start + 1
+		params.off = decReader.encOffset()
+		params.ln = decReader.encLength()
+	} else {
+		if p.Range != nil {
+			if p.Range.Start > p.Range.End {
+				panic("invalid range")
+			}
+			params.ln = p.Range.End - p.Range.Start + 1
+			params.off = p.Range.Start
+		}
 	}
 
 	payload, err := n.initObjectPayloadReader(ctx, params)
@@ -402,17 +751,26 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 		return fmt.Errorf("init object payload reader: %w", err)
 	}
 
-	if params.ln == 0 {
-		params.ln = 4096 // configure?
+	bufSize := uint64(32 * 1024) // configure?
+	if params.ln != 0 && params.ln < bufSize {
+		bufSize = params.ln
 	}
 
 	// alloc buffer for copying
-	buf := make([]byte, params.ln) // sync-pool it?
+	buf := make([]byte, bufSize) // sync-pool it?
+
+	r := payload
+	if decReader != nil {
+		if err = decReader.SetReader(payload); err != nil {
+			return fmt.Errorf("set reader to decrypter: %w", err)
+		}
+		r = io.LimitReader(decReader, decReader.decLength())
+	}
 
 	// copy full payload
-	_, err = io.CopyBuffer(p.Writer, payload, buf)
+	written, err := io.CopyBuffer(p.Writer, r, buf)
 	if err != nil {
-		return fmt.Errorf("copy object payload: %w", err)
+		return fmt.Errorf("copy object payload written: '%d', decLength: '%d', params.ln: '%d' : %w", written, decReader.decLength(), params.ln, err)
 	}
 
 	return nil
@@ -447,6 +805,7 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 			Writer:     pw,
 			Range:      p.Range,
 			BucketInfo: p.ScrBktInfo,
+			Encryption: p.Encryption,
 		})
 
 		if err = pw.CloseWithError(err); err != nil {
@@ -455,11 +814,12 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 	}()
 
 	return n.PutObject(ctx, &PutObjectParams{
-		BktInfo: p.DstBktInfo,
-		Object:  p.DstObject,
-		Size:    p.SrcSize,
-		Reader:  pr,
-		Header:  p.Header,
+		BktInfo:    p.DstBktInfo,
+		Object:     p.DstObject,
+		Size:       p.SrcSize,
+		Reader:     pr,
+		Header:     p.Header,
+		Encryption: p.Encryption,
 	})
 }
 

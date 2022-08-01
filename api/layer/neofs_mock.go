@@ -176,9 +176,16 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPar
 	sAddr := addr.EncodeToString()
 
 	if obj, ok := t.objects[sAddr]; ok {
+		payload := obj.Payload()
+
+		if prm.PayloadRange[0]+prm.PayloadRange[1] > 0 {
+			off := prm.PayloadRange[0]
+			payload = payload[off : off+prm.PayloadRange[1]]
+		}
+
 		return &ObjectPart{
 			Head:    obj,
-			Payload: io.NopCloser(bytes.NewReader(obj.Payload())),
+			Payload: io.NopCloser(bytes.NewReader(payload)),
 		}, nil
 	}
 
