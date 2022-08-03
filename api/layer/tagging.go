@@ -16,16 +16,16 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 		tags map[string]string
 	)
 
-	tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
-	if tags != nil {
-		return p.VersionID, tags, nil
-	}
-
 	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
 		return "", nil, err
 	}
 	p.VersionID = version.OID.EncodeToString()
+
+	tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
+	if tags != nil {
+		return p.VersionID, tags, nil
+	}
 
 	tags, err = n.treeService.GetObjectTagging(ctx, p.BktInfo.CID, version)
 	if err != nil {
