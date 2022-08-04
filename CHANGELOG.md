@@ -2,6 +2,21 @@
 
 This document outlines major changes between releases.
 
+## [Unreleased]
+
+### Added
+- Exposure of pool metrics (#615)
+### Changed
+- Improved wallet configuration via `.yaml` config and environment variables (#607)
+### Removed
+### Fixed
+### Updating from v0.23.0
+1. Make sure configuration of wallet is valid. If you use:
+   1. environment variables: set `S3_GW_WALLET_PATH` instead of `S3_GW_WALLET`, 
+   set `S3_GW_WALLET_ADDRESS` instead of `S3_GW_ADDRESS`
+   2. `.yaml` config: to set wallet path use `wallet.path` instead of `wallet`, 
+   to set wallet address use `wallet.address` instead of `address`
+
 ## [0.23.0] - 2022-08-01
 
 ### Fixed
@@ -270,3 +285,4 @@ releases.
 [0.21.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.0...v0.21.1
 [0.22.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.1...v0.22.0
 [0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...master
