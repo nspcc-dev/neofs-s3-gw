@@ -82,7 +82,7 @@ type (
 func NotificationInfoFromObject(objInfo *ObjectInfo) *NotificationInfo {
 	return &NotificationInfo{
 		Name:    objInfo.Name,
-		Version: objInfo.Version(),
+		Version: objInfo.VersionID(),
 		Size:    objInfo.Size,
 		HashSum: objInfo.HashSum,
 	}
@@ -98,8 +98,8 @@ func (b *BucketInfo) NotificationConfigurationObjectName() string {
 	return bktNotificationConfigurationObject
 }
 
-// Version returns object version from ObjectInfo.
-func (o *ObjectInfo) Version() string { return o.ID.EncodeToString() }
+// VersionID returns object version from ObjectInfo.
+func (o *ObjectInfo) VersionID() string { return o.ID.EncodeToString() }
 
 // NiceName returns object name for cache.
 func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }

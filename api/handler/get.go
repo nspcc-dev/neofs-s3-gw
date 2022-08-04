@@ -141,7 +141,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	t := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: info.Name,
-		VersionID:  info.Version(),
+		VersionID:  info.VersionID(),
 	}
 
 	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)

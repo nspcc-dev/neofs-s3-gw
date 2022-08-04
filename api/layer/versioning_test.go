@@ -251,7 +251,7 @@ func TestGetUnversioned(t *testing.T) {
 
 	resInfo, buffer := tc.getObject(tc.obj, UnversionedObjectVersionID, false)
 	require.Equal(t, objContent, buffer)
-	require.Equal(t, objInfo.Version(), resInfo.Version())
+	require.Equal(t, objInfo.VersionID(), resInfo.VersionID())
 }
 
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
@@ -268,8 +268,8 @@ func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	objV3Content := []byte("content obj1 v3")
 	objV3Info := tc.putObject(objV3Content)
 
-	tc.deleteObject(tc.obj, objV2Info.Version(), settings)
-	tc.getObject(tc.obj, objV2Info.Version(), true)
+	tc.deleteObject(tc.obj, objV2Info.VersionID(), settings)
+	tc.getObject(tc.obj, objV2Info.VersionID(), true)
 
 	_, buffer3 := tc.getObject(tc.obj, "", false)
 	require.Equal(t, objV3Content, buffer3)
@@ -286,7 +286,7 @@ func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 
 	resInfo, buffer := tc.getObject(tc.obj, "", false)
 	require.Equal(t, objV3Content, buffer)
-	require.Equal(t, objV3Info.Version(), resInfo.Version())
+	require.Equal(t, objV3Info.VersionID(), resInfo.VersionID())
 }
 
 func TestNoVersioningDeleteObject(t *testing.T) {

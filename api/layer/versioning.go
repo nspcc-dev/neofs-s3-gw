@@ -41,7 +41,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	}
 
 	for i, obj := range allObjects {
-		if obj.ObjectInfo.Name >= p.KeyMarker && obj.ObjectInfo.Version() >= p.VersionIDMarker {
+		if obj.ObjectInfo.Name >= p.KeyMarker && obj.ObjectInfo.VersionID() >= p.VersionIDMarker {
 			allObjects = allObjects[i:]
 			break
 		}
@@ -52,11 +52,11 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	if len(allObjects) > p.MaxKeys {
 		res.IsTruncated = true
 		res.NextKeyMarker = allObjects[p.MaxKeys].ObjectInfo.Name
-		res.NextVersionIDMarker = allObjects[p.MaxKeys].ObjectInfo.Version()
+		res.NextVersionIDMarker = allObjects[p.MaxKeys].ObjectInfo.VersionID()
 
 		allObjects = allObjects[:p.MaxKeys]
 		res.KeyMarker = allObjects[p.MaxKeys-1].ObjectInfo.Name
-		res.VersionIDMarker = allObjects[p.MaxKeys-1].ObjectInfo.Version()
+		res.VersionIDMarker = allObjects[p.MaxKeys-1].ObjectInfo.VersionID()
 	}
 
 	res.Version, res.DeleteMarker = triageVersions(allObjects)

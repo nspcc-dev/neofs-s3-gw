@@ -21,7 +21,7 @@ func TestObjectLockAttributes(t *testing.T) {
 	p := &ObjectVersion{
 		BktInfo:    tc.bktInfo,
 		ObjectName: obj.Name,
-		VersionID:  obj.Version(),
+		VersionID:  obj.VersionID(),
 	}
 
 	lock := &data.ObjectLock{
