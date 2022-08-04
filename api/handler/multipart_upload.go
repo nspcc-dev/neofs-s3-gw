@@ -363,7 +363,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		t := &layer.ObjectVersion{
 			BktInfo:    bktInfo,
 			ObjectName: objInfo.Name,
-			VersionID:  objInfo.Version(),
+			VersionID:  objInfo.VersionID(),
 		}
 		if _, err = h.obj.PutObjectTagging(r.Context(), t, uploadData.TagSet); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
@@ -420,7 +420,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	if bktSettings.VersioningEnabled() {
-		w.Header().Set(api.AmzVersionID, objInfo.Version())
+		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
 
 	if err = api.EncodeToResponse(w, response); err != nil {

@@ -26,7 +26,7 @@ func TestDeleteBucket(t *testing.T) {
 	require.True(t, isDeleteMarker)
 
 	deleteBucket(t, tc, bktName, http.StatusConflict)
-	deleteObject(t, tc, bktName, objName, objInfo.Version())
+	deleteObject(t, tc, bktName, objName, objInfo.VersionID())
 	deleteBucket(t, tc, bktName, http.StatusConflict)
 	deleteObject(t, tc, bktName, objName, deleteMarkerVersion)
 	deleteBucket(t, tc, bktName, http.StatusNoContent)
@@ -86,13 +86,13 @@ func TestDeleteDeletedObject(t *testing.T) {
 		bktName, objName := "bucket-versioned-for-removal", "object-to-delete"
 		_, objInfo := createVersionedBucketAndObject(t, tc, bktName, objName)
 
-		versionID, isDeleteMarker := deleteObject(t, tc, bktName, objName, objInfo.Version())
+		versionID, isDeleteMarker := deleteObject(t, tc, bktName, objName, objInfo.VersionID())
 		require.False(t, isDeleteMarker)
-		require.Equal(t, objInfo.Version(), versionID)
+		require.Equal(t, objInfo.VersionID(), versionID)
 
 		versionID2, isDeleteMarker := deleteObject(t, tc, bktName, objName, versionID)
 		require.False(t, isDeleteMarker)
-		require.Equal(t, objInfo.Version(), versionID2)
+		require.Equal(t, objInfo.VersionID(), versionID2)
 	})
 }
 
@@ -106,9 +106,9 @@ func TestDeleteObjectVersioned(t *testing.T) {
 	deleteObject(t, tc, bktName, objName, emptyVersion)
 	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	checkFound(t, tc, bktName, objName, objInfo.Version())
-	deleteObject(t, tc, bktName, objName, objInfo.Version())
-	checkNotFound(t, tc, bktName, objName, objInfo.Version())
+	checkFound(t, tc, bktName, objName, objInfo.VersionID())
+	deleteObject(t, tc, bktName, objName, objInfo.VersionID())
+	checkNotFound(t, tc, bktName, objName, objInfo.VersionID())
 
 	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object exists but shouldn't")
 }
@@ -141,7 +141,7 @@ func TestRemoveDeleteMarker(t *testing.T) {
 	require.True(t, isDeleteMarker)
 	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	checkFound(t, tc, bktName, objName, objInfo.Version())
+	checkFound(t, tc, bktName, objName, objInfo.VersionID())
 	deleteObject(t, tc, bktName, objName, deleteMarkerVersion)
 	checkFound(t, tc, bktName, objName, emptyVersion)
 
@@ -160,7 +160,7 @@ func TestDeleteObjectCombined(t *testing.T) {
 	deleteObject(t, tc, bktName, objName, emptyVersion)
 	checkNotFound(t, tc, bktName, objName, emptyVersion)
 
-	checkFound(t, tc, bktName, objName, objInfo.Version())
+	checkFound(t, tc, bktName, objName, objInfo.VersionID())
 
 	require.True(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object doesn't exist but should")
 }
@@ -180,7 +180,7 @@ func TestDeleteObjectSuspended(t *testing.T) {
 	putBucketVersioning(t, tc, bktName, false)
 
 	deleteObject(t, tc, bktName, objName, emptyVersion)
-	checkNotFound(t, tc, bktName, objName, objInfo.Version())
+	checkNotFound(t, tc, bktName, objName, objInfo.VersionID())
 
 	require.False(t, existInMockedNeoFS(tc, bktInfo, objInfo), "object exists but shouldn't")
 }
@@ -213,9 +213,9 @@ func TestDeleteObjectFromListCache(t *testing.T) {
 	versions := listObjectsV1(t, tc, bktName)
 	require.Len(t, versions.Contents, 1)
 
-	checkFound(t, tc, bktName, objName, objInfo.Version())
-	deleteObject(t, tc, bktName, objName, objInfo.Version())
-	checkNotFound(t, tc, bktName, objName, objInfo.Version())
+	checkFound(t, tc, bktName, objName, objInfo.VersionID())
+	deleteObject(t, tc, bktName, objName, objInfo.VersionID())
+	checkNotFound(t, tc, bktName, objName, objInfo.VersionID())
 
 	// check cache is clean after object removal
 	versions = listObjectsV1(t, tc, bktName)

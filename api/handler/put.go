@@ -255,7 +255,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	t := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: info.Name,
-		VersionID:  info.Version(),
+		VersionID:  info.VersionID(),
 	}
 	if tagSet != nil {
 		if _, err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
@@ -278,7 +278,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if settings.VersioningEnabled() {
-		w.Header().Set(api.AmzVersionID, info.Version())
+		w.Header().Set(api.AmzVersionID, info.VersionID())
 	}
 
 	w.Header().Set(api.ETag, info.HashSum)
@@ -382,7 +382,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	t := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: info.Name,
-		VersionID:  info.Version(),
+		VersionID:  info.VersionID(),
 	}
 
 	if tagSet != nil {
@@ -408,7 +408,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
 	} else if settings.VersioningEnabled() {
-		w.Header().Set(api.AmzVersionID, info.Version())
+		w.Header().Set(api.AmzVersionID, info.VersionID())
 	}
 
 	if redirectURL := auth.MultipartFormValue(r, "success_action_redirect"); redirectURL != "" {
@@ -508,7 +508,7 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 	resInfo := &resourceInfo{
 		Bucket:  objInfo.Bucket,
 		Object:  objInfo.Name,
-		Version: objInfo.Version(),
+		Version: objInfo.VersionID(),
 	}
 
 	bktPolicy, err := aclToPolicy(objectACL, resInfo)

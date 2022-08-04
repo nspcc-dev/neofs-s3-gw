@@ -307,7 +307,7 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.ObjectInfo.Version())); err != nil {
+	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.ObjectInfo.VersionID())); err != nil {
 		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
