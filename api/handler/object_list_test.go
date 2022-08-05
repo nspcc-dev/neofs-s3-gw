@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/stretchr/testify/require"
 )
 
@@ -73,7 +73,7 @@ func TestListObjectNullVersions(t *testing.T) {
 	parseTestResponse(t, w, result)
 
 	require.Len(t, result.Version, 2)
-	require.Equal(t, layer.UnversionedObjectVersionID, result.Version[1].VersionID)
+	require.Equal(t, data.UnversionedObjectVersionID, result.Version[1].VersionID)
 }
 
 func TestS3CompatibilityBucketListV2BothContinuationTokenStartAfter(t *testing.T) {
