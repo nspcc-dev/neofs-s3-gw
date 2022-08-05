@@ -8,7 +8,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,7 +53,7 @@ func TestDeleteObjectFromSuspended(t *testing.T) {
 
 	versionID, isDeleteMarker := deleteObject(t, tc, bktName, objName, emptyVersion)
 	require.True(t, isDeleteMarker)
-	require.Equal(t, layer.UnversionedObjectVersionID, versionID)
+	require.Equal(t, data.UnversionedObjectVersionID, versionID)
 }
 
 func TestDeleteDeletedObject(t *testing.T) {

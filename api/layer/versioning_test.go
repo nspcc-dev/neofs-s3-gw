@@ -249,7 +249,7 @@ func TestGetUnversioned(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resInfo, buffer := tc.getObject(tc.obj, UnversionedObjectVersionID, false)
+	resInfo, buffer := tc.getObject(tc.obj, data.UnversionedObjectVersionID, false)
 	require.Equal(t, objContent, buffer)
 	require.Equal(t, objInfo.VersionID(), resInfo.VersionID())
 }
@@ -280,7 +280,7 @@ func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	versions := tc.listVersions()
 	for _, ver := range versions.DeleteMarker {
 		if ver.IsLatest {
-			tc.deleteObject(tc.obj, ver.Object.Version(), settings)
+			tc.deleteObject(tc.obj, ver.ObjectInfo.VersionID(), settings)
 		}
 	}
 
