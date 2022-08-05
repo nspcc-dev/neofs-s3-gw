@@ -92,7 +92,13 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), extendedInfo, len(tagSet))
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	writeHeaders(w.Header(), extendedInfo, len(tagSet), bktSettings.Unversioned())
 	w.WriteHeader(http.StatusOK)
 }
 

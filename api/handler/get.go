@@ -71,7 +71,7 @@ func overrideResponseHeaders(h http.Header, query url.Values) {
 	}
 }
 
-func writeHeaders(h http.Header, extendedInfo *data.ExtendedObjectInfo, tagSetLength int) {
+func writeHeaders(h http.Header, extendedInfo *data.ExtendedObjectInfo, tagSetLength int, isBucketUnversioned bool) {
 	info := extendedInfo.ObjectInfo
 	if len(info.ContentType) > 0 && h.Get(api.ContentType) == "" {
 		h.Set(api.ContentType, info.ContentType)
@@ -79,8 +79,11 @@ func writeHeaders(h http.Header, extendedInfo *data.ExtendedObjectInfo, tagSetLe
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 	h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
 	h.Set(api.ETag, info.HashSum)
-	h.Set(api.AmzVersionID, extendedInfo.Version())
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
+
+	if !isBucketUnversioned {
+		h.Set(api.AmzVersionID, extendedInfo.Version())
+	}
 
 	if cacheControl := info.Headers[api.CacheControl]; cacheControl != "" {
 		h.Set(api.CacheControl, cacheControl)
@@ -160,7 +163,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), extendedInfo, len(tagSet))
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	writeHeaders(w.Header(), extendedInfo, len(tagSet), bktSettings.Unversioned())
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
 	} else {
