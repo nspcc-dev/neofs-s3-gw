@@ -98,21 +98,27 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
 	response, err := encodeToObjectAttributesResponse(info, params)
 	if err != nil {
 		h.logAndSendError(w, "couldn't encode object info to response", reqInfo, err)
 		return
 	}
 
-	writeAttributesHeaders(w.Header(), extendedInfo, params)
+	writeAttributesHeaders(w.Header(), extendedInfo, bktSettings.Unversioned())
 	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
-func writeAttributesHeaders(h http.Header, info *data.ExtendedObjectInfo, params *GetObjectAttributesArgs) {
+func writeAttributesHeaders(h http.Header, info *data.ExtendedObjectInfo, isBucketUnversioned bool) {
 	h.Set(api.LastModified, info.ObjectInfo.Created.UTC().Format(http.TimeFormat))
-	if len(params.VersionID) != 0 {
+	if !isBucketUnversioned {
 		h.Set(api.AmzVersionID, info.Version())
 	}
 
