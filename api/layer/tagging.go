@@ -16,6 +16,13 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 		tags map[string]string
 	)
 
+	if len(p.VersionID) != 0 && p.VersionID != UnversionedObjectVersionID {
+		tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
+		if tags != nil {
+			return p.VersionID, tags, nil
+		}
+	}
+
 	version, err := n.getNodeVersion(ctx, p)
 	if err != nil {
 		return "", nil, err
