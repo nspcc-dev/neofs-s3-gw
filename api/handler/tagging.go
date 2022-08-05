@@ -86,7 +86,7 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	p := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get("versionId"),
+		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
 	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), p)
