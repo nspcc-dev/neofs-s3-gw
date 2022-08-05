@@ -90,33 +90,32 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
-	info := extendedInfo.ObjectInfo
 
-	if err = checkPreconditions(info, args.Conditional); err != nil {
+	if err = checkPreconditions(objInfo, args.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed))
 		return
 	}
 
 	if metadata == nil {
-		if len(info.ContentType) > 0 {
-			info.Headers[api.ContentType] = info.ContentType
+		if len(objInfo.ContentType) > 0 {
+			objInfo.Headers[api.ContentType] = objInfo.ContentType
 		}
-		metadata = info.Headers
+		metadata = objInfo.Headers
 	} else if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		metadata[api.ContentType] = contentType
 	}
 
 	params := &layer.CopyObjectParams{
-		SrcObject:  info,
+		SrcObject:  objInfo,
 		ScrBktInfo: p.BktInfo,
 		DstBktInfo: dstBktInfo,
 		DstObject:  reqInfo.ObjectName,
-		SrcSize:    info.Size,
+		SrcSize:    objInfo.Size,
 		Header:     metadata,
 	}
 
@@ -133,16 +132,16 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	additional := []zap.Field{zap.String("src_bucket_name", srcBucket), zap.String("src_object_name", srcObject)}
-	if info, err = h.obj.CopyObject(r.Context(), params); err != nil {
+	if objInfo, err = h.obj.CopyObject(r.Context(), params); err != nil {
 		h.logAndSendError(w, "couldn't copy object", reqInfo, err, additional...)
 		return
-	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: info.Created.UTC().Format(time.RFC3339), ETag: info.HashSum}); err != nil {
+	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: objInfo.Created.UTC().Format(time.RFC3339), ETag: objInfo.HashSum}); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err, additional...)
 		return
 	}
 
 	if containsACL {
-		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, info)
+		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, objInfo)
 		if err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
@@ -161,13 +160,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("object is copied",
-		zap.String("bucket", info.Bucket),
-		zap.String("object", info.Name),
-		zap.Stringer("object_id", info.ID))
+		zap.String("bucket", objInfo.Bucket),
+		zap.String("object", objInfo.Name),
+		zap.Stringer("object_id", objInfo.ID))
 
 	s := &SendNotificationParams{
 		Event:            EventObjectCreatedCopy,
-		NotificationInfo: data.NotificationInfoFromObject(info),
+		NotificationInfo: data.NotificationInfoFromObject(objInfo),
 		BktInfo:          dstBktInfo,
 		ReqInfo:          reqInfo,
 	}

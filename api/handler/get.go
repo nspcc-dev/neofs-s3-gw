@@ -122,7 +122,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
