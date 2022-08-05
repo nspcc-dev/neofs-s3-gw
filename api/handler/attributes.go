@@ -86,7 +86,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		VersionID: params.VersionID,
 	}
 
-	extendedInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return

@@ -31,7 +31,7 @@ func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 }
 
 func (tc *testContext) getObject(objectName, versionID string, needError bool) (*data.ObjectInfo, []byte) {
-	extendedInfo, err := tc.layer.GetObjectInfo(tc.ctx, &HeadObjectParams{
+	objInfo, err := tc.layer.GetObjectInfo(tc.ctx, &HeadObjectParams{
 		BktInfo:   tc.bktInfo,
 		Object:    objectName,
 		VersionID: versionID,
@@ -44,13 +44,13 @@ func (tc *testContext) getObject(objectName, versionID string, needError bool) (
 
 	content := bytes.NewBuffer(nil)
 	err = tc.layer.GetObject(tc.ctx, &GetObjectParams{
-		ObjectInfo: extendedInfo.ObjectInfo,
+		ObjectInfo: objInfo,
 		Writer:     content,
 		BucketInfo: tc.bktInfo,
 	})
 	require.NoError(tc.t, err)
 
-	return extendedInfo.ObjectInfo, content.Bytes()
+	return objInfo, content.Bytes()
 }
 
 func (tc *testContext) deleteObject(objectName, versionID string, settings *data.BucketSettings) {

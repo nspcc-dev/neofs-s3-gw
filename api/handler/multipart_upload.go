@@ -261,7 +261,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	extSrcInfo, err := h.obj.GetObjectInfo(r.Context(), &layer.HeadObjectParams{
+	srcInfo, err := h.obj.GetObjectInfo(r.Context(), &layer.HeadObjectParams{
 		BktInfo:   srcBktInfo,
 		Object:    srcObject,
 		VersionID: versionID,
@@ -283,7 +283,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = checkPreconditions(extSrcInfo.ObjectInfo, args.Conditional); err != nil {
+	if err = checkPreconditions(srcInfo, args.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed),
 			additional...)
 		return
@@ -295,7 +295,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
-		SrcObjInfo: extSrcInfo.ObjectInfo,
+		SrcObjInfo: srcInfo,
 		SrcBktInfo: srcBktInfo,
 		PartNumber: partNumber,
 		Range:      srcRange,

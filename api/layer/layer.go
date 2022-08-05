@@ -205,7 +205,8 @@ type (
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
-		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
+		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
+		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
 
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
 		PutLockInfo(ctx context.Context, p *ObjectVersion, lock *data.ObjectLock) error
@@ -418,7 +419,17 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 }
 
 // GetObjectInfo returns meta information about the object.
-func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
+func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error) {
+	extendedObjectInfo, err := n.GetExtendedObjectInfo(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	return extendedObjectInfo.ObjectInfo, nil
+}
+
+// GetExtendedObjectInfo returns meta information and corresponding info from the tree service about the object.
+func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
 	if len(p.VersionID) == 0 {
 		return n.headLastVersionIfNotDeleted(ctx, p.BktInfo, p.Object)
 	}
