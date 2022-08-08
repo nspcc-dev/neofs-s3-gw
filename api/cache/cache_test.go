@@ -71,15 +71,26 @@ func TestObjectCacheType(t *testing.T) {
 	cache := New(DefaultObjectsConfig(logger))
 
 	addr := oidtest.Address()
-	objInfo := &data.ObjectInfo{
-		ID:  addr.Object(),
-		CID: addr.Container(),
+
+	extObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo: &data.ObjectInfo{
+			ID:  addr.Object(),
+			CID: addr.Container(),
+		},
+		NodeVersion: &data.NodeVersion{
+			BaseNodeVersion: data.BaseNodeVersion{
+				FilePath: "obj",
+				Size:     50,
+			},
+			IsUnversioned: true,
+		},
+		IsLatest: true,
 	}
 
-	err := cache.PutObject(objInfo)
+	err := cache.PutObject(extObjInfo)
 	require.NoError(t, err)
 	val := cache.GetObject(addr)
-	require.Equal(t, objInfo, val)
+	require.Equal(t, extObjInfo, val)
 	require.Equal(t, 0, observedLog.Len())
 
 	err = cache.cache.Set(addr, "tmp")
