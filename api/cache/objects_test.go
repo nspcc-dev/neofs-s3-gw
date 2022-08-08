@@ -28,23 +28,33 @@ func TestCache(t *testing.T) {
 	addr.SetContainer(cnrID)
 	addr.SetObject(objID)
 
-	objInfo := &data.ObjectInfo{
-		ID:  addr.Object(),
-		CID: addr.Container(),
+	extObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo: &data.ObjectInfo{
+			ID:  addr.Object(),
+			CID: addr.Container(),
+		},
+		NodeVersion: &data.NodeVersion{
+			BaseNodeVersion: data.BaseNodeVersion{
+				FilePath: "obj",
+				Size:     50,
+			},
+			IsUnversioned: true,
+		},
+		IsLatest: true,
 	}
 
 	t.Run("check get", func(t *testing.T) {
 		cache := New(getTestConfig())
-		err := cache.PutObject(objInfo)
+		err := cache.PutObject(extObjInfo)
 		require.NoError(t, err)
 
 		actual := cache.GetObject(addr)
-		require.Equal(t, objInfo, actual)
+		require.Equal(t, extObjInfo, actual)
 	})
 
 	t.Run("check delete", func(t *testing.T) {
 		cache := New(getTestConfig())
-		err := cache.PutObject(objInfo)
+		err := cache.PutObject(extObjInfo)
 		require.NoError(t, err)
 
 		cache.Delete(addr)
