@@ -230,7 +230,13 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		HashSum:     newVersion.ETag,
 	}
 
-	if err = n.objCache.PutObject(objInfo); err != nil {
+	extendedObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: newVersion,
+		IsLatest:    false,
+	}
+
+	if err = n.objCache.PutObject(extendedObjInfo); err != nil {
 		n.log.Warn("couldn't add object to cache", zap.Error(err),
 			zap.String("object_name", p.Object), zap.String("bucket_name", p.BktInfo.Name),
 			zap.String("cid", objInfo.CID.EncodeToString()), zap.String("oid", objInfo.ID.EncodeToString()))
@@ -246,8 +252,8 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ExtendedObjectInfo, error) {
 	if addr := n.namesCache.Get(bkt.Name + "/" + objectName); addr != nil {
-		if objInfo := n.objCache.GetObject(*addr); objInfo != nil {
-			return &data.ExtendedObjectInfo{ObjectInfo: objInfo}, nil
+		if extObjInfo := n.objCache.GetObject(*addr); extObjInfo != nil {
+			return extObjInfo, nil
 		}
 	}
 
@@ -268,7 +274,14 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		return nil, err
 	}
 	objInfo := objectInfoFromMeta(bkt, meta)
-	if err = n.objCache.PutObject(objInfo); err != nil {
+
+	extObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: node,
+		IsLatest:    true,
+	}
+
+	if err = n.objCache.PutObject(extObjInfo); err != nil {
 		n.log.Warn("couldn't put object info to cache",
 			zap.Stringer("object id", node.OID),
 			zap.Stringer("bucket id", bkt.CID),
@@ -280,11 +293,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 			zap.Error(err))
 	}
 
-	return &data.ExtendedObjectInfo{
-		ObjectInfo:  objInfo,
-		NodeVersion: node,
-		IsLatest:    true,
-	}, nil
+	return extObjInfo, nil
 }
 
 func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
@@ -315,11 +324,8 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		}
 	}
 
-	if objInfo := n.objCache.GetObject(newAddress(bkt.CID, foundVersion.OID)); objInfo != nil {
-		return &data.ExtendedObjectInfo{
-			ObjectInfo:  objInfo,
-			NodeVersion: foundVersion,
-		}, nil
+	if extObjInfo := n.objCache.GetObject(newAddress(bkt.CID, foundVersion.OID)); extObjInfo != nil {
+		return extObjInfo, nil
 	}
 
 	meta, err := n.objectHead(ctx, bkt, foundVersion.OID)
@@ -329,9 +335,14 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		}
 		return nil, err
 	}
-
 	objInfo := objectInfoFromMeta(bkt, meta)
-	if err = n.objCache.PutObject(objInfo); err != nil {
+
+	extObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: foundVersion,
+	}
+
+	if err = n.objCache.PutObject(extObjInfo); err != nil {
 		n.log.Warn("couldn't put obj to object cache",
 			zap.String("bucket name", objInfo.Bucket),
 			zap.Stringer("bucket cid", objInfo.CID),
@@ -340,10 +351,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 			zap.Error(err))
 	}
 
-	return &data.ExtendedObjectInfo{
-		ObjectInfo:  objInfo,
-		NodeVersion: foundVersion,
-	}, nil
+	return extObjInfo, nil
 }
 
 // objectDelete puts tombstone object into neofs.
@@ -539,7 +547,7 @@ func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams,
 				wg.Add(1)
 				err = pool.Submit(func() {
 					defer wg.Done()
-					if oi := n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node.OID, p.Prefix, p.Delimiter); oi != nil {
+					if oi := n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node, p.Prefix, p.Delimiter); oi != nil {
 						select {
 						case <-ctx.Done():
 						case objCh <- oi:
@@ -597,7 +605,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 			oi.Created = nodeVersion.DeleteMarker.Created
 			oi.IsDeleteMarker = true
 		} else {
-			if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, bkt, nodeVersion.OID, prefix, delimiter); oi == nil {
+			if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, bkt, nodeVersion, prefix, delimiter); oi == nil {
 				continue
 			}
 		}
@@ -678,20 +686,21 @@ func triageExtendedObjects(allObjects []*data.ExtendedObjectInfo) (prefixes []st
 	return
 }
 
-func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, obj oid.ID, prefix, delimiter string) (oi *data.ObjectInfo) {
-	oi = n.objCache.GetObject(newAddress(bktInfo.CID, obj))
+func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, delimiter string) (oi *data.ObjectInfo) {
+	extObjInfo := n.objCache.GetObject(newAddress(bktInfo.CID, node.OID))
+	if extObjInfo != nil {
+		return extObjInfo.ObjectInfo
+	}
 
-	if oi == nil {
-		meta, err := n.objectHead(ctx, bktInfo, obj)
-		if err != nil {
-			n.log.Warn("could not fetch object meta", zap.Error(err))
-			return nil
-		}
+	meta, err := n.objectHead(ctx, bktInfo, node.OID)
+	if err != nil {
+		n.log.Warn("could not fetch object meta", zap.Error(err))
+		return nil
+	}
 
-		oi = objectInfoFromMeta(bktInfo, meta)
-		if err = n.objCache.PutObject(oi); err != nil {
-			n.log.Warn("couldn't cache an object", zap.Error(err))
-		}
+	oi = objectInfoFromMeta(bktInfo, meta)
+	if err = n.objCache.PutObject(&data.ExtendedObjectInfo{ObjectInfo: oi, NodeVersion: node}); err != nil {
+		n.log.Warn("couldn't cache an object", zap.Error(err))
 	}
 
 	return processObjectInfoName(oi, prefix, delimiter)
