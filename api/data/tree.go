@@ -9,6 +9,10 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
+const (
+	UnversionedObjectVersionID = "null"
+)
+
 // NodeVersion represent node from tree service.
 type NodeVersion struct {
 	BaseNodeVersion
@@ -28,6 +32,14 @@ type ExtendedObjectInfo struct {
 	ObjectInfo  *ObjectInfo
 	NodeVersion *NodeVersion
 	IsLatest    bool
+}
+
+func (e ExtendedObjectInfo) Version() string {
+	if e.NodeVersion.IsUnversioned {
+		return UnversionedObjectVersionID
+	}
+
+	return e.ObjectInfo.ID.EncodeToString()
 }
 
 // BaseNodeVersion is minimal node info from tree service.

@@ -104,19 +104,19 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeAttributesHeaders(w.Header(), info, params)
+	writeAttributesHeaders(w.Header(), extendedInfo, params)
 	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
-func writeAttributesHeaders(h http.Header, info *data.ObjectInfo, params *GetObjectAttributesArgs) {
-	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
+func writeAttributesHeaders(h http.Header, info *data.ExtendedObjectInfo, params *GetObjectAttributesArgs) {
+	h.Set(api.LastModified, info.ObjectInfo.Created.UTC().Format(http.TimeFormat))
 	if len(params.VersionID) != 0 {
 		h.Set(api.AmzVersionID, info.Version())
 	}
 
-	if info.IsDeleteMarker {
+	if info.NodeVersion.DeleteMarker != nil {
 		h.Set(api.AmzDeleteMarker, strconv.FormatBool(true))
 	}
 

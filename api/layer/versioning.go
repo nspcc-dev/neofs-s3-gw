@@ -7,10 +7,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 )
 
-const (
-	UnversionedObjectVersionID = "null"
-)
-
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
 	var (
 		allObjects = make([]*data.ExtendedObjectInfo, 0, p.MaxKeys)

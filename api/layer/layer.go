@@ -482,7 +482,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	var newVersion *data.NodeVersion
 
 	if settings.VersioningSuspended() {
-		obj.VersionID = UnversionedObjectVersionID
+		obj.VersionID = data.UnversionedObjectVersionID
 
 		var nodeVersion *data.NodeVersion
 		if nodeVersion, obj.Error = n.getNodeVersionToDelete(ctx, bkt, obj); obj.Error != nil {

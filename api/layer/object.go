@@ -290,7 +290,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
 	var err error
 	var foundVersion *data.NodeVersion
-	if p.VersionID == UnversionedObjectVersionID {
+	if p.VersionID == data.UnversionedObjectVersionID {
 		foundVersion, err = n.treeService.GetUnversioned(ctx, bkt.CID, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {

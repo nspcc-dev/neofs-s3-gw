@@ -92,7 +92,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), info, len(tagSet))
+	writeHeaders(w.Header(), extendedInfo, len(tagSet))
 	w.WriteHeader(http.StatusOK)
 }
 
