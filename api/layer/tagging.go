@@ -16,7 +16,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 		tags map[string]string
 	)
 
-	if len(p.VersionID) != 0 && p.VersionID != UnversionedObjectVersionID {
+	if len(p.VersionID) != 0 && p.VersionID != data.UnversionedObjectVersionID {
 		tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
 		if tags != nil {
 			return p.VersionID, tags, nil
@@ -141,7 +141,7 @@ func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (
 	var err error
 	var version *data.NodeVersion
 
-	if objVersion.VersionID == UnversionedObjectVersionID {
+	if objVersion.VersionID == data.UnversionedObjectVersionID {
 		version, err = n.treeService.GetUnversioned(ctx, objVersion.BktInfo.CID, objVersion.ObjectName)
 	} else if len(objVersion.VersionID) == 0 {
 		version, err = n.treeService.GetLatestVersion(ctx, objVersion.BktInfo.CID, objVersion.ObjectName)

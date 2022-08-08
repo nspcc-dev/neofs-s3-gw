@@ -272,10 +272,6 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 	}
 
 	for _, ver := range info.Version {
-		versionID := ver.ObjectInfo.Version()
-		if ver.NodeVersion.IsUnversioned {
-			versionID = layer.UnversionedObjectVersionID
-		}
 		res.Version = append(res.Version, ObjectVersionResponse{
 			IsLatest:     ver.IsLatest,
 			Key:          ver.ObjectInfo.Name,
@@ -285,7 +281,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 				DisplayName: ver.ObjectInfo.Owner.String(),
 			},
 			Size:      ver.ObjectInfo.Size,
-			VersionID: versionID,
+			VersionID: ver.Version(),
 			ETag:      ver.ObjectInfo.HashSum,
 		})
 	}
@@ -299,7 +295,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 				ID:          del.ObjectInfo.Owner.String(),
 				DisplayName: del.ObjectInfo.Owner.String(),
 			},
-			VersionID: del.ObjectInfo.Version(),
+			VersionID: del.Version(),
 		})
 	}
 
