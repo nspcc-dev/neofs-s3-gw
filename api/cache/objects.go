@@ -39,13 +39,13 @@ func New(config *Config) *ObjectsCache {
 }
 
 // GetObject returns a cached object info.
-func (o *ObjectsCache) GetObject(address oid.Address) *data.ObjectInfo {
+func (o *ObjectsCache) GetObject(address oid.Address) *data.ExtendedObjectInfo {
 	entry, err := o.cache.Get(address)
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.(*data.ObjectInfo)
+	result, ok := entry.(*data.ExtendedObjectInfo)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
 			zap.String("expected", fmt.Sprintf("%T", result)))
@@ -56,8 +56,8 @@ func (o *ObjectsCache) GetObject(address oid.Address) *data.ObjectInfo {
 }
 
 // PutObject puts an object info to cache.
-func (o *ObjectsCache) PutObject(obj *data.ObjectInfo) error {
-	return o.cache.Set(obj.Address(), obj)
+func (o *ObjectsCache) PutObject(obj *data.ExtendedObjectInfo) error {
+	return o.cache.Set(obj.ObjectInfo.Address(), obj)
 }
 
 // Delete deletes an object from cache.
