@@ -122,7 +122,7 @@ func writeAttributesHeaders(h http.Header, info *data.ExtendedObjectInfo, isBuck
 		h.Set(api.AmzVersionID, info.Version())
 	}
 
-	if info.NodeVersion.DeleteMarker != nil {
+	if info.NodeVersion.IsDeleteMarker() {
 		h.Set(api.AmzDeleteMarker, strconv.FormatBool(true))
 	}
 

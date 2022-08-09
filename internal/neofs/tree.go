@@ -747,7 +747,7 @@ func (c *TreeClient) getSubTreeVersions(ctx context.Context, cnrID cid.ID, nodeI
 
 	result := make([]*data.NodeVersion, 0, len(versions)) // consider use len(subTree)
 	for _, version := range versions {
-		if latestOnly && version[0].DeleteMarker != nil {
+		if latestOnly && version[0].IsDeleteMarker() {
 			continue
 		}
 		result = append(result, version...)
@@ -1066,7 +1066,7 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 		meta[etagKV] = version.ETag
 	}
 
-	if version.DeleteMarker != nil {
+	if version.IsDeleteMarker() {
 		meta[isDeleteMarkerKV] = "true"
 		meta[ownerKV] = version.DeleteMarker.Owner.EncodeToString()
 		meta[createdKV] = strconv.FormatInt(version.DeleteMarker.Created.UTC().UnixMilli(), 10)

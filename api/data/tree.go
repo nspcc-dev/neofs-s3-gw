@@ -20,6 +20,10 @@ type NodeVersion struct {
 	IsUnversioned bool
 }
 
+func (v NodeVersion) IsDeleteMarker() bool {
+	return v.DeleteMarker != nil
+}
+
 // DeleteMarkerInfo is used to save object info if node in the tree service is delete marker.
 // We need this information because the "delete marker" object is no longer stored in NeoFS.
 type DeleteMarkerInfo struct {

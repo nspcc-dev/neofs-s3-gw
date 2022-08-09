@@ -264,7 +264,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		return nil, err
 	}
 
-	if node.DeleteMarker != nil {
+	if node.IsDeleteMarker() {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
 	}
 
@@ -596,7 +596,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	for _, nodeVersion := range nodeVersions {
 		oi := &data.ObjectInfo{}
 
-		if nodeVersion.DeleteMarker != nil { // delete marker does not match any object in NeoFS
+		if nodeVersion.IsDeleteMarker() { // delete marker does not match any object in NeoFS
 			oi.ID = nodeVersion.OID
 			oi.Name = nodeVersion.FilePath
 			oi.Owner = nodeVersion.DeleteMarker.Owner

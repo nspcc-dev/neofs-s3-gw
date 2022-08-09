@@ -163,7 +163,7 @@ func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (
 		}
 	}
 
-	if err == nil && version.DeleteMarker != nil && !objVersion.NoErrorOnDeleteMarker || errorsStd.Is(err, ErrNodeNotFound) {
+	if err == nil && version.IsDeleteMarker() && !objVersion.NoErrorOnDeleteMarker || errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, errors.GetAPIError(errors.ErrNoSuchKey)
 	}
 
