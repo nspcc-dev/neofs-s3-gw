@@ -85,6 +85,8 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*dat
 		return nil, err
 	}
 
+	p.VersionID = version.OID.EncodeToString()
+
 	n.systemCache.Delete(objectTaggingCacheKey(p))
 
 	return version, nil
