@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 - Improved wallet configuration via `.yaml` config and environment variables (#607)
 ### Removed
 ### Fixed
+- Responses to `GetObject` and `HeadObject`: remove redundant `VersionID` (#577)  
 ### Updating from v0.23.0
 1. Make sure configuration of wallet is valid. If you use:
    1. environment variables: set `S3_GW_WALLET_PATH` instead of `S3_GW_WALLET`, 
