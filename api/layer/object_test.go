@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,7 +22,7 @@ func TestWrapReader(t *testing.T) {
 		streamHash.Write(buf)
 	})
 
-	dst, err := ioutil.ReadAll(wrappedReader)
+	dst, err := io.ReadAll(wrappedReader)
 	require.NoError(t, err)
 	require.Equal(t, src, dst)
 	require.Equal(t, h[:], streamHash.Sum(nil))
