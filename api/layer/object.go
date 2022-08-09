@@ -233,7 +233,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	extendedObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo:  objInfo,
 		NodeVersion: newVersion,
-		IsLatest:    false,
 	}
 
 	if err = n.objCache.PutObject(extendedObjInfo); err != nil {
@@ -278,7 +277,6 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 	extObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo:  objInfo,
 		NodeVersion: node,
-		IsLatest:    true,
 	}
 
 	if err = n.objCache.PutObject(extObjInfo); err != nil {
