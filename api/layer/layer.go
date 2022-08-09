@@ -556,7 +556,7 @@ func (n *layer) getNodeVersionToDelete(ctx context.Context, bkt *data.BucketInfo
 }
 
 func (n *layer) removeOldVersion(ctx context.Context, bkt *data.BucketInfo, nodeVersion *data.NodeVersion, obj *VersionedObject) (string, error) {
-	if nodeVersion.DeleteMarker != nil {
+	if nodeVersion.IsDeleteMarker() {
 		return obj.VersionID, nil
 	}
 
