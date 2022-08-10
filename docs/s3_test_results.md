@@ -4,6 +4,7 @@ NeoFS Node: v0.30.0
 NeoFS S3 Gateway: v0.22.0-10-g87f6681
 
 To update this file using tests result, run:
+
 ```sh
 ./updateTestsResult.sh ceph_tests_result.txt
 ```
@@ -365,6 +366,7 @@ Compatibility: 19/15/19 out of 22
 | 20 | s3tests_boto3.functional.test_s3.test_multipart_resend_first_finishes_last       | ERROR | ERROR | ERROR  |
 | 21 | s3tests_boto3.functional.test_s3.test_atomic_multipart_upload_write              | ok    | ok    | ok     |
 | 22 | s3tests_boto3.functional.test_s3.test_multipart_copy_versioned                   | ok    | ERROR | ok     |
+
 Comments: in [PR](https://github.com/nspcc-dev/s3-tests/pull/5)
 
 ## Tagging
@@ -538,40 +540,41 @@ Compatibility: 2/0/3 out of 4
 
 ## Encryption
 
-Compatibility: 13/9/16 out of 29
-This group is not explicitly supported by s3-gw, but some tests may pass.
+Compatibility: 23/9/16 out of 29
+Currently only SSE-C is supported
+This group is not explicitly supported by s3-gw, but some other tests may pass.
 
-|    | Test                                                                                     | s3-gw       | minio | aws s3 |
-|----|------------------------------------------------------------------------------------------|-------------|-------|--------|
-| 1  | s3tests_boto3.functional.test_s3.test_encrypted_transfer_1b                              | ok          | ERROR | ok     |
-| 2  | s3tests_boto3.functional.test_s3.test_encrypted_transfer_1kb                             | ok          | ERROR | ok     |
-| 3  | s3tests_boto3.functional.test_s3.test_encrypted_transfer_1MB                             | ok          | ERROR | ok     |
-| 4  | s3tests_boto3.functional.test_s3.test_encrypted_transfer_13b                             | ok          | ERROR | ok     |
-| 5  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_method_head                       | FAIL        | ERROR | ok     |
-| 6  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_present                           | FAIL        | ERROR | ok     |
-| 7  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_other_key                         | FAIL        | ERROR | FAIL   |
-| 8  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_invalid_md5                       | UNSUPPORTED | ok     | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_no_md5                            | FAIL        | ok    | ok     |
-| 10 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_no_key                            | FAIL        | ok    | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_encryption_key_no_sse_c                            | FAIL        | ok    | ok     |
-| 12 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_upload                  | ok          | ERROR | ok     |
-| 13 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_invalid_chunks_1        | FAIL        | ok    | ok     |
-| 14 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_invalid_chunks_2        | FAIL        | ok    | ok     |
-| 15 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_bad_download            | FAIL        | ERROR | FAIL   |
-| 16 | s3tests_boto3.functional.test_s3.test_encryption_sse_c_post_object_authenticated_request | FAIL        | FAIL  | ok     |
-| 17 | s3tests_boto3.functional.test_s3.test_sse_kms_method_head                                | ERROR       | ERROR | ERROR  |
-| 18 | s3tests_boto3.functional.test_s3.test_sse_kms_present                                    | ok          | ERROR | ERROR  |
-| 19 | s3tests_boto3.functional.test_s3.test_sse_kms_no_key                                     | FAIL        | ok    | FAIL   |
-| 20 | s3tests_boto3.functional.test_s3.test_sse_kms_not_declared                               | FAIL        | ok    | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_upload                           | ok          | ERROR | ERROR  |
-| 22 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_1                 | ok          | ERROR | ERROR  |
-| 23 | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_2                 | ok          | ERROR | ERROR  |
-| 24 | s3tests_boto3.functional.test_s3.test_sse_kms_post_object_authenticated_request          | FAIL        | FAIL  | FAIL   |
-| 25 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1b                                | ok          | ERROR | ERROR  |
-| 26 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1kb                               | ok          | ERROR | ERROR  |
-| 27 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1MB                               | ok          | ERROR | ERROR  |
-| 28 | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_13b                               | ok          | ERROR | ERROR  |
-| 29 | s3tests_boto3.functional.test_s3.test_sse_kms_read_declare                               | FAIL        | ok    | ok     |
+|     | Test                                                                                     | s3-gw | minio | aws s3 |
+|-----|------------------------------------------------------------------------------------------|-------|-------|--------|
+| 1   | s3tests_boto3.functional.test_s3.test_encrypted_transfer_1b                              | ok    | ERROR | ok     |
+| 2   | s3tests_boto3.functional.test_s3.test_encrypted_transfer_1kb                             | ok    | ERROR | ok     |
+| 3   | s3tests_boto3.functional.test_s3.test_encrypted_transfer_1MB                             | ok    | ERROR | ok     |
+| 4   | s3tests_boto3.functional.test_s3.test_encrypted_transfer_13b                             | ok    | ERROR | ok     |
+| 5   | s3tests_boto3.functional.test_s3.test_encryption_sse_c_method_head                       | ok    | ERROR | ok     |
+| 6   | s3tests_boto3.functional.test_s3.test_encryption_sse_c_present                           | ok    | ERROR | ok     |
+| 7   | s3tests_boto3.functional.test_s3.test_encryption_sse_c_other_key                         | ok    | ERROR | FAIL   |
+| 8   | s3tests_boto3.functional.test_s3.test_encryption_sse_c_invalid_md5                       | ok    | ok    | ok     |
+| 9   | s3tests_boto3.functional.test_s3.test_encryption_sse_c_no_md5                            | ok    | ok    | ok     |
+| 10  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_no_key                            | ok    | ok    | ok     |
+| 11  | s3tests_boto3.functional.test_s3.test_encryption_key_no_sse_c                            | ok    | ok    | ok     |
+| 12  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_upload                  | ok    | ERROR | ok     |
+| 13  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_invalid_chunks_1        | ok    | ok    | ok     |
+| 14  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_invalid_chunks_2        | ok    | ok    | ok     |
+| 15  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_multipart_bad_download            | ok    | ERROR | FAIL   |
+| 16  | s3tests_boto3.functional.test_s3.test_encryption_sse_c_post_object_authenticated_request | FAIL  | FAIL  | ok     |
+| 17  | s3tests_boto3.functional.test_s3.test_sse_kms_method_head                                | ERROR | ERROR | ERROR  |
+| 18  | s3tests_boto3.functional.test_s3.test_sse_kms_present                                    | ok    | ERROR | ERROR  |
+| 19  | s3tests_boto3.functional.test_s3.test_sse_kms_no_key                                     | FAIL  | ok    | FAIL   |
+| 20  | s3tests_boto3.functional.test_s3.test_sse_kms_not_declared                               | FAIL  | ok    | ok     |
+| 21  | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_upload                           | ok    | ERROR | ERROR  |
+| 22  | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_1                 | ok    | ERROR | ERROR  |
+| 23  | s3tests_boto3.functional.test_s3.test_sse_kms_multipart_invalid_chunks_2                 | ok    | ERROR | ERROR  |
+| 24  | s3tests_boto3.functional.test_s3.test_sse_kms_post_object_authenticated_request          | FAIL  | FAIL  | FAIL   |
+| 25  | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1b                                | ok    | ERROR | ERROR  |
+| 26  | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1kb                               | ok    | ERROR | ERROR  |
+| 27  | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_1MB                               | ok    | ERROR | ERROR  |
+| 28  | s3tests_boto3.functional.test_s3.test_sse_kms_transfer_13b                               | ok    | ERROR | ERROR  |
+| 29  | s3tests_boto3.functional.test_s3.test_sse_kms_read_declare                               | FAIL  | ok    | ok     |
 
 ## Lifecycle
 
