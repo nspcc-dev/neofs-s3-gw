@@ -1082,7 +1082,11 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 				return err
 			}
 
-			return c.moveNode(ctx, cnrID, treeID, node.ID, parentID, meta)
+			if err = c.moveNode(ctx, cnrID, treeID, node.ID, parentID, meta); err != nil {
+				return err
+			}
+
+			return c.clearOutdatedVersionInfo(ctx, cnrID, treeID, node.ID)
 		}
 
 		if !errors.Is(err, layer.ErrNodeNotFound) {
@@ -1091,6 +1095,18 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 	}
 
 	return c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
+}
+
+func (c *TreeClient) clearOutdatedVersionInfo(ctx context.Context, cnrID cid.ID, treeID string, nodeID uint64) error {
+	taggingNode, err := c.getTreeNode(ctx, cnrID, nodeID, isTagKV)
+	if err != nil {
+		return err
+	}
+	if taggingNode != nil {
+		return c.removeNode(ctx, cnrID, treeID, taggingNode.ID)
+	}
+
+	return nil
 }
 
 func (c *TreeClient) getVersions(ctx context.Context, cnrID cid.ID, treeID, filepath string, onlyUnversioned bool) ([]*data.NodeVersion, error) {
