@@ -419,6 +419,7 @@ func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 
 	cfg.DefaultMaxAge = defaultMaxAge
 	cfg.NotificatorEnabled = v.GetBool(cfgEnableNATS)
+	cfg.TLSEnabled = v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile)
 
 	return &cfg
 }

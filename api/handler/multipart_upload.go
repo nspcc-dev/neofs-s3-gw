@@ -137,7 +137,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	p.Info.Encryption, err = h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -220,7 +220,7 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		Reader:     r.Body,
 	}
 
-	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	p.Info.Encryption, err = h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -321,7 +321,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		Range:      srcRange,
 	}
 
-	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	p.Info.Encryption, err = h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -558,7 +558,7 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 		PartNumberMarker: partNumberMarker,
 	}
 
-	p.Info.Encryption, err = formEncryptionParams(r.Header)
+	p.Info.Encryption, err = h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -593,7 +593,7 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		Key:      reqInfo.ObjectName,
 	}
 
-	p.Encryption, err = formEncryptionParams(r.Header)
+	p.Encryption, err = h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
