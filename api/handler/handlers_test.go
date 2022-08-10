@@ -71,7 +71,9 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	h := &handler{
 		log: l,
 		obj: layer.NewLayer(l, tp, layerCfg),
-		cfg: &Config{},
+		cfg: &Config{
+			TLSEnabled: true,
+		},
 	}
 
 	return &handlerContext{

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	errorsStd "errors"
 	"fmt"
 	"io"
 	"net"
@@ -210,7 +211,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		metadata[api.Expires] = expires
 	}
 
-	encryption, err := formEncryptionParams(r.Header)
+	encryption, err := h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -296,13 +297,17 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
-func formEncryptionParams(header http.Header) (enc layer.EncryptionParams, err error) {
+func (h handler) formEncryptionParams(header http.Header) (enc layer.EncryptionParams, err error) {
 	sseCustomerAlgorithm := header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
 	sseCustomerKey := header.Get(api.AmzServerSideEncryptionCustomerKey)
 	sseCustomerKeyMD5 := header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
 
 	if len(sseCustomerAlgorithm) == 0 && len(sseCustomerKey) == 0 && len(sseCustomerKeyMD5) == 0 {
 		return
+	}
+
+	if !h.cfg.TLSEnabled {
+		return enc, errorsStd.New("encryption available only when TLS is enabled")
 	}
 
 	if sseCustomerAlgorithm != layer.AESEncryptionAlgorithm {

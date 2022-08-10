@@ -27,6 +27,7 @@ type (
 		DefaultPolicy      netmap.PlacementPolicy
 		DefaultMaxAge      int
 		NotificatorEnabled bool
+		TLSEnabled         bool
 	}
 )
 

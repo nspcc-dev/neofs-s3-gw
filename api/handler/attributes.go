@@ -94,7 +94,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 	}
 	info := extendedInfo.ObjectInfo
 
-	encryption, err := formEncryptionParams(r.Header)
+	encryption, err := h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
