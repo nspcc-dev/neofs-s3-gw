@@ -84,7 +84,7 @@ func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.E
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 
-	if info.IsEncrypted() {
+	if len(info.Headers[layer.AttributeEncryptionAlgorithm]) > 0 {
 		h.Set(api.ContentLength, info.Headers[layer.AttributeDecryptedSize])
 		addSSECHeaders(h, requestHeader)
 	} else {
@@ -150,19 +150,19 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryption, err := h.formEncryptionParams(r.Header)
+	encryptionParams, err := h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
 	}
 
-	if err = encryption.MatchObjectEncryption(info.EncryptionInfo); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
 	fullSize := info.Size
-	if encryption.Enabled() {
+	if encryptionParams.Enabled() {
 		if fullSize, err = strconv.ParseInt(info.Headers[layer.AttributeDecryptedSize], 10, 64); err != nil {
 			h.logAndSendError(w, "invalid decrypted size header", reqInfo, errors.GetAPIError(errors.ErrBadRequest))
 			return
@@ -213,7 +213,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Writer:     w,
 		Range:      params,
 		BucketInfo: bktInfo,
-		Encryption: encryption,
+		Encryption: encryptionParams,
 	}
 	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)

@@ -36,7 +36,6 @@ type (
 		CID            cid.ID
 		IsDir          bool
 		IsDeleteMarker bool
-		EncryptionInfo EncryptionInfo
 
 		Bucket      string
 		Name        string
@@ -46,14 +45,6 @@ type (
 		HashSum     string
 		Owner       user.ID
 		Headers     map[string]string
-	}
-
-	// EncryptionInfo store parsed object encryption headers.
-	EncryptionInfo struct {
-		Enabled   bool
-		Algorithm string
-		HMACKey   string
-		HMACSalt  string
 	}
 
 	// NotificationInfo store info to send s3 notification.
@@ -120,11 +111,6 @@ func (o *ObjectInfo) Address() oid.Address {
 	addr.SetObject(o.ID)
 
 	return addr
-}
-
-// IsEncrypted returns true if object is encrypted.
-func (o ObjectInfo) IsEncrypted() bool {
-	return o.EncryptionInfo.Enabled
 }
 
 func (b BucketSettings) Unversioned() bool {

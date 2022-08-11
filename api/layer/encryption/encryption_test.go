@@ -1,11 +1,10 @@
-package layer
+package encryption
 
 import (
 	"encoding/hex"
 	"strconv"
 	"testing"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,19 +12,20 @@ const (
 	aes256Key = "1234567890qwertyuiopasdfghjklzxc"
 )
 
-func getAES256Key() AES256Key {
-	var key AES256Key
+func getAES256Key() []byte {
+	key := make([]byte, 32)
 	copy(key[:], aes256Key)
 	return key
 }
 
 func TestHMAC(t *testing.T) {
-	encParam := NewEncryptionParams(getAES256Key())
+	encParam, err := NewParams(getAES256Key())
+	require.NoError(t, err)
 
 	hmacKey, hmacSalt, err := encParam.HMAC()
 	require.NoError(t, err)
 
-	encInfo := data.EncryptionInfo{
+	encInfo := ObjectEncryption{
 		Enabled:   true,
 		Algorithm: "",
 		HMACKey:   hex.EncodeToString(hmacKey),
@@ -44,33 +44,34 @@ const (
 	encPartSize = 5245440  // partSize + enc headers
 )
 
-func getDecrypter() *decrypter {
-	parts := make([]EncryptedPart, partNum)
+func getDecrypter(t *testing.T) *Decrypter {
+	parts := make([]encryptedPart, partNum)
 	for i := range parts {
-		parts[i] = EncryptedPart{
-			Part: Part{
-				PartNumber: i + 1,
-				Size:       int64(partSize),
-			},
-			EncryptedSize: encPartSize,
+		parts[i] = encryptedPart{
+			size:          partSize,
+			encryptedSize: encPartSize,
 		}
 	}
-	return &decrypter{
+
+	params, err := NewParams(getAES256Key())
+	require.NoError(t, err)
+
+	return &Decrypter{
 		parts:      parts,
-		encryption: NewEncryptionParams(getAES256Key()),
+		encryption: params,
 	}
 }
 
 func TestDecrypterInitParams(t *testing.T) {
-	decReader := getDecrypter()
+	decReader := getDecrypter(t)
 
 	for i, tc := range []struct {
-		rng                                       *RangeParams
+		rng                                       *Range
 		expSkipLen, expLn, expOff, expSeqNumber   uint64
-		expDecLen, expDataRemain, expEncPartRange int64
+		expDecLen, expDataRemain, expEncPartRange uint64
 	}{
 		{
-			rng:             &RangeParams{End: objSize - 1},
+			rng:             &Range{End: objSize - 1},
 			expSkipLen:      0,
 			expLn:           encObjSize,
 			expOff:          0,
@@ -80,7 +81,7 @@ func TestDecrypterInitParams(t *testing.T) {
 			expEncPartRange: encPartSize,
 		},
 		{
-			rng:             &RangeParams{End: 999999},
+			rng:             &Range{End: 999999},
 			expSkipLen:      0,
 			expLn:           1049088,
 			expOff:          0,
@@ -90,7 +91,7 @@ func TestDecrypterInitParams(t *testing.T) {
 			expEncPartRange: 1049088,
 		},
 		{
-			rng:             &RangeParams{Start: 1000000, End: 1999999},
+			rng:             &Range{Start: 1000000, End: 1999999},
 			expSkipLen:      16960,
 			expLn:           1049088,
 			expOff:          983520,
