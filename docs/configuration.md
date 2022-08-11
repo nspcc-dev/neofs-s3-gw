@@ -120,19 +120,20 @@ There are some custom types used for brevity:
 
 ### Structure
 
-| Section      | Description                                     |
-|--------------|-------------------------------------------------|
-| no section   | [General parameters](#general-section)          |
-| `wallet`     | [Wallet configuration](#wallet-section)         |
-| `peers`      | [Nodes configuration](#peers-section)           |
-| `tls`        | [TLS configuration](#tls-section)               |
-| `logger`     | [Logger configuration](#logger-section)         |
-| `tree`       | [Tree configuration](#tree-section)             |
-| `cache`      | [Cache configuration](#cache-section)           |
-| `nats`       | [NATS configuration](#nats-section)             |
-| `cors`       | [CORS configuration](#cors-section)             |
-| `pprof`      | [Pprof configuration](#pprof-section)           |
-| `prometheus` | [Prometheus configuration](#prometheus-section) |
+| Section      | Description                                       |
+|--------------|---------------------------------------------------|
+| no section   | [General parameters](#general-section)            |
+| `wallet`     | [Wallet configuration](#wallet-section)           |
+| `peers`      | [Nodes configuration](#peers-section)             |
+| `tls`        | [TLS configuration](#tls-section)                 |
+| `logger`     | [Logger configuration](#logger-section)           |
+| `tree`       | [Tree configuration](#tree-section)               |
+| `cache`      | [Cache configuration](#cache-section)             |
+| `nats`       | [NATS configuration](#nats-section)               |
+| `cors`       | [CORS configuration](#cors-section)               |
+| `pprof`      | [Pprof configuration](#pprof-section)             |
+| `prometheus` | [Prometheus configuration](#prometheus-section)   |
+| `neofs`      | [Parameters of requests to NeoFS](#neofs-section) |
 
 ### General section
 
@@ -364,3 +365,16 @@ prometheus:
 |-----------|----------|------------------|-----------------------------------------|
 | `enabled` | `bool`   | `false`          | Flag to enable the service.             |
 | `address` | `string` | `localhost:8086` | Address that service listener binds to. |
+
+# `neofs` section
+
+Contains parameters of requests to NeoFS.
+
+```yaml
+neofs:
+  set_copies_number: 0
+```
+
+| Parameter           | Type     | Default value | Description                                                                                                                                                               |
+|---------------------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `set_copies_number` | `uint32` | `0`           | Number of the object copies to consider PUT to NeoFS successful. <br/>Default value `0` means that object will be processed according to the container's placement policy |

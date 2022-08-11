@@ -6,6 +6,7 @@ This document outlines major changes between releases.
 
 ### Added
 - Exposure of pool metrics (#615)
+- Configuration of `set_copies_number` (#634)
 ### Changed
 - Improved wallet configuration via `.yaml` config and environment variables (#607)
 ### Removed
