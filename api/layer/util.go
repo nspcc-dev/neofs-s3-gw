@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
@@ -83,10 +85,9 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 	objID, _ := meta.ID()
 	payloadChecksum, _ := meta.PayloadChecksum()
 	return &data.ObjectInfo{
-		ID:             objID,
-		CID:            bkt.CID,
-		IsDir:          false,
-		EncryptionInfo: formEncryptionInfo(headers),
+		ID:    objID,
+		CID:   bkt.CID,
+		IsDir: false,
 
 		Bucket:      bkt.Name,
 		Name:        filenameFromObject(meta),
@@ -99,9 +100,9 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 	}
 }
 
-func formEncryptionInfo(headers map[string]string) data.EncryptionInfo {
+func FormEncryptionInfo(headers map[string]string) encryption.ObjectEncryption {
 	algorithm := headers[AttributeEncryptionAlgorithm]
-	return data.EncryptionInfo{
+	return encryption.ObjectEncryption{
 		Enabled:   len(algorithm) > 0,
 		Algorithm: algorithm,
 		HMACKey:   headers[AttributeHMACKey],
@@ -109,7 +110,7 @@ func formEncryptionInfo(headers map[string]string) data.EncryptionInfo {
 	}
 }
 
-func addEncryptionHeaders(meta map[string]string, enc EncryptionParams) error {
+func addEncryptionHeaders(meta map[string]string, enc encryption.Params) error {
 	meta[AttributeEncryptionAlgorithm] = AESEncryptionAlgorithm
 	hmacKey, hmacSalt, err := enc.HMAC()
 	if err != nil {

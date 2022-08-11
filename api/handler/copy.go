@@ -96,13 +96,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryption, err := h.formEncryptionParams(r.Header)
+	encryptionParams, err := h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
 	}
 
-	if err = encryption.MatchObjectEncryption(objInfo.EncryptionInfo); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(objInfo.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
@@ -128,7 +128,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		DstObject:  reqInfo.ObjectName,
 		SrcSize:    objInfo.Size,
 		Header:     metadata,
-		Encryption: encryption,
+		Encryption: encryptionParams,
 	}
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
@@ -186,7 +186,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	if encryption.Enabled() {
+	if encryptionParams.Enabled() {
 		addSSECHeaders(w.Header(), r.Header)
 	}
 }

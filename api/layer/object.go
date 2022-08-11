@@ -161,7 +161,7 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 	return r, encSize, nil
 }
 
-func parseCompletedPartHeader(hdr string) (*Part, error) {
+func ParseCompletedPartHeader(hdr string) (*Part, error) {
 	// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum
 	partInfo := strings.Split(hdr, "-")
 	if len(partInfo) != 3 {
@@ -268,9 +268,8 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	objInfo := &data.ObjectInfo{
-		ID:             id,
-		CID:            p.BktInfo.CID,
-		EncryptionInfo: formEncryptionInfo(p.Header),
+		ID:  id,
+		CID: p.BktInfo.CID,
 
 		Owner:       own,
 		Bucket:      p.BktInfo.Name,

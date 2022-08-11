@@ -21,6 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -297,7 +298,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
-func (h handler) formEncryptionParams(header http.Header) (enc layer.EncryptionParams, err error) {
+func (h handler) formEncryptionParams(header http.Header) (enc encryption.Params, err error) {
 	sseCustomerAlgorithm := header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
 	sseCustomerKey := header.Get(api.AmzServerSideEncryptionCustomerKey)
 	sseCustomerKeyMD5 := header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
@@ -333,10 +334,7 @@ func (h handler) formEncryptionParams(header http.Header) (enc layer.EncryptionP
 		return enc, errors.GetAPIError(errors.ErrSSECustomerKeyMD5Mismatch)
 	}
 
-	var aesKey layer.AES256Key
-	copy(aesKey[:], key)
-
-	return layer.NewEncryptionParams(aesKey), nil
+	return encryption.NewParams(key)
 }
 
 func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {

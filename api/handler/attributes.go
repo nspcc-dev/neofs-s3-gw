@@ -94,13 +94,13 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 	}
 	info := extendedInfo.ObjectInfo
 
-	encryption, err := h.formEncryptionParams(r.Header)
+	encryptionParams, err := h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
 	}
 
-	if err = encryption.MatchObjectEncryption(info.EncryptionInfo); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
@@ -214,23 +214,14 @@ func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectP
 	partInfos := strings.Split(completedParts, ",")
 	parts := make([]Part, len(partInfos))
 	for i, p := range partInfos {
-		// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum
-		partInfo := strings.Split(p, "-")
-		if len(partInfo) != 3 {
-			return nil, fmt.Errorf("invalid completed parts header")
-		}
-		num, err := strconv.Atoi(partInfo[0])
+		part, err := layer.ParseCompletedPartHeader(p)
 		if err != nil {
-			return nil, err
-		}
-		size, err := strconv.Atoi(partInfo[1])
-		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid competed part: %w", err)
 		}
 		parts[i] = Part{
-			PartNumber:     num,
-			Size:           size,
-			ChecksumSHA256: partInfo[2],
+			PartNumber:     part.PartNumber,
+			Size:           int(part.Size),
+			ChecksumSHA256: part.ETag,
 		}
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/minio/sio"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -40,7 +41,7 @@ type (
 		UploadID   string
 		Bkt        *data.BucketInfo
 		Key        string
-		Encryption EncryptionParams
+		Encryption encryption.Params
 	}
 
 	CreateMultipartParams struct {
@@ -190,7 +191,7 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 }
 
 func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadPartParams) (*data.ObjectInfo, error) {
-	encInfo := formEncryptionInfo(multipartInfo.Meta)
+	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 	if err := p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
 		return nil, errors.GetAPIError(errors.ErrInvalidEncryptionParameters)
@@ -356,7 +357,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	if err != nil {
 		return nil, nil, err
 	}
-	encInfo := formEncryptionInfo(multipartInfo.Meta)
+	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 
 	if len(partsInfo) < len(p.Parts) {
 		return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
@@ -545,7 +546,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 		return nil, err
 	}
 
-	encInfo := formEncryptionInfo(multipartInfo.Meta)
+	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 	if err = p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
 		return nil, errors.GetAPIError(errors.ErrInvalidEncryptionParameters)
