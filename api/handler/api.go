@@ -15,6 +15,7 @@ type (
 		obj         layer.Client
 		notificator Notificator
 		cfg         *Config
+		NeoFS       NeoFS
 	}
 
 	Notificator interface {

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
 	"encoding/json"
@@ -10,8 +9,6 @@ import (
 	stderrors "errors"
 	"fmt"
 	"net/http"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -21,31 +18,29 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
 
 var (
-	writeOps = []eacl.Operation{eacl.OperationPut, eacl.OperationDelete}
-	readOps  = []eacl.Operation{eacl.OperationGet, eacl.OperationHead,
+	WriteOps = []eacl.Operation{eacl.OperationPut, eacl.OperationDelete}
+	ReadOps  = []eacl.Operation{eacl.OperationGet, eacl.OperationHead,
 		eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
-	fullOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
+	FullOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
 		eacl.OperationDelete, eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
 )
 
 var actionToOpMap = map[string][]eacl.Operation{
 	s3DeleteObject: {eacl.OperationDelete},
-	s3GetObject:    readOps,
+	s3GetObject:    ReadOps,
 	s3PutObject:    {eacl.OperationPut},
-	s3ListBucket:   readOps,
+	s3ListBucket:   ReadOps,
 }
 
 const (
 	arnAwsPrefix     = "arn:aws:s3:::"
 	allUsersWildcard = "*"
-	allUsersGroup    = "http://acs.amazonaws.com/groups/global/AllUsers"
+	AllUsersGroup    = "http://acs.amazonaws.com/groups/global/AllUsers"
 
 	s3DeleteObject               = "s3:DeleteObject"
 	s3GetObject                  = "s3:GetObject"
@@ -60,18 +55,18 @@ const (
 type AWSACL string
 
 const (
-	aclFullControl AWSACL = "FULL_CONTROL"
-	aclWrite       AWSACL = "WRITE"
-	aclRead        AWSACL = "READ"
+	ACLFullControl AWSACL = "FULL_CONTROL"
+	ACLWrite       AWSACL = "WRITE"
+	ACLRead        AWSACL = "READ"
 )
 
 // GranteeType is aws grantee permission type constants.
 type GranteeType string
 
 const (
-	acpCanonicalUser         GranteeType = "CanonicalUser"
-	acpAmazonCustomerByEmail GranteeType = "AmazonCustomerByEmail"
-	acpGroup                 GranteeType = "Group"
+	AcpCanonicalUser         GranteeType = "CanonicalUser"
+	AcpAmazonCustomerByEmail GranteeType = "AmazonCustomerByEmail"
+	AcpGroup                 GranteeType = "Group"
 )
 
 type bucketPolicy struct {
@@ -94,27 +89,18 @@ type principal struct {
 	CanonicalUser string `json:"CanonicalUser,omitempty"`
 }
 
-type orderedAstResource struct {
-	Index    int
-	Resource *astResource
+type AstResource struct {
+	ResourceInfo
+	Operations []*AstOperation
 }
 
-type ast struct {
-	Resources []*astResource
-}
-
-type astResource struct {
-	resourceInfo
-	Operations []*astOperation
-}
-
-type resourceInfo struct {
+type ResourceInfo struct {
 	Bucket  string
 	Object  string
 	Version string
 }
 
-func (r *resourceInfo) Name() string {
+func (r *ResourceInfo) Name() string {
 	if len(r.Object) == 0 {
 		return r.Bucket
 	}
@@ -124,38 +110,18 @@ func (r *resourceInfo) Name() string {
 	return r.Bucket + "/" + r.Object + ":" + r.Version
 }
 
-func (r *resourceInfo) IsBucket() bool {
+func (r *ResourceInfo) IsBucket() bool {
 	return len(r.Object) == 0
 }
 
-type astOperation struct {
+type AstOperation struct {
 	Users  []string
 	Op     eacl.Operation
 	Action eacl.Action
 }
 
-func (a astOperation) IsGroupGrantee() bool {
+func (a AstOperation) IsGroupGrantee() bool {
 	return len(a.Users) == 0
-}
-
-const (
-	serviceRecordResourceKey    = "Resource"
-	serviceRecordGroupLengthKey = "GroupLength"
-)
-
-type ServiceRecord struct {
-	Resource           string
-	GroupRecordsLength int
-}
-
-func (s ServiceRecord) ToEACLRecord() *eacl.Record {
-	serviceRecord := eacl.NewRecord()
-	serviceRecord.SetAction(eacl.ActionAllow)
-	serviceRecord.SetOperation(eacl.OperationGet)
-	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordResourceKey, s.Resource)
-	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordGroupLengthKey, strconv.Itoa(s.GroupRecordsLength))
-	eacl.AddFormedTarget(serviceRecord, eacl.RoleSystem)
-	return serviceRecord
 }
 
 func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +188,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resInfo := &resourceInfo{Bucket: reqInfo.BucketName}
+	resInfo := &ResourceInfo{Bucket: reqInfo.BucketName}
 	astBucket, err := aclToAst(list, resInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not translate acl to policy", reqInfo, err)
@@ -242,13 +208,13 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Container) (bool, error) {
+func (h *handler) updateBucketACL(r *http.Request, astChild *Ast, bktInfo *data.BucketInfo, sessionToken *session.Container) (bool, error) {
 	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return false, fmt.Errorf("could not get bucket eacl: %w", err)
 	}
 
-	parentAst := tableToAst(bucketACL.EACL, bktInfo.Name)
+	parentAst := h.NeoFS.TableToAst(bucketACL.EACL, bktInfo.Name)
 	strCID := bucketACL.Info.CID.EncodeToString()
 
 	for _, resource := range parentAst.Resources {
@@ -257,12 +223,12 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 		}
 	}
 
-	resAst, updated := mergeAst(parentAst, astChild)
+	resAst, updated := MergeAst(parentAst, astChild)
 	if !updated {
 		return false, nil
 	}
 
-	table, err := astToTable(resAst)
+	table, err := h.NeoFS.AstToTable(resAst)
 	if err != nil {
 		return false, fmt.Errorf("could not translate ast to table: %w", err)
 	}
@@ -339,7 +305,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resInfo := &resourceInfo{
+	resInfo := &ResourceInfo{
 		Bucket:  reqInfo.BucketName,
 		Object:  reqInfo.ObjectName,
 		Version: versionID,
@@ -403,7 +369,7 @@ func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ast := tableToAst(bucketACL.EACL, reqInfo.BucketName)
+	ast := h.NeoFS.TableToAst(bucketACL.EACL, reqInfo.BucketName)
 	bktPolicy := astToPolicy(ast)
 
 	w.WriteHeader(http.StatusOK)
@@ -469,9 +435,9 @@ func parseACLHeaders(header http.Header, key *keys.PublicKey) (*AccessControlPol
 		Grantee: &Grantee{
 			ID:          hex.EncodeToString(key.Bytes()),
 			DisplayName: key.Address(),
-			Type:        acpCanonicalUser,
+			Type:        AcpCanonicalUser,
 		},
-		Permission: aclFullControl,
+		Permission: ACLFullControl,
 	}}
 
 	cannedACL := header.Get(api.AmzACL)
@@ -509,7 +475,7 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 	}
 
 	for _, grantee := range grantees {
-		if grantee.Type == acpAmazonCustomerByEmail || (grantee.Type == acpGroup && grantee.URI != allUsersGroup) {
+		if grantee.Type == AcpAmazonCustomerByEmail || (grantee.Type == AcpGroup && grantee.URI != AllUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
 		}
 
@@ -524,11 +490,11 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 func grantHdrToPermission(grant string) (AWSACL, error) {
 	switch grant {
 	case api.AmzGrantFullControl:
-		return aclFullControl, nil
+		return ACLFullControl, nil
 	case api.AmzGrantRead:
-		return aclRead, nil
+		return ACLRead, nil
 	case api.AmzGrantWrite:
-		return aclWrite, nil
+		return ACLWrite, nil
 	}
 	return "", fmt.Errorf("unsuppoted header: %s", grant)
 }
@@ -559,17 +525,17 @@ func formGrantee(granteeType, value string) (*Grantee, error) {
 	case "id":
 		return &Grantee{
 			ID:   value,
-			Type: acpCanonicalUser,
+			Type: AcpCanonicalUser,
 		}, nil
 	case "uri":
 		return &Grantee{
 			URI:  value,
-			Type: acpGroup,
+			Type: AcpGroup,
 		}, nil
 	case "emailAddress":
 		return &Grantee{
 			EmailAddress: value,
-			Type:         acpAmazonCustomerByEmail,
+			Type:         AcpAmazonCustomerByEmail,
 		}, nil
 	}
 	// do not return grantee type to avoid sensitive data logging (#489)
@@ -582,20 +548,20 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 	case basicACLPublic:
 		acp.AccessControlList = append(acp.AccessControlList, &Grant{
 			Grantee: &Grantee{
-				URI:  allUsersGroup,
-				Type: acpGroup,
+				URI:  AllUsersGroup,
+				Type: AcpGroup,
 			},
-			Permission: aclFullControl,
+			Permission: ACLFullControl,
 		})
 	case cannedACLAuthRead:
 		fallthrough
 	case basicACLReadOnly:
 		acp.AccessControlList = append(acp.AccessControlList, &Grant{
 			Grantee: &Grantee{
-				URI:  allUsersGroup,
-				Type: acpGroup,
+				URI:  AllUsersGroup,
+				Type: AcpGroup,
 			},
-			Permission: aclRead,
+			Permission: ACLRead,
 		})
 	default:
 		return nil, errors.GetAPIError(errors.ErrInvalidArgument)
@@ -604,89 +570,7 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 	return acp, nil
 }
 
-func tableToAst(table *eacl.Table, bktName string) *ast {
-	resourceMap := make(map[string]orderedAstResource)
-
-	var groupRecordsLeft int
-	var currentResource orderedAstResource
-	for i, record := range table.Records() {
-		if serviceRec := tryServiceRecord(record); serviceRec != nil {
-			resInfo := resourceInfoFromName(serviceRec.Resource, bktName)
-			groupRecordsLeft = serviceRec.GroupRecordsLength
-
-			currentResource = getResourceOrCreate(resourceMap, i, resInfo)
-			resourceMap[resInfo.Name()] = currentResource
-		} else if groupRecordsLeft != 0 {
-			groupRecordsLeft--
-			addOperationsAndUpdateMap(currentResource, record, resourceMap)
-		} else {
-			resInfo := resInfoFromFilters(bktName, record.Filters())
-			resource := getResourceOrCreate(resourceMap, i, resInfo)
-			addOperationsAndUpdateMap(resource, record, resourceMap)
-		}
-	}
-
-	return &ast{
-		Resources: formReverseOrderResources(resourceMap),
-	}
-}
-
-func formReverseOrderResources(resourceMap map[string]orderedAstResource) []*astResource {
-	orderedResources := make([]orderedAstResource, 0, len(resourceMap))
-	for _, resource := range resourceMap {
-		orderedResources = append(orderedResources, resource)
-	}
-	sort.Slice(orderedResources, func(i, j int) bool {
-		return orderedResources[i].Index >= orderedResources[j].Index // reverse order
-	})
-
-	result := make([]*astResource, len(orderedResources))
-	for i, ordered := range orderedResources {
-		res := ordered.Resource
-		for j, k := 0, len(res.Operations)-1; j < k; j, k = j+1, k-1 {
-			res.Operations[j], res.Operations[k] = res.Operations[k], res.Operations[j]
-		}
-
-		result[i] = res
-	}
-
-	return result
-}
-
-func addOperationsAndUpdateMap(orderedRes orderedAstResource, record eacl.Record, resMap map[string]orderedAstResource) {
-	for _, target := range record.Targets() {
-		orderedRes.Resource.Operations = addToList(orderedRes.Resource.Operations, record, target)
-	}
-	resMap[orderedRes.Resource.Name()] = orderedRes
-}
-
-func getResourceOrCreate(resMap map[string]orderedAstResource, index int, resInfo resourceInfo) orderedAstResource {
-	resource, ok := resMap[resInfo.Name()]
-	if !ok {
-		resource = orderedAstResource{
-			Index:    index,
-			Resource: &astResource{resourceInfo: resInfo},
-		}
-	}
-	return resource
-}
-
-func resInfoFromFilters(bucketName string, filters []eacl.Filter) resourceInfo {
-	resInfo := resourceInfo{Bucket: bucketName}
-	for _, filter := range filters {
-		if filter.Matcher() == eacl.MatchStringEqual {
-			if filter.Key() == object.AttributeFileName {
-				resInfo.Object = filter.Value()
-			} else if filter.Key() == v2acl.FilterObjectID {
-				resInfo.Version = filter.Value()
-			}
-		}
-	}
-
-	return resInfo
-}
-
-func mergeAst(parent, child *ast) (*ast, bool) {
+func MergeAst(parent, child *Ast) (*Ast, bool) {
 	updated := false
 	for _, resource := range child.Resources {
 		parentResource := getParentResource(parent, resource)
@@ -696,7 +580,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 			continue
 		}
 
-		var newOps []*astOperation
+		var newOps []*AstOperation
 		for _, astOp := range resource.Operations {
 			ops := getAstOps(parentResource, astOp)
 			switch len(ops) {
@@ -760,7 +644,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 	return parent, updated
 }
 
-func handleAddOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
+func handleAddOperations(parentResource *AstResource, astOp, existedOp *AstOperation) bool {
 	var needToAdd []string
 	for _, user := range astOp.Users {
 		if !containsStr(existedOp.Users, user) {
@@ -774,7 +658,7 @@ func handleAddOperations(parentResource *astResource, astOp, existedOp *astOpera
 	return false
 }
 
-func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
+func handleRemoveOperations(parentResource *AstResource, astOp, existedOp *AstOperation) bool {
 	var needToRemove []string
 	for _, user := range astOp.Users {
 		if containsStr(existedOp.Users, user) {
@@ -798,8 +682,8 @@ func containsStr(list []string, element string) bool {
 	return false
 }
 
-func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
-	var res []*astOperation
+func getAstOps(resource *AstResource, childOp *AstOperation) []*AstOperation {
+	var res []*AstOperation
 	for _, astOp := range resource.Operations {
 		if astOp.IsGroupGrantee() == childOp.IsGroupGrantee() && astOp.Op == childOp.Op {
 			res = append(res, astOp)
@@ -808,7 +692,7 @@ func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
 	return res
 }
 
-func removeAstOp(resource *astResource, group bool, op eacl.Operation, action eacl.Action) {
+func removeAstOp(resource *AstResource, group bool, op eacl.Operation, action eacl.Action) {
 	for i, astOp := range resource.Operations {
 		if astOp.IsGroupGrantee() == group && astOp.Op == op && astOp.Action == action {
 			resource.Operations = append(resource.Operations[:i], resource.Operations[i+1:]...)
@@ -817,7 +701,7 @@ func removeAstOp(resource *astResource, group bool, op eacl.Operation, action ea
 	}
 }
 
-func addUsers(resource *astResource, astO *astOperation, users []string) {
+func addUsers(resource *AstResource, astO *AstOperation, users []string) {
 	for _, astOp := range resource.Operations {
 		if astOp.IsGroupGrantee() == astO.IsGroupGrantee() && astOp.Op == astO.Op && astOp.Action == astO.Action {
 			astOp.Users = append(astO.Users, users...)
@@ -826,9 +710,9 @@ func addUsers(resource *astResource, astO *astOperation, users []string) {
 	}
 }
 
-func removeUsers(resource *astResource, astOperation *astOperation, users []string) {
+func removeUsers(resource *AstResource, AstOperation *AstOperation, users []string) {
 	for ind, astOp := range resource.Operations {
-		if !astOp.IsGroupGrantee() && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
+		if !astOp.IsGroupGrantee() && astOp.Op == AstOperation.Op && astOp.Action == AstOperation.Action {
 			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
 				if !containsStr(users, user) {
@@ -845,7 +729,7 @@ func removeUsers(resource *astResource, astOperation *astOperation, users []stri
 	}
 }
 
-func getParentResource(parent *ast, resource *astResource) *astResource {
+func getParentResource(parent *Ast, resource *AstResource) *AstResource {
 	for _, parentResource := range parent.Resources {
 		if resource.Bucket == parentResource.Bucket && resource.Object == parentResource.Object &&
 			resource.Version == parentResource.Version {
@@ -855,137 +739,10 @@ func getParentResource(parent *ast, resource *astResource) *astResource {
 	return nil
 }
 
-func astToTable(ast *ast) (*eacl.Table, error) {
-	table := eacl.NewTable()
+func policyToAst(bktPolicy *bucketPolicy) (*Ast, error) {
+	res := &Ast{}
 
-	for i := len(ast.Resources) - 1; i >= 0; i-- {
-		records, err := formRecords(ast.Resources[i])
-		if err != nil {
-			return nil, fmt.Errorf("form records: %w", err)
-		}
-
-		serviceRecord := ServiceRecord{
-			Resource:           ast.Resources[i].Name(),
-			GroupRecordsLength: len(records),
-		}
-		table.AddRecord(serviceRecord.ToEACLRecord())
-
-		for _, rec := range records {
-			table.AddRecord(rec)
-		}
-	}
-
-	return table, nil
-}
-
-func tryServiceRecord(record eacl.Record) *ServiceRecord {
-	if record.Action() != eacl.ActionAllow || record.Operation() != eacl.OperationGet ||
-		len(record.Targets()) != 1 || len(record.Filters()) != 2 {
-		return nil
-	}
-
-	target := record.Targets()[0]
-	if target.Role() != eacl.RoleSystem {
-		return nil
-	}
-
-	resourceFilter := record.Filters()[0]
-	recordsFilter := record.Filters()[1]
-	if resourceFilter.From() != eacl.HeaderFromService || recordsFilter.From() != eacl.HeaderFromService ||
-		resourceFilter.Matcher() != eacl.MatchUnknown || recordsFilter.Matcher() != eacl.MatchUnknown ||
-		resourceFilter.Key() != serviceRecordResourceKey || recordsFilter.Key() != serviceRecordGroupLengthKey {
-		return nil
-	}
-
-	groupLength, err := strconv.Atoi(recordsFilter.Value())
-	if err != nil {
-		return nil
-	}
-
-	return &ServiceRecord{
-		Resource:           resourceFilter.Value(),
-		GroupRecordsLength: groupLength,
-	}
-}
-
-func formRecords(resource *astResource) ([]*eacl.Record, error) {
-	var res []*eacl.Record
-
-	for i := len(resource.Operations) - 1; i >= 0; i-- {
-		astOp := resource.Operations[i]
-		record := eacl.NewRecord()
-		record.SetOperation(astOp.Op)
-		record.SetAction(astOp.Action)
-		if astOp.IsGroupGrantee() {
-			eacl.AddFormedTarget(record, eacl.RoleOthers)
-		} else {
-			targetKeys := make([]ecdsa.PublicKey, 0, len(astOp.Users))
-			for _, user := range astOp.Users {
-				pk, err := keys.NewPublicKeyFromString(user)
-				if err != nil {
-					return nil, fmt.Errorf("public key from string: %w", err)
-				}
-				targetKeys = append(targetKeys, (ecdsa.PublicKey)(*pk))
-			}
-			// Unknown role is used, because it is ignored when keys are set
-			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
-		}
-		if len(resource.Object) != 0 {
-			if len(resource.Version) != 0 {
-				var id oid.ID
-				if err := id.DecodeString(resource.Version); err != nil {
-					return nil, fmt.Errorf("parse object version (oid): %w", err)
-				}
-				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
-			} else {
-				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
-			}
-		}
-		res = append(res, record)
-	}
-
-	return res, nil
-}
-
-func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) []*astOperation {
-	var (
-		found       *astOperation
-		groupTarget = target.Role() == eacl.RoleOthers
-	)
-
-	for _, astOp := range operations {
-		if astOp.Op == rec.Operation() && astOp.IsGroupGrantee() == groupTarget {
-			found = astOp
-		}
-	}
-
-	if found != nil {
-		if !groupTarget {
-			for _, key := range target.BinaryKeys() {
-				found.Users = append(found.Users, hex.EncodeToString(key))
-			}
-		}
-	} else {
-		astOperation := &astOperation{
-			Op:     rec.Operation(),
-			Action: rec.Action(),
-		}
-		if !groupTarget {
-			for _, key := range target.BinaryKeys() {
-				astOperation.Users = append(astOperation.Users, hex.EncodeToString(key))
-			}
-		}
-
-		operations = append(operations, astOperation)
-	}
-
-	return operations
-}
-
-func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
-	res := &ast{}
-
-	rr := make(map[string]*astResource)
+	rr := make(map[string]*AstResource)
 
 	for _, state := range bktPolicy.Statement {
 		if state.Principal.AWS != "" && state.Principal.AWS != allUsersWildcard ||
@@ -1001,8 +758,8 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
 			r, ok := rr[trimmedResource]
 			if !ok {
-				r = &astResource{
-					resourceInfo: resourceInfoFromName(trimmedResource, bktPolicy.Bucket),
+				r = &AstResource{
+					ResourceInfo: ResourceInfoFromName(trimmedResource, bktPolicy.Bucket),
 				}
 			}
 			for _, action := range state.Action {
@@ -1023,8 +780,8 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 	return res, nil
 }
 
-func resourceInfoFromName(name, bucketName string) resourceInfo {
-	resInfo := resourceInfo{Bucket: bucketName}
+func ResourceInfoFromName(name, bucketName string) ResourceInfo {
+	resInfo := ResourceInfo{Bucket: bucketName}
 	if name != bucketName {
 		versionedObject := strings.TrimPrefix(name, bucketName+"/")
 		objVersion := strings.Split(versionedObject, ":")
@@ -1042,7 +799,7 @@ func resourceInfoFromName(name, bucketName string) resourceInfo {
 	return resInfo
 }
 
-func astToPolicy(ast *ast) *bucketPolicy {
+func astToPolicy(ast *Ast) *bucketPolicy {
 	bktPolicy := &bucketPolicy{}
 
 	for _, resource := range ast.Resources {
@@ -1057,7 +814,7 @@ func astToPolicy(ast *ast) *bucketPolicy {
 	return bktPolicy
 }
 
-func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eaclAction eacl.Action, resourceName string) {
+func handleResourceOperations(bktPolicy *bucketPolicy, list []*AstOperation, eaclAction eacl.Action, resourceName string) {
 	userOpsMap := make(map[string][]eacl.Operation)
 
 	for _, op := range list {
@@ -1068,9 +825,9 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 				userOpsMap[user] = userOps
 			}
 		} else {
-			userOps := userOpsMap[allUsersGroup]
+			userOps := userOpsMap[AllUsersGroup]
 			userOps = append(userOps, op.Op)
-			userOpsMap[allUsersGroup] = userOps
+			userOpsMap[AllUsersGroup] = userOps
 		}
 	}
 
@@ -1092,7 +849,7 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 				Action:    actions,
 				Resource:  []string{arnAwsPrefix + resourceName},
 			}
-			if user == allUsersGroup {
+			if user == AllUsersGroup {
 				state.Principal = principal{AWS: allUsersWildcard}
 			}
 			bktPolicy.Statement = append(bktPolicy.Statement, state)
@@ -1100,8 +857,8 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 	}
 }
 
-func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperation) {
-	var allowed, denied []*astOperation
+func triageOperations(operations []*AstOperation) ([]*AstOperation, []*AstOperation) {
+	var allowed, denied []*AstOperation
 	for _, op := range operations {
 		if op.Action == eacl.ActionAllow {
 			allowed = append(allowed, op)
@@ -1112,8 +869,8 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 	return allowed, denied
 }
 
-func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee bool, action eacl.Action) []*astOperation {
-	var found *astOperation
+func addTo(list []*AstOperation, userID string, op eacl.Operation, groupGrantee bool, action eacl.Action) []*AstOperation {
+	var found *AstOperation
 	for _, astop := range list {
 		if astop.Op == op && astop.IsGroupGrantee() == groupGrantee {
 			found = astop
@@ -1125,28 +882,28 @@ func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee 
 			found.Users = append(found.Users, userID)
 		}
 	} else {
-		astoperation := &astOperation{
+		AstOperation := &AstOperation{
 			Op:     op,
 			Action: action,
 		}
 		if !groupGrantee {
-			astoperation.Users = append(astoperation.Users, userID)
+			AstOperation.Users = append(AstOperation.Users, userID)
 		}
 
-		list = append(list, astoperation)
+		list = append(list, AstOperation)
 	}
 
 	return list
 }
 
-func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
-	res := &ast{}
+func aclToAst(acl *AccessControlPolicy, resInfo *ResourceInfo) (*Ast, error) {
+	res := &Ast{}
 
-	resource := &astResource{resourceInfo: *resInfo}
+	resource := &AstResource{ResourceInfo: *resInfo}
 
-	ops := readOps
+	ops := ReadOps
 	if resInfo.IsBucket() {
-		ops = append(ops, writeOps...)
+		ops = append(ops, WriteOps...)
 	}
 
 	// Expect to have at least 1 full control grant for owner which is set in
@@ -1154,7 +911,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 	// canned ACL, which is processed in this branch.
 	if len(acl.AccessControlList) < 2 {
 		for _, op := range ops {
-			operation := &astOperation{
+			operation := &AstOperation{
 				Op:     op,
 				Action: eacl.ActionDeny,
 			}
@@ -1163,7 +920,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 	}
 
 	for _, op := range ops {
-		operation := &astOperation{
+		operation := &AstOperation{
 			Users:  []string{acl.Owner.ID},
 			Op:     op,
 			Action: eacl.ActionAllow,
@@ -1172,12 +929,12 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 	}
 
 	for _, grant := range acl.AccessControlList {
-		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
+		if grant.Grantee.Type == AcpAmazonCustomerByEmail || (grant.Grantee.Type == AcpGroup && grant.Grantee.URI != AllUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		var groupGrantee bool
-		if grant.Grantee.Type == acpGroup {
+		if grant.Grantee.Type == AcpGroup {
 			groupGrantee = true
 		} else if grant.Grantee.ID == acl.Owner.ID {
 			continue
@@ -1190,33 +947,33 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 		}
 	}
 
-	res.Resources = []*astResource{resource}
+	res.Resources = []*AstResource{resource}
 	return res, nil
 }
 
-func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy, error) {
+func aclToPolicy(acl *AccessControlPolicy, resInfo *ResourceInfo) (*bucketPolicy, error) {
 	if resInfo.Bucket == "" {
 		return nil, fmt.Errorf("resource bucket must not be empty")
 	}
 
 	results := []statement{
-		getAllowStatement(resInfo, acl.Owner.ID, aclFullControl),
+		getAllowStatement(resInfo, acl.Owner.ID, ACLFullControl),
 	}
 
 	// Expect to have at least 1 full control grant for owner which is set in
 	// parseACLHeaders(). If there is no other grants, then user sets private
 	// canned ACL, which is processed in this branch.
 	if len(acl.AccessControlList) < 2 {
-		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, aclFullControl)}, results...)
+		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, ACLFullControl)}, results...)
 	}
 
 	for _, grant := range acl.AccessControlList {
-		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
+		if grant.Grantee.Type == AcpAmazonCustomerByEmail || (grant.Grantee.Type == AcpGroup && grant.Grantee.URI != AllUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		user := grant.Grantee.ID
-		if grant.Grantee.Type == acpGroup {
+		if grant.Grantee.Type == AcpGroup {
 			user = allUsersWildcard
 		} else if user == acl.Owner.ID {
 			continue
@@ -1230,7 +987,7 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 	}, nil
 }
 
-func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+func getAllowStatement(resInfo *ResourceInfo, id string, permission AWSACL) statement {
 	state := statement{
 		Effect: "Allow",
 		Principal: principal{
@@ -1247,7 +1004,7 @@ func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) stat
 	return state
 }
 
-func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+func getDenyStatement(resInfo *ResourceInfo, id string, permission AWSACL) statement {
 	state := statement{
 		Effect: "Deny",
 		Principal: principal{
@@ -1267,17 +1024,17 @@ func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) state
 func getActions(permission AWSACL, isBucket bool) []string {
 	var res []string
 	switch permission {
-	case aclRead:
+	case ACLRead:
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads}
 		} else {
 			res = []string{s3GetObject, s3GetObjectVersion}
 		}
-	case aclWrite:
+	case ACLWrite:
 		if isBucket {
 			res = []string{s3PutObject, s3DeleteObject}
 		}
-	case aclFullControl:
+	case ACLFullControl:
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads, s3PutObject, s3DeleteObject}
 		} else {
@@ -1309,18 +1066,6 @@ func actionToEffect(action eacl.Action) string {
 	}
 }
 
-func permissionToOperations(permission AWSACL) []eacl.Operation {
-	switch permission {
-	case aclFullControl:
-		return fullOps
-	case aclRead:
-		return readOps
-	case aclWrite:
-		return writeOps
-	}
-	return nil
-}
-
 func isWriteOperation(op eacl.Operation) bool {
 	return op == eacl.OperationDelete || op == eacl.OperationPut
 }
@@ -1335,7 +1080,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 
 	m := make(map[string][]eacl.Operation)
 
-	astList := tableToAst(bucketACL.EACL, bucketName)
+	astList := h.NeoFS.TableToAst(bucketACL.EACL, bucketName)
 
 	for _, resource := range astList.Resources {
 		if resource.Version != objectVersion {
@@ -1348,8 +1093,8 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 			}
 
 			if len(op.Users) == 0 {
-				list := append(m[allUsersGroup], op.Op)
-				m[allUsersGroup] = list
+				list := append(m[AllUsersGroup], op.Op)
+				m[AllUsersGroup] = list
 			} else {
 				for _, user := range op.Users {
 					list := append(m[user], op.Op)
@@ -1360,7 +1105,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 	}
 
 	for key, val := range m {
-		permission := aclFullControl
+		permission := ACLFullControl
 		read, write := true, true
 		for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
 			if !contains(val, op) {
@@ -1377,17 +1122,17 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 			continue
 		}
 		if !read {
-			permission = aclWrite
+			permission = ACLWrite
 		} else if !write {
-			permission = aclRead
+			permission = ACLRead
 		}
 
 		var grantee *Grantee
-		if key == allUsersGroup {
-			grantee = NewGrantee(acpGroup)
-			grantee.URI = allUsersGroup
+		if key == AllUsersGroup {
+			grantee = NewGrantee(AcpGroup)
+			grantee.URI = AllUsersGroup
 		} else {
-			grantee = NewGrantee(acpCanonicalUser)
+			grantee = NewGrantee(AcpCanonicalUser)
 			grantee.ID = key
 		}
 
@@ -1412,90 +1157,4 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 		}
 	}
 	return false
-}
-
-type getRecordFunc func(op eacl.Operation) *eacl.Record
-
-func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Table, error) {
-	if !resInfo.IsBucket() {
-		return nil, fmt.Errorf("allowed only bucket acl")
-	}
-
-	var found bool
-	table := eacl.NewTable()
-
-	ownerKey, err := keys.NewPublicKeyFromString(acp.Owner.ID)
-	if err != nil {
-		return nil, fmt.Errorf("public key from string: %w", err)
-	}
-
-	for _, grant := range acp.AccessControlList {
-		if !isValidGrant(grant) {
-			return nil, stderrors.New("unsupported grantee")
-		}
-		if grant.Grantee.ID == acp.Owner.ID {
-			found = true
-		}
-
-		getRecord, err := getRecordFunction(grant.Grantee)
-		if err != nil {
-			return nil, fmt.Errorf("record func from grantee: %w", err)
-		}
-		for _, op := range permissionToOperations(grant.Permission) {
-			table.AddRecord(getRecord(op))
-		}
-	}
-
-	if !found {
-		for _, op := range fullOps {
-			table.AddRecord(getAllowRecord(op, ownerKey))
-		}
-	}
-
-	for _, op := range fullOps {
-		table.AddRecord(getOthersRecord(op, eacl.ActionDeny))
-	}
-
-	return table, nil
-}
-
-func getRecordFunction(grantee *Grantee) (getRecordFunc, error) {
-	switch grantee.Type {
-	case acpAmazonCustomerByEmail:
-	case acpCanonicalUser:
-		pk, err := keys.NewPublicKeyFromString(grantee.ID)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't parse canonical ID %s: %w", grantee.ID, err)
-		}
-		return func(op eacl.Operation) *eacl.Record {
-			return getAllowRecord(op, pk)
-		}, nil
-	case acpGroup:
-		return func(op eacl.Operation) *eacl.Record {
-			return getOthersRecord(op, eacl.ActionAllow)
-		}, nil
-	}
-	return nil, fmt.Errorf("unknown type: %s", grantee.Type)
-}
-
-func isValidGrant(grant *Grant) bool {
-	return (grant.Permission == aclFullControl || grant.Permission == aclRead || grant.Permission == aclWrite) &&
-		(grant.Grantee.Type == acpCanonicalUser || (grant.Grantee.Type == acpGroup && grant.Grantee.URI == allUsersGroup))
-}
-
-func getAllowRecord(op eacl.Operation, pk *keys.PublicKey) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(eacl.ActionAllow)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record, eacl.RoleUnknown, (ecdsa.PublicKey)(*pk))
-	return record
-}
-
-func getOthersRecord(op eacl.Operation, action eacl.Action) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(action)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	return record
 }

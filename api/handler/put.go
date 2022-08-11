@@ -505,7 +505,7 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 		return nil, fmt.Errorf("could not parse object acl: %w", err)
 	}
 
-	resInfo := &resourceInfo{
+	resInfo := &ResourceInfo{
 		Bucket:  objInfo.Bucket,
 		Object:  objInfo.Name,
 		Version: objInfo.VersionID(),
@@ -526,7 +526,7 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 		return nil, fmt.Errorf("could not get bucket eacl: %w", err)
 	}
 
-	parentAst := tableToAst(bacl.EACL, objInfo.Bucket)
+	parentAst := h.NeoFS.TableToAst(bacl.EACL, objInfo.Bucket)
 	strCID := bacl.Info.CID.EncodeToString()
 
 	for _, resource := range parentAst.Resources {
@@ -535,8 +535,8 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 		}
 	}
 
-	if resAst, updated := mergeAst(parentAst, astChild); updated {
-		if newEaclTable, err = astToTable(resAst); err != nil {
+	if resAst, updated := MergeAst(parentAst, astChild); updated {
+		if newEaclTable, err = h.NeoFS.AstToTable(resAst); err != nil {
 			return nil, fmt.Errorf("could not translate ast to table: %w", err)
 		}
 	}
@@ -601,9 +601,9 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
 	}
-	resInfo := &resourceInfo{Bucket: reqInfo.BucketName}
+	resInfo := &ResourceInfo{Bucket: reqInfo.BucketName}
 
-	p.EACL, err = bucketACLToTable(bktACL, resInfo)
+	p.EACL, err = h.NeoFS.BucketACLToTable(bktACL, resInfo)
 	if err != nil {
 		h.logAndSendError(w, "could translate bucket acl to eacl", reqInfo, err)
 		return

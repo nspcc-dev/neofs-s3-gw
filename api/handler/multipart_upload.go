@@ -383,7 +383,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			return
 		}
 
-		resInfo := &resourceInfo{
+		resInfo := &ResourceInfo{
 			Bucket: objInfo.Bucket,
 			Object: objInfo.Name,
 		}

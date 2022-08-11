@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
@@ -468,6 +471,99 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 	}
 
 	return nil
+}
+
+func (x *NeoFS) AstToTable(ast *handler.Ast) (*eacl.Table, error) {
+	table := eacl.NewTable()
+
+	for i := len(ast.Resources) - 1; i >= 0; i-- {
+		records, err := formRecords(ast.Resources[i])
+		if err != nil {
+			return nil, fmt.Errorf("form records: %w", err)
+		}
+
+		serviceRecord := serviceRecord{
+			Resource:           ast.Resources[i].Name(),
+			GroupRecordsLength: len(records),
+		}
+		table.AddRecord(serviceRecord.ToEACLRecord())
+
+		for _, rec := range records {
+			table.AddRecord(rec)
+		}
+	}
+
+	return table, nil
+}
+
+func (x *NeoFS) TableToAst(table *eacl.Table, bktName string) *handler.Ast {
+	resourceMap := make(map[string]orderedAstResource)
+
+	var groupRecordsLeft int
+	var currentResource orderedAstResource
+	for i, record := range table.Records() {
+		if serviceRec := tryServiceRecord(record); serviceRec != nil {
+			resInfo := handler.ResourceInfoFromName(serviceRec.Resource, bktName)
+			groupRecordsLeft = serviceRec.GroupRecordsLength
+
+			currentResource = getResourceOrCreate(resourceMap, i, resInfo)
+			resourceMap[resInfo.Name()] = currentResource
+		} else if groupRecordsLeft != 0 {
+			groupRecordsLeft--
+			addOperationsAndUpdateMap(currentResource, record, resourceMap)
+		} else {
+			resInfo := resInfoFromFilters(bktName, record.Filters())
+			resource := getResourceOrCreate(resourceMap, i, resInfo)
+			addOperationsAndUpdateMap(resource, record, resourceMap)
+		}
+	}
+
+	return &handler.Ast{
+		Resources: formReverseOrderResources(resourceMap),
+	}
+}
+
+func (x *NeoFS) BucketACLToTable(acp *handler.AccessControlPolicy, resInfo *handler.ResourceInfo) (*eacl.Table, error) {
+	if !resInfo.IsBucket() {
+		return nil, fmt.Errorf("allowed only bucket acl")
+	}
+
+	var found bool
+	table := eacl.NewTable()
+
+	ownerKey, err := keys.NewPublicKeyFromString(acp.Owner.ID)
+	if err != nil {
+		return nil, fmt.Errorf("public key from string: %w", err)
+	}
+
+	for _, grant := range acp.AccessControlList {
+		if !isValidGrant(grant) {
+			return nil, stderrors.New("unsupported grantee")
+		}
+		if grant.Grantee.ID == acp.Owner.ID {
+			found = true
+		}
+
+		getRecord, err := getRecordFunction(grant.Grantee)
+		if err != nil {
+			return nil, fmt.Errorf("record func from grantee: %w", err)
+		}
+		for _, op := range permissionToOperations(grant.Permission) {
+			table.AddRecord(getRecord(op))
+		}
+	}
+
+	if !found {
+		for _, op := range handler.FullOps {
+			table.AddRecord(getAllowRecord(op, ownerKey))
+		}
+	}
+
+	for _, op := range handler.FullOps {
+		table.AddRecord(getOthersRecord(op, eacl.ActionDeny))
+	}
+
+	return table, nil
 }
 
 func isErrAccessDenied(err error) (string, bool) {
