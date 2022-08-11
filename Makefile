@@ -2,7 +2,7 @@
 
 # Common variables
 REPO ?= $(shell go list -m)
-VERSION ?= $(shell git describe --tags --dirty --always 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
+VERSION ?= $(shell git describe --tags --dirty --match "v*" --always 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 GO_VERSION ?= 1.17
 LINT_VERSION ?= 1.46.2
 BINDIR = bin
