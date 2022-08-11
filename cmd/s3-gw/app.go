@@ -392,10 +392,11 @@ func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
 
 func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 	var (
-		cfg           handler.Config
-		err           error
-		policyStr     = handler.DefaultPolicy
-		defaultMaxAge = handler.DefaultMaxAge
+		cfg             handler.Config
+		err             error
+		policyStr       = handler.DefaultPolicy
+		defaultMaxAge   = handler.DefaultMaxAge
+		setCopiesNumber = handler.DefaultCopiesNumber
 	)
 
 	if v.IsSet(cfgDefaultPolicy) {
@@ -417,9 +418,14 @@ func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
 		}
 	}
 
+	if val := v.GetUint32(cfgSetCopiesNumber); val > 0 {
+		setCopiesNumber = val
+	}
+
 	cfg.DefaultMaxAge = defaultMaxAge
 	cfg.NotificatorEnabled = v.GetBool(cfgEnableNATS)
 	cfg.TLSEnabled = v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile)
+	cfg.CopiesNumber = setCopiesNumber
 
 	return &cfg
 }

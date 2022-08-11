@@ -229,11 +229,12 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	prm := PrmObjectCreate{
-		Container:   p.BktInfo.CID,
-		Creator:     own,
-		PayloadSize: uint64(p.Size),
-		Filename:    p.Object,
-		Payload:     r,
+		Container:    p.BktInfo.CID,
+		Creator:      own,
+		PayloadSize:  uint64(p.Size),
+		Filename:     p.Object,
+		Payload:      r,
+		CopiesNumber: p.CopiesNumber,
 	}
 
 	prm.Attributes = make([][2]string, 0, len(p.Header))
@@ -254,13 +255,17 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	if p.Lock != nil && (p.Lock.Retention != nil || p.Lock.LegalHold != nil) {
-		objVersion := &ObjectVersion{
-			BktInfo:    p.BktInfo,
-			ObjectName: p.Object,
-			VersionID:  id.EncodeToString(),
+		prm := &PutLockInfoParams{
+			ObjVersion: &ObjectVersion{
+				BktInfo:    p.BktInfo,
+				ObjectName: p.Object,
+				VersionID:  id.EncodeToString(),
+			},
+			NewLock:      p.Lock,
+			CopiesNumber: p.CopiesNumber,
 		}
 
-		if err = n.PutLockInfo(ctx, objVersion, p.Lock); err != nil {
+		if err = n.PutLockInfo(ctx, prm); err != nil {
 			return nil, err
 		}
 	}

@@ -112,6 +112,10 @@ const ( // Settings.
 	cmdPProf   = "pprof"
 	cmdMetrics = "metrics"
 
+	// Configuration of parameters of requests to NeoFS.
+	// Number of the object copies to consider PUT to NeoFS successful.
+	cfgSetCopiesNumber = "neofs.set_copies_number"
+
 	// envPrefix is an environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
 )

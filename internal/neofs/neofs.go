@@ -259,6 +259,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	var prmPut pool.PrmObjectPut
 	prmPut.SetHeader(*obj)
 	prmPut.SetPayload(prm.Payload)
+	prmPut.SetCopiesNumber(prm.CopiesNumber)
 
 	if prm.BearerToken != nil {
 		prmPut.UseBearer(*prm.BearerToken)
