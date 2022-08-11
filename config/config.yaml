@@ -111,3 +111,9 @@ default_policy: REP 3
 # value of Access-Control-Max-Age header if this value is not set in a rule. Has an int type.
 cors:
   default_max_age: 600
+
+# Parameters of requests to NeoFS
+neofs:
+# Number of the object copies to consider PUT to NeoFS successful.
+# `0` means that object will be processed according to the container's placement policy
+  set_copies_number: 0
