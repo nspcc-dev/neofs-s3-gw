@@ -19,9 +19,18 @@ const (
 	AttributeExpirationEpoch = "__NEOFS__EXPIRATION_EPOCH"
 )
 
-func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newLock *data.ObjectLock) error {
-	cnrID := objVersion.BktInfo.CID
-	versionNode, err := n.getNodeVersion(ctx, objVersion)
+type PutLockInfoParams struct {
+	ObjVersion   *ObjectVersion
+	NewLock      *data.ObjectLock
+	CopiesNumber uint32
+}
+
+func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) error {
+	var (
+		cnrID   = p.ObjVersion.BktInfo.CID
+		newLock = p.NewLock
+	)
+	versionNode, err := n.getNodeVersion(ctx, p.ObjVersion)
 	if err != nil {
 		return err
 	}
@@ -56,7 +65,7 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 			}
 		}
 		lock := &data.ObjectLock{Retention: newLock.Retention}
-		retentionOID, err := n.putLockObject(ctx, objVersion.BktInfo, versionNode.OID, lock)
+		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
 		if err != nil {
 			return err
 		}
@@ -66,13 +75,13 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 	if newLock.LegalHold != nil {
 		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
 			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			legalHoldOID, err := n.putLockObject(ctx, objVersion.BktInfo, versionNode.OID, lock)
+			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
 			if err != nil {
 				return err
 			}
 			lockInfo.SetLegalHold(legalHoldOID)
 		} else if !newLock.LegalHold.Enabled && lockInfo.IsLegalHoldSet() {
-			if err = n.objectDelete(ctx, objVersion.BktInfo, lockInfo.LegalHold()); err != nil {
+			if err = n.objectDelete(ctx, p.ObjVersion.BktInfo, lockInfo.LegalHold()); err != nil {
 				return fmt.Errorf("couldn't delete lock object '%s' to remove legal hold: %w", lockInfo.LegalHold().EncodeToString(), err)
 			}
 			lockInfo.ResetLegalHold()
@@ -83,18 +92,19 @@ func (n *layer) PutLockInfo(ctx context.Context, objVersion *ObjectVersion, newL
 		return fmt.Errorf("couldn't put lock into tree: %w", err)
 	}
 
-	if err = n.systemCache.PutLockInfo(lockObjectKey(objVersion), lockInfo); err != nil {
+	if err = n.systemCache.PutLockInfo(lockObjectKey(p.ObjVersion), lockInfo); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 
 	return nil
 }
 
-func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock) (oid.ID, error) {
+func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32) (oid.ID, error) {
 	prm := PrmObjectCreate{
-		Container: bktInfo.CID,
-		Creator:   bktInfo.Owner,
-		Locks:     []oid.ID{objID},
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		Locks:        []oid.ID{objID},
+		CopiesNumber: copiesNumber,
 	}
 
 	var err error

@@ -56,18 +56,20 @@ type (
 	}
 
 	UploadPartParams struct {
-		Info       *UploadInfoParams
-		PartNumber int
-		Size       int64
-		Reader     io.Reader
+		Info         *UploadInfoParams
+		PartNumber   int
+		Size         int64
+		Reader       io.Reader
+		CopiesNumber uint32
 	}
 
 	UploadCopyParams struct {
-		Info       *UploadInfoParams
-		SrcObjInfo *data.ObjectInfo
-		SrcBktInfo *data.BucketInfo
-		PartNumber int
-		Range      *RangeParams
+		Info         *UploadInfoParams
+		SrcObjInfo   *data.ObjectInfo
+		SrcBktInfo   *data.BucketInfo
+		PartNumber   int
+		Range        *RangeParams
+		CopiesNumber uint32
 	}
 
 	CompleteMultipartParams struct {
@@ -199,10 +201,11 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	bktInfo := p.Info.Bkt
 	prm := PrmObjectCreate{
-		Container:  bktInfo.CID,
-		Creator:    bktInfo.Owner,
-		Attributes: make([][2]string, 2),
-		Payload:    p.Reader,
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		Attributes:   make([][2]string, 2),
+		Payload:      p.Reader,
+		CopiesNumber: p.CopiesNumber,
 	}
 
 	decSize := p.Size
@@ -298,10 +301,11 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	}()
 
 	params := &UploadPartParams{
-		Info:       p.Info,
-		PartNumber: p.PartNumber,
-		Size:       size,
-		Reader:     pr,
+		Info:         p.Info,
+		PartNumber:   p.PartNumber,
+		Size:         size,
+		Reader:       pr,
+		CopiesNumber: p.CopiesNumber,
 	}
 
 	return n.uploadPart(ctx, multipartInfo, params)

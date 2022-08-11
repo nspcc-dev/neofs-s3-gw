@@ -110,13 +110,14 @@ type (
 
 	// PutObjectParams stores object put request parameters.
 	PutObjectParams struct {
-		BktInfo    *data.BucketInfo
-		Object     string
-		Size       int64
-		Reader     io.Reader
-		Header     map[string]string
-		Lock       *data.ObjectLock
-		Encryption encryption.Params
+		BktInfo      *data.BucketInfo
+		Object       string
+		Size         int64
+		Reader       io.Reader
+		Header       map[string]string
+		Lock         *data.ObjectLock
+		Encryption   encryption.Params
+		CopiesNumber uint32
 	}
 
 	DeleteObjectParams struct {
@@ -133,8 +134,9 @@ type (
 
 	// PutCORSParams stores PutCORS request parameters.
 	PutCORSParams struct {
-		BktInfo *data.BucketInfo
-		Reader  io.Reader
+		BktInfo      *data.BucketInfo
+		Reader       io.Reader
+		CopiesNumber uint32
 	}
 
 	// CopyObjectParams stores object copy request parameters.
@@ -215,7 +217,7 @@ type (
 		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
 
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
-		PutLockInfo(ctx context.Context, p *ObjectVersion, lock *data.ObjectLock) error
+		PutLockInfo(ctx context.Context, p *PutLockInfoParams) error
 
 		GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[string]string, error)
 		PutBucketTagging(ctx context.Context, cnrID cid.ID, tagSet map[string]string) error

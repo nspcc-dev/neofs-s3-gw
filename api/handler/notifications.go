@@ -116,6 +116,7 @@ func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 		RequestInfo:   reqInfo,
 		BktInfo:       bktInfo,
 		Configuration: conf,
+		CopiesNumber:  h.cfg.CopiesNumber,
 	}
 
 	if err = h.obj.PutBucketNotificationConfiguration(r.Context(), p); err != nil {

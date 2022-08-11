@@ -215,9 +215,10 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
-		PartNumber: partNumber,
-		Size:       r.ContentLength,
-		Reader:     r.Body,
+		PartNumber:   partNumber,
+		Size:         r.ContentLength,
+		Reader:       r.Body,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
 	p.Info.Encryption, err = h.formEncryptionParams(r.Header)
@@ -315,10 +316,11 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
-		SrcObjInfo: srcInfo,
-		SrcBktInfo: srcBktInfo,
-		PartNumber: partNumber,
-		Range:      srcRange,
+		SrcObjInfo:   srcInfo,
+		SrcBktInfo:   srcBktInfo,
+		PartNumber:   partNumber,
+		Range:        srcRange,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
 	p.Info.Encryption, err = h.formEncryptionParams(r.Header)

@@ -16,6 +16,7 @@ type PutBucketNotificationConfigurationParams struct {
 	RequestInfo   *api.ReqInfo
 	BktInfo       *data.BucketInfo
 	Configuration *data.NotificationConfiguration
+	CopiesNumber  uint32
 }
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
@@ -27,10 +28,11 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 	sysName := p.BktInfo.NotificationConfigurationObjectName()
 
 	prm := PrmObjectCreate{
-		Container: p.BktInfo.CID,
-		Creator:   p.BktInfo.Owner,
-		Payload:   bytes.NewReader(confXML),
-		Filename:  sysName,
+		Container:    p.BktInfo.CID,
+		Creator:      p.BktInfo.Owner,
+		Payload:      bytes.NewReader(confXML),
+		Filename:     sysName,
+		CopiesNumber: p.CopiesNumber,
 	}
 
 	objID, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo)

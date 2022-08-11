@@ -129,18 +129,21 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
-	}
-	lock := &data.ObjectLock{
-		LegalHold: &data.LegalHoldLock{
-			Enabled: legalHold.Status == legalHoldOn,
+	p := &layer.PutLockInfoParams{
+		ObjVersion: &layer.ObjectVersion{
+			BktInfo:    bktInfo,
+			ObjectName: reqInfo.ObjectName,
+			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 		},
+		NewLock: &data.ObjectLock{
+			LegalHold: &data.LegalHoldLock{
+				Enabled: legalHold.Status == legalHoldOn,
+			},
+		},
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
-	if err = h.obj.PutLockInfo(r.Context(), p, lock); err != nil {
+	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't head put legal hold", reqInfo, err)
 		return
 	}
@@ -209,13 +212,17 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+	p := &layer.PutLockInfoParams{
+		ObjVersion: &layer.ObjectVersion{
+			BktInfo:    bktInfo,
+			ObjectName: reqInfo.ObjectName,
+			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+		},
+		NewLock:      lock,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
-	if err = h.obj.PutLockInfo(r.Context(), p, lock); err != nil {
+	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
 		return
 	}

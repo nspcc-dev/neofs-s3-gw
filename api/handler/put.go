@@ -219,12 +219,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := &layer.PutObjectParams{
-		BktInfo:    bktInfo,
-		Object:     reqInfo.ObjectName,
-		Reader:     r.Body,
-		Size:       r.ContentLength,
-		Header:     metadata,
-		Encryption: encryption,
+		BktInfo:      bktInfo,
+		Object:       reqInfo.ObjectName,
+		Reader:       r.Body,
+		Size:         r.ContentLength,
+		Header:       metadata,
+		Encryption:   encryption,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
