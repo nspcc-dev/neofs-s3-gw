@@ -58,7 +58,7 @@ func getDecrypter(t *testing.T) *Decrypter {
 
 	return &Decrypter{
 		parts:      parts,
-		encryption: params,
+		encryption: *params,
 	}
 }
 

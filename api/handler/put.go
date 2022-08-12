@@ -334,7 +334,12 @@ func (h handler) formEncryptionParams(header http.Header) (enc encryption.Params
 		return enc, errors.GetAPIError(errors.ErrSSECustomerKeyMD5Mismatch)
 	}
 
-	return encryption.NewParams(key)
+	params, err := encryption.NewParams(key)
+	if err == nil {
+		enc = *params
+	}
+
+	return enc, err
 }
 
 func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {

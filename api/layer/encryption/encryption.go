@@ -15,7 +15,6 @@ import (
 
 // Params contains encryption key info.
 type Params struct {
-	enabled     bool
 	customerKey []byte
 }
 
@@ -66,25 +65,24 @@ const (
 )
 
 // NewParams creates new params to encrypt with provided key.
-func NewParams(key []byte) (Params, error) {
-	var p Params
+func NewParams(key []byte) (*Params, error) {
 	if len(key) != aes256KeySize {
-		return p, fmt.Errorf("invalid key size: %d", len(key))
+		return nil, fmt.Errorf("invalid key size: %d", len(key))
 	}
-	p.enabled = true
+	var p Params
 	p.customerKey = make([]byte, aes256KeySize)
 	copy(p.customerKey, key)
-	return p, nil
+	return &p, nil
 }
 
-// Key returns encryption key as slice.
+// Key returns encryption key.
 func (p Params) Key() []byte {
-	return p.customerKey[:]
+	return p.customerKey
 }
 
 // Enabled returns true if key isn't empty.
 func (p Params) Enabled() bool {
-	return p.enabled
+	return len(p.customerKey) > 0
 }
 
 // HMAC computes salted HMAC.
