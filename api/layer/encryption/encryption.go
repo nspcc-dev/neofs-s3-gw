@@ -54,8 +54,8 @@ type Decrypter struct {
 	decLen    uint64
 	skipLen   uint64
 
-	ln  uint64
-	off uint64
+	length uint64
+	offset uint64
 }
 
 const (
@@ -197,12 +197,12 @@ func (d Decrypter) DecryptedLength() uint64 {
 
 // EncryptedLength is size of encrypted data that should be read for successful decryption.
 func (d Decrypter) EncryptedLength() uint64 {
-	return d.ln
+	return d.length
 }
 
 // EncryptedOffset is offset of encrypted payload for successful decryption.
 func (d Decrypter) EncryptedOffset() uint64 {
-	return d.off
+	return d.offset
 }
 
 func (d *Decrypter) initRangeParams() {
@@ -210,7 +210,7 @@ func (d *Decrypter) initRangeParams() {
 	d.encPartRangeLen = d.parts[d.currentPart].encryptedSize
 	if d.rangeParam == nil {
 		d.decLen = d.partDataRemain
-		d.ln = d.encPartRangeLen
+		d.length = d.encPartRangeLen
 		return
 	}
 
@@ -230,7 +230,7 @@ func (d *Decrypter) initRangeParams() {
 	d.skipLen = (start - sum) % blockSize
 	d.seqNumber = (start - sum) / blockSize
 	encOffPart := d.seqNumber * fullBlockSize
-	d.off = encSum + encOffPart
+	d.offset = encSum + encOffPart
 	d.encPartRangeLen = d.encPartRangeLen - encOffPart
 	d.partDataRemain = d.partDataRemain + sum - start
 
@@ -252,11 +252,11 @@ func (d *Decrypter) initRangeParams() {
 	if endPartEnc < endEnc {
 		endEnc = endPartEnc
 	}
-	d.ln = endEnc - d.off
+	d.length = endEnc - d.offset
 	d.decLen = end - start + 1
 
-	if d.ln < d.encPartRangeLen {
-		d.encPartRangeLen = d.ln
+	if d.length < d.encPartRangeLen {
+		d.encPartRangeLen = d.length
 	}
 	if d.decLen < d.partDataRemain {
 		d.partDataRemain = d.decLen
