@@ -216,7 +216,7 @@ func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectP
 	for i, p := range partInfos {
 		part, err := layer.ParseCompletedPartHeader(p)
 		if err != nil {
-			return nil, fmt.Errorf("invalid competed part: %w", err)
+			return nil, fmt.Errorf("invalid completed part: %w", err)
 		}
 		parts[i] = Part{
 			PartNumber:     part.PartNumber,
