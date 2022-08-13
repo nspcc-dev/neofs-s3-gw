@@ -121,30 +121,6 @@ func addEncryptionHeaders(meta map[string]string, enc encryption.Params) error {
 	return nil
 }
 
-// processObjectInfoName fixes name in objectInfo structure based on prefix and
-// delimiter from user request. If name does not contain prefix, nil value is
-// returned. If name should be modified, then function returns copy of objectInfo
-// structure.
-func processObjectInfoName(oi *data.ObjectInfo, prefix, delimiter string) *data.ObjectInfo {
-	if !strings.HasPrefix(oi.Name, prefix) {
-		return nil
-	}
-	if len(delimiter) == 0 {
-		return oi
-	}
-	copiedObjInfo := *oi
-	tail := strings.TrimPrefix(copiedObjInfo.Name, prefix)
-	index := strings.Index(tail, delimiter)
-	if index >= 0 {
-		copiedObjInfo.IsDir = true
-		copiedObjInfo.Size = 0
-		copiedObjInfo.Headers = nil
-		copiedObjInfo.ContentType = ""
-		copiedObjInfo.Name = prefix + tail[:index+1]
-	}
-	return &copiedObjInfo
-}
-
 func filenameFromObject(o *object.Object) string {
 	for _, attr := range o.Attributes() {
 		if attr.Key() == object.AttributeFileName {

@@ -87,11 +87,11 @@ func TestS3CompatibilityBucketListV2BothContinuationTokenStartAfter(t *testing.T
 		createTestObject(tc.Context(), t, tc, bktInfo, objName)
 	}
 
-	listV2Response1 := listObjectsV2(t, tc, bktName, "bar", "", 1)
+	listV2Response1 := listObjectsV2(t, tc, bktName, "", "", "bar", "", 1)
 	nextContinuationToken := listV2Response1.NextContinuationToken
 	require.Equal(t, "baz", listV2Response1.Contents[0].Key)
 
-	listV2Response2 := listObjectsV2(t, tc, bktName, "bar", nextContinuationToken, -1)
+	listV2Response2 := listObjectsV2(t, tc, bktName, "", "", "bar", nextContinuationToken, -1)
 
 	require.Equal(t, nextContinuationToken, listV2Response2.ContinuationToken)
 	require.Equal(t, "bar", listV2Response2.StartAfter)
@@ -101,22 +101,68 @@ func TestS3CompatibilityBucketListV2BothContinuationTokenStartAfter(t *testing.T
 	require.Equal(t, "quxx", listV2Response2.Contents[1].Key)
 }
 
-func listObjectsV2(t *testing.T, tc *handlerContext, bktName, startAfter, continuationToken string, maxKeys int) *ListObjectsV2Response {
-	query := make(url.Values)
+func TestS3BucketListDelimiterBasic(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName := "bucket-for-listing"
+	objects := []string{"foo/bar", "foo/bar/xyzzy", "quux/thud", "asdf"}
+	bktInfo, _ := createBucketAndObject(t, tc, bktName, objects[0])
+
+	for _, objName := range objects[1:] {
+		createTestObject(tc.Context(), t, tc, bktInfo, objName)
+	}
+
+	listV1Response := listObjectsV1(t, tc, bktName, "", "/", "", -1)
+	require.Equal(t, "/", listV1Response.Delimiter)
+	require.Equal(t, "asdf", listV1Response.Contents[0].Key)
+	require.Len(t, listV1Response.CommonPrefixes, 2)
+	require.Equal(t, "foo/", listV1Response.CommonPrefixes[0].Prefix)
+	require.Equal(t, "quux/", listV1Response.CommonPrefixes[1].Prefix)
+}
+
+func listObjectsV2(t *testing.T, tc *handlerContext, bktName, prefix, delimiter, startAfter, continuationToken string, maxKeys int) *ListObjectsV2Response {
+	query := prepareCommonListObjectsQuery(prefix, delimiter, maxKeys)
 	if len(startAfter) != 0 {
 		query.Add("start-after", startAfter)
 	}
 	if len(continuationToken) != 0 {
 		query.Add("continuation-token", continuationToken)
 	}
-	if maxKeys != -1 {
-		query.Add("max-keys", strconv.Itoa(maxKeys))
-	}
 
 	w, r := prepareTestFullRequest(t, bktName, "", query, nil)
 	tc.Handler().ListObjectsV2Handler(w, r)
 	assertStatus(t, w, http.StatusOK)
 	res := &ListObjectsV2Response{}
+	parseTestResponse(t, w, res)
+	return res
+}
+
+func prepareCommonListObjectsQuery(prefix, delimiter string, maxKeys int) url.Values {
+	query := make(url.Values)
+
+	if len(delimiter) != 0 {
+		query.Add("delimiter", delimiter)
+	}
+	if len(prefix) != 0 {
+		query.Add("prefix", prefix)
+	}
+	if maxKeys != -1 {
+		query.Add("max-keys", strconv.Itoa(maxKeys))
+	}
+
+	return query
+}
+
+func listObjectsV1(t *testing.T, tc *handlerContext, bktName, prefix, delimiter, marker string, maxKeys int) *ListObjectsV1Response {
+	query := prepareCommonListObjectsQuery(prefix, delimiter, maxKeys)
+	if len(marker) != 0 {
+		query.Add("marker", marker)
+	}
+
+	w, r := prepareTestFullRequest(t, bktName, "", query, nil)
+	tc.Handler().ListObjectsV1Handler(w, r)
+	assertStatus(t, w, http.StatusOK)
+	res := &ListObjectsV1Response{}
 	parseTestResponse(t, w, res)
 	return res
 }
