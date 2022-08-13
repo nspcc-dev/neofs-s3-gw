@@ -682,19 +682,19 @@ func IsSystemHeader(key string) bool {
 }
 
 func shouldSkip(node *data.NodeVersion, p allObjectParams, existed map[string]struct{}) bool {
-	filepath := node.FilePath
-	if len(p.Delimiter) > 0 {
-		tail := strings.TrimPrefix(filepath, p.Prefix)
-		index := strings.Index(tail, p.Delimiter)
-		if index >= 0 {
-			filepath = p.Prefix + tail[:index+1]
-		}
-	}
-	if _, ok := existed[filepath]; ok {
+	if node.IsDeleteMarker() {
 		return true
 	}
 
-	if filepath <= p.Marker {
+	filePath := node.FilePath
+	if dirName := tryDirectoryName(node, p.Prefix, p.Delimiter); len(dirName) != 0 {
+		filePath = dirName
+	}
+	if _, ok := existed[filePath]; ok {
+		return true
+	}
+
+	if filePath <= p.Marker {
 		return true
 	}
 
@@ -707,7 +707,7 @@ func shouldSkip(node *data.NodeVersion, p allObjectParams, existed map[string]st
 		}
 	}
 
-	existed[filepath] = struct{}{}
+	existed[filePath] = struct{}{}
 	return false
 }
 
@@ -736,6 +736,10 @@ func triageExtendedObjects(allObjects []*data.ExtendedObjectInfo) (prefixes []st
 }
 
 func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, delimiter string) (oi *data.ObjectInfo) {
+	if oiDir := tryDirectory(bktInfo, node, prefix, delimiter); oiDir != nil {
+		return oiDir
+	}
+
 	extObjInfo := n.objCache.GetObject(newAddress(bktInfo.CID, node.OID))
 	if extObjInfo != nil {
 		return extObjInfo.ObjectInfo
@@ -753,6 +757,38 @@ func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *
 	}
 
 	return processObjectInfoName(oi, prefix, delimiter)
+}
+
+func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, delimiter string) *data.ObjectInfo {
+	dirName := tryDirectoryName(node, prefix, delimiter)
+	if len(dirName) == 0 {
+		return nil
+	}
+
+	return &data.ObjectInfo{
+		CID:            bktInfo.CID,
+		IsDir:          true,
+		IsDeleteMarker: node.IsDeleteMarker(),
+		Bucket:         bktInfo.Name,
+		Name:           dirName,
+	}
+}
+
+// tryDirectoryName forms directory name by prefix and delimiter.
+// If node isn't a directory empty string is returned.
+// This function doesn't check if node has a prefix. It must do a caller.
+func tryDirectoryName(node *data.NodeVersion, prefix, delimiter string) string {
+	if len(delimiter) == 0 {
+		return ""
+	}
+
+	tail := strings.TrimPrefix(node.FilePath, prefix)
+	index := strings.Index(tail, delimiter)
+	if index >= 0 {
+		return prefix + tail[:index+1]
+	}
+
+	return ""
 }
 
 func (n *layer) transformNeofsError(ctx context.Context, err error) error {
