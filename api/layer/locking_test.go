@@ -18,22 +18,24 @@ func TestObjectLockAttributes(t *testing.T) {
 
 	obj := tc.putObject([]byte("content obj1 v1"))
 
-	p := &ObjectVersion{
-		BktInfo:    tc.bktInfo,
-		ObjectName: obj.Name,
-		VersionID:  obj.VersionID(),
-	}
-
-	lock := &data.ObjectLock{
-		Retention: &data.RetentionLock{
-			Until: time.Now(),
+	p := &PutLockInfoParams{
+		ObjVersion: &ObjectVersion{
+			BktInfo:    tc.bktInfo,
+			ObjectName: obj.Name,
+			VersionID:  obj.VersionID(),
 		},
+		NewLock: &data.ObjectLock{
+			Retention: &data.RetentionLock{
+				Until: time.Now(),
+			},
+		},
+		CopiesNumber: 0,
 	}
 
-	err = tc.layer.PutLockInfo(tc.ctx, p, lock)
+	err = tc.layer.PutLockInfo(tc.ctx, p)
 	require.NoError(t, err)
 
-	foundLock, err := tc.layer.GetLockInfo(tc.ctx, p)
+	foundLock, err := tc.layer.GetLockInfo(tc.ctx, p.ObjVersion)
 	require.NoError(t, err)
 
 	lockObj := tc.getObjectByID(foundLock.Retention())
