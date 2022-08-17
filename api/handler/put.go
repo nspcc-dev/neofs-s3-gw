@@ -212,6 +212,12 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		metadata[api.Expires] = expires
 	}
 
+	copiesNumber, err := getCopiesNumberOrDefault(metadata, h.cfg.CopiesNumber)
+	if err != nil {
+		h.logAndSendError(w, "invalid copies number", reqInfo, err)
+		return
+	}
+
 	encryption, err := h.formEncryptionParams(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
@@ -225,7 +231,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Size:         r.ContentLength,
 		Header:       metadata,
 		Encryption:   encryption,
-		CopiesNumber: h.cfg.CopiesNumber,
+		CopiesNumber: copiesNumber,
 	}
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
@@ -297,6 +303,20 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(api.ETag, info.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func getCopiesNumberOrDefault(metadata map[string]string, defaultCopiesNumber uint32) (uint32, error) {
+	copiesNumberStr, ok := metadata[layer.AttributeNeofsCopiesNumber]
+	if !ok {
+		return defaultCopiesNumber, nil
+	}
+
+	copiesNumber, err := strconv.ParseUint(copiesNumberStr, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("pasrse copies number: %w", err)
+	}
+
+	return uint32(copiesNumber), nil
 }
 
 func (h handler) formEncryptionParams(header http.Header) (enc encryption.Params, err error) {

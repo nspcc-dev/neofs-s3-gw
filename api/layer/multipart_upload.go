@@ -45,9 +45,10 @@ type (
 	}
 
 	CreateMultipartParams struct {
-		Info   *UploadInfoParams
-		Header map[string]string
-		Data   *UploadData
+		Info         *UploadInfoParams
+		Header       map[string]string
+		Data         *UploadData
+		CopiesNumber uint32
 	}
 
 	UploadData struct {
@@ -56,20 +57,18 @@ type (
 	}
 
 	UploadPartParams struct {
-		Info         *UploadInfoParams
-		PartNumber   int
-		Size         int64
-		Reader       io.Reader
-		CopiesNumber uint32
+		Info       *UploadInfoParams
+		PartNumber int
+		Size       int64
+		Reader     io.Reader
 	}
 
 	UploadCopyParams struct {
-		Info         *UploadInfoParams
-		SrcObjInfo   *data.ObjectInfo
-		SrcBktInfo   *data.BucketInfo
-		PartNumber   int
-		Range        *RangeParams
-		CopiesNumber uint32
+		Info       *UploadInfoParams
+		SrcObjInfo *data.ObjectInfo
+		SrcBktInfo *data.BucketInfo
+		PartNumber int
+		Range      *RangeParams
 	}
 
 	CompleteMultipartParams struct {
@@ -141,11 +140,12 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 	}
 
 	info := &data.MultipartInfo{
-		Key:      p.Info.Key,
-		UploadID: p.Info.UploadID,
-		Owner:    n.Owner(ctx),
-		Created:  time.Now(),
-		Meta:     make(map[string]string, metaSize),
+		Key:          p.Info.Key,
+		UploadID:     p.Info.UploadID,
+		Owner:        n.Owner(ctx),
+		Created:      time.Now(),
+		Meta:         make(map[string]string, metaSize),
+		CopiesNumber: p.CopiesNumber,
 	}
 
 	for key, val := range p.Header {
@@ -205,7 +205,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Creator:      bktInfo.Owner,
 		Attributes:   make([][2]string, 2),
 		Payload:      p.Reader,
-		CopiesNumber: p.CopiesNumber,
+		CopiesNumber: multipartInfo.CopiesNumber,
 	}
 
 	decSize := p.Size
@@ -301,11 +301,10 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	}()
 
 	params := &UploadPartParams{
-		Info:         p.Info,
-		PartNumber:   p.PartNumber,
-		Size:         size,
-		Reader:       pr,
-		CopiesNumber: p.CopiesNumber,
+		Info:       p.Info,
+		PartNumber: p.PartNumber,
+		Size:       size,
+		Reader:     pr,
 	}
 
 	return n.uploadPart(ctx, multipartInfo, params)
@@ -435,12 +434,13 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	r.prm.bktInfo = p.Info.Bkt
 
 	obj, err := n.PutObject(ctx, &PutObjectParams{
-		BktInfo:    p.Info.Bkt,
-		Object:     p.Info.Key,
-		Reader:     r,
-		Header:     initMetadata,
-		Size:       multipartObjetSize,
-		Encryption: p.Info.Encryption,
+		BktInfo:      p.Info.Bkt,
+		Object:       p.Info.Key,
+		Reader:       r,
+		Header:       initMetadata,
+		Size:         multipartObjetSize,
+		Encryption:   p.Info.Encryption,
+		CopiesNumber: multipartInfo.CopiesNumber,
 	})
 	if err != nil {
 		n.log.Error("could not put a completed object (multipart upload)",
