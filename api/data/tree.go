@@ -67,12 +67,13 @@ type ObjectTaggingInfo struct {
 type MultipartInfo struct {
 	// ID is node id in tree service.
 	// It's ignored when creating a new multipart upload.
-	ID       uint64
-	Key      string
-	UploadID string
-	Owner    user.ID
-	Created  time.Time
-	Meta     map[string]string
+	ID           uint64
+	Key          string
+	UploadID     string
+	Owner        user.ID
+	Created      time.Time
+	Meta         map[string]string
+	CopiesNumber uint32
 }
 
 // PartInfo is upload information about part.

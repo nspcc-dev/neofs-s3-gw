@@ -141,15 +141,16 @@ type (
 
 	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
-		SrcObject  *data.ObjectInfo
-		ScrBktInfo *data.BucketInfo
-		DstBktInfo *data.BucketInfo
-		DstObject  string
-		SrcSize    int64
-		Header     map[string]string
-		Range      *RangeParams
-		Lock       *data.ObjectLock
-		Encryption encryption.Params
+		SrcObject   *data.ObjectInfo
+		ScrBktInfo  *data.BucketInfo
+		DstBktInfo  *data.BucketInfo
+		DstObject   string
+		SrcSize     int64
+		Header      map[string]string
+		Range       *RangeParams
+		Lock        *data.ObjectLock
+		Encryption  encryption.Params
+		CopiesNuber uint32
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
@@ -264,6 +265,8 @@ const (
 	AttributeDecryptedSize       = api.NeoFSSystemMetadataPrefix + "Decrypted-Size"
 	AttributeHMACSalt            = api.NeoFSSystemMetadataPrefix + "HMAC-Salt"
 	AttributeHMACKey             = api.NeoFSSystemMetadataPrefix + "HMAC-Key"
+
+	AttributeNeofsCopiesNumber = "neofs-copies-number" // such formate to match X-Amz-Meta-Neofs-Copies-Number header
 )
 
 func (t *VersionedObject) String() string {
@@ -519,12 +522,13 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Obje
 	}()
 
 	return n.PutObject(ctx, &PutObjectParams{
-		BktInfo:    p.DstBktInfo,
-		Object:     p.DstObject,
-		Size:       p.SrcSize,
-		Reader:     pr,
-		Header:     p.Header,
-		Encryption: p.Encryption,
+		BktInfo:      p.DstBktInfo,
+		Object:       p.DstObject,
+		Size:         p.SrcSize,
+		Reader:       pr,
+		Header:       p.Header,
+		Encryption:   p.Encryption,
+		CopiesNumber: p.CopiesNuber,
 	})
 }
 

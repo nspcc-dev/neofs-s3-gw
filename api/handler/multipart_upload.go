@@ -148,6 +148,12 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		p.Header[api.ContentType] = contentType
 	}
 
+	p.CopiesNumber, err = getCopiesNumberOrDefault(p.Header, h.cfg.CopiesNumber)
+	if err != nil {
+		h.logAndSendError(w, "invalid copies number", reqInfo, err)
+		return
+	}
+
 	if err = h.obj.CreateMultipartUpload(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could create multipart upload", reqInfo, err, additional...)
 		return
@@ -215,10 +221,9 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
-		PartNumber:   partNumber,
-		Size:         r.ContentLength,
-		Reader:       r.Body,
-		CopiesNumber: h.cfg.CopiesNumber,
+		PartNumber: partNumber,
+		Size:       r.ContentLength,
+		Reader:     r.Body,
 	}
 
 	p.Info.Encryption, err = h.formEncryptionParams(r.Header)
@@ -316,11 +321,10 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
-		SrcObjInfo:   srcInfo,
-		SrcBktInfo:   srcBktInfo,
-		PartNumber:   partNumber,
-		Range:        srcRange,
-		CopiesNumber: h.cfg.CopiesNumber,
+		SrcObjInfo: srcInfo,
+		SrcBktInfo: srcBktInfo,
+		PartNumber: partNumber,
+		Range:      srcRange,
 	}
 
 	p.Info.Encryption, err = h.formEncryptionParams(r.Header)

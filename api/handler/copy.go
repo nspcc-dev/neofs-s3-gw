@@ -121,14 +121,21 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		metadata[api.ContentType] = contentType
 	}
 
+	copiesNumber, err := getCopiesNumberOrDefault(metadata, h.cfg.CopiesNumber)
+	if err != nil {
+		h.logAndSendError(w, "invalid copies number", reqInfo, err)
+		return
+	}
+
 	params := &layer.CopyObjectParams{
-		SrcObject:  objInfo,
-		ScrBktInfo: p.BktInfo,
-		DstBktInfo: dstBktInfo,
-		DstObject:  reqInfo.ObjectName,
-		SrcSize:    objInfo.Size,
-		Header:     metadata,
-		Encryption: encryptionParams,
+		SrcObject:   objInfo,
+		ScrBktInfo:  p.BktInfo,
+		DstBktInfo:  dstBktInfo,
+		DstObject:   reqInfo.ObjectName,
+		SrcSize:     objInfo.Size,
+		Header:      metadata,
+		Encryption:  encryptionParams,
+		CopiesNuber: copiesNumber,
 	}
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
