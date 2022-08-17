@@ -368,7 +368,8 @@ prometheus:
 
 # `neofs` section
 
-Contains parameters of requests to NeoFS.
+Contains parameters of requests to NeoFS. 
+This value can be overridden with `X-Amz-Meta-Neofs-Copies-Number` header for `PutObject`, `CopyObject`, `CreateMultipartUpload`.
 
 ```yaml
 neofs:
