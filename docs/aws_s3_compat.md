@@ -42,14 +42,18 @@ For now there are some limitations:
 
 ## Locking
 
-|    | Method                     | Comments                  |
-|----|----------------------------|---------------------------|
-| 🟢 | GetObjectLegalHold         |                           |
-| 🟢 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
-| 🟢 | GetObjectRetention         |                           |
-| 🟢 | PutObjectLegalHold         |                           |
-| 🟢 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
-| 🟢 | PutObjectRetention         |                           |
+For now there are some limitations:
+* Retention period can't be shortened, only extended.
+* You can't delete locks or object with unexpired lock.
+
+|     | Method                     | Comments                  |
+|-----|----------------------------|---------------------------|
+| 🟡  | GetObjectLegalHold         |                           |
+| 🟢  | GetObjectLockConfiguration | GetBucketObjectLockConfig |
+| 🟡  | GetObjectRetention         |                           |
+| 🟡  | PutObjectLegalHold         |                           |
+| 🟢  | PutObjectLockConfiguration | PutBucketObjectLockConfig |
+| 🟡  | PutObjectRetention         |                           |
 
 ## Multipart
 

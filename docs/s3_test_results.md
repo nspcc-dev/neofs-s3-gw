@@ -306,37 +306,37 @@ Compatibility:  3/3/10 out of 19
 
 Compatibility:  4/5/29 out of 29
 
-|    | Test                                                                                           | s3-gw | minio | aws s3 |
-|----|------------------------------------------------------------------------------------------------|-------|-------|--------|
-| 1  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock                                 | ok    | ERROR | ok     |
-| 2  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_bucket                  | ok    | FAIL  | ok     |
-| 3  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_with_days_and_years             | FAIL  | ERROR | ok     |
-| 4  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_days                    | FAIL  | ERROR | FAIL   |
-| 5  | s3tests_boto3.functional.test_s3.test_object_lock_uploading_obj                                | ERROR | ERROR | ok     |
-| 6  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_years                   | FAIL  | ERROR | ok     |
-| 7  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_status                  | FAIL  | ERROR | ok     |
-| 8  | s3tests_boto3.functional.test_s3.test_object_lock_suspend_versioning                           | FAIL  | ERROR | ok     |
-| 9  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock                                 | FAIL  | ERROR | ok     |
-| 10 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock_invalid_bucket                  | ok    | ok    | ok     |
-| 11 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention                            | ERROR | ERROR | ok     |
-| 12 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_invalid_bucket             | FAIL  | ok    | ok     |
-| 13 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_invalid_mode               | FAIL  | ERROR | ok     |
-| 14 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention                            | ERROR | ERROR | ok     |
-| 15 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention_invalid_bucket             | FAIL  | ok    | ok     |
-| 16 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_versionid                  | ERROR | ERROR | ok     |
-| 17 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_override_default_retention | ERROR | ERROR | ok     |
-| 18 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_increase_period            | ERROR | ERROR | ok     |
-| 19 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period             | FAIL  | ERROR | ok     |
-| 20 | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period_bypass      | ERROR | ERROR | ok     |
-| 21 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_retention                 | ERROR | ERROR | ok     |
-| 22 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold                               | ERROR | ERROR | ok     |
-| 23 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold_invalid_bucket                | FAIL  | ok    | ok     |
-| 24 | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold_invalid_status                | FAIL  | ERROR | ok     |
-| 25 | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold                               | ERROR | ERROR | ok     |
-| 26 | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold_invalid_bucket                | FAIL  | ok    | ok     |
-| 27 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_on             | ERROR | ERROR | ok     |
-| 28 | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_off            | ok    | ERROR | ok     |
-| 29 | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_metadata                             | ERROR | ERROR | ok     |
+|     | Test                                                                                           | s3-gw | minio | aws s3 |
+|-----|------------------------------------------------------------------------------------------------|-------|-------|--------|
+| 1   | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock                                 | ok    | ERROR | ok     |
+| 2   | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_bucket                  | ok    | FAIL  | ok     |
+| 3   | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_with_days_and_years             | FAIL  | ERROR | ok     |
+| 4   | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_days                    | FAIL  | ERROR | FAIL   |
+| 5   | s3tests_boto3.functional.test_s3.test_object_lock_uploading_obj                                | ERROR | ERROR | ok     |
+| 6   | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_years                   | FAIL  | ERROR | ok     |
+| 7   | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_lock_invalid_status                  | FAIL  | ERROR | ok     |
+| 8   | s3tests_boto3.functional.test_s3.test_object_lock_suspend_versioning                           | FAIL  | ERROR | ok     |
+| 9   | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock                                 | FAIL  | ERROR | ok     |
+| 10  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_lock_invalid_bucket                  | ok    | ok    | ok     |
+| 11  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention                            | ERROR | ERROR | ok     |
+| 12  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_invalid_bucket             | FAIL  | ok    | ok     |
+| 13  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_invalid_mode               | FAIL  | ERROR | ok     |
+| 14  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention                            | ERROR | ERROR | ok     |
+| 15  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_retention_invalid_bucket             | FAIL  | ok    | ok     |
+| 16  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_versionid                  | ERROR | ERROR | ok     |
+| 17  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_override_default_retention | ERROR | ERROR | ok     |
+| 18  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_increase_period            | ERROR | ERROR | ok     |
+| 19  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period             | FAIL  | ERROR | ok     |
+| 20  | s3tests_boto3.functional.test_s3.test_object_lock_put_obj_retention_shorten_period_bypass      | ERROR | ERROR | ok     |
+| 21  | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_retention                 | ERROR | ERROR | ok     |
+| 22  | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold                               | ERROR | ERROR | ok     |
+| 23  | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold_invalid_bucket                | FAIL  | ok    | ok     |
+| 24  | s3tests_boto3.functional.test_s3.test_object_lock_put_legal_hold_invalid_status                | FAIL  | ERROR | ok     |
+| 25  | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold                               | ERROR | ERROR | ok     |
+| 26  | s3tests_boto3.functional.test_s3.test_object_lock_get_legal_hold_invalid_bucket                | FAIL  | ok    | ok     |
+| 27  | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_on             | ERROR | ERROR | ok     |
+| 28  | s3tests_boto3.functional.test_s3.test_object_lock_delete_object_with_legal_hold_off            | ok    | ERROR | ok     |
+| 29  | s3tests_boto3.functional.test_s3.test_object_lock_get_obj_metadata                             | ERROR | ERROR | ok     |
 
 ## Multipart
 
