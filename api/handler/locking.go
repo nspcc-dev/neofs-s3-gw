@@ -56,11 +56,13 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	settings.LockConfiguration = lockingConf
+	// settings pointer is stored in the cache, so modify a copy of the settings
+	newSettings := *settings
+	newSettings.LockConfiguration = lockingConf
 
 	sp := &layer.PutSettingsParams{
 		BktInfo:  bktInfo,
-		Settings: settings,
+		Settings: &newSettings,
 	}
 
 	if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {

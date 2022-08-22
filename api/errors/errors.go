@@ -122,6 +122,7 @@ const (
 	ErrInvalidBucketObjectLockConfiguration
 	ErrObjectLockConfigurationNotFound
 	ErrObjectLockConfigurationNotAllowed
+	ErrObjectLockConfigurationVersioningCannotBeChanged
 	ErrNoSuchObjectLockConfiguration
 	ErrObjectLocked
 	ErrInvalidRetentionDate
@@ -829,6 +830,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrObjectLockConfigurationNotAllowed,
 		Code:           "InvalidBucketState",
 		Description:    "Object Lock configuration cannot be enabled on existing buckets",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrObjectLockConfigurationVersioningCannotBeChanged: {
+		ErrCode:        ErrObjectLockConfigurationVersioningCannotBeChanged,
+		Code:           "InvalidBucketState",
+		Description:    "An Object Lock configuration is present on this bucket, so the versioning state cannot be changed.",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrNoSuchCORSConfiguration: {
