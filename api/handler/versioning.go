@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/xml"
-	"fmt"
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -37,15 +36,18 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		h.logAndSendError(w, "invalid versioning configuration", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
-	settings.Versioning = configuration.Status
+
+	// settings pointer is stored in the cache, so modify a copy of the settings
+	newSettings := *settings
+	newSettings.Versioning = configuration.Status
 
 	p := &layer.PutSettingsParams{
 		BktInfo:  bktInfo,
-		Settings: settings,
+		Settings: &newSettings,
 	}
 
 	if p.Settings.VersioningSuspended() && bktInfo.ObjectLockEnabled {
-		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, fmt.Errorf("object lock is enabled"))
+		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, errors.GetAPIError(errors.ErrObjectLockConfigurationVersioningCannotBeChanged))
 		return
 	}
 
