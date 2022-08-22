@@ -200,7 +200,7 @@ func TestDeleteMarkers(t *testing.T) {
 	require.Len(t, versions.DeleteMarker, 3, "invalid delete markers length")
 	require.Len(t, versions.Version, 0, "versions must be empty")
 
-	require.Len(t, listOIDsFromMockedNeoFS(t, tc, bktName, objName), 0, "shouldn't be any object in neofs")
+	require.Len(t, listOIDsFromMockedNeoFS(t, tc, bktName), 0, "shouldn't be any object in neofs")
 }
 
 func TestDeleteObjectFromListCache(t *testing.T) {

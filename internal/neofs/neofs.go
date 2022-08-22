@@ -279,53 +279,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	return *idObj, nil
 }
 
-// SelectObjects implements neofs.NeoFS interface method.
-func (x *NeoFS) SelectObjects(ctx context.Context, prm layer.PrmObjectSelect) ([]oid.ID, error) {
-	filters := object.NewSearchFilters()
-	filters.AddRootFilter()
-
-	if prm.ExactAttribute[0] != "" {
-		filters.AddFilter(prm.ExactAttribute[0], prm.ExactAttribute[1], object.MatchStringEqual)
-	}
-
-	if prm.FilePrefix != "" {
-		filters.AddFilter(object.AttributeFileName, prm.FilePrefix, object.MatchCommonPrefix)
-	}
-
-	var prmSearch pool.PrmObjectSearch
-	prmSearch.SetContainerID(prm.Container)
-	prmSearch.SetFilters(filters)
-
-	if prm.BearerToken != nil {
-		prmSearch.UseBearer(*prm.BearerToken)
-	} else {
-		prmSearch.UseKey(prm.PrivateKey)
-	}
-
-	res, err := x.pool.SearchObjects(ctx, prmSearch)
-	if err != nil {
-		return nil, fmt.Errorf("init object search via connection pool: %w", err)
-	}
-
-	defer res.Close()
-
-	var buf []oid.ID
-
-	err = res.Iterate(func(id oid.ID) bool {
-		buf = append(buf, id)
-		return false
-	})
-	if err != nil {
-		if reason, ok := isErrAccessDenied(err); ok {
-			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-		}
-
-		return nil, fmt.Errorf("read object list: %w", err)
-	}
-
-	return buf, nil
-}
-
 // wraps io.ReadCloser and transforms Read errors related to access violation
 // to neofs.ErrAccessDenied.
 type payloadReader struct {
