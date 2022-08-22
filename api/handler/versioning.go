@@ -34,7 +34,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if configuration.Status != data.VersioningEnabled && configuration.Status != data.VersioningSuspended {
-		h.logAndSendError(w, "invalid versioning configuration", reqInfo, err)
+		h.logAndSendError(w, "invalid versioning configuration", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
 		return
 	}
 	settings.Versioning = configuration.Status
