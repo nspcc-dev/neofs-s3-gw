@@ -49,22 +49,6 @@ type PrmAuth struct {
 	PrivateKey *ecdsa.PrivateKey
 }
 
-// PrmObjectSelect groups parameters of NeoFS.SelectObjects operation.
-type PrmObjectSelect struct {
-	// Authentication parameters.
-	PrmAuth
-
-	// Container to select the objects from.
-	Container cid.ID
-
-	// Key-value object attribute which should be
-	// presented in selected objects. Optional, empty key means any.
-	ExactAttribute [2]string
-
-	// File prefix of the selected objects. Optional, empty value means any.
-	FilePrefix string
-}
-
 // PrmObjectRead groups parameters of NeoFS.ReadObject operation.
 type PrmObjectRead struct {
 	// Authentication parameters.
@@ -183,15 +167,6 @@ type NeoFS interface {
 	//
 	// It returns any error encountered which prevented the removal request from being sent.
 	DeleteContainer(context.Context, cid.ID, *session.Container) error
-
-	// SelectObjects performs object selection from the NeoFS container according
-	// to the specified parameters. It selects user's objects only.
-	//
-	// It returns ErrAccessDenied on selection access violation.
-	//
-	// It returns exactly one non-nil value. It returns any error encountered which
-	// prevented the objects from being selected.
-	SelectObjects(context.Context, PrmObjectSelect) ([]oid.ID, error)
 
 	// ReadObject reads a part of the object from the NeoFS container by identifier.
 	// Exact part is returned according to the parameters:

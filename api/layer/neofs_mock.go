@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
@@ -27,8 +26,6 @@ type TestNeoFS struct {
 	containers   map[string]*container.Container
 	currentEpoch uint64
 }
-
-const objectSystemAttributeName = "S3-System-name"
 
 func NewTestNeoFS() *TestNeoFS {
 	return &TestNeoFS{
@@ -121,48 +118,6 @@ func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, erro
 			return nil, err
 		}
 		res = append(res, idCnr)
-	}
-
-	return res, nil
-}
-
-func (t *TestNeoFS) SelectObjects(_ context.Context, prm PrmObjectSelect) ([]oid.ID, error) {
-	filters := object.NewSearchFilters()
-	filters.AddRootFilter()
-
-	if prm.FilePrefix != "" {
-		filters.AddFilter(object.AttributeFileName, prm.FilePrefix, object.MatchCommonPrefix)
-	}
-
-	if prm.ExactAttribute[0] != "" {
-		filters.AddFilter(prm.ExactAttribute[0], prm.ExactAttribute[1], object.MatchStringEqual)
-	}
-
-	cidStr := prm.Container.EncodeToString()
-
-	var res []oid.ID
-
-	if len(filters) == 1 {
-		for k, v := range t.objects {
-			if strings.Contains(k, cidStr) {
-				id, _ := v.ID()
-				res = append(res, id)
-			}
-		}
-		return res, nil
-	}
-
-	filter := filters[1]
-	if len(filters) != 2 || filter.Operation() != object.MatchStringEqual ||
-		(filter.Header() != object.AttributeFileName && filter.Header() != objectSystemAttributeName) {
-		return nil, fmt.Errorf("usupported filters")
-	}
-
-	for k, v := range t.objects {
-		if strings.Contains(k, cidStr) && isMatched(v.Attributes(), filter) {
-			id, _ := v.ID()
-			res = append(res, id)
-		}
 	}
 
 	return res, nil
@@ -264,12 +219,16 @@ func (t *TestNeoFS) TimeToEpoch(_ context.Context, futureTime time.Time) (uint64
 	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Second()), nil
 }
 
-func isMatched(attributes []object.Attribute, filter object.SearchFilter) bool {
-	for _, attr := range attributes {
-		if attr.Key() == filter.Header() && attr.Value() == filter.Value() {
-			return true
+func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
+	result := make([]oid.ID, 0, len(t.objects))
+
+	for _, val := range t.objects {
+		objCnrID, _ := val.ContainerID()
+		objObjID, _ := val.ID()
+		if cnrID.Equals(objCnrID) {
+			result = append(result, objObjID)
 		}
 	}
 
-	return false
+	return result
 }

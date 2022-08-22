@@ -195,20 +195,11 @@ func existInMockedNeoFS(tc *handlerContext, bktInfo *data.BucketInfo, objInfo *d
 	return tc.Layer().GetObject(tc.Context(), p) == nil
 }
 
-func listOIDsFromMockedNeoFS(t *testing.T, tc *handlerContext, bktName, objectName string) []oid.ID {
+func listOIDsFromMockedNeoFS(t *testing.T, tc *handlerContext, bktName string) []oid.ID {
 	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 
-	p := layer.PrmObjectSelect{
-		Container: bktInfo.CID,
-		ExactAttribute: [2]string{
-			object.AttributeFileName, objectName,
-		},
-	}
-	ids, err := tc.MockedPool().SelectObjects(tc.Context(), p)
-	require.NoError(t, err)
-
-	return ids
+	return tc.MockedPool().AllObjects(bktInfo.CID)
 }
 
 func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
