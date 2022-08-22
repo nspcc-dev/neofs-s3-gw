@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - master
-    types: [opened, synchronize]
+    types: [ opened, synchronize ]
     paths-ignore:
       - '**/*.md'
 
@@ -37,6 +37,9 @@ jobs:
 
       - name: Build CLI
         run: make
+
+      - name: Check version
+        run: if [[ $(make version) == *"dirty"* ]]; then exit 1; fi
 
       - name: Save binary
         uses: actions/upload-artifact@v2
