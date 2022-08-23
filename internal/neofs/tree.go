@@ -839,7 +839,7 @@ func (c *TreeClient) RemoveVersion(ctx context.Context, cnrID cid.ID, id uint64)
 
 func (c *TreeClient) CreateMultipartUpload(ctx context.Context, cnrID cid.ID, info *data.MultipartInfo) error {
 	path := pathFromName(info.Key)
-	meta := metaFromMultipart(info)
+	meta := metaFromMultipart(info, path[len(path)-1])
 
 	return c.addNodeByPath(ctx, cnrID, systemTree, path[:len(path)-1], meta)
 }
@@ -1209,8 +1209,8 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 	return results
 }
 
-func metaFromMultipart(info *data.MultipartInfo) map[string]string {
-	info.Meta[fileNameKV] = info.Key
+func metaFromMultipart(info *data.MultipartInfo, fileName string) map[string]string {
+	info.Meta[fileNameKV] = fileName
 	info.Meta[uploadIDKV] = info.UploadID
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
