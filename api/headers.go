@@ -5,6 +5,7 @@ const (
 	MetadataPrefix            = "X-Amz-Meta-"
 	NeoFSSystemMetadataPrefix = "S3-"
 	AmzMetadataDirective      = "X-Amz-Metadata-Directive"
+	AmzTaggingDirective       = "X-Amz-Tagging-Directive"
 	AmzVersionID              = "X-Amz-Version-Id"
 	AmzTaggingCount           = "X-Amz-Tagging-Count"
 	AmzTagging                = "X-Amz-Tagging"

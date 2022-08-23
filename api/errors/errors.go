@@ -47,6 +47,7 @@ const (
 	ErrInvalidRequestBody
 	ErrInvalidCopySource
 	ErrInvalidMetadataDirective
+	ErrInvalidTaggingDirective
 	ErrInvalidCopyDest
 	ErrInvalidPolicyDocument
 	ErrInvalidObjectState
@@ -292,6 +293,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrInvalidMetadataDirective,
 		Code:           "InvalidArgument",
 		Description:    "Unknown metadata directive.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTaggingDirective: {
+		ErrCode:        ErrInvalidTaggingDirective,
+		Code:           "InvalidArgument",
+		Description:    "Unknown tagging directive.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidStorageClass: {

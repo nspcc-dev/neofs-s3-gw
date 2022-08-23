@@ -16,6 +16,7 @@ type TreeServiceMock struct {
 	versions   map[string]map[string][]*data.NodeVersion
 	system     map[string]map[string]*data.BaseNodeVersion
 	locks      map[string]map[uint64]*data.LockInfo
+	tags       map[string]map[uint64]map[string]string
 	multiparts map[string]map[string][]*data.MultipartInfo
 	parts      map[string]map[int]*data.PartInfo
 }
@@ -26,19 +27,37 @@ func (t *TreeServiceMock) GetObjectTaggingAndLock(ctx context.Context, cnrID cid
 	return nil, lock, err
 }
 
-func (t *TreeServiceMock) GetObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) (map[string]string, error) {
-	// TODO implement me
-	panic("implement me")
+func (t *TreeServiceMock) GetObjectTagging(_ context.Context, cnrID cid.ID, nodeVersion *data.NodeVersion) (map[string]string, error) {
+	cnrTagsMap, ok := t.tags[cnrID.EncodeToString()]
+	if !ok {
+		return nil, nil
+	}
+
+	return cnrTagsMap[nodeVersion.ID], nil
 }
 
-func (t *TreeServiceMock) PutObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion, tagSet map[string]string) error {
-	// TODO implement me
-	panic("implement me")
+func (t *TreeServiceMock) PutObjectTagging(_ context.Context, cnrID cid.ID, nodeVersion *data.NodeVersion, tagSet map[string]string) error {
+	cnrTagsMap, ok := t.tags[cnrID.EncodeToString()]
+	if !ok {
+		t.tags[cnrID.EncodeToString()] = map[uint64]map[string]string{
+			nodeVersion.ID: tagSet,
+		}
+		return nil
+	}
+
+	cnrTagsMap[nodeVersion.ID] = tagSet
+
+	return nil
 }
 
-func (t *TreeServiceMock) DeleteObjectTagging(ctx context.Context, cnrID cid.ID, objVersion *data.NodeVersion) error {
-	// TODO implement me
-	panic("implement me")
+func (t *TreeServiceMock) DeleteObjectTagging(_ context.Context, cnrID cid.ID, objVersion *data.NodeVersion) error {
+	cnrTagsMap, ok := t.tags[cnrID.EncodeToString()]
+	if !ok {
+		return nil
+	}
+
+	delete(cnrTagsMap, objVersion.ID)
+	return nil
 }
 
 func (t *TreeServiceMock) GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[string]string, error) {
@@ -62,6 +81,7 @@ func NewTreeService() *TreeServiceMock {
 		versions:   make(map[string]map[string][]*data.NodeVersion),
 		system:     make(map[string]map[string]*data.BaseNodeVersion),
 		locks:      make(map[string]map[uint64]*data.LockInfo),
+		tags:       make(map[string]map[uint64]map[string]string),
 		multiparts: make(map[string]map[string][]*data.MultipartInfo),
 		parts:      make(map[string]map[int]*data.PartInfo),
 	}
