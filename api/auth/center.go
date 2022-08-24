@@ -37,8 +37,8 @@ type (
 	}
 
 	center struct {
-		reg     *regexpSubmatcher
-		postReg *regexpSubmatcher
+		reg     *RegexpSubmatcher
+		postReg *RegexpSubmatcher
 		cli     tokens.Credentials
 	}
 
@@ -88,13 +88,13 @@ var _ io.ReadSeeker = prs(0)
 func New(neoFS tokens.NeoFS, key *keys.PrivateKey, config *cache.Config) Center {
 	return &center{
 		cli:     tokens.New(neoFS, key, config),
-		reg:     &regexpSubmatcher{re: authorizationFieldRegexp},
-		postReg: &regexpSubmatcher{re: postPolicyCredentialRegexp},
+		reg:     NewRegexpMatcher(authorizationFieldRegexp),
+		postReg: NewRegexpMatcher(postPolicyCredentialRegexp),
 	}
 }
 
 func (c *center) parseAuthHeader(header string) (*authHeader, error) {
-	submatches := c.reg.getSubmatches(header)
+	submatches := c.reg.GetSubmatches(header)
 	if len(submatches) != authHeaderPartsNum {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
 	}
@@ -203,7 +203,7 @@ func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
 		return nil, ErrNoAuthorizationHeader
 	}
 
-	submatches := c.postReg.getSubmatches(MultipartFormValue(r, "x-amz-credential"))
+	submatches := c.postReg.GetSubmatches(MultipartFormValue(r, "x-amz-credential"))
 	if len(submatches) != 4 {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
 	}
@@ -277,7 +277,7 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		if _, err := signer.Sign(request, nil, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
 			return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
 		}
-		signature = c.reg.getSubmatches(request.Header.Get(AuthorizationHdr))["v4_signature"]
+		signature = c.reg.GetSubmatches(request.Header.Get(AuthorizationHdr))["v4_signature"]
 	}
 
 	if authHeader.SignatureV4 != signature {
