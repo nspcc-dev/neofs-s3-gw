@@ -327,30 +327,6 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list := &AccessControlPolicy{}
-	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r.Header, key)
-		if err != nil {
-			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
-			return
-		}
-	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
-		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
-		return
-	}
-
-	resInfo := &resourceInfo{
-		Bucket:  reqInfo.BucketName,
-		Object:  reqInfo.ObjectName,
-		Version: versionID,
-	}
-
-	astObject, err := aclToAst(list, resInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not translate acl to ast", reqInfo, err)
-		return
-	}
-
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
@@ -366,6 +342,30 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
+		return
+	}
+
+	list := &AccessControlPolicy{}
+	if r.ContentLength == 0 {
+		list, err = parseACLHeaders(r.Header, key)
+		if err != nil {
+			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
+			return
+		}
+	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
+		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
+		return
+	}
+
+	resInfo := &resourceInfo{
+		Bucket:  reqInfo.BucketName,
+		Object:  reqInfo.ObjectName,
+		Version: objInfo.VersionID(),
+	}
+
+	astObject, err := aclToAst(list, resInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not translate acl to ast", reqInfo, err)
 		return
 	}
 
@@ -1361,25 +1361,17 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 
 	for key, val := range m {
 		permission := aclFullControl
-		read, write := true, true
+		read := true
 		for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-			if !contains(val, op) {
-				if isWriteOperation(op) {
-					write = false
-				} else {
-					read = false
-				}
+			if !contains(val, op) && !isWriteOperation(op) {
+				read = false
 			}
 		}
 
-		if !read && !write {
+		if read {
+			permission = aclFullControl
+		} else {
 			h.log.Warn("some acl not fully mapped")
-			continue
-		}
-		if !read {
-			permission = aclWrite
-		} else if !write {
-			permission = aclRead
 		}
 
 		var grantee *Grantee
