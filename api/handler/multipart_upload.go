@@ -266,7 +266,11 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		versionID = u.Query().Get(api.QueryVersionID)
 		src = u.Path
 	}
-	srcBucket, srcObject := path2BucketObject(src)
+	srcBucket, srcObject, err := path2BucketObject(src)
+	if err != nil {
+		h.logAndSendError(w, "invalid source copy", reqInfo, err)
+		return
+	}
 
 	srcRange, err := parseRange(r.Header.Get(api.AmzCopySourceRange))
 	if err != nil {

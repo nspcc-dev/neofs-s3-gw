@@ -13,7 +13,7 @@ func TestAuthHeaderParse(t *testing.T) {
 	defaultHeader := "AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=2811ccb9e242f41426738fb1f"
 
 	center := &center{
-		reg: &regexpSubmatcher{re: authorizationFieldRegexp},
+		reg: NewRegexpMatcher(authorizationFieldRegexp),
 	}
 
 	for _, tc := range []struct {

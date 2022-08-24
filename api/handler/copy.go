@@ -3,10 +3,11 @@ package handler
 import (
 	"net/http"
 	"net/url"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -25,14 +26,16 @@ const (
 	copyDirective    = "COPY"
 )
 
+var copySourceMatcher = auth.NewRegexpMatcher(regexp.MustCompile(`^/?(?P<bucket_name>[a-z0-9.\-]{3,63})/(?P<object_name>.+)$`))
+
 // path2BucketObject returns a bucket and an object.
-func path2BucketObject(path string) (bucket, prefix string) {
-	path = strings.TrimPrefix(path, api.SlashSeparator)
-	m := strings.Index(path, api.SlashSeparator)
-	if m < 0 {
-		return path, ""
+func path2BucketObject(path string) (string, string, error) {
+	matches := copySourceMatcher.GetSubmatches(path)
+	if len(matches) != 2 {
+		return "", "", errors.GetAPIError(errors.ErrInvalidRequest)
 	}
-	return path[:m], path[m+len(api.SlashSeparator):]
+
+	return matches["bucket_name"], matches["object_name"], nil
 }
 
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +62,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		src = u.Path
 	}
 
-	srcBucket, srcObject := path2BucketObject(src)
+	srcBucket, srcObject, err := path2BucketObject(src)
+	if err != nil {
+		h.logAndSendError(w, "invalid source copy", reqInfo, err)
+		return
+	}
 
 	p := &layer.HeadObjectParams{
 		Object:    srcObject,

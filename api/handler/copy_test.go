@@ -93,3 +93,75 @@ func getObjectTagging(t *testing.T, tc *handlerContext, bktName, objName, versio
 	require.NoError(t, err)
 	return tagging
 }
+
+func TestSourceCopyRegexp(t *testing.T) {
+	for _, tc := range []struct {
+		path    string
+		err     bool
+		bktName string
+		objName string
+	}{
+		{
+			path:    "/bucket/object",
+			err:     false,
+			bktName: "bucket",
+			objName: "object",
+		},
+		{
+			path:    "bucket/object",
+			err:     false,
+			bktName: "bucket",
+			objName: "object",
+		},
+		{
+			path:    "sub-bucket/object",
+			err:     false,
+			bktName: "sub-bucket",
+			objName: "object",
+		},
+		{
+			path:    "bucket.domain/object",
+			err:     false,
+			bktName: "bucket.domain",
+			objName: "object",
+		},
+		{
+			path:    "bucket/object/deep",
+			err:     false,
+			bktName: "bucket",
+			objName: "object/deep",
+		},
+		{
+			path: "bucket",
+			err:  true,
+		},
+		{
+			path: "/bucket",
+			err:  true,
+		},
+		{
+			path: "invalid+bucket/object",
+			err:  true,
+		},
+		{
+			path: "invaliDBucket/object",
+			err:  true,
+		},
+		{
+			path: "i/object",
+			err:  true,
+		},
+	} {
+		t.Run("", func(t *testing.T) {
+			bktName, objName, err := path2BucketObject(tc.path)
+			if tc.err {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.bktName, bktName)
+			require.Equal(t, tc.objName, objName)
+		})
+	}
+}
