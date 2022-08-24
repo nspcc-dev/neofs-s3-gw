@@ -98,7 +98,7 @@ func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Contain
 		return nil, fmt.Errorf("read container via connection pool: %w", err)
 	}
 
-	return res, nil
+	return &res, nil
 }
 
 var basicACLZero acl.Basic
@@ -149,7 +149,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
 
-	return *idCnr, nil
+	return idCnr, nil
 }
 
 // UserContainers implements neofs.NeoFS interface method.
@@ -193,7 +193,7 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 		return nil, fmt.Errorf("read eACL via connection pool: %w", err)
 	}
 
-	return res, nil
+	return &res, nil
 }
 
 // DeleteContainer implements neofs.NeoFS interface method.
@@ -276,7 +276,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
-	return *idObj, nil
+	return idObj, nil
 }
 
 // SelectObjects implements neofs.NeoFS interface method.
@@ -402,7 +402,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		}
 
 		return &layer.ObjectPart{
-			Head: hdr,
+			Head: &hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
 		res, err := x.pool.GetObject(ctx, prmGet)
@@ -440,7 +440,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	}
 
 	return &layer.ObjectPart{
-		Payload: payloadReader{res},
+		Payload: payloadReader{&res},
 	}, nil
 }
 

@@ -2,21 +2,18 @@
 package neofs
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha512"
-
+	crypto "github.com/nspcc-dev/neofs-crypto"
 	"google.golang.org/protobuf/proto"
 )
 
 func (c *TreeClient) signData(buf []byte, f func(key, sign []byte)) error {
-	hash := sha512.Sum512(buf)
-	x, y, err := ecdsa.Sign(rand.Reader, &c.key.PrivateKey, hash[:])
+	// crypto package should not be used outside of API libraries (see neofs-node#491).
+	// For now tree service does not include into SDK Client nor SDK Pool, so there is no choice.
+	// When SDK library adopts Tree service client, this should be dropped.
+	sign, err := crypto.Sign(&c.key.PrivateKey, buf)
 	if err != nil {
 		return err
 	}
-	sign := elliptic.Marshal(elliptic.P256(), x, y)
 
 	f(c.key.PublicKey().Bytes(), sign)
 	return nil
