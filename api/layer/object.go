@@ -788,6 +788,7 @@ func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, deli
 	}
 
 	return &data.ObjectInfo{
+		ID:             node.OID, // to use it as continuation token
 		CID:            bktInfo.CID,
 		IsDir:          true,
 		IsDeleteMarker: node.IsDeleteMarker(),

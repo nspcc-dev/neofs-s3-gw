@@ -120,6 +120,35 @@ func TestS3BucketListDelimiterBasic(t *testing.T) {
 	require.Equal(t, "quux/", listV1Response.CommonPrefixes[1].Prefix)
 }
 
+func TestS3BucketListV2DelimiterPrefix(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName := "bucket-for-listingv2"
+	objects := []string{"asdf", "boo/bar", "boo/baz/xyzzy", "cquux/thud", "cquux/bla"}
+	bktInfo, _ := createBucketAndObject(t, tc, bktName, objects[0])
+
+	for _, objName := range objects[1:] {
+		createTestObject(tc.Context(), t, tc, bktInfo, objName)
+	}
+
+	var empty []string
+	delim := "/"
+	prefix := ""
+
+	continuationToken := validateListV2(t, tc, bktName, prefix, delim, "", 1, true, false, []string{"asdf"}, empty)
+	continuationToken = validateListV2(t, tc, bktName, prefix, delim, continuationToken, 1, true, false, empty, []string{"boo/"})
+	validateListV2(t, tc, bktName, prefix, delim, continuationToken, 1, false, true, empty, []string{"cquux/"})
+
+	continuationToken = validateListV2(t, tc, bktName, prefix, delim, "", 2, true, false, []string{"asdf"}, []string{"boo/"})
+	validateListV2(t, tc, bktName, prefix, delim, continuationToken, 2, false, true, empty, []string{"cquux/"})
+
+	prefix = "boo/"
+	continuationToken = validateListV2(t, tc, bktName, prefix, delim, "", 1, true, false, []string{"boo/bar"}, empty)
+	validateListV2(t, tc, bktName, prefix, delim, continuationToken, 1, false, true, empty, []string{"boo/baz/"})
+
+	validateListV2(t, tc, bktName, prefix, delim, "", 2, false, true, []string{"boo/bar"}, []string{"boo/baz/"})
+}
+
 func listObjectsV2(t *testing.T, tc *handlerContext, bktName, prefix, delimiter, startAfter, continuationToken string, maxKeys int) *ListObjectsV2Response {
 	query := prepareCommonListObjectsQuery(prefix, delimiter, maxKeys)
 	if len(startAfter) != 0 {
@@ -135,6 +164,26 @@ func listObjectsV2(t *testing.T, tc *handlerContext, bktName, prefix, delimiter,
 	res := &ListObjectsV2Response{}
 	parseTestResponse(t, w, res)
 	return res
+}
+
+func validateListV2(t *testing.T, tc *handlerContext, bktName, prefix, delimiter, continuationToken string, maxKeys int,
+	isTruncated, last bool, checkObjects, checkPrefixes []string) string {
+	response := listObjectsV2(t, tc, bktName, prefix, delimiter, "", continuationToken, maxKeys)
+
+	require.Equal(t, isTruncated, response.IsTruncated)
+	require.Equal(t, last, len(response.NextContinuationToken) == 0)
+
+	require.Len(t, response.Contents, len(checkObjects))
+	for i := 0; i < len(checkObjects); i++ {
+		require.Equal(t, checkObjects[i], response.Contents[i].Key)
+	}
+
+	require.Len(t, response.CommonPrefixes, len(checkPrefixes))
+	for i := 0; i < len(checkPrefixes); i++ {
+		require.Equal(t, checkPrefixes[i], response.CommonPrefixes[i].Prefix)
+	}
+
+	return response.NextContinuationToken
 }
 
 func prepareCommonListObjectsQuery(prefix, delimiter string, maxKeys int) url.Values {
