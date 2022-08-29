@@ -829,7 +829,7 @@ func (c *TreeClient) getUnversioned(ctx context.Context, cnrID cid.ID, treeID, f
 	return nodes[0], nil
 }
 
-func (c *TreeClient) AddVersion(ctx context.Context, cnrID cid.ID, version *data.NodeVersion) error {
+func (c *TreeClient) AddVersion(ctx context.Context, cnrID cid.ID, version *data.NodeVersion) (uint64, error) {
 	return c.addVersion(ctx, cnrID, versionTree, version)
 }
 
@@ -1053,7 +1053,7 @@ func (c *TreeClient) Close() error {
 	return nil
 }
 
-func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string, version *data.NodeVersion) error {
+func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string, version *data.NodeVersion) (uint64, error) {
 	path := pathFromName(version.FilePath)
 	meta := map[string]string{
 		oidKV:      version.OID.EncodeToString(),
@@ -1080,24 +1080,22 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 		if err == nil {
 			parentID, err := c.getParent(ctx, cnrID, treeID, node.ID)
 			if err != nil {
-				return err
+				return 0, err
 			}
 
 			if err = c.moveNode(ctx, cnrID, treeID, node.ID, parentID, meta); err != nil {
-				return err
+				return 0, err
 			}
 
-			return c.clearOutdatedVersionInfo(ctx, cnrID, treeID, node.ID)
+			return node.ID, c.clearOutdatedVersionInfo(ctx, cnrID, treeID, node.ID)
 		}
 
 		if !errors.Is(err, layer.ErrNodeNotFound) {
-			return err
+			return 0, err
 		}
 	}
 
-	_, err := c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
-
-	return err
+	return c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
 }
 
 func (c *TreeClient) clearOutdatedVersionInfo(ctx context.Context, cnrID cid.ID, treeID string, nodeID uint64) error {

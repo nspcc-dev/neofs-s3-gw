@@ -594,7 +594,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		IsUnversioned: settings.VersioningSuspended(),
 	}
 
-	if obj.Error = n.treeService.AddVersion(ctx, bkt.CID, newVersion); obj.Error != nil {
+	if _, obj.Error = n.treeService.AddVersion(ctx, bkt.CID, newVersion); obj.Error != nil {
 		return obj
 	}
 
