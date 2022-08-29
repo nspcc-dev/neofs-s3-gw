@@ -248,7 +248,9 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	info, err := h.obj.PutObject(r.Context(), params)
 	if err != nil {
-		h.logAndSendError(w, "could not upload object", reqInfo, err)
+		_, err2 := io.Copy(io.Discard, r.Body)
+		err3 := r.Body.Close()
+		h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
 		return
 	}
 
