@@ -58,7 +58,7 @@ type TreeService interface {
 	GetLatestVersionsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.NodeVersion, error)
 	GetAllVersionsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.NodeVersion, error)
 	GetUnversioned(ctx context.Context, cnrID cid.ID, objectName string) (*data.NodeVersion, error)
-	AddVersion(ctx context.Context, cnrID cid.ID, newVersion *data.NodeVersion) error
+	AddVersion(ctx context.Context, cnrID cid.ID, newVersion *data.NodeVersion) (uint64, error)
 	RemoveVersion(ctx context.Context, cnrID cid.ID, nodeID uint64) error
 
 	PutLock(ctx context.Context, cnrID cid.ID, nodeID uint64, lock *data.LockInfo) error

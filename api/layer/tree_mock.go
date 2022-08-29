@@ -202,19 +202,19 @@ func (t *TreeServiceMock) GetUnversioned(_ context.Context, cnrID cid.ID, object
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID cid.ID, newVersion *data.NodeVersion) error {
+func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID cid.ID, newVersion *data.NodeVersion) (uint64, error) {
 	cnrVersionsMap, ok := t.versions[cnrID.EncodeToString()]
 	if !ok {
 		t.versions[cnrID.EncodeToString()] = map[string][]*data.NodeVersion{
 			newVersion.FilePath: {newVersion},
 		}
-		return nil
+		return newVersion.ID, nil
 	}
 
 	versions, ok := cnrVersionsMap[newVersion.FilePath]
 	if !ok {
 		cnrVersionsMap[newVersion.FilePath] = []*data.NodeVersion{newVersion}
-		return nil
+		return newVersion.ID, nil
 	}
 
 	sort.Slice(versions, func(i, j int) bool {
@@ -239,7 +239,7 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, cnrID cid.ID, newVersion
 
 	cnrVersionsMap[newVersion.FilePath] = append(result, newVersion)
 
-	return nil
+	return newVersion.ID, nil
 }
 
 func (t *TreeServiceMock) RemoveVersion(_ context.Context, cnrID cid.ID, nodeID uint64) error {

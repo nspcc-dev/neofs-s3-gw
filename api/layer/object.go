@@ -250,7 +250,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	newVersion.OID = id
 	newVersion.ETag = hex.EncodeToString(hash)
-	if err = n.treeService.AddVersion(ctx, p.BktInfo.CID, newVersion); err != nil {
+	if newVersion.ID, err = n.treeService.AddVersion(ctx, p.BktInfo.CID, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
 
