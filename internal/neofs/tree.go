@@ -840,8 +840,9 @@ func (c *TreeClient) RemoveVersion(ctx context.Context, cnrID cid.ID, id uint64)
 func (c *TreeClient) CreateMultipartUpload(ctx context.Context, cnrID cid.ID, info *data.MultipartInfo) error {
 	path := pathFromName(info.Key)
 	meta := metaFromMultipart(info, path[len(path)-1])
+	_, err := c.addNodeByPath(ctx, cnrID, systemTree, path[:len(path)-1], meta)
 
-	return c.addNodeByPath(ctx, cnrID, systemTree, path[:len(path)-1], meta)
+	return err
 }
 
 func (c *TreeClient) GetMultipartUploadsByPrefix(ctx context.Context, cnrID cid.ID, prefix string) ([]*data.MultipartInfo, error) {
@@ -1094,7 +1095,9 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 		}
 	}
 
-	return c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
+	_, err := c.addNodeByPath(ctx, cnrID, treeID, path[:len(path)-1], meta)
+
+	return err
 }
 
 func (c *TreeClient) clearOutdatedVersionInfo(ctx context.Context, cnrID cid.ID, treeID string, nodeID uint64) error {
@@ -1319,7 +1322,7 @@ func (c *TreeClient) addNode(ctx context.Context, cnrID cid.ID, treeID string, p
 	return resp.GetBody().GetNodeId(), nil
 }
 
-func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID cid.ID, treeID string, path []string, meta map[string]string) error {
+func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID cid.ID, treeID string, path []string, meta map[string]string) (uint64, error) {
 	request := &tree.AddByPathRequest{
 		Body: &tree.AddByPathRequest_Body{
 			ContainerId:   cnrID[:],
@@ -1337,11 +1340,23 @@ func (c *TreeClient) addNodeByPath(ctx context.Context, cnrID cid.ID, treeID str
 			Sign: sign,
 		}
 	}); err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err := c.service.AddByPath(ctx, request)
-	return err
+	resp, err := c.service.AddByPath(ctx, request)
+	if err != nil {
+		return 0, err
+	}
+
+	body := resp.GetBody()
+	if body == nil {
+		return 0, errors.New("nil body in tree service response")
+	} else if len(body.Nodes) == 0 {
+		return 0, errors.New("empty list of added nodes in tree service response")
+	}
+
+	// The first node is the leaf that we add, according to tree service docs.
+	return body.Nodes[0], nil
 }
 
 func (c *TreeClient) moveNode(ctx context.Context, cnrID cid.ID, treeID string, nodeID, parentID uint64, meta map[string]string) error {
