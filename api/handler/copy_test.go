@@ -29,21 +29,41 @@ func TestCopyWithTaggingDirective(t *testing.T) {
 	copyMeta := CopyMeta{
 		Tags: map[string]string{"key2": "val"},
 	}
-	copyObject(t, tc, bktName, objName, objToCopy, copyMeta)
+	copyObject(t, tc, bktName, objName, objToCopy, copyMeta, http.StatusOK)
 	tagging := getObjectTagging(t, tc, bktName, objToCopy, emptyVersion)
 	require.Len(t, tagging.TagSet, 1)
 	require.Equal(t, "key", tagging.TagSet[0].Key)
 	require.Equal(t, "val", tagging.TagSet[0].Value)
 
 	copyMeta.TaggingDirective = replaceDirective
-	copyObject(t, tc, bktName, objName, objToCopy2, copyMeta)
+	copyObject(t, tc, bktName, objName, objToCopy2, copyMeta, http.StatusOK)
 	tagging = getObjectTagging(t, tc, bktName, objToCopy2, emptyVersion)
 	require.Len(t, tagging.TagSet, 1)
 	require.Equal(t, "key2", tagging.TagSet[0].Key)
 	require.Equal(t, "val", tagging.TagSet[0].Value)
 }
 
-func copyObject(t *testing.T, tc *handlerContext, bktName, fromObject, toObject string, copyMeta CopyMeta) {
+func TestCopyToItself(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-copy", "object-for-copy"
+	createBucketAndObject(t, tc, bktName, objName)
+
+	copyMeta := CopyMeta{MetadataDirective: replaceDirective}
+
+	copyObject(t, tc, bktName, objName, objName, CopyMeta{}, http.StatusBadRequest)
+	copyObject(t, tc, bktName, objName, objName, copyMeta, http.StatusOK)
+
+	putBucketVersioning(t, tc, bktName, true)
+	copyObject(t, tc, bktName, objName, objName, CopyMeta{}, http.StatusOK)
+	copyObject(t, tc, bktName, objName, objName, copyMeta, http.StatusOK)
+
+	putBucketVersioning(t, tc, bktName, false)
+	copyObject(t, tc, bktName, objName, objName, CopyMeta{}, http.StatusOK)
+	copyObject(t, tc, bktName, objName, objName, copyMeta, http.StatusOK)
+}
+
+func copyObject(t *testing.T, tc *handlerContext, bktName, fromObject, toObject string, copyMeta CopyMeta, statusCode int) {
 	w, r := prepareTestRequest(t, bktName, toObject, nil)
 	r.Header.Set(api.AmzCopySource, bktName+"/"+fromObject)
 
@@ -60,7 +80,7 @@ func copyObject(t *testing.T, tc *handlerContext, bktName, fromObject, toObject 
 	r.Header.Set(api.AmzTagging, tagsQuery.Encode())
 
 	tc.Handler().CopyObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	assertStatus(t, w, statusCode)
 }
 
 func putObjectTagging(t *testing.T, tc *handlerContext, bktName, objName string, tags map[string]string) {

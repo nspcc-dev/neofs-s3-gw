@@ -84,6 +84,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
 	if containsACL {
 		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
 			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
@@ -100,6 +106,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	args, err := parseCopyObjectArgs(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse request params", reqInfo, err)
+		return
+	}
+
+	if isCopyingToItselfForbidden(reqInfo, srcBucket, srcObject, settings, args) {
+		h.logAndSendError(w, "copying to itself without changing anything", reqInfo, errors.GetAPIError(errors.ErrInvalidCopyDest))
 		return
 	}
 
@@ -169,12 +180,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		CopiesNuber: copiesNumber,
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	params.Lock, err = formObjectLock(dstBktInfo, settings.LockConfiguration, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not form object lock", reqInfo, err)
@@ -239,6 +244,18 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if encryptionParams.Enabled() {
 		addSSECHeaders(w.Header(), r.Header)
 	}
+}
+
+func isCopyingToItselfForbidden(reqInfo *api.ReqInfo, srcBucket string, srcObject string, settings *data.BucketSettings, args *copyObjectArgs) bool {
+	if reqInfo.BucketName != srcBucket || reqInfo.ObjectName != srcObject {
+		return false
+	}
+
+	if !settings.Unversioned() {
+		return false
+	}
+
+	return args.MetadataDirective != replaceDirective
 }
 
 func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
