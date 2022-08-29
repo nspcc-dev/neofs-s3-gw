@@ -23,16 +23,23 @@ type PutLockInfoParams struct {
 	ObjVersion   *ObjectVersion
 	NewLock      *data.ObjectLock
 	CopiesNumber uint32
+	NodeVersion  *data.NodeVersion // optional
 }
 
-func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) error {
+func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err error) {
 	var (
 		cnrID   = p.ObjVersion.BktInfo.CID
 		newLock = p.NewLock
 	)
-	versionNode, err := n.getNodeVersion(ctx, p.ObjVersion)
-	if err != nil {
-		return err
+
+	versionNode := p.NodeVersion
+	// sometimes node version can be provided from executing context
+	// if value is not provided, make a tree service call
+	if versionNode == nil {
+		versionNode, err = n.getNodeVersion(ctx, p.ObjVersion)
+		if err != nil {
+			return err
+		}
 	}
 
 	lockInfo, err := n.treeService.GetLock(ctx, cnrID, versionNode.ID)

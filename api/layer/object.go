@@ -255,7 +255,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 	}
 
 	if p.Lock != nil && (p.Lock.Retention != nil || p.Lock.LegalHold != nil) {
-		prm := &PutLockInfoParams{
+		putLockInfoPrms := &PutLockInfoParams{
 			ObjVersion: &ObjectVersion{
 				BktInfo:    p.BktInfo,
 				ObjectName: p.Object,
@@ -263,9 +263,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 			},
 			NewLock:      p.Lock,
 			CopiesNumber: p.CopiesNumber,
+			NodeVersion:  newVersion, // provide new version to make one less tree service call in PutLockInfo
 		}
 
-		if err = n.PutLockInfo(ctx, prm); err != nil {
+		if err = n.PutLockInfo(ctx, putLockInfoPrms); err != nil {
 			return nil, err
 		}
 	}
