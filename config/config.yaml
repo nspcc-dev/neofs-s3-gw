@@ -31,6 +31,10 @@ tls:
   cert_file: /path/to/cert
   key_file: /path/to/key
 
+# Domains to be able to use virtual-hosted-style access to bucket.
+listen_domains:
+  - s3dev.neofs.devenv
+
 logger:
   level: debug
 

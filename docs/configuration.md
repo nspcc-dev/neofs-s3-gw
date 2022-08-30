@@ -140,6 +140,10 @@ There are some custom types used for brevity:
 ```yaml
 listen_address: 0.0.0.0:8084
 
+listen_domains:
+   - s3dev.neofs.devenv
+   - s3dev2.neofs.devenv
+
 rpc_endpoint: http://morph-chain.neofs.devenv:30333
 resolve_order:
   - nns
@@ -163,6 +167,7 @@ allowed_access_key_id_prefixes:
 | Parameter                        | Type       | Default value  | Description                                                                                                                                                                                                       |
 |----------------------------------|------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `listen_address`                 | `string`   | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
+| `listen_domains`                 | `[]string` |                | Domains to be able to use virtual-hosted-style access to bucket.                                                                                                                                                  |
 | `rpc_endpoint`                   | `string`   |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
 | `resolve_order`                  | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
 | `connect_timeout`                | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
