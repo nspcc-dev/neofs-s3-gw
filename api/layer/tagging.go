@@ -7,6 +7,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 )
 
@@ -168,4 +169,26 @@ func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (
 	}
 
 	return version, err
+}
+
+func (n *layer) getNodeVersionFromCache(o *ObjectVersion) *data.NodeVersion {
+	if len(o.VersionID) == 0 || o.VersionID == data.UnversionedObjectVersionID {
+		return nil
+	}
+
+	var objID oid.ID
+	if objID.DecodeString(o.VersionID) != nil {
+		return nil
+	}
+
+	var addr oid.Address
+	addr.SetContainer(o.BktInfo.CID)
+	addr.SetObject(objID)
+
+	extObjectInfo := n.objCache.GetObject(addr)
+	if extObjectInfo == nil {
+		return nil
+	}
+
+	return extObjectInfo.NodeVersion
 }

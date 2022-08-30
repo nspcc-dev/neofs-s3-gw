@@ -34,11 +34,16 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 
 	versionNode := p.NodeVersion
 	// sometimes node version can be provided from executing context
-	// if value is not provided, make a tree service call
+	// if not, then receive node version from tree service
 	if versionNode == nil {
-		versionNode, err = n.getNodeVersion(ctx, p.ObjVersion)
-		if err != nil {
-			return err
+		// check cache if node version is stored inside extendedObjectVersion
+		versionNode = n.getNodeVersionFromCache(p.ObjVersion)
+		if versionNode == nil {
+			// else get node version from tree service
+			versionNode, err = n.getNodeVersion(ctx, p.ObjVersion)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
