@@ -54,6 +54,33 @@ $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
   neofs-s3-gw
 ```
 
+## Domains
+
+By default, s3-gw enable only `path-style access`. 
+To be able to use both: `virtual-hosted-style` and `path-style` access you must configure `listen_domains`:
+
+```shell
+$ neofs-s3-gw -p 192.168.130.72:8080 --wallet wallet.json --listen_domains your.first.domain --listen_domains your.second.domain
+```
+
+So now you can use (e.g. `HeadBucket`. Make sure DNS is properly configured):
+
+```shell
+$ curl --head http://bucket-name.your.first.domain:8080
+HTTP/1.1 200 OK
+...
+```
+
+or
+
+```shell
+$ curl --head http://your.second.domain:8080/bucket-name
+HTTP/1.1 200 OK
+...
+```
+
+Also, you can configure domains using `.env` variables or `yaml` file.
+
 ## Documentation
 
 - [Configuration](./docs/configuration.md)

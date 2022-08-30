@@ -161,21 +161,6 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.NodeParam {
 	return nodes
 }
 
-func fetchDomains(v *viper.Viper) []string {
-	cnt := v.GetInt(cfgListenDomains + ".count")
-	res := make([]string, 0, cnt)
-	for i := 0; ; i++ {
-		domain := v.GetString(cfgListenDomains + "." + strconv.Itoa(i))
-		if domain == "" {
-			break
-		}
-
-		res = append(res, domain)
-	}
-
-	return res
-}
-
 func newSettings() *viper.Viper {
 	v := viper.New()
 
@@ -216,7 +201,7 @@ func newSettings() *viper.Viper {
 	flags.StringP(cfgRPCEndpoint, "r", "", "set RPC endpoint")
 	resolveMethods := flags.StringSlice(cfgResolveOrder, []string{resolver.DNSResolver}, "set bucket name resolve order")
 
-	domains := flags.StringArrayP(cfgListenDomains, "d", nil, "set domains to be listened")
+	domains := flags.StringSliceP(cfgListenDomains, "d", nil, "set domains to be listened")
 
 	// set defaults:
 
@@ -264,11 +249,7 @@ func newSettings() *viper.Viper {
 	}
 
 	if domains != nil && len(*domains) > 0 {
-		for i := range *domains {
-			v.SetDefault(cfgListenDomains+"."+strconv.Itoa(i), (*domains)[i])
-		}
-
-		v.SetDefault(cfgListenDomains+".count", len(*domains))
+		v.SetDefault(cfgListenDomains, *domains)
 	}
 
 	switch {

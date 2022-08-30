@@ -265,7 +265,7 @@ func (a *App) Server(ctx context.Context) {
 
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	// Attach S3 API:
-	domains := fetchDomains(a.cfg)
+	domains := a.cfg.GetStringSlice(cfgListenDomains)
 	a.log.Info("fetch domains, prepare to use API",
 		zap.Strings("domains", domains))
 	api.Attach(router, domains, a.maxClients, a.api, a.ctr, a.log)
