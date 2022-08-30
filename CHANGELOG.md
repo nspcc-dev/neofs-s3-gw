@@ -9,6 +9,7 @@ This document outlines major changes between releases.
 - Configuration of `set_copies_number` (#634, #637)
 ### Changed
 - Improved wallet configuration via `.yaml` config and environment variables (#607)
+- Update go version for build to 1.19 (#694)
 ### Removed
 ### Fixed
 - Responses to `GetObject` and `HeadObject`: removed redundant `VersionID` (#577)
