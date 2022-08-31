@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -717,13 +718,13 @@ func TestBucketAclToPolicy(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: formGranteeType(acpGroup),
 			},
 			Permission: aclRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclWrite,
 		}},
@@ -783,19 +784,19 @@ func TestObjectAclToPolicy(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				ID:   id,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: formGranteeType(acpGroup),
 			},
 			Permission: aclRead,
 		}},
@@ -852,7 +853,7 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				ID:   id,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}},
@@ -973,13 +974,13 @@ func TestParseCannedACLHeaders(t *testing.T) {
 			Grantee: &Grantee{
 				ID:          id,
 				DisplayName: address,
-				Type:        acpCanonicalUser,
+				Type:        formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: formGranteeType(acpGroup),
 			},
 			Permission: aclRead,
 		}},
@@ -1014,37 +1015,37 @@ func TestParseACLHeaders(t *testing.T) {
 			Grantee: &Grantee{
 				ID:          id,
 				DisplayName: address,
-				Type:        acpCanonicalUser,
+				Type:        formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user1",
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: formGranteeType(acpGroup),
 			},
 			Permission: aclRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user2",
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user2",
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclWrite,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user3",
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclWrite,
 		}},
@@ -1105,13 +1106,13 @@ func TestBucketAclToTable(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: formGranteeType(acpGroup),
 			},
 			Permission: aclRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclWrite,
 		}},
@@ -1162,13 +1163,13 @@ func TestObjectAclToAst(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				ID:   id,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: formGranteeType(acpCanonicalUser),
 			},
 			Permission: aclRead,
 		},
@@ -1231,13 +1232,13 @@ func TestBucketAclToAst(t *testing.T) {
 			{
 				Grantee: &Grantee{
 					ID:   id2,
-					Type: acpCanonicalUser,
+					Type: formGranteeType(acpCanonicalUser),
 				},
 				Permission: aclWrite,
 			}, {
 				Grantee: &Grantee{
 					URI:  allUsersGroup,
-					Type: acpGroup,
+					Type: formGranteeType(acpGroup),
 				},
 				Permission: aclRead,
 			},
@@ -1286,4 +1287,48 @@ func TestBucketAclToAst(t *testing.T) {
 	actualAst, err := aclToAst(acl, resInfo)
 	require.NoError(t, err)
 	require.Equal(t, expectedAst, actualAst)
+}
+
+func TestName(t *testing.T) {
+	body := []byte(`
+<AccessControlPolicy xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	<Owner>
+		<DisplayName>NbUgTSFvPmsRxmGeWpuuGeJUoRoi6PErcM</DisplayName>
+		<ID>NbUgTSFvPmsRxmGeWpuuGeJUoRoi6PErcM</ID>
+	</Owner>
+	<AccessControlList>
+		<Grant>
+			<Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
+				<ID>031a6c6fbbdf02ca351745fa86b9ba5a9452d785ac4f7fc2b7548ca2a46c4fcf4a</ID>
+			</Grantee>
+			<Permission>FULL_CONTROL</Permission>
+		</Grant>
+		<Grant>
+			<Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="Group">
+				<URI>http://acs.amazonaws.com/groups/global/AllUsers</URI>
+			</Grantee>
+			<Permission>FULL_CONTROL</Permission>
+		</Grant>
+	</AccessControlList>
+</AccessControlPolicy>
+`)
+
+	acl := &AccessControlPolicy{}
+	err := xml.Unmarshal(body, acl)
+	require.NoError(t, err)
+	require.True(t, acl.AccessControlList[0].Grantee.matchType(acpCanonicalUser))
+	require.True(t, acl.AccessControlList[1].Grantee.matchType(acpGroup))
+
+	grantee := NewGrantee(formGranteeType(acpGroup))
+	grantee.URI = allUsersGroup
+
+	raw, err := xml.MarshalIndent(grantee, "", "  ")
+	require.NoError(t, err)
+
+	grantee2 := &Grantee{}
+	err = xml.Unmarshal(raw, grantee2)
+	require.NoError(t, err)
+
+	grantee2.XMLNS.Value = granteeXMLNS
+	require.Equal(t, grantee, grantee2)
 }
