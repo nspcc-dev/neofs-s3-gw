@@ -154,20 +154,25 @@ max_clients_count: 100
 max_clients_deadline: 30s
 
 default_policy: REP 3
+
+allowed_access_key_id_prefixes: 
+   - Ck9BHsgKcnwfCTUSFm6pxhoNS4cBqgN2NQ8zVgPjqZDX
+   - 3stjWenX15YwYzczMr88gy3CQr4NYFBQ8P7keGzH5QFn
 ```
 
-| Parameter              | Type       | Default value  | Description                                                                                                                                                                                                       |
-|------------------------|------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `listen_address`       | `string`   | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
-| `rpc_endpoint`         | `string`   |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
-| `resolve_order`        | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
-| `connect_timeout`      | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
-| `healthcheck_timeout`  | `duration` | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
-| `rebalance_interval`   | `duration` | `60s`          | Interval to check node health.                                                                                                                                                                                    |
-| `pool_error_threshold` | `uint32`   | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
-| `max_clients_count`    | `int`      | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
-| `max_clients_deadline` | `duration` | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
-| `default_policy`       | `string`   | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
+| Parameter                        | Type       | Default value  | Description                                                                                                                                                                                                       |
+|----------------------------------|------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `listen_address`                 | `string`   | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
+| `rpc_endpoint`                   | `string`   |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
+| `resolve_order`                  | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
+| `connect_timeout`                | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
+| `healthcheck_timeout`            | `duration` | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
+| `rebalance_interval`             | `duration` | `60s`          | Interval to check node health.                                                                                                                                                                                    |
+| `pool_error_threshold`           | `uint32`   | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
+| `max_clients_count`              | `int`      | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
+| `max_clients_deadline`           | `duration` | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
+| `default_policy`                 | `string`   | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
+| `allowed_access_key_id_prefixes` | `[]string` |                | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                                                                                        |
 
 ### `wallet` section
 
