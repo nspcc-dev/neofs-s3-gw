@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 - Exposure of pool metrics (#615)
 - Configuration of `set_copies_number` (#634, #637)
+- Configuration of list of allowed `AccessKeyID` prefixes (#674)
 ### Changed
 - Improved wallet configuration via `.yaml` config and environment variables (#607)
 - Update go version for build to 1.19 (#694)
