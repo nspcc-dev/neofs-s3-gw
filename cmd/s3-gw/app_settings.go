@@ -116,6 +116,9 @@ const ( // Settings.
 	// Number of the object copies to consider PUT to NeoFS successful.
 	cfgSetCopiesNumber = "neofs.set_copies_number"
 
+	// List of allowed AccessKeyID prefixes.
+	cfgAllowedAccessKeyIDPrefixes = "allowed_access_key_id_prefixes"
+
 	// envPrefix is an environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
 )
