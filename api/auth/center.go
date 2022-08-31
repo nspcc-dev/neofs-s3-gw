@@ -37,9 +37,10 @@ type (
 	}
 
 	center struct {
-		reg     *RegexpSubmatcher
-		postReg *RegexpSubmatcher
-		cli     tokens.Credentials
+		reg                        *RegexpSubmatcher
+		postReg                    *RegexpSubmatcher
+		cli                        tokens.Credentials
+		allowedAccessKeyIDPrefixes []string // empty slice means all access key ids are allowed
 	}
 
 	prs int
@@ -85,11 +86,12 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(neoFS tokens.NeoFS, key *keys.PrivateKey, config *cache.Config) Center {
+func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *cache.Config) Center {
 	return &center{
-		cli:     tokens.New(neoFS, key, config),
-		reg:     NewRegexpMatcher(authorizationFieldRegexp),
-		postReg: NewRegexpMatcher(postPolicyCredentialRegexp),
+		cli:                        tokens.New(neoFS, key, config),
+		reg:                        NewRegexpMatcher(authorizationFieldRegexp),
+		postReg:                    NewRegexpMatcher(postPolicyCredentialRegexp),
+		allowedAccessKeyIDPrefixes: prefixes,
 	}
 }
 
@@ -171,6 +173,10 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
+	if err := c.checkAccessKeyID(authHdr.AccessKeyID); err != nil {
+		return nil, err
+	}
+
 	addr, err := authHdr.getAddress()
 	if err != nil {
 		return nil, err
@@ -187,6 +193,20 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 	}
 
 	return box, nil
+}
+
+func (c center) checkAccessKeyID(accessKeyID string) error {
+	if len(c.allowedAccessKeyIDPrefixes) == 0 {
+		return nil
+	}
+
+	for _, prefix := range c.allowedAccessKeyIDPrefixes {
+		if strings.HasPrefix(accessKeyID, prefix) {
+			return nil
+		}
+	}
+
+	return apiErrors.GetAPIError(apiErrors.ErrAccessDenied)
 }
 
 func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {

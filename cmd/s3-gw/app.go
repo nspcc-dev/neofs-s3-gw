@@ -188,7 +188,7 @@ func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
 	}
 
 	// prepare auth center
-	ctr = auth.New(neofs.NewAuthmateNeoFS(conns), key, getAccessBoxCacheConfig(v, l))
+	ctr = auth.New(neofs.NewAuthmateNeoFS(conns), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, l))
 	handlerOptions := getHandlerOptions(v, l)
 
 	if caller, err = handler.New(l, obj, nc, handlerOptions); err != nil {
