@@ -87,7 +87,7 @@ const (
 	separator            = "/"
 	userDefinedTagPrefix = "User-Tag-"
 
-	maxGetSubTreeDepth = 10 // current limit on storage node side
+	maxGetSubTreeDepth = 0 // means all subTree
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
@@ -506,7 +506,7 @@ func (c *TreeClient) getTreeNode(ctx context.Context, cnrID cid.ID, nodeID uint6
 }
 
 func (c *TreeClient) getTreeNodes(ctx context.Context, cnrID cid.ID, nodeID uint64, keys ...string) (map[string]*TreeNode, error) {
-	subtree, err := c.getSubTree(ctx, cnrID, versionTree, nodeID, 1)
+	subtree, err := c.getSubTree(ctx, cnrID, versionTree, nodeID, 2)
 	if err != nil {
 		return nil, err
 	}
@@ -634,7 +634,7 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, cnrID cid.ID, treeI
 		return nil, "", err
 	}
 
-	subTree, err := c.getSubTree(ctx, cnrID, treeID, rootID, 1)
+	subTree, err := c.getSubTree(ctx, cnrID, treeID, rootID, 2)
 	if err != nil {
 		if errors.Is(err, layer.ErrNodeNotFound) {
 			return nil, "", nil
@@ -909,7 +909,7 @@ func (c *TreeClient) GetMultipartUpload(ctx context.Context, cnrID cid.ID, objec
 }
 
 func (c *TreeClient) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error) {
-	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 1)
+	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 2)
 	if err != nil {
 		return oid.ID{}, err
 	}
@@ -949,7 +949,7 @@ func (c *TreeClient) AddPart(ctx context.Context, cnrID cid.ID, multipartNodeID 
 }
 
 func (c *TreeClient) GetParts(ctx context.Context, cnrID cid.ID, multipartNodeID uint64) ([]*data.PartInfo, error) {
-	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 1)
+	parts, err := c.getSubTree(ctx, cnrID, systemTree, multipartNodeID, 2)
 	if err != nil {
 		return nil, err
 	}
@@ -1147,7 +1147,7 @@ func (c *TreeClient) getVersions(ctx context.Context, cnrID cid.ID, treeID, file
 }
 
 func (c *TreeClient) getParent(ctx context.Context, cnrID cid.ID, treeID string, id uint64) (uint64, error) {
-	subTree, err := c.getSubTree(ctx, cnrID, treeID, id, 0)
+	subTree, err := c.getSubTree(ctx, cnrID, treeID, id, 1)
 	if err != nil {
 		return 0, err
 	}
