@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -24,6 +26,7 @@ type TestNeoFS struct {
 
 	objects      map[string]*object.Object
 	containers   map[string]*container.Container
+	eaclTables   map[string]*eacl.Table
 	currentEpoch uint64
 }
 
@@ -31,6 +34,7 @@ func NewTestNeoFS() *TestNeoFS {
 	return &TestNeoFS{
 		objects:    make(map[string]*object.Object),
 		containers: make(map[string]*container.Container),
+		eaclTables: make(map[string]*eacl.Table),
 	}
 }
 
@@ -231,4 +235,28 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 	}
 
 	return result
+}
+
+func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container) error {
+	cnrID, ok := table.CID()
+	if !ok {
+		return errors.New("invalid cid")
+	}
+
+	if _, ok = t.containers[cnrID.EncodeToString()]; !ok {
+		return errors.New("not found")
+	}
+
+	t.eaclTables[cnrID.EncodeToString()] = &table
+
+	return nil
+}
+
+func (t *TestNeoFS) ContainerEACL(_ context.Context, cnrID cid.ID) (*eacl.Table, error) {
+	table, ok := t.eaclTables[cnrID.EncodeToString()]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+
+	return table, nil
 }

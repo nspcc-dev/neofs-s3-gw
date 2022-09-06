@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
@@ -12,9 +13,13 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1286,4 +1291,82 @@ func TestBucketAclToAst(t *testing.T) {
 	actualAst, err := aclToAst(acl, resInfo)
 	require.NoError(t, err)
 	require.Equal(t, expectedAst, actualAst)
+}
+
+func TestPutBucketACL(t *testing.T) {
+	tc := prepareHandlerContext(t)
+	bktName := "bucket-for-acl"
+
+	box := createAccessBox(t)
+	bktInfo := createBucket(t, tc, bktName, box)
+
+	header := map[string]string{api.AmzACL: "public-read"}
+	putBucketACL(t, tc, bktName, box, header)
+
+	header = map[string]string{api.AmzACL: "private"}
+	putBucketACL(t, tc, bktName, box, header)
+	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny)
+}
+
+func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo, action eacl.Action) {
+	bktACL, err := tc.Layer().GetBucketACL(tc.Context(), bktInfo)
+	require.NoError(t, err)
+
+	length := len(bktACL.EACL.Records())
+
+	if length < 7 {
+		t.Fatalf("length of records is less than 7: '%d'", length)
+	}
+
+	for _, rec := range bktACL.EACL.Records()[length-7:] {
+		if rec.Action() != action || rec.Targets()[0].Role() != eacl.RoleOthers {
+			t.Fatalf("inavid last record: '%s', '%s', '%s',", rec.Action(), rec.Operation(), rec.Targets()[0].Role())
+		}
+	}
+}
+
+func createAccessBox(t *testing.T) *accessbox.Box {
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
+	var bearerToken bearer.Token
+	err = bearerToken.Sign(key.PrivateKey)
+	require.NoError(t, err)
+
+	tok := new(session.Container)
+	tok.ForVerb(session.VerbContainerSetEACL)
+
+	tok2 := new(session.Container)
+	tok2.ForVerb(session.VerbContainerPut)
+	box := &accessbox.Box{
+		Gate: &accessbox.GateData{
+			SessionTokens: []*session.Container{tok, tok2},
+			BearerToken:   &bearerToken,
+		},
+	}
+
+	return box
+}
+
+func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box) *data.BucketInfo {
+	w, r := prepareTestRequest(t, bktName, "", nil)
+	ctx := context.WithValue(r.Context(), api.BoxData, box)
+	r = r.WithContext(ctx)
+	tc.Handler().CreateBucketHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	require.NoError(t, err)
+	return bktInfo
+}
+
+func putBucketACL(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box, header map[string]string) {
+	w, r := prepareTestRequest(t, bktName, "", nil)
+	for key, val := range header {
+		r.Header.Set(key, val)
+	}
+	ctx := context.WithValue(r.Context(), api.BoxData, box)
+	r = r.WithContext(ctx)
+	tc.Handler().PutBucketACLHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
 }
