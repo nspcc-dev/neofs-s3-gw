@@ -698,9 +698,10 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 
 		var newOps []*astOperation
 		for _, astOp := range resource.Operations {
+			// get parent matched operations
 			ops := getAstOps(parentResource, astOp)
 			switch len(ops) {
-			case 2:
+			case 2: // parent contains different actions for the same child operation
 				// potential inconsistency
 				if groupGrantee := astOp.IsGroupGrantee(); groupGrantee {
 					// it is not likely (such state must be detected early)
@@ -725,13 +726,12 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 				if handleRemoveOperations(parentResource, astOp, opToDelete) {
 					updated = true
 				}
-			case 1:
+			case 1: // parent contains some action for the same child operation
 				if astOp.Action != ops[0].Action {
 					// potential inconsistency
 					if groupGrantee := astOp.IsGroupGrantee(); groupGrantee {
 						// inconsistency
-						removeAstOp(parentResource, groupGrantee, astOp.Op, ops[0].Action)
-						parentResource.Operations = append(parentResource.Operations, astOp)
+						ops[0].Action = astOp.Action
 						updated = true
 						continue
 					}
@@ -746,7 +746,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 				if handleAddOperations(parentResource, astOp, ops[0]) {
 					updated = true
 				}
-			case 0:
+			case 0: // parent doesn't contain actions for the same child operation
 				newOps = append(newOps, astOp)
 				updated = true
 			}
