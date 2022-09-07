@@ -41,7 +41,7 @@ func TestTableToAst(t *testing.T) {
 	record2.SetOperation(eacl.OperationPut)
 	// Unknown role is used, because it is ignored when keys are set
 	eacl.AddFormedTarget(record2, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()), *((*ecdsa.PublicKey)(key2.PublicKey())))
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
+	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
 	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
 	table.AddRecord(record2)
 
@@ -480,12 +480,12 @@ func TestOrder(t *testing.T) {
 	objectUsersPutRec := eacl.NewRecord()
 	objectUsersPutRec.SetOperation(eacl.OperationPut)
 	objectUsersPutRec.SetAction(eacl.ActionAllow)
-	objectUsersPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, objectName)
+	objectUsersPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, objectName)
 	objectUsersPutRec.SetTargets(*targetUser)
 	objectOtherPutRec := eacl.NewRecord()
 	objectOtherPutRec.SetOperation(eacl.OperationPut)
 	objectOtherPutRec.SetAction(eacl.ActionDeny)
-	objectOtherPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, objectName)
+	objectOtherPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, objectName)
 	objectOtherPutRec.SetTargets(*targetOther)
 
 	expectedEacl := eacl.NewTable()
@@ -528,7 +528,7 @@ func TestOrder(t *testing.T) {
 		childRecord.SetOperation(eacl.OperationDelete)
 		childRecord.SetAction(eacl.ActionDeny)
 		childRecord.SetTargets(*targetOther)
-		childRecord.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, childName)
+		childRecord.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, childName)
 
 		mergedAst, updated := mergeAst(expectedAst, child)
 		require.True(t, updated)
@@ -654,7 +654,7 @@ func TestAstToTable(t *testing.T) {
 	record2.SetAction(eacl.ActionDeny)
 	record2.SetOperation(eacl.OperationGet)
 	eacl.AddFormedTarget(record2, eacl.RoleOthers)
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, "objectName")
+	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
 
 	expectedTable.AddRecord(serviceRec2.ToEACLRecord())
 	expectedTable.AddRecord(record2)
@@ -895,7 +895,7 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		if isVersion {
 			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
 		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resInfo.Object)
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
 		}
 		expectedTable.AddRecord(record)
 	}
@@ -905,7 +905,7 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		if isVersion {
 			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
 		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resInfo.Object)
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
 		}
 		expectedTable.AddRecord(record)
 	}

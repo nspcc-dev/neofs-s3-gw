@@ -218,7 +218,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oid.ID, error) {
 	attrNum := len(prm.Attributes) + 1 // + creation time
 
-	if prm.Filename != "" {
+	if prm.Filepath != "" {
 		attrNum++
 	}
 
@@ -237,10 +237,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		attrs = append(attrs, *a)
 	}
 
-	if prm.Filename != "" {
+	if prm.Filepath != "" {
 		a = object.NewAttribute()
-		a.SetKey(object.AttributeFileName)
-		a.SetValue(prm.Filename)
+		a.SetKey(object.AttributeFilePath)
+		a.SetValue(prm.Filepath)
 		attrs = append(attrs, *a)
 	}
 
@@ -527,7 +527,7 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 	return x.neoFS.CreateObject(ctx, layer.PrmObjectCreate{
 		Creator:   prm.Creator,
 		Container: prm.Container,
-		Filename:  prm.Filename,
+		Filepath:  prm.Filepath,
 		Attributes: [][2]string{
 			{"__NEOFS__EXPIRATION_EPOCH", strconv.FormatUint(prm.ExpirationEpoch, 10)}},
 		Payload: bytes.NewReader(prm.Payload),

@@ -138,9 +138,9 @@ func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID o
 	return res.Head, nil
 }
 
-// MimeByFileName detect mime type by filename extension.
-func MimeByFileName(name string) string {
-	ext := filepath.Ext(name)
+// MimeByFilePath detect mime type by file path extension.
+func MimeByFilePath(path string) string {
+	ext := filepath.Ext(path)
 	if len(ext) == 0 {
 		return ""
 	}
@@ -216,7 +216,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	if r != nil {
 		if len(p.Header[api.ContentType]) == 0 {
-			if contentType := MimeByFileName(p.Object); len(contentType) == 0 {
+			if contentType := MimeByFilePath(p.Object); len(contentType) == 0 {
 				d := newDetector(r)
 				if contentType, err := d.Detect(); err == nil {
 					p.Header[api.ContentType] = contentType
@@ -232,7 +232,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		Container:    p.BktInfo.CID,
 		Creator:      own,
 		PayloadSize:  uint64(p.Size),
-		Filename:     p.Object,
+		Filepath:     p.Object,
 		Payload:      r,
 		CopiesNumber: p.CopiesNumber,
 	}

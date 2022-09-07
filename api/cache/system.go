@@ -11,7 +11,7 @@ import (
 
 // SystemCache provides lru cache for objects.
 // This cache contains "system" objects (bucket versioning settings, tagging object etc.).
-// Key is bucketName+systemFileName.
+// Key is bucketName+systemFilePath.
 type SystemCache struct {
 	cache  gcache.Cache
 	logger *zap.Logger

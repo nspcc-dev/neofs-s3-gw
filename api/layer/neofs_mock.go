@@ -157,10 +157,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 	attrs := make([]object.Attribute, 0)
 
-	if prm.Filename != "" {
+	if prm.Filepath != "" {
 		a := object.NewAttribute()
-		a.SetKey(object.AttributeFileName)
-		a.SetValue(prm.Filename)
+		a.SetKey(object.AttributeFilePath)
+		a.SetValue(prm.Filepath)
 		attrs = append(attrs, *a)
 	}
 

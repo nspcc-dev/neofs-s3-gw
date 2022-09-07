@@ -675,7 +675,7 @@ func resInfoFromFilters(bucketName string, filters []eacl.Filter) resourceInfo {
 	resInfo := resourceInfo{Bucket: bucketName}
 	for _, filter := range filters {
 		if filter.Matcher() == eacl.MatchStringEqual {
-			if filter.Key() == object.AttributeFileName {
+			if filter.Key() == object.AttributeFilePath {
 				resInfo.Object = filter.Value()
 			} else if filter.Key() == v2acl.FilterObjectID {
 				resInfo.Version = filter.Value()
@@ -938,7 +938,7 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 				}
 				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
 			} else {
-				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFileName, resource.Object)
+				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
 			}
 		}
 		res = append(res, record)
