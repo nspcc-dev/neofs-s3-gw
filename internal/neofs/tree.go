@@ -31,6 +31,7 @@ type (
 
 	TreeNode struct {
 		ID        uint64
+		ParentID  uint64
 		ObjID     oid.ID
 		TimeStamp uint64
 		Size      int64
@@ -109,12 +110,14 @@ func NewTreeClient(addr string, key *keys.PrivateKey) (*TreeClient, error) {
 type NodeResponse interface {
 	GetMeta() []*tree.KeyValue
 	GetNodeId() uint64
+	GetParentId() uint64
 	GetTimestamp() uint64
 }
 
 func newTreeNode(nodeInfo NodeResponse) (*TreeNode, error) {
 	treeNode := &TreeNode{
 		ID:        nodeInfo.GetNodeId(),
+		ParentID:  nodeInfo.GetParentId(),
 		TimeStamp: nodeInfo.GetTimestamp(),
 		Meta:      make(map[string]string, len(nodeInfo.GetMeta())),
 	}
@@ -171,6 +174,7 @@ func newNodeVersionFromTreeNode(filePath string, treeNode *TreeNode) *data.NodeV
 	version := &data.NodeVersion{
 		BaseNodeVersion: data.BaseNodeVersion{
 			ID:        treeNode.ID,
+			ParenID:   treeNode.ParentID,
 			OID:       treeNode.ObjID,
 			Timestamp: treeNode.TimeStamp,
 			ETag:      eTag,
@@ -1078,12 +1082,7 @@ func (c *TreeClient) addVersion(ctx context.Context, cnrID cid.ID, treeID string
 
 		node, err := c.getUnversioned(ctx, cnrID, treeID, version.FilePath)
 		if err == nil {
-			parentID, err := c.getParent(ctx, cnrID, treeID, node.ID)
-			if err != nil {
-				return 0, err
-			}
-
-			if err = c.moveNode(ctx, cnrID, treeID, node.ID, parentID, meta); err != nil {
+			if err = c.moveNode(ctx, cnrID, treeID, node.ID, node.ParenID, meta); err != nil {
 				return 0, err
 			}
 
@@ -1144,15 +1143,6 @@ func (c *TreeClient) getVersions(ctx context.Context, cnrID cid.ID, treeID, file
 	}
 
 	return result, nil
-}
-
-func (c *TreeClient) getParent(ctx context.Context, cnrID cid.ID, treeID string, id uint64) (uint64, error) {
-	subTree, err := c.getSubTree(ctx, cnrID, treeID, id, 1)
-	if err != nil {
-		return 0, err
-	}
-
-	return subTree[0].GetParentId(), nil
 }
 
 func (c *TreeClient) getSubTree(ctx context.Context, cnrID cid.ID, treeID string, rootID uint64, depth uint32) ([]*tree.GetSubTreeResponse_Body, error) {
