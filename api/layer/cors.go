@@ -40,7 +40,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
 		Payload:      p.Reader,
-		Filename:     p.BktInfo.CORSObjectName(),
+		Filepath:     p.BktInfo.CORSObjectName(),
 		CopiesNumber: p.CopiesNumber,
 	}
 
@@ -64,7 +64,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		}
 	}
 
-	if err := n.systemCache.PutCORS(systemObjectKey(p.BktInfo, prm.Filename), cors); err != nil {
+	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, prm.Filepath), cors); err != nil {
 		n.log.Error("couldn't cache system object", zap.Error(err))
 	}
 

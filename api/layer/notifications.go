@@ -31,7 +31,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
 		Payload:      bytes.NewReader(confXML),
-		Filename:     sysName,
+		Filepath:     sysName,
 		CopiesNumber: p.CopiesNumber,
 	}
 

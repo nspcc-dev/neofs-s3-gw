@@ -37,8 +37,8 @@ type PrmObjectCreate struct {
 	// NeoFS container to store the object.
 	Container cid.ID
 
-	// File name.
-	Filename string
+	// File path.
+	Filepath string
 
 	// Last NeoFS epoch of the object lifetime.
 	ExpirationEpoch uint64
@@ -131,7 +131,7 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
 		Creator:         issuer,
 		Container:       idCnr,
-		Filename:        strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
+		Filepath:        strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
 		ExpirationEpoch: expiration,
 		Payload:         data,
 	})

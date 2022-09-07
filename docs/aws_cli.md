@@ -66,7 +66,7 @@ To upload a file into a bucket in the NeoFS network, run the following command:
 ```
 $ aws s3api put-object --bucket %BUCKET_NAME --key %OBJECT_KEY --body  %FILEPATH
 ```
-where %OBJECT_KEY is the filename of an object in NeoFS
+where %OBJECT_KEY is the filepath of an object in NeoFS
 
 #### Upload of a dir
 

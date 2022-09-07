@@ -82,7 +82,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(info.ContentType) == 0 {
-		if info.ContentType = layer.MimeByFileName(info.Name); len(info.ContentType) == 0 {
+		if info.ContentType = layer.MimeByFilePath(info.Name); len(info.ContentType) == 0 {
 			buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
 			getParams := &layer.GetObjectParams{
 				ObjectInfo: info,

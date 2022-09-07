@@ -69,7 +69,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 	)
 
 	headers := userHeaders(meta.Attributes())
-	delete(headers, object.AttributeFileName)
+	delete(headers, object.AttributeFilePath)
 	if contentType, ok := headers[object.AttributeContentType]; ok {
 		mimeType = contentType
 		delete(headers, object.AttributeContentType)
@@ -89,7 +89,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		IsDir: false,
 
 		Bucket:      bkt.Name,
-		Name:        filenameFromObject(meta),
+		Name:        filepathFromObject(meta),
 		Created:     creation,
 		ContentType: mimeType,
 		Headers:     headers,
@@ -121,9 +121,9 @@ func addEncryptionHeaders(meta map[string]string, enc encryption.Params) error {
 	return nil
 }
 
-func filenameFromObject(o *object.Object) string {
+func filepathFromObject(o *object.Object) string {
 	for _, attr := range o.Attributes() {
-		if attr.Key() == object.AttributeFileName {
+		if attr.Key() == object.AttributeFilePath {
 			return attr.Value()
 		}
 	}

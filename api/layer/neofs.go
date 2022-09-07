@@ -100,8 +100,8 @@ type PrmObjectCreate struct {
 	// Full payload size (optional).
 	PayloadSize uint64
 
-	// Associated filename (optional).
-	Filename string
+	// Associated filepath (optional).
+	Filepath string
 
 	// Object payload encapsulated in io.Reader primitive.
 	Payload io.Reader
