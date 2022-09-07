@@ -449,7 +449,10 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	// copy full payload
 	written, err := io.CopyBuffer(p.Writer, r, buf)
 	if err != nil {
-		return fmt.Errorf("copy object payload written: '%d', decLength: '%d', params.ln: '%d' : %w", written, decReader.DecryptedLength(), params.ln, err)
+		if decReader != nil {
+			return fmt.Errorf("copy object payload written: '%d', decLength: '%d', params.ln: '%d' : %w", written, decReader.DecryptedLength(), params.ln, err)
+		}
+		return fmt.Errorf("copy object payload written: '%d': %w", written, err)
 	}
 
 	return nil
