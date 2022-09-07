@@ -50,6 +50,7 @@ func (e ExtendedObjectInfo) Version() string {
 // Basically used for "system" object.
 type BaseNodeVersion struct {
 	ID        uint64
+	ParenID   uint64
 	OID       oid.ID
 	Timestamp uint64
 	Size      int64
