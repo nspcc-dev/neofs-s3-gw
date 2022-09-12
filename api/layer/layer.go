@@ -18,7 +18,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -42,11 +41,15 @@ type (
 
 	MsgHandlerFunc func(context.Context, *nats.Msg) error
 
+	BucketResolver interface {
+		Resolve(ctx context.Context, name string) (cid.ID, error)
+	}
+
 	layer struct {
 		neoFS       NeoFS
 		log         *zap.Logger
 		anonKey     AnonymousKey
-		resolver    *resolver.BucketResolver
+		resolver    BucketResolver
 		ncontroller EventListener
 		listsCache  *cache.ObjectsListCache
 		objCache    *cache.ObjectsCache
@@ -60,7 +63,7 @@ type (
 		ChainAddress string
 		Caches       *CachesConfig
 		AnonKey      AnonymousKey
-		Resolver     *resolver.BucketResolver
+		Resolver     BucketResolver
 		TreeService  TreeService
 	}
 
