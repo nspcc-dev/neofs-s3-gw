@@ -2,7 +2,9 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/ns"
@@ -12,6 +14,9 @@ const (
 	NNSResolver = "nns"
 	DNSResolver = "dns"
 )
+
+// ErrNoResolvers returns when trying to resolve container without any resolver.
+var ErrNoResolvers = errors.New("no resolvers")
 
 // NeoFS represents virtual connection to the NeoFS network.
 type NeoFS interface {
@@ -28,62 +33,115 @@ type Config struct {
 }
 
 type BucketResolver struct {
-	Name    string
-	resolve func(context.Context, string) (cid.ID, error)
-
-	next *BucketResolver
+	mu        sync.RWMutex
+	resolvers []*Resolver
 }
 
-func (r *BucketResolver) SetResolveFunc(fn func(context.Context, string) (cid.ID, error)) {
+type Resolver struct {
+	Name    string
+	resolve func(context.Context, string) (cid.ID, error)
+}
+
+func (r *Resolver) SetResolveFunc(fn func(context.Context, string) (cid.ID, error)) {
 	r.resolve = fn
 }
 
-func (r *BucketResolver) Resolve(ctx context.Context, name string) (cid.ID, error) {
-	cnrID, err := r.resolve(ctx, name)
-	if err != nil {
-		if r.next != nil {
-			return r.next.Resolve(ctx, name)
-		}
-		return cid.ID{}, fmt.Errorf("failed resolve: %w", err)
-	}
-	return cnrID, nil
+func (r *Resolver) Resolve(ctx context.Context, name string) (cid.ID, error) {
+	return r.resolve(ctx, name)
 }
 
-func NewResolver(order []string, cfg *Config) (*BucketResolver, error) {
-	if len(order) == 0 {
-		return nil, fmt.Errorf("resolving order must not be empty")
-	}
-
-	bucketResolver, err := newResolver(order[len(order)-1], cfg, nil)
+func NewBucketResolver(resolverNames []string, cfg *Config) (*BucketResolver, error) {
+	resolvers, err := createResolvers(resolverNames, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("create resolver: %w", err)
+		return nil, err
 	}
 
-	for i := len(order) - 2; i >= 0; i-- {
-		resolverName := order[i]
-		next := bucketResolver
+	return &BucketResolver{
+		resolvers: resolvers,
+	}, nil
+}
 
-		bucketResolver, err = newResolver(resolverName, cfg, next)
+func createResolvers(resolverNames []string, cfg *Config) ([]*Resolver, error) {
+	resolvers := make([]*Resolver, len(resolverNames))
+	for i, name := range resolverNames {
+		cnrResolver, err := newResolver(name, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("create resolver: %w", err)
+			return nil, err
 		}
+		resolvers[i] = cnrResolver
 	}
 
-	return bucketResolver, nil
+	return resolvers, nil
 }
 
-func newResolver(name string, cfg *Config, next *BucketResolver) (*BucketResolver, error) {
+func (r *BucketResolver) Resolve(ctx context.Context, bktName string) (cnrID cid.ID, err error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, resolver := range r.resolvers {
+		cnrID, resolverErr := resolver.Resolve(ctx, bktName)
+		if resolverErr != nil {
+			resolverErr = fmt.Errorf("%s: %w", resolver.Name, resolverErr)
+			if err == nil {
+				err = resolverErr
+			} else {
+				err = fmt.Errorf("%s: %w", err.Error(), resolverErr)
+			}
+			continue
+		}
+		return cnrID, nil
+	}
+
+	if err != nil {
+		return cnrID, err
+	}
+
+	return cnrID, ErrNoResolvers
+}
+
+func (r *BucketResolver) UpdateResolvers(resolverNames []string, cfg *Config) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.equals(resolverNames) {
+		return nil
+	}
+
+	resolvers, err := createResolvers(resolverNames, cfg)
+	if err != nil {
+		return err
+	}
+
+	r.resolvers = resolvers
+
+	return nil
+}
+
+func (r *BucketResolver) equals(resolverNames []string) bool {
+	if len(r.resolvers) != len(resolverNames) {
+		return false
+	}
+
+	for i := 0; i < len(resolverNames); i++ {
+		if r.resolvers[i].Name != resolverNames[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func newResolver(name string, cfg *Config) (*Resolver, error) {
 	switch name {
 	case DNSResolver:
-		return NewDNSResolver(cfg.NeoFS, next)
+		return NewDNSResolver(cfg.NeoFS)
 	case NNSResolver:
-		return NewNNSResolver(cfg.RPCAddress, next)
+		return NewNNSResolver(cfg.RPCAddress)
 	default:
 		return nil, fmt.Errorf("unknown resolver: %s", name)
 	}
 }
 
-func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) {
+func NewDNSResolver(neoFS NeoFS) (*Resolver, error) {
 	if neoFS == nil {
 		return nil, fmt.Errorf("pool must not be nil for DNS resolver")
 	}
@@ -104,15 +162,13 @@ func NewDNSResolver(neoFS NeoFS, next *BucketResolver) (*BucketResolver, error) 
 		return cnrID, nil
 	}
 
-	return &BucketResolver{
-		Name: DNSResolver,
-
+	return &Resolver{
+		Name:    DNSResolver,
 		resolve: resolveFunc,
-		next:    next,
 	}, nil
 }
 
-func NewNNSResolver(address string, next *BucketResolver) (*BucketResolver, error) {
+func NewNNSResolver(address string) (*Resolver, error) {
 	if address == "" {
 		return nil, fmt.Errorf("rpc address must not be empty for NNS resolver")
 	}
@@ -131,10 +187,8 @@ func NewNNSResolver(address string, next *BucketResolver) (*BucketResolver, erro
 		return cnrID, nil
 	}
 
-	return &BucketResolver{
-		Name: NNSResolver,
-
+	return &Resolver{
+		Name:    NNSResolver,
 		resolve: resolveFunc,
-		next:    next,
 	}, nil
 }

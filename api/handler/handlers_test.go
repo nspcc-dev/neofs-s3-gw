@@ -56,7 +56,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	l := zap.NewExample()
 	tp := layer.NewTestNeoFS()
 
-	testResolver := &resolver.BucketResolver{Name: "test_resolver"}
+	testResolver := &resolver.Resolver{Name: "test_resolver"}
 	testResolver.SetResolveFunc(func(_ context.Context, name string) (cid.ID, error) {
 		return tp.ContainerID(name)
 	})

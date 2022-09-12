@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -33,14 +35,16 @@ import (
 type (
 	// App is the main application structure.
 	App struct {
-		ctr auth.Center
-		log *zap.Logger
-		cfg *viper.Viper
-		tls *tlsConfig
-		obj layer.Client
-		api api.Handler
+		ctr  auth.Center
+		log  *zap.Logger
+		cfg  *viper.Viper
+		pool *pool.Pool
+		obj  layer.Client
+		api  api.Handler
 
-		metrics *appMetrics
+		metrics        *appMetrics
+		bucketResolver *resolver.BucketResolver
+		tlsProvider    *certProvider
 
 		maxClients api.MaxClients
 
@@ -60,9 +64,13 @@ type (
 		lvl    zap.AtomicLevel
 	}
 
-	tlsConfig struct {
-		KeyFile  string
-		CertFile string
+	certProvider struct {
+		Enabled bool
+
+		mu       sync.RWMutex
+		certPath string
+		keyPath  string
+		cert     *tls.Certificate
 	}
 
 	appMetrics struct {
@@ -84,7 +92,6 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	var (
 		key    *keys.PrivateKey
 		err    error
-		tls    *tlsConfig
 		caller api.Handler
 		ctr    auth.Center
 		obj    layer.Client
@@ -130,15 +137,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		l.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
-	if v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile) {
-		tls = &tlsConfig{
-			KeyFile:  v.GetString(cfgTLSKeyFile),
-			CertFile: v.GetString(cfgTLSCertFile),
-		}
-	}
-
-	l.Info("using credentials",
-		zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
+	l.Info("using credentials", zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
 
 	prmPool.SetKey(&key.PrivateKey)
 	prmPool.SetNodeDialTimeout(conTimeout)
@@ -175,7 +174,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		l.Warn(fmt.Sprintf("resolver '%s' won't be used since '%s' isn't provided", resolver.NNSResolver, cfgRPCEndpoint))
 	}
 
-	bucketResolver, err := resolver.NewResolver(order, resolveCfg)
+	bucketResolver, err := resolver.NewBucketResolver(order, resolveCfg)
 	if err != nil {
 		l.Fatal("failed to form resolver", zap.Error(err))
 	}
@@ -220,12 +219,12 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	}
 
 	app := &App{
-		ctr: ctr,
-		log: l,
-		cfg: v,
-		obj: obj,
-		tls: tls,
-		api: caller,
+		ctr:  ctr,
+		log:  l,
+		cfg:  v,
+		pool: conns,
+		obj:  obj,
+		api:  caller,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -233,14 +232,49 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		maxClients: api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline),
 	}
 
-	app.initMetrics(neofs.NewPoolStatistic(conns))
+	app.initMetrics()
+	app.initResolver()
+	app.initTLSProvider()
 
 	return app
 }
 
-func (a *App) initMetrics(scraper StatisticScraper) {
-	gateMetricsProvider := newGateMetrics(scraper)
+func (a *App) initMetrics() {
+	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.pool))
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
+}
+
+func (a *App) initResolver() {
+	var err error
+	a.bucketResolver, err = resolver.NewBucketResolver(a.getResolverConfig())
+	if err != nil {
+		a.log.Fatal("failed to create resolver", zap.Error(err))
+	}
+}
+
+func (a *App) initTLSProvider() {
+	a.tlsProvider = &certProvider{
+		Enabled: a.cfg.IsSet(cfgTLSCertFile) || a.cfg.IsSet(cfgTLSKeyFile),
+	}
+}
+
+func (a *App) getResolverConfig() ([]string, *resolver.Config) {
+	resolveCfg := &resolver.Config{
+		NeoFS:      neofs.NewResolverNeoFS(a.pool),
+		RPCAddress: a.cfg.GetString(cfgRPCEndpoint),
+	}
+
+	order := a.cfg.GetStringSlice(cfgResolveOrder)
+	if resolveCfg.RPCAddress == "" {
+		order = remove(order, resolver.NNSResolver)
+		a.log.Warn(fmt.Sprintf("resolver '%s' won't be used since '%s' isn't provided", resolver.NNSResolver, cfgRPCEndpoint))
+	}
+
+	if len(order) == 0 {
+		a.log.Info("container resolver will be disabled because of resolvers 'resolver_order' is empty")
+	}
+
+	return order, resolveCfg
 }
 
 func newAppMetrics(logger *zap.Logger, provider GateMetricsCollector, enabled bool) *appMetrics {
@@ -284,6 +318,44 @@ func (m *appMetrics) Shutdown() {
 	m.mu.Unlock()
 }
 
+func (p *certProvider) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	if !p.Enabled {
+		return nil, errors.New("cert provider: disabled")
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.cert, nil
+}
+
+func (p *certProvider) UpdateCert(certPath, keyPath string) error {
+	if !p.Enabled {
+		return fmt.Errorf("tls disabled")
+	}
+
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return fmt.Errorf("cannot load TLS key pair from certFile '%s' and keyFile '%s': %w", certPath, keyPath, err)
+	}
+
+	p.mu.Lock()
+	p.certPath = certPath
+	p.keyPath = keyPath
+	p.cert = &cert
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *certProvider) FilePaths() (string, string) {
+	if !p.Enabled {
+		return "", ""
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.certPath, p.keyPath
+}
+
 func remove(list []string, element string) []string {
 	for i, item := range list {
 		if item == element {
@@ -317,50 +389,48 @@ func (a *App) setHealthStatus() {
 
 // Serve runs HTTP server to handle S3 API requests.
 func (a *App) Serve(ctx context.Context) {
-	var (
-		err  error
-		lis  net.Listener
-		lic  net.ListenConfig
-		srv  = new(http.Server)
-		addr = a.cfg.GetString(cfgListenAddress)
-	)
-
-	if lis, err = lic.Listen(ctx, "tcp", addr); err != nil {
-		a.log.Fatal("could not prepare listener",
-			zap.Error(err))
-	}
-
-	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	// Attach S3 API:
 	domains := a.cfg.GetStringSlice(cfgListenDomains)
-	a.log.Info("fetch domains, prepare to use API",
-		zap.Strings("domains", domains))
+	a.log.Info("fetch domains, prepare to use API", zap.Strings("domains", domains))
+	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	api.Attach(router, domains, a.maxClients, a.api, a.ctr, a.log)
 
 	// Use mux.Router as http.Handler
+	srv := new(http.Server)
 	srv.Handler = router
 	srv.ErrorLog = zap.NewStdLog(a.log)
 
 	a.startServices()
 
 	go func() {
-		a.log.Info("starting server",
-			zap.String("bind", addr))
+		addr := a.cfg.GetString(cfgListenAddress)
+		a.log.Info("starting server", zap.String("bind", addr))
 
-		switch a.tls {
-		case nil:
-			if err = srv.Serve(lis); err != nil && err != http.ErrServerClosed {
-				a.log.Fatal("listen and serve",
-					zap.Error(err))
+		var lic net.ListenConfig
+		ln, err := lic.Listen(ctx, "tcp", addr)
+		if err != nil {
+			a.log.Fatal("could not prepare listener", zap.Error(err))
+		}
+
+		if a.tlsProvider.Enabled {
+			certFile := a.cfg.GetString(cfgTLSCertFile)
+			keyFile := a.cfg.GetString(cfgTLSKeyFile)
+
+			a.log.Info("using certificate", zap.String("cert", certFile), zap.String("key", keyFile))
+			if err = a.tlsProvider.UpdateCert(certFile, keyFile); err != nil {
+				a.log.Fatal("failed to update cert", zap.Error(err))
 			}
-		default:
-			a.log.Info("using certificate",
-				zap.String("key", a.tls.KeyFile),
-				zap.String("cert", a.tls.CertFile))
 
-			if err = srv.ServeTLS(lis, a.tls.CertFile, a.tls.KeyFile); err != nil && err != http.ErrServerClosed {
-				a.log.Fatal("listen and serve",
-					zap.Error(err))
+			lnTLS := tls.NewListener(ln, &tls.Config{
+				GetCertificate: a.tlsProvider.GetCertificate,
+			})
+
+			if err = srv.ServeTLS(lnTLS, certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				a.log.Fatal("listen and serve", zap.Error(err))
+			}
+		} else {
+			if err = srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+				a.log.Fatal("listen and serve", zap.Error(err))
 			}
 		}
 	}()
@@ -403,6 +473,14 @@ func (a *App) configReload() {
 	if err := readConfig(a.cfg); err != nil {
 		a.log.Warn("failed to reload config", zap.Error(err))
 		return
+	}
+
+	if err := a.bucketResolver.UpdateResolvers(a.getResolverConfig()); err != nil {
+		a.log.Warn("failed to reload resolvers", zap.Error(err))
+	}
+
+	if err := a.tlsProvider.UpdateCert(a.cfg.GetString(cfgTLSCertFile), a.cfg.GetString(cfgTLSKeyFile)); err != nil {
+		a.log.Warn("failed to reload TLS certs", zap.Error(err))
 	}
 
 	a.stopServices()
