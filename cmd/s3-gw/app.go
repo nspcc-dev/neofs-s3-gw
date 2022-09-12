@@ -230,6 +230,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		wrkDone: make(chan struct{}, 1),
 
 		maxClients: api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline),
+		settings:   &appSettings{LogLevel: log.lvl},
 	}
 
 	app.initMetrics()
