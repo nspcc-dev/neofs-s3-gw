@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -42,6 +45,17 @@ type (
 
 		webDone chan struct{}
 		wrkDone chan struct{}
+
+		settings *appSettings
+	}
+
+	appSettings struct {
+		LogLevel zap.AtomicLevel
+	}
+
+	Logger struct {
+		logger *zap.Logger
+		lvl    zap.AtomicLevel
 	}
 
 	tlsConfig struct {
@@ -54,7 +68,9 @@ type (
 	}
 )
 
-func newApp(ctx context.Context, l *zap.Logger, v *viper.Viper) *App {
+func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
+	l := log.logger
+
 	var (
 		key    *keys.PrivateKey
 		err    error
@@ -245,8 +261,8 @@ func (a *App) Wait() {
 	a.log.Info("application finished")
 }
 
-// Server runs HTTP server to handle S3 API requests.
-func (a *App) Server(ctx context.Context) {
+// Serve runs HTTP server to handle S3 API requests.
+func (a *App) Serve(ctx context.Context) {
 	var (
 		err  error
 		lis  net.Listener
@@ -299,7 +315,18 @@ func (a *App) Server(ctx context.Context) {
 		}
 	}()
 
-	<-ctx.Done()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGHUP)
+
+LOOP:
+	for {
+		select {
+		case <-ctx.Done():
+			break LOOP
+		case <-sigs:
+			a.configReload()
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
 	defer cancel()
@@ -310,6 +337,31 @@ func (a *App) Server(ctx context.Context) {
 	prometheus.ShutDown(ctx)
 
 	close(a.webDone)
+}
+
+func (a *App) configReload() {
+	a.log.Info("SIGHUP config reload started")
+
+	if !a.cfg.IsSet(cmdConfig) {
+		a.log.Warn("failed to reload config because it's missed")
+		return
+	}
+	if err := readConfig(a.cfg); err != nil {
+		a.log.Warn("failed to reload config", zap.Error(err))
+		return
+	}
+
+	a.updateSettings()
+
+	a.log.Info("SIGHUP config reload completed")
+}
+
+func (a *App) updateSettings() {
+	if lvl, err := getLogLevel(a.cfg); err != nil {
+		a.log.Warn("log level won't be updated", zap.Error(err))
+	} else {
+		a.settings.LogLevel.SetLevel(lvl)
+	}
 }
 
 func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Options {
