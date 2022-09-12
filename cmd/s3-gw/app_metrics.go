@@ -67,6 +67,11 @@ func newGateMetrics(scraper StatisticScraper) *GateMetrics {
 	}
 }
 
+func (g *GateMetrics) Unregister() {
+	g.stateMetrics.unregister()
+	prometheus.Unregister(&g.poolMetricsCollector)
+}
+
 func newStateMetrics() *stateMetrics {
 	return &stateMetrics{
 		healthCheck: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -80,6 +85,10 @@ func newStateMetrics() *stateMetrics {
 
 func (m stateMetrics) register() {
 	prometheus.MustRegister(m.healthCheck)
+}
+
+func (m stateMetrics) unregister() {
+	prometheus.Unregister(m.healthCheck)
 }
 
 func (m stateMetrics) SetHealth(s int32) {
@@ -164,7 +173,7 @@ func (m *poolMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	m.requestDuration.Collect(ch)
 }
 
-func (m poolMetricsCollector) Describe(descs chan<- *prometheus.Desc) {
+func (m *poolMetricsCollector) Describe(descs chan<- *prometheus.Desc) {
 	m.overallErrors.Describe(descs)
 	m.overallNodeErrors.Describe(descs)
 	m.overallNodeRequests.Describe(descs)
