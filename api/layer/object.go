@@ -250,7 +250,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	newVersion.OID = id
 	newVersion.ETag = hex.EncodeToString(hash)
-	if newVersion.ID, err = n.treeService.AddVersion(ctx, p.BktInfo.CID, newVersion); err != nil {
+	if newVersion.ID, err = n.treeService.AddVersion(ctx, p.BktInfo, newVersion); err != nil {
 		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
 	}
 
@@ -313,7 +313,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		}
 	}
 
-	node, err := n.treeService.GetLatestVersion(ctx, bkt.CID, objectName)
+	node, err := n.treeService.GetLatestVersion(ctx, bkt, objectName)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
@@ -355,7 +355,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 	var err error
 	var foundVersion *data.NodeVersion
 	if p.VersionID == data.UnversionedObjectVersionID {
-		foundVersion, err = n.treeService.GetUnversioned(ctx, bkt.CID, p.Object)
+		foundVersion, err = n.treeService.GetUnversioned(ctx, bkt, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
@@ -363,7 +363,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 			return nil, err
 		}
 	} else {
-		versions, err := n.treeService.GetVersions(ctx, bkt.CID, p.Object)
+		versions, err := n.treeService.GetVersions(ctx, bkt, p.Object)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't get versions: %w", err)
 		}
@@ -507,7 +507,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	nodeVersions := n.listsCache.GetVersions(cacheKey)
 
 	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetLatestVersionsByPrefix(ctx, p.Bucket.CID, p.Prefix)
+		nodeVersions, err = n.treeService.GetLatestVersionsByPrefix(ctx, p.Bucket, p.Prefix)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -647,7 +647,7 @@ func (n *layer) bucketNodeVersions(ctx context.Context, bkt *data.BucketInfo, pr
 	nodeVersions := n.listsCache.GetVersions(cacheKey)
 
 	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt.CID, prefix)
+		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt, prefix)
 		if err != nil {
 			return nil, fmt.Errorf("get all versions from tree service: %w", err)
 		}

@@ -157,7 +157,7 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = h.obj.PutBucketTagging(r.Context(), bktInfo.CID, tagSet); err != nil {
+	if err = h.obj.PutBucketTagging(r.Context(), bktInfo, tagSet); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
@@ -172,7 +172,7 @@ func (h *handler) GetBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tagSet, err := h.obj.GetBucketTagging(r.Context(), bktInfo.CID)
+	tagSet, err := h.obj.GetBucketTagging(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 		return
@@ -193,7 +193,7 @@ func (h *handler) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = h.obj.DeleteBucketTagging(r.Context(), bktInfo.CID); err != nil {
+	if err = h.obj.DeleteBucketTagging(r.Context(), bktInfo); err != nil {
 		h.logAndSendError(w, "could not delete bucket tagging", reqInfo, err)
 		return
 	}

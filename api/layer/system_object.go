@@ -27,11 +27,7 @@ type PutLockInfoParams struct {
 }
 
 func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err error) {
-	var (
-		cnrID   = p.ObjVersion.BktInfo.CID
-		newLock = p.NewLock
-	)
-
+	newLock := p.NewLock
 	versionNode := p.NodeVersion
 	// sometimes node version can be provided from executing context
 	// if not, then receive node version from tree service
@@ -47,7 +43,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		}
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, cnrID, versionNode.ID)
+	lockInfo, err := n.treeService.GetLock(ctx, p.ObjVersion.BktInfo, versionNode.ID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
@@ -100,7 +96,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		}
 	}
 
-	if err = n.treeService.PutLock(ctx, cnrID, versionNode.ID, lockInfo); err != nil {
+	if err = n.treeService.PutLock(ctx, p.ObjVersion.BktInfo, versionNode.ID, lockInfo); err != nil {
 		return fmt.Errorf("couldn't put lock into tree: %w", err)
 	}
 
@@ -139,7 +135,7 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		return nil, err
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, objVersion.BktInfo.CID, versionNode.ID)
+	lockInfo, err := n.treeService.GetLock(ctx, objVersion.BktInfo, versionNode.ID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
@@ -158,7 +154,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
 		return cors, nil
 	}
-	objID, err := n.treeService.GetBucketCORS(ctx, bkt.CID)
+	objID, err := n.treeService.GetBucketCORS(ctx, bkt)
 	objIDNotFound := errorsStd.Is(err, ErrNodeNotFound)
 	if err != nil && !objIDNotFound {
 		return nil, err
@@ -206,7 +202,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
-	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo.CID)
+	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo)
 	if err != nil {
 		if !errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, err
@@ -224,7 +220,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 }
 
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo.CID, p.Settings); err != nil {
+	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo, p.Settings); err != nil {
 		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 
