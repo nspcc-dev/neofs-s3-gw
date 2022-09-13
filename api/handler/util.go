@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	errorsStd "errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,7 +24,20 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 	fields = append(fields, additional...)
 
 	h.log.Error(logText, fields...)
-	api.WriteErrorResponse(w, reqInfo, err)
+	api.WriteErrorResponse(w, reqInfo, transformToS3Error(err))
+}
+
+func transformToS3Error(err error) error {
+	if _, ok := err.(errors.Error); ok {
+		return err
+	}
+
+	if errorsStd.Is(err, layer.ErrAccessDenied) ||
+		errorsStd.Is(err, layer.ErrNodeAccessDenied) {
+		return errors.GetAPIError(errors.ErrAccessDenied)
+	}
+
+	return errors.GetAPIError(errors.ErrInternalError)
 }
 
 func (h *handler) getBucketAndCheckOwner(r *http.Request, bucket string, header ...string) (*data.BucketInfo, error) {

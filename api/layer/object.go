@@ -93,7 +93,7 @@ func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj 
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {
-		return nil, n.transformNeofsError(ctx, err)
+		return nil, err
 	}
 
 	return res.Head, nil
@@ -113,7 +113,7 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Re
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {
-		return nil, n.transformNeofsError(ctx, err)
+		return nil, err
 	}
 
 	return res.Payload, nil
@@ -132,7 +132,7 @@ func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID o
 
 	res, err := n.neoFS.ReadObject(ctx, prm)
 	if err != nil {
-		return nil, n.transformNeofsError(ctx, err)
+		return nil, err
 	}
 
 	return res.Head, nil
@@ -420,7 +420,7 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 
 	n.objCache.Delete(newAddress(bktInfo.CID, idObj))
 
-	return n.transformNeofsError(ctx, n.neoFS.DeleteObject(ctx, prm))
+	return n.neoFS.DeleteObject(ctx, prm)
 }
 
 // objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
@@ -432,7 +432,7 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 		hash.Write(buf)
 	})
 	id, err := n.neoFS.CreateObject(ctx, prm)
-	return id, hash.Sum(nil), n.transformNeofsError(ctx, err)
+	return id, hash.Sum(nil), err
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.
@@ -813,19 +813,6 @@ func tryDirectoryName(node *data.NodeVersion, prefix, delimiter string) string {
 	}
 
 	return ""
-}
-
-func (n *layer) transformNeofsError(ctx context.Context, err error) error {
-	if err == nil {
-		return nil
-	}
-
-	if errors.Is(err, ErrAccessDenied) {
-		n.log.Debug("error was transformed", zap.String("request_id", api.GetRequestID(ctx)), zap.Error(err))
-		return apiErrors.GetAPIError(apiErrors.ErrAccessDenied)
-	}
-
-	return err
 }
 
 func wrapReader(input io.Reader, bufSize int, f func(buf []byte)) io.Reader {
