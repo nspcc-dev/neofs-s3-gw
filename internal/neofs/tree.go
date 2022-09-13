@@ -441,9 +441,6 @@ func (c *TreeClient) DeleteObjectTagging(ctx context.Context, bktInfo *data.Buck
 func (c *TreeClient) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
 	node, err := c.getSystemNodeWithAllAttributes(ctx, bktInfo, []string{bucketTaggingFilename})
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil, layer.ErrNodeNotFound
-		}
 		return nil, err
 	}
 
@@ -549,7 +546,7 @@ func (c *TreeClient) GetLatestVersion(ctx context.Context, bktInfo *data.BucketI
 	}
 	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't get nodes: %w", err)
+		return nil, err
 	}
 
 	if len(nodes) == 0 {
@@ -1107,10 +1104,10 @@ func (c *TreeClient) getVersions(ctx context.Context, bktInfo *data.BucketInfo, 
 	}
 	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, layer.ErrNodeNotFound) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("couldn't get nodes: %w", err)
+		return nil, err
 	}
 
 	result := make([]*data.NodeVersion, 0, len(nodes))
@@ -1152,10 +1149,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, bktInfo *data.BucketInfo, t
 
 	cli, err := c.service.GetSubTree(ctx, request)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil, layer.ErrNodeNotFound
-		}
-		return nil, fmt.Errorf("failed to get sub tree client: %w", err)
+		return nil, handleError("failed to get sub tree client", err)
 	}
 
 	var subtree []*tree.GetSubTreeResponse_Body
@@ -1164,10 +1158,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, bktInfo *data.BucketInfo, t
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				return nil, layer.ErrNodeNotFound
-			}
-			return nil, fmt.Errorf("failed to get sub tree: %w", err)
+			return nil, handleError("failed to get sub tree", err)
 		}
 		subtree = append(subtree, resp.Body)
 	}
@@ -1213,7 +1204,7 @@ func (c *TreeClient) getNode(ctx context.Context, bktInfo *data.BucketInfo, tree
 	}
 	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't get nodes: %w", err)
+		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nil, layer.ErrNodeNotFound
@@ -1250,13 +1241,19 @@ func (c *TreeClient) getNodes(ctx context.Context, p *getNodesParams) ([]*tree.G
 
 	resp, err := c.service.GetNodeByPath(ctx, request)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil, layer.ErrNodeNotFound
-		}
-		return nil, fmt.Errorf("failed to get node path: %w", err)
+		return nil, handleError("failed to get node by path", err)
 	}
 
 	return resp.GetBody().GetNodes(), nil
+}
+
+func handleError(msg string, err error) error {
+	if strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("%w: %s", layer.ErrNodeNotFound, err.Error())
+	} else if strings.Contains(err.Error(), "is denied by") {
+		return fmt.Errorf("%w: %s", layer.ErrNodeAccessDenied, err.Error())
+	}
+	return fmt.Errorf("%s: %w", msg, err)
 }
 
 func getBearer(ctx context.Context, bktInfo *data.BucketInfo) []byte {
@@ -1291,7 +1288,7 @@ func (c *TreeClient) addNode(ctx context.Context, bktInfo *data.BucketInfo, tree
 
 	resp, err := c.service.Add(ctx, request)
 	if err != nil {
-		return 0, err
+		return 0, handleError("failed to add node", err)
 	}
 
 	return resp.GetBody().GetNodeId(), nil
@@ -1320,7 +1317,7 @@ func (c *TreeClient) addNodeByPath(ctx context.Context, bktInfo *data.BucketInfo
 
 	resp, err := c.service.AddByPath(ctx, request)
 	if err != nil {
-		return 0, err
+		return 0, handleError("failed to add node by path", err)
 	}
 
 	body := resp.GetBody()
@@ -1355,8 +1352,11 @@ func (c *TreeClient) moveNode(ctx context.Context, bktInfo *data.BucketInfo, tre
 		return err
 	}
 
-	_, err := c.service.Move(ctx, request)
-	return err
+	if _, err := c.service.Move(ctx, request); err != nil {
+		return handleError("failed to move node", err)
+	}
+
+	return nil
 }
 
 func (c *TreeClient) removeNode(ctx context.Context, bktInfo *data.BucketInfo, treeID string, nodeID uint64) error {
@@ -1377,8 +1377,11 @@ func (c *TreeClient) removeNode(ctx context.Context, bktInfo *data.BucketInfo, t
 		return err
 	}
 
-	_, err := c.service.Remove(ctx, request)
-	return err
+	if _, err := c.service.Remove(ctx, request); err != nil {
+		return handleError("failed to remove node", err)
+	}
+
+	return nil
 }
 
 func metaToKV(meta map[string]string) []*tree.KeyValue {

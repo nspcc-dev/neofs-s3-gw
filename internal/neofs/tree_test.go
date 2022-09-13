@@ -1,9 +1,11 @@
 package neofs
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,6 +92,32 @@ func TestLockConfigurationEncoding(t *testing.T) {
 
 			encoded := encodeLockConfiguration(lockConfiguration)
 			require.Equal(t, tc.expectedEncoded, encoded)
+		})
+	}
+}
+
+func TestHandleError(t *testing.T) {
+	defaultError := errors.New("default error")
+	for _, tc := range []struct {
+		err           error
+		expectedError error
+	}{
+		{
+			err:           defaultError,
+			expectedError: defaultError,
+		},
+		{
+			err:           errors.New("something not found"),
+			expectedError: layer.ErrNodeNotFound,
+		},
+		{
+			err:           errors.New("something is denied by some acl rule"),
+			expectedError: layer.ErrNodeAccessDenied,
+		},
+	} {
+		t.Run("", func(t *testing.T) {
+			err := handleError("err message", tc.err)
+			require.True(t, errors.Is(err, tc.expectedError))
 		})
 	}
 }
