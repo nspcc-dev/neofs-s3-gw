@@ -220,9 +220,9 @@ type (
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
 		PutLockInfo(ctx context.Context, p *PutLockInfoParams) error
 
-		GetBucketTagging(ctx context.Context, cnrID cid.ID) (map[string]string, error)
-		PutBucketTagging(ctx context.Context, cnrID cid.ID, tagSet map[string]string) error
-		DeleteBucketTagging(ctx context.Context, cnrID cid.ID) error
+		GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
+		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
+		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error)
 		PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) (*data.NodeVersion, error)
@@ -557,7 +557,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			return obj
 		}
 
-		obj.Error = n.treeService.RemoveVersion(ctx, bkt.CID, nodeVersion.ID)
+		obj.Error = n.treeService.RemoveVersion(ctx, bkt, nodeVersion.ID)
 		n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
 		return obj
 	}
@@ -597,7 +597,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		IsUnversioned: settings.VersioningSuspended(),
 	}
 
-	if _, obj.Error = n.treeService.AddVersion(ctx, bkt.CID, newVersion); obj.Error != nil {
+	if _, obj.Error = n.treeService.AddVersion(ctx, bkt, newVersion); obj.Error != nil {
 		return obj
 	}
 
