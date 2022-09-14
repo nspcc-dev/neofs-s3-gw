@@ -4,23 +4,57 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.24.0] - 2022-09-14
+
 ### Added
-- Exposure of pool metrics (#615)
+- Exposure of pool metrics (#615, #680)
 - Configuration of `set_copies_number` (#634, #637)
 - Configuration of list of allowed `AccessKeyID` prefixes (#674)
+- Tagging directive for `CopyObject` (#666, #683)
+- Customer encryption (#595)
+- `CopiesNumber` configuration (#634, #637)
+
 ### Changed
 - Improved wallet configuration via `.yaml` config and environment variables (#607)
-- Update go version for build to 1.19 (#694)
+- Update go version for build to 1.19 (#694, #705)
+- Update version calculation (#653, #697)
+- Optimized lock creation (#692)
+- Update way to configure `listen_domains` (#667)
+- Use `FilePath` instead of `FileName` for object keys (#657)
+- Optimize listing (#625, #616)
+
 ### Removed
+- Drop any object search logic (#545)
+
 ### Fixed
-- Responses to `GetObject` and `HeadObject`: removed redundant `VersionID` (#577)
+- Responses to `GetObject` and `HeadObject`: removed redundant `VersionID` (#577, #682)
 - Replacement of object tagging in case of overwriting of an object (#645)
+- Using tags cache with empty `versionId` (#643)
+- Fix panic on go1.19 (#678)
+- Fix panic on invalid versioning status (#660)
+- Fix panic on missing decrypt reader (#704)
+- Using multipart uploads with `/` in name (#671)
+- Don't update settings cache when request fails (#661)
+- Fix handling `X-Amz-Copy-Source` header (#672)
+- ACL related problems (#676, #606)
+- Using `ContinuationToken` for "directories" (#684)
+- Fix `connection was closed` error (#656)
+- Fix listing for nested objects (#624)
+- Fix anon requests to tree service (#504, #505)
+
 ### Updating from v0.23.0
-1. Make sure configuration of wallet is valid. If you use:
-   1. environment variables: set `S3_GW_WALLET_PATH` instead of `S3_GW_WALLET`, 
-   set `S3_GW_WALLET_ADDRESS` instead of `S3_GW_ADDRESS`
-   2. `.yaml` config: to set wallet path use `wallet.path` instead of `wallet`, 
-   to set wallet address use `wallet.address` instead of `address`
+Make sure your configuration is valid:
+
+If you configure application using environment variables change:
+* `S3_GW_WALLET` -> `S3_GW_WALLET_PATH`
+* `S3_GW_ADDRESS` -> `S3_GW_WALLET_ADDRESS`
+* `S3_GW_LISTEN_DOMAINS_N` -> `S3_GW_LISTEN_DOMAINS` (use it as array variable)
+
+If you configure application using `.yaml` file change:
+* `wallet` -> `wallet.path` 
+* `address` -> `wallet.address`
+* `listen_domains.n` -> `listen_domains` (use it as array param)
+
 
 ## [0.23.0] - 2022-08-01
 
@@ -290,4 +324,5 @@ releases.
 [0.21.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.0...v0.21.1
 [0.22.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.1...v0.22.0
 [0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...master
+[0.24.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...v0.24.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...master
