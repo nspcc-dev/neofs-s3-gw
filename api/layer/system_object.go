@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	errorsStd "errors"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -233,24 +234,34 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 }
 
 func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) ([][2]string, error) {
-	if lock.Retention == nil {
-		return nil, nil
-	}
+	var (
+		err      error
+		expEpoch uint64
+		result   [][2]string
+	)
 
-	_, exp, err := n.neoFS.TimeToEpoch(ctx, lock.Retention.Until)
-	if err != nil {
-		return nil, fmt.Errorf("fetch time to epoch: %w", err)
-	}
-
-	result := [][2]string{
-		{AttributeExpirationEpoch, strconv.FormatUint(exp, 10)},
-	}
-
-	if lock.Retention.IsCompliance {
-		attrCompliance := [2]string{
-			AttributeComplianceMode, strconv.FormatBool(true),
+	if lock.Retention != nil {
+		if _, expEpoch, err = n.neoFS.TimeToEpoch(ctx, lock.Retention.Until); err != nil {
+			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
-		result = append(result, attrCompliance)
+
+		if lock.Retention.IsCompliance {
+			result = append(result, [2]string{AttributeComplianceMode, "true"})
+		}
 	}
+
+	if lock.LegalHold != nil && lock.LegalHold.Enabled {
+		// todo: (@KirillovDenis) reconsider this when NeoFS will support Legal Hold https://github.com/nspcc-dev/neofs-contract/issues/247
+		// Currently lock object must have an expiration epoch.
+		// Besides we need to override retention expiration epoch since legal hold cannot be deleted yet.
+		expEpoch = math.MaxUint64
+	}
+
+	if expEpoch != 0 {
+		result = append(result, [2]string{
+			AttributeExpirationEpoch, strconv.FormatUint(expEpoch, 10),
+		})
+	}
+
 	return result, nil
 }
