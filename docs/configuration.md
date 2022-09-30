@@ -108,6 +108,35 @@ A path to a configuration file can be specified with `--config` parameter:
 $ neofs-s3-gw --config your-config.yaml
 ```
 
+### Reload on SIGHUP
+
+Some config values can be reloaded on SIGHUP signal. 
+Such parameters have special mark in tables below.
+
+You can send SIGHUP signal to app using the following command:
+
+```shell
+$ kill -s SIGHUP <app_pid>
+```
+
+Example:
+
+```shell
+$ ./bin/neofs-s3-gw --config config.yaml  &> s3.log &
+[1] 998346
+
+$ cat s3.log
+# ...
+2022-09-30T17:38:22.338+0300    info    s3-gw/app.go:371        application started     {"name": "neofs-s3-gw", "version": "v0.24.0"}
+# ...
+
+$ kill -s SIGHUP 998346
+
+$ cat s3.log
+# ...
+2022-09-30T17:38:40.909+0300    info    s3-gw/app.go:491        SIGHUP config reload completed
+```
+
 ### NeoFS S3 Gateway configuration file
 
 This section contains detailed NeoFS S3 Gateway configuration file description
@@ -164,20 +193,20 @@ allowed_access_key_id_prefixes:
    - 3stjWenX15YwYzczMr88gy3CQr4NYFBQ8P7keGzH5QFn
 ```
 
-| Parameter                        | Type       | Default value  | Description                                                                                                                                                                                                       |
-|----------------------------------|------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `listen_address`                 | `string`   | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
-| `listen_domains`                 | `[]string` |                | Domains to be able to use virtual-hosted-style access to bucket.                                                                                                                                                  |
-| `rpc_endpoint`                   | `string`   |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
-| `resolve_order`                  | `[]string` | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
-| `connect_timeout`                | `duration` | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
-| `healthcheck_timeout`            | `duration` | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
-| `rebalance_interval`             | `duration` | `60s`          | Interval to check node health.                                                                                                                                                                                    |
-| `pool_error_threshold`           | `uint32`   | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
-| `max_clients_count`              | `int`      | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
-| `max_clients_deadline`           | `duration` | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
-| `default_policy`                 | `string`   | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
-| `allowed_access_key_id_prefixes` | `[]string` |                | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                                                                                        |
+| Parameter                        | Type       | SIGHUP reload | Default value  | Description                                                                                                                                                                                                       |
+|----------------------------------|------------|---------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `listen_address`                 | `string`   |               | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
+| `listen_domains`                 | `[]string` |               |                | Domains to be able to use virtual-hosted-style access to bucket.                                                                                                                                                  |
+| `rpc_endpoint`                   | `string`   | yes           |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
+| `resolve_order`                  | `[]string` | yes           | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
+| `connect_timeout`                | `duration` |               | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
+| `healthcheck_timeout`            | `duration` |               | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
+| `rebalance_interval`             | `duration` |               | `60s`          | Interval to check node health.                                                                                                                                                                                    |
+| `pool_error_threshold`           | `uint32`   |               | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
+| `max_clients_count`              | `int`      |               | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
+| `max_clients_deadline`           | `duration` |               | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
+| `default_policy`                 | `string`   |               | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
+| `allowed_access_key_id_prefixes` | `[]string` |               |                | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                                                                                        |
 
 ### `wallet` section
 
@@ -233,10 +262,10 @@ tls:
   key_file: /path/to/key
 ```
 
-| Parameter   | Type     | Default value | Description                  |
-|-------------|----------|---------------|------------------------------|
-| `cert_file` | `string` |               | Path to the TLS certificate. |
-| `key_file`  | `string` |               | Path to the key.             |
+| Parameter   | Type     | SIGHUP reload | Default value | Description                  |
+|-------------|----------|---------------|---------------|------------------------------|
+| `cert_file` | `string` | yes           |               | Path to the TLS certificate. |
+| `key_file`  | `string` | yes           |               | Path to the key.             |
 
 ### `logger` section
 
@@ -245,9 +274,9 @@ logger:
   level: debug
 ```
 
-| Parameter | Type     | Default value | Description                                                                                        |
-|-----------|----------|---------------|----------------------------------------------------------------------------------------------------|
-| `level`   | `string` | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. |
+| Parameter | Type     | SIGHUP reload | Default value | Description                                                                                        |
+|-----------|----------|---------------|---------------|----------------------------------------------------------------------------------------------------|
+| `level`   | `string` | yes           | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. |
 
 ### `tree` section
 
@@ -356,10 +385,10 @@ pprof:
   address: localhost:8085
 ```
 
-| Parameter | Type     | Default value    | Description                             |
-|-----------|----------|------------------|-----------------------------------------|
-| `enabled` | `bool`   | `false`          | Flag to enable the service.             |
-| `address` | `string` | `localhost:8085` | Address that service listener binds to. |
+| Parameter | Type     | SIGHUP reload | Default value    | Description                             |
+|-----------|----------|---------------|------------------|-----------------------------------------|
+| `enabled` | `bool`   | yes           | `false`          | Flag to enable the service.             |
+| `address` | `string` | yes           | `localhost:8085` | Address that service listener binds to. |
 
 # `prometheus` section
 
@@ -371,10 +400,10 @@ prometheus:
   address: localhost:8086
 ```
 
-| Parameter | Type     | Default value    | Description                             |
-|-----------|----------|------------------|-----------------------------------------|
-| `enabled` | `bool`   | `false`          | Flag to enable the service.             |
-| `address` | `string` | `localhost:8086` | Address that service listener binds to. |
+| Parameter | Type     | SIGHUP reload | Default value    | Description                             |
+|-----------|----------|---------------|------------------|-----------------------------------------|
+| `enabled` | `bool`   | yes           | `false`          | Flag to enable the service.             |
+| `address` | `string` | yes           | `localhost:8086` | Address that service listener binds to. |
 
 # `neofs` section
 
