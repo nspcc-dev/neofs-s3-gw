@@ -418,17 +418,13 @@ func (a *App) Serve(ctx context.Context) {
 				a.log.Fatal("failed to update cert", zap.Error(err))
 			}
 
-			lnTLS := tls.NewListener(ln, &tls.Config{
+			ln = tls.NewListener(ln, &tls.Config{
 				GetCertificate: a.tlsProvider.GetCertificate,
 			})
+		}
 
-			if err = srv.ServeTLS(lnTLS, certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				a.log.Fatal("listen and serve", zap.Error(err))
-			}
-		} else {
-			if err = srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-				a.log.Fatal("listen and serve", zap.Error(err))
-			}
+		if err = srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			a.log.Fatal("listen and serve", zap.Error(err))
 		}
 	}()
 
