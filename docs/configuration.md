@@ -311,16 +311,20 @@ cache:
   accessbox:
     lifetime: 5m
     size: 10
+  accesscontrol:
+    lifetime: 1m
+    size: 100000
 ```
 
-| Parameter   | Type                              | Default value                     | Description                                                                            |
-|-------------|-----------------------------------|-----------------------------------|----------------------------------------------------------------------------------------|
-| `objects`   | [Cache config](#cache-subsection) | `lifetime: 5m`<br>`size: 1000000` | Cache for objects (NeoFS headers).                                                     |
-| `list`      | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 100000` | Cache which keeps lists of objects in buckets.                                         |
-| `names`     | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 10000`  | Cache which contains mapping of nice name to object addresses.                         |
-| `buckets`   | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 1000`   | Cache which contains mapping of bucket name to bucket info.                            |
-| `system`    | [Cache config](#cache-subsection) | `lifetime: 5m`<br>`size: 10000`   | Cache for system objects in a bucket: bucket settings, notification configuration etc. |
-| `accessbox` | [Cache config](#cache-subsection) | `lifetime: 10m`<br>`size: 100`    | Cache which stores access box with tokens by its address.                              |
+| Parameter       | Type                              | Default value                     | Description                                                                            |
+|-----------------|-----------------------------------|-----------------------------------|----------------------------------------------------------------------------------------|
+| `objects`       | [Cache config](#cache-subsection) | `lifetime: 5m`<br>`size: 1000000` | Cache for objects (NeoFS headers).                                                     |
+| `list`          | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 100000` | Cache which keeps lists of objects in buckets.                                         |
+| `names`         | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 10000`  | Cache which contains mapping of nice name to object addresses.                         |
+| `buckets`       | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 1000`   | Cache which contains mapping of bucket name to bucket info.                            |
+| `system`        | [Cache config](#cache-subsection) | `lifetime: 5m`<br>`size: 10000`   | Cache for system objects in a bucket: bucket settings, notification configuration etc. |
+| `accessbox`     | [Cache config](#cache-subsection) | `lifetime: 10m`<br>`size: 100`    | Cache which stores access box with tokens by its address.                              |
+| `accesscontrol` | [Cache config](#cache-subsection) | `lifetime: 1m`<br>`size: 100000`  | Cache which stores owner to cache operation mapping.                                   |
 
 #### `cache` subsection
 
