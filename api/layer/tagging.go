@@ -8,7 +8,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"go.uber.org/zap"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error) {
@@ -18,7 +18,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 	)
 
 	if len(p.VersionID) != 0 && p.VersionID != data.UnversionedObjectVersionID {
-		tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
+		tags = n.cache.GetTagging(objectTaggingCacheKey(p))
 		if tags != nil {
 			return p.VersionID, tags, nil
 		}
@@ -30,7 +30,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 	}
 	p.VersionID = version.OID.EncodeToString()
 
-	tags = n.systemCache.GetTagging(objectTaggingCacheKey(p))
+	tags = n.cache.GetTagging(objectTaggingCacheKey(p))
 	if tags != nil {
 		return p.VersionID, tags, nil
 	}
@@ -43,9 +43,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 		return "", nil, err
 	}
 
-	if err = n.systemCache.PutTagging(objectTaggingCacheKey(p), tags); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutTagging(objectTaggingCacheKey(p), tags)
 
 	return p.VersionID, tags, nil
 }
@@ -65,9 +63,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet m
 		return nil, err
 	}
 
-	if err = n.systemCache.PutTagging(objectTaggingCacheKey(p), tagSet); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutTagging(objectTaggingCacheKey(p), tagSet)
 
 	return version, nil
 }
@@ -88,7 +84,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*dat
 
 	p.VersionID = version.OID.EncodeToString()
 
-	n.systemCache.Delete(objectTaggingCacheKey(p))
+	n.cache.DeleteTagging(objectTaggingCacheKey(p))
 
 	return version, nil
 }
@@ -99,7 +95,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 		tags map[string]string
 	)
 
-	tags = n.systemCache.GetTagging(bucketTaggingCacheKey(bktInfo.CID))
+	tags = n.cache.GetTagging(bucketTaggingCacheKey(bktInfo.CID))
 	if tags != nil {
 		return tags, nil
 	}
@@ -108,9 +104,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 		return nil, err
 	}
 
-	if err := n.systemCache.PutTagging(bucketTaggingCacheKey(bktInfo.CID), tags); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutTagging(bucketTaggingCacheKey(bktInfo.CID), tags)
 
 	return tags, nil
 }
@@ -119,15 +113,14 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 	if err := n.treeService.PutBucketTagging(ctx, bktInfo, tagSet); err != nil {
 		return err
 	}
-	if err := n.systemCache.PutTagging(bucketTaggingCacheKey(bktInfo.CID), tagSet); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+
+	n.cache.PutTagging(bucketTaggingCacheKey(bktInfo.CID), tagSet)
 
 	return nil
 }
 
 func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
-	n.systemCache.Delete(bucketTaggingCacheKey(bktInfo.CID))
+	n.cache.DeleteTagging(bucketTaggingCacheKey(bktInfo.CID))
 
 	return n.treeService.DeleteBucketTagging(ctx, bktInfo)
 }
@@ -171,7 +164,7 @@ func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (
 	return version, err
 }
 
-func (n *layer) getNodeVersionFromCache(o *ObjectVersion) *data.NodeVersion {
+func (n *layer) getNodeVersionFromCache(owner user.ID, o *ObjectVersion) *data.NodeVersion {
 	if len(o.VersionID) == 0 || o.VersionID == data.UnversionedObjectVersionID {
 		return nil
 	}
@@ -185,7 +178,7 @@ func (n *layer) getNodeVersionFromCache(o *ObjectVersion) *data.NodeVersion {
 	addr.SetContainer(o.BktInfo.CID)
 	addr.SetObject(objID)
 
-	extObjectInfo := n.objCache.GetObject(addr)
+	extObjectInfo := n.cache.GetObject(owner, addr)
 	if extObjectInfo == nil {
 		return nil
 	}

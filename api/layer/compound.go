@@ -6,7 +6,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"go.uber.org/zap"
 )
 
 func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectVersion, nodeVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
@@ -15,8 +14,8 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		tags map[string]string
 	)
 
-	tags = n.systemCache.GetTagging(objectTaggingCacheKey(objVersion))
-	lockInfo := n.systemCache.GetLockInfo(lockObjectKey(objVersion))
+	tags = n.cache.GetTagging(objectTaggingCacheKey(objVersion))
+	lockInfo := n.cache.GetLockInfo(lockObjectKey(objVersion))
 
 	if tags != nil && lockInfo != nil {
 		return tags, lockInfo, nil
@@ -37,13 +36,8 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		return nil, nil, err
 	}
 
-	if err = n.systemCache.PutTagging(objectTaggingCacheKey(objVersion), tags); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
-
-	if err = n.systemCache.PutLockInfo(lockObjectKey(objVersion), lockInfo); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutTagging(objectTaggingCacheKey(objVersion), tags)
+	n.cache.PutLockInfo(lockObjectKey(objVersion), lockInfo)
 
 	return tags, lockInfo, nil
 }

@@ -64,15 +64,13 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		}
 	}
 
-	if err = n.systemCache.PutCORS(systemObjectKey(p.BktInfo, prm.Filepath), cors); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutCORS(p.BktInfo, cors)
 
 	return nil
 }
 
 func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
-	cors, err := n.getCORS(ctx, bktInfo, bktInfo.CORSObjectName())
+	cors, err := n.getCORS(ctx, bktInfo)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
@@ -95,7 +93,7 @@ func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 		}
 	}
 
-	n.systemCache.Delete(systemObjectKey(bktInfo, bktInfo.CORSObjectName()))
+	n.cache.DeleteCORS(bktInfo)
 
 	return nil
 }
