@@ -14,7 +14,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
@@ -51,11 +50,7 @@ type (
 		anonKey     AnonymousKey
 		resolver    BucketResolver
 		ncontroller EventListener
-		listsCache  *cache.ObjectsListCache
-		objCache    *cache.ObjectsCache
-		namesCache  *cache.ObjectsNameCache
-		bucketCache *cache.BucketCache
-		systemCache *cache.SystemCache
+		cache       *Cache
 		treeService TreeService
 	}
 
@@ -70,15 +65,6 @@ type (
 	// AnonymousKey contains data for anonymous requests.
 	AnonymousKey struct {
 		Key *keys.PrivateKey
-	}
-
-	// CachesConfig contains params for caches.
-	CachesConfig struct {
-		Objects     *cache.Config
-		ObjectsList *cache.Config
-		Names       *cache.Config
-		Buckets     *cache.Config
-		System      *cache.Config
 	}
 
 	// GetObjectParams stores object get request parameters.
@@ -280,17 +266,6 @@ func (f MsgHandlerFunc) HandleMessage(ctx context.Context, msg *nats.Msg) error 
 	return f(ctx, msg)
 }
 
-// DefaultCachesConfigs returns filled configs.
-func DefaultCachesConfigs(logger *zap.Logger) *CachesConfig {
-	return &CachesConfig{
-		Objects:     cache.DefaultObjectsConfig(logger),
-		ObjectsList: cache.DefaultObjectsListConfig(logger),
-		Names:       cache.DefaultObjectsNameConfig(logger),
-		Buckets:     cache.DefaultBucketConfig(logger),
-		System:      cache.DefaultSystemConfig(logger),
-	}
-}
-
 // NewLayer creates an instance of a layer. It checks credentials
 // and establishes gRPC connection with the node.
 func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
@@ -299,11 +274,7 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 		log:         log,
 		anonKey:     config.AnonKey,
 		resolver:    config.Resolver,
-		listsCache:  cache.NewObjectsListCache(config.Caches.ObjectsList),
-		objCache:    cache.New(config.Caches.Objects),
-		namesCache:  cache.NewObjectsNameCache(config.Caches.Names),
-		bucketCache: cache.NewBucketCache(config.Caches.Buckets),
-		systemCache: cache.NewSystemCache(config.Caches.System),
+		cache:       NewCache(config.Caches),
 		treeService: config.TreeService,
 	}
 }
@@ -365,7 +336,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 		return nil, fmt.Errorf("unescape bucket name: %w", err)
 	}
 
-	if bktInfo := n.bucketCache.Get(name); bktInfo != nil {
+	if bktInfo := n.cache.GetBucket(name); bktInfo != nil {
 		return bktInfo, nil
 	}
 
@@ -561,7 +532,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		obj.Error = n.treeService.RemoveVersion(ctx, bkt, nodeVersion.ID)
-		n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
+		n.cache.CleanListCacheEntriesContainingObject(obj.Name, bkt.CID)
 		return obj
 	}
 
@@ -604,8 +575,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		return obj
 	}
 
-	n.namesCache.Delete(bkt.Name + "/" + obj.Name)
-	n.listsCache.CleanCacheEntriesContainingObject(obj.Name, bkt.CID)
+	n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 
 	return obj
 }
@@ -681,6 +651,6 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return errors.GetAPIError(errors.ErrBucketNotEmpty)
 	}
 
-	n.bucketCache.Delete(p.BktInfo.Name)
+	n.cache.DeleteBucket(p.BktInfo.Name)
 	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken)
 }

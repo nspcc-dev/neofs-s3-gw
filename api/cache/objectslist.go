@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,6 +55,10 @@ func DefaultObjectsListConfig(logger *zap.Logger) *Config {
 		Lifetime: DefaultObjectsListCacheLifetime,
 		Logger:   logger,
 	}
+}
+
+func (k *ObjectsListKey) String() string {
+	return k.cid.EncodeToString() + k.prefix + strconv.FormatBool(k.latestOnly)
 }
 
 // NewObjectsListCache is a constructor which creates an object of ListObjectsCache with the given lifetime of entries.

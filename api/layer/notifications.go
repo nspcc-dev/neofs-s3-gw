@@ -25,13 +25,11 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return fmt.Errorf("marshal notify configuration: %w", err)
 	}
 
-	sysName := p.BktInfo.NotificationConfigurationObjectName()
-
 	prm := PrmObjectCreate{
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
 		Payload:      bytes.NewReader(confXML),
-		Filepath:     sysName,
+		Filepath:     p.BktInfo.NotificationConfigurationObjectName(),
 		CopiesNumber: p.CopiesNumber,
 	}
 
@@ -55,17 +53,13 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		}
 	}
 
-	if err = n.systemCache.PutNotificationConfiguration(systemObjectKey(p.BktInfo, sysName), p.Configuration); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutNotificationConfiguration(p.BktInfo, p.Configuration)
 
 	return nil
 }
 
 func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
-	systemCacheKey := systemObjectKey(bktInfo, bktInfo.NotificationConfigurationObjectName())
-
-	if conf := n.systemCache.GetNotificationConfiguration(systemCacheKey); conf != nil {
+	if conf := n.cache.GetNotificationConfiguration(bktInfo); conf != nil {
 		return conf, nil
 	}
 
@@ -88,11 +82,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		}
 	}
 
-	if err = n.systemCache.PutNotificationConfiguration(systemCacheKey, conf); err != nil {
-		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("bucket id", bktInfo.CID),
-			zap.Error(err))
-	}
+	n.cache.PutNotificationConfiguration(bktInfo, conf)
 
 	return conf, nil
 }

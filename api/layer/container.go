@@ -70,10 +70,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 		}
 	}
 
-	if err = n.bucketCache.Put(info); err != nil {
-		log.Warn("could not put bucket info into cache",
-			zap.String("bucket_name", info.Name), zap.Error(err))
-	}
+	n.cache.PutBucket(info)
 
 	return info, nil
 }
@@ -152,12 +149,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		return nil, fmt.Errorf("set container eacl: %w", err)
 	}
 
-	if err = n.bucketCache.Put(bktInfo); err != nil {
-		n.log.Warn("couldn't put bucket info into cache",
-			zap.String("bucket name", bktInfo.Name),
-			zap.Stringer("bucket cid", bktInfo.CID),
-			zap.Error(err))
-	}
+	n.cache.PutBucket(bktInfo)
 
 	return bktInfo, nil
 }

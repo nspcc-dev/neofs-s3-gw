@@ -461,7 +461,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 				zap.Error(err))
 		}
 		addr.SetObject(partInfo.OID)
-		n.objCache.Delete(addr)
+		n.cache.DeleteObject(addr)
 	}
 
 	return uploadData, obj, n.treeService.DeleteMultipartUpload(ctx, p.Info.Bkt, multipartInfo.ID)

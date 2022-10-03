@@ -185,7 +185,7 @@ func ParseCompletedPartHeader(hdr string) (*Part, error) {
 
 // PutObject stores object into NeoFS, took payload from io.Reader.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
-	own := n.Owner(ctx)
+	owner := n.Owner(ctx)
 
 	bktSettings, err := n.GetBucketSettings(ctx, p.BktInfo)
 	if err != nil {
@@ -230,7 +230,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	prm := PrmObjectCreate{
 		Container:    p.BktInfo.CID,
-		Creator:      own,
+		Creator:      owner,
 		PayloadSize:  uint64(p.Size),
 		Filepath:     p.Object,
 		Payload:      r,
@@ -271,13 +271,13 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		}
 	}
 
-	n.listsCache.CleanCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
+	n.cache.CleanListCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
 
 	objInfo := &data.ObjectInfo{
 		ID:  id,
 		CID: p.BktInfo.CID,
 
-		Owner:       own,
+		Owner:       owner,
 		Bucket:      p.BktInfo.Name,
 		Name:        p.Object,
 		Size:        p.Size,
@@ -292,25 +292,15 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 		NodeVersion: newVersion,
 	}
 
-	if err = n.objCache.PutObject(extendedObjInfo); err != nil {
-		n.log.Warn("couldn't add object to cache", zap.Error(err),
-			zap.String("object_name", p.Object), zap.String("bucket_name", p.BktInfo.Name),
-			zap.String("cid", objInfo.CID.EncodeToString()), zap.String("oid", objInfo.ID.EncodeToString()))
-	}
-	if err = n.namesCache.Put(objInfo.NiceName(), objInfo.Address()); err != nil {
-		n.log.Warn("couldn't put obj address to name cache",
-			zap.String("obj nice name", objInfo.NiceName()),
-			zap.Error(err))
-	}
+	n.cache.PutObjectWithName(owner, extendedObjInfo)
 
 	return objInfo, nil
 }
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ExtendedObjectInfo, error) {
-	if addr := n.namesCache.Get(bkt.Name + "/" + objectName); addr != nil {
-		if extObjInfo := n.objCache.GetObject(*addr); extObjInfo != nil {
-			return extObjInfo, nil
-		}
+	owner := n.Owner(ctx)
+	if extObjInfo := n.cache.GetLastObject(owner, bkt.Name, objectName); extObjInfo != nil {
+		return extObjInfo, nil
 	}
 
 	node, err := n.treeService.GetLatestVersion(ctx, bkt, objectName)
@@ -336,17 +326,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		NodeVersion: node,
 	}
 
-	if err = n.objCache.PutObject(extObjInfo); err != nil {
-		n.log.Warn("couldn't put object info to cache",
-			zap.Stringer("object id", node.OID),
-			zap.Stringer("bucket id", bkt.CID),
-			zap.Error(err))
-	}
-	if err = n.namesCache.Put(objInfo.NiceName(), objInfo.Address()); err != nil {
-		n.log.Warn("couldn't put obj address to head cache",
-			zap.String("obj nice name", objInfo.NiceName()),
-			zap.Error(err))
-	}
+	n.cache.PutObjectWithName(owner, extObjInfo)
 
 	return extObjInfo, nil
 }
@@ -379,7 +359,8 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		}
 	}
 
-	if extObjInfo := n.objCache.GetObject(newAddress(bkt.CID, foundVersion.OID)); extObjInfo != nil {
+	owner := n.Owner(ctx)
+	if extObjInfo := n.cache.GetObject(owner, newAddress(bkt.CID, foundVersion.OID)); extObjInfo != nil {
 		return extObjInfo, nil
 	}
 
@@ -397,14 +378,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		NodeVersion: foundVersion,
 	}
 
-	if err = n.objCache.PutObject(extObjInfo); err != nil {
-		n.log.Warn("couldn't put obj to object cache",
-			zap.String("bucket name", objInfo.Bucket),
-			zap.Stringer("bucket cid", objInfo.CID),
-			zap.String("object name", objInfo.Name),
-			zap.Stringer("object id", objInfo.ID),
-			zap.Error(err))
-	}
+	n.cache.PutObject(owner, extObjInfo)
 
 	return extObjInfo, nil
 }
@@ -418,7 +392,7 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
-	n.objCache.Delete(newAddress(bktInfo.CID, idObj))
+	n.cache.DeleteObject(newAddress(bktInfo.CID, idObj))
 
 	return n.neoFS.DeleteObject(ctx, prm)
 }
@@ -503,17 +477,16 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 		return nil, nil, nil
 	}
 
+	owner := n.Owner(ctx)
 	cacheKey := cache.CreateObjectsListCacheKey(p.Bucket.CID, p.Prefix, true)
-	nodeVersions := n.listsCache.GetVersions(cacheKey)
+	nodeVersions := n.cache.GetList(owner, cacheKey)
 
 	if nodeVersions == nil {
 		nodeVersions, err = n.treeService.GetLatestVersionsByPrefix(ctx, p.Bucket, p.Prefix)
 		if err != nil {
 			return nil, nil, err
 		}
-		if err = n.listsCache.PutVersions(cacheKey, nodeVersions); err != nil {
-			n.log.Error("couldn't cache list of objects", zap.Error(err))
-		}
+		n.cache.PutList(owner, cacheKey, nodeVersions)
 	}
 
 	if len(nodeVersions) == 0 {
@@ -643,17 +616,17 @@ func getPartialObjectInfo(bktInfo *data.BucketInfo, node *data.NodeVersion) *dat
 func (n *layer) bucketNodeVersions(ctx context.Context, bkt *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
 	var err error
 
+	owner := n.Owner(ctx)
 	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix, false)
-	nodeVersions := n.listsCache.GetVersions(cacheKey)
+	nodeVersions := n.cache.GetList(owner, cacheKey)
 
 	if nodeVersions == nil {
 		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt, prefix)
 		if err != nil {
 			return nil, fmt.Errorf("get all versions from tree service: %w", err)
 		}
-		if err = n.listsCache.PutVersions(cacheKey, nodeVersions); err != nil {
-			n.log.Error("couldn't cache list of objects", zap.Error(err))
-		}
+
+		n.cache.PutList(owner, cacheKey, nodeVersions)
 	}
 
 	return nodeVersions, nil
@@ -763,9 +736,9 @@ func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *
 		return oiDir
 	}
 
-	extObjInfo := n.objCache.GetObject(newAddress(bktInfo.CID, node.OID))
-	if extObjInfo != nil {
-		return extObjInfo.ObjectInfo
+	owner := n.Owner(ctx)
+	if extInfo := n.cache.GetObject(owner, newAddress(bktInfo.CID, node.OID)); extInfo != nil {
+		return extInfo.ObjectInfo
 	}
 
 	meta, err := n.objectHead(ctx, bktInfo, node.OID)
@@ -775,9 +748,7 @@ func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *
 	}
 
 	oi = objectInfoFromMeta(bktInfo, meta)
-	if err = n.objCache.PutObject(&data.ExtendedObjectInfo{ObjectInfo: oi, NodeVersion: node}); err != nil {
-		n.log.Warn("couldn't cache an object", zap.Error(err))
-	}
+	n.cache.PutObject(owner, &data.ExtendedObjectInfo{ObjectInfo: oi, NodeVersion: node})
 
 	return oi
 }

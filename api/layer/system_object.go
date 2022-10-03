@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"go.uber.org/zap"
 )
 
 const (
@@ -34,7 +33,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	// if not, then receive node version from tree service
 	if versionNode == nil {
 		// check cache if node version is stored inside extendedObjectVersion
-		versionNode = n.getNodeVersionFromCache(p.ObjVersion)
+		versionNode = n.getNodeVersionFromCache(n.Owner(ctx), p.ObjVersion)
 		if versionNode == nil {
 			// else get node version from tree service
 			versionNode, err = n.getNodeVersion(ctx, p.ObjVersion)
@@ -101,9 +100,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		return fmt.Errorf("couldn't put lock into tree: %w", err)
 	}
 
-	if err = n.systemCache.PutLockInfo(lockObjectKey(p.ObjVersion), lockInfo); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutLockInfo(lockObjectKey(p.ObjVersion), lockInfo)
 
 	return nil
 }
@@ -127,7 +124,7 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 }
 
 func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*data.LockInfo, error) {
-	if lockInfo := n.systemCache.GetLockInfo(lockObjectKey(objVersion)); lockInfo != nil {
+	if lockInfo := n.cache.GetLockInfo(lockObjectKey(objVersion)); lockInfo != nil {
 		return lockInfo, nil
 	}
 
@@ -144,17 +141,16 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		lockInfo = &data.LockInfo{}
 	}
 
-	if err = n.systemCache.PutLockInfo(lockObjectKey(objVersion), lockInfo); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutLockInfo(lockObjectKey(objVersion), lockInfo)
 
 	return lockInfo, nil
 }
 
-func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName string) (*data.CORSConfiguration, error) {
-	if cors := n.systemCache.GetCORS(systemObjectKey(bkt, sysName)); cors != nil {
+func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSConfiguration, error) {
+	if cors := n.cache.GetCORS(bkt); cors != nil {
 		return cors, nil
 	}
+
 	objID, err := n.treeService.GetBucketCORS(ctx, bkt)
 	objIDNotFound := errorsStd.Is(err, ErrNodeNotFound)
 	if err != nil && !objIDNotFound {
@@ -176,20 +172,9 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo, sysName strin
 		return nil, fmt.Errorf("unmarshal cors: %w", err)
 	}
 
-	if err = n.systemCache.PutCORS(systemObjectKey(bkt, sysName), cors); err != nil {
-		objID, _ := obj.ID()
-		n.log.Warn("couldn't put system meta to objects cache",
-			zap.Stringer("object id", &objID),
-			zap.String("bucket id", bkt.CID.EncodeToString()),
-			zap.Error(err))
-	}
+	n.cache.PutCORS(bkt, cors)
 
 	return cors, nil
-}
-
-// systemObjectKey is a key to use in SystemCache.
-func systemObjectKey(bktInfo *data.BucketInfo, obj string) string {
-	return bktInfo.Name + obj
 }
 
 func lockObjectKey(objVersion *ObjectVersion) string {
@@ -198,8 +183,7 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 }
 
 func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	systemKey := systemObjectKey(bktInfo, bktInfo.SettingsObjectName())
-	if settings := n.systemCache.GetSettings(systemKey); settings != nil {
+	if settings := n.cache.GetSettings(bktInfo); settings != nil {
 		return settings, nil
 	}
 
@@ -211,11 +195,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
 	}
 
-	if err = n.systemCache.PutSettings(systemKey, settings); err != nil {
-		n.log.Warn("couldn't put system meta to objects cache",
-			zap.String("bucket id", bktInfo.CID.EncodeToString()),
-			zap.Error(err))
-	}
+	n.cache.PutSettings(bktInfo, settings)
 
 	return settings, nil
 }
@@ -225,10 +205,7 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 
-	systemKey := systemObjectKey(p.BktInfo, p.BktInfo.SettingsObjectName())
-	if err := n.systemCache.PutSettings(systemKey, p.Settings); err != nil {
-		n.log.Error("couldn't cache system object", zap.Error(err))
-	}
+	n.cache.PutSettings(p.BktInfo, p.Settings)
 
 	return nil
 }
