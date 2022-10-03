@@ -4,6 +4,19 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Fixed
+- Unrestricted access to not owned objects via cache (#713)
+
+### Updating from v0.24.0
+New config parameters were added. Make sure the default parameters are appropriate for you.
+
+```yaml
+cache:
+  accesscontrol:
+    lifetime: 1m
+    size: 100000
+```
+
 ## [0.24.0] - 2022-09-14
 
 ### Added

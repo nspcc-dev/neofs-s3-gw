@@ -89,14 +89,18 @@ cache:
   buckets:
     lifetime: 1m
     size: 500
-    # Cache for system objects in a bucket: bucket settings, notification configuration etc
+  # Cache for system objects in a bucket: bucket settings, notification configuration etc
   system:
     lifetime: 2m
     size: 1000
-    # Cache which stores access box with tokens by its address
+  # Cache which stores access box with tokens by its address
   accessbox:
     lifetime: 5m
     size: 10
+  # Cache which stores owner to cache operation mapping
+  accesscontrol:
+    lifetime: 1m
+    size: 100000
 
 nats:
   enabled: true
@@ -118,8 +122,8 @@ cors:
 
 # Parameters of requests to NeoFS
 neofs:
-# Number of the object copies to consider PUT to NeoFS successful.
-# `0` means that object will be processed according to the container's placement policy
+  # Number of the object copies to consider PUT to NeoFS successful.
+  # `0` means that object will be processed according to the container's placement policy
   set_copies_number: 0
 
 # List of allowed AccessKeyID prefixes
