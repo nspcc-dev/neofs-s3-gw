@@ -22,12 +22,13 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 type handlerContext struct {
+	owner   user.ID
+	t       *testing.T
 	h       *handler
 	tp      *layer.TestNeoFS
 	context context.Context
@@ -61,6 +62,9 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 		return tp.ContainerID(name)
 	})
 
+	var owner user.ID
+	user.IDFromKey(&owner, key.PrivateKey.PublicKey)
+
 	layerCfg := &layer.Config{
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
 		AnonKey:     layer.AnonymousKey{Key: key},
@@ -77,31 +81,33 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	}
 
 	return &handlerContext{
+		owner:   owner,
+		t:       t,
 		h:       h,
 		tp:      tp,
-		context: context.Background(),
+		context: context.WithValue(context.Background(), api.BoxData, newTestAccessBox(t, key)),
 	}
 }
 
-func createTestBucket(ctx context.Context, t *testing.T, h *handlerContext, bktName string) *data.BucketInfo {
-	_, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
-		Creator: *usertest.ID(),
+func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {
+	_, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
+		Creator: hc.owner,
 		Name:    bktName,
 	})
-	require.NoError(t, err)
+	require.NoError(hc.t, err)
 
-	bktInfo, err := h.Layer().GetBucketInfo(ctx, bktName)
-	require.NoError(t, err)
+	bktInfo, err := hc.Layer().GetBucketInfo(hc.Context(), bktName)
+	require.NoError(hc.t, err)
 	return bktInfo
 }
 
-func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
-	cnrID, err := h.MockedPool().CreateContainer(ctx, layer.PrmContainerCreate{
-		Creator:              *usertest.ID(),
+func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
+	cnrID, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
+		Creator:              hc.owner,
 		Name:                 bktName,
 		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
 	})
-	require.NoError(t, err)
+	require.NoError(hc.t, err)
 
 	var ownerID user.ID
 
@@ -120,61 +126,61 @@ func createTestBucketWithLock(ctx context.Context, t *testing.T, h *handlerConte
 		},
 	}
 
-	err = h.Layer().PutBucketSettings(ctx, sp)
-	require.NoError(t, err)
+	err = hc.Layer().PutBucketSettings(hc.Context(), sp)
+	require.NoError(hc.t, err)
 
 	return bktInfo
 }
 
-func createTestObject(ctx context.Context, t *testing.T, h *handlerContext, bktInfo *data.BucketInfo, objName string) *data.ObjectInfo {
+func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName string) *data.ObjectInfo {
 	content := make([]byte, 1024)
 	_, err := rand.Read(content)
-	require.NoError(t, err)
+	require.NoError(hc.t, err)
 
 	header := map[string]string{
 		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),
 	}
 
-	objInfo, err := h.Layer().PutObject(ctx, &layer.PutObjectParams{
+	objInfo, err := hc.Layer().PutObject(hc.Context(), &layer.PutObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,
 		Size:    int64(len(content)),
 		Reader:  bytes.NewReader(content),
 		Header:  header,
 	})
-	require.NoError(t, err)
+	require.NoError(hc.t, err)
 
 	return objInfo
 }
 
-func prepareTestRequest(t *testing.T, bktName, objName string, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
-	return prepareTestFullRequest(t, bktName, objName, make(url.Values), body)
+func prepareTestRequest(hc *handlerContext, bktName, objName string, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+	return prepareTestFullRequest(hc, bktName, objName, make(url.Values), body)
 }
 
-func prepareTestFullRequest(t *testing.T, bktName, objName string, query url.Values, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestFullRequest(hc *handlerContext, bktName, objName string, query url.Values, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
 	rawBody, err := xml.Marshal(body)
-	require.NoError(t, err)
+	require.NoError(hc.t, err)
 
-	return prepareTestRequestWithQuery(bktName, objName, query, rawBody)
+	return prepareTestRequestWithQuery(hc, bktName, objName, query, rawBody)
 }
 
-func prepareTestRequestWithQuery(bktName, objName string, query url.Values, body []byte) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestRequestWithQuery(hc *handlerContext, bktName, objName string, query url.Values, body []byte) (*httptest.ResponseRecorder, *http.Request) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(body))
 	r.URL.RawQuery = query.Encode()
 
 	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
-	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
+	r = r.WithContext(api.SetReqInfo(hc.Context(), reqInfo))
 
 	return w, r
 }
 
-func prepareTestPayloadRequest(bktName, objName string, payload io.Reader) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestPayloadRequest(hc *handlerContext, bktName, objName string, payload io.Reader) (*httptest.ResponseRecorder, *http.Request) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPut, defaultURL, payload)
 
 	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
-	r = r.WithContext(api.SetReqInfo(r.Context(), reqInfo))
+	r = r.WithContext(api.SetReqInfo(hc.Context(), reqInfo))
 
 	return w, r
 }

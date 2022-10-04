@@ -11,6 +11,9 @@ import (
 	"time"
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -127,7 +130,7 @@ func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, erro
 	return res, nil
 }
 
-func (t *TestNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPart, error) {
+func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectPart, error) {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
 	addr.SetObject(prm.Object)
@@ -135,6 +138,11 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPar
 	sAddr := addr.EncodeToString()
 
 	if obj, ok := t.objects[sAddr]; ok {
+		owner := getOwner(ctx)
+		if !obj.OwnerID().Equals(owner) {
+			return nil, ErrAccessDenied
+		}
+
 		payload := obj.Payload()
 
 		if prm.PayloadRange[0]+prm.PayloadRange[1] > 0 {
@@ -151,7 +159,7 @@ func (t *TestNeoFS) ReadObject(_ context.Context, prm PrmObjectRead) (*ObjectPar
 	return nil, fmt.Errorf("object not found %s", addr)
 }
 
-func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID, error) {
+func (t *TestNeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (oid.ID, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return oid.ID{}, err
@@ -181,6 +189,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	obj.SetPayloadSize(prm.PayloadSize)
 	obj.SetAttributes(attrs...)
 	obj.SetCreationEpoch(t.currentEpoch)
+	obj.SetOwnerID(&prm.Creator)
 	t.currentEpoch++
 
 	if len(prm.Locks) > 0 {
@@ -209,12 +218,19 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	return objID, nil
 }
 
-func (t *TestNeoFS) DeleteObject(_ context.Context, prm PrmObjectDelete) error {
+func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
 	addr.SetObject(prm.Object)
 
-	delete(t.objects, addr.EncodeToString())
+	if obj, ok := t.objects[addr.EncodeToString()]; ok {
+		owner := getOwner(ctx)
+		if !obj.OwnerID().Equals(owner) {
+			return ErrAccessDenied
+		}
+
+		delete(t.objects, addr.EncodeToString())
+	}
 
 	return nil
 }
@@ -259,4 +275,12 @@ func (t *TestNeoFS) ContainerEACL(_ context.Context, cnrID cid.ID) (*eacl.Table,
 	}
 
 	return table, nil
+}
+
+func getOwner(ctx context.Context) user.ID {
+	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
+		return bearer.ResolveIssuer(*bd.Gate.BearerToken)
+	}
+
+	return user.ID{}
 }

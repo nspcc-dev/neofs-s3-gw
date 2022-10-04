@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -43,30 +42,29 @@ func TestParseContinuationToken(t *testing.T) {
 }
 
 func TestListObjectNullVersions(t *testing.T) {
-	ctx := context.Background()
 	hc := prepareHandlerContext(t)
 
 	bktName := "bucket-versioning-enabled"
-	createTestBucket(ctx, t, hc, bktName)
+	createTestBucket(hc, bktName)
 
 	objName := "object"
 
 	body := bytes.NewReader([]byte("content"))
-	w, r := prepareTestPayloadRequest(bktName, objName, body)
+	w, r := prepareTestPayloadRequest(hc, bktName, objName, body)
 	hc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
 	versioning := &VersioningConfiguration{Status: "Enabled"}
-	w, r = prepareTestRequest(t, bktName, objName, versioning)
+	w, r = prepareTestRequest(hc, bktName, objName, versioning)
 	hc.Handler().PutBucketVersioningHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
 	body2 := bytes.NewReader([]byte("content2"))
-	w, r = prepareTestPayloadRequest(bktName, objName, body2)
+	w, r = prepareTestPayloadRequest(hc, bktName, objName, body2)
 	hc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
+	w, r = prepareTestRequest(hc, bktName, objName, nil)
 	hc.Handler().ListBucketObjectVersionsHandler(w, r)
 
 	result := &ListObjectsVersionsResponse{}
@@ -81,10 +79,10 @@ func TestS3CompatibilityBucketListV2BothContinuationTokenStartAfter(t *testing.T
 
 	bktName := "bucket-for-listing"
 	objects := []string{"bar", "baz", "foo", "quxx"}
-	bktInfo, _ := createBucketAndObject(t, tc, bktName, objects[0])
+	bktInfo, _ := createBucketAndObject(tc, bktName, objects[0])
 
 	for _, objName := range objects[1:] {
-		createTestObject(tc.Context(), t, tc, bktInfo, objName)
+		createTestObject(tc, bktInfo, objName)
 	}
 
 	listV2Response1 := listObjectsV2(t, tc, bktName, "", "", "bar", "", 1)
@@ -106,10 +104,10 @@ func TestS3BucketListDelimiterBasic(t *testing.T) {
 
 	bktName := "bucket-for-listing"
 	objects := []string{"foo/bar", "foo/bar/xyzzy", "quux/thud", "asdf"}
-	bktInfo, _ := createBucketAndObject(t, tc, bktName, objects[0])
+	bktInfo, _ := createBucketAndObject(tc, bktName, objects[0])
 
 	for _, objName := range objects[1:] {
-		createTestObject(tc.Context(), t, tc, bktInfo, objName)
+		createTestObject(tc, bktInfo, objName)
 	}
 
 	listV1Response := listObjectsV1(t, tc, bktName, "", "/", "", -1)
@@ -125,10 +123,10 @@ func TestS3BucketListV2DelimiterPrefix(t *testing.T) {
 
 	bktName := "bucket-for-listingv2"
 	objects := []string{"asdf", "boo/bar", "boo/baz/xyzzy", "cquux/thud", "cquux/bla"}
-	bktInfo, _ := createBucketAndObject(t, tc, bktName, objects[0])
+	bktInfo, _ := createBucketAndObject(tc, bktName, objects[0])
 
 	for _, objName := range objects[1:] {
-		createTestObject(tc.Context(), t, tc, bktInfo, objName)
+		createTestObject(tc, bktInfo, objName)
 	}
 
 	var empty []string
@@ -158,7 +156,7 @@ func listObjectsV2(t *testing.T, tc *handlerContext, bktName, prefix, delimiter,
 		query.Add("continuation-token", continuationToken)
 	}
 
-	w, r := prepareTestFullRequest(t, bktName, "", query, nil)
+	w, r := prepareTestFullRequest(tc, bktName, "", query, nil)
 	tc.Handler().ListObjectsV2Handler(w, r)
 	assertStatus(t, w, http.StatusOK)
 	res := &ListObjectsV2Response{}
@@ -208,7 +206,7 @@ func listObjectsV1(t *testing.T, tc *handlerContext, bktName, prefix, delimiter,
 		query.Add("marker", marker)
 	}
 
-	w, r := prepareTestFullRequest(t, bktName, "", query, nil)
+	w, r := prepareTestFullRequest(tc, bktName, "", query, nil)
 	tc.Handler().ListObjectsV1Handler(w, r)
 	assertStatus(t, w, http.StatusOK)
 	res := &ListObjectsV1Response{}
