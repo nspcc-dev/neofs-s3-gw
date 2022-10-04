@@ -27,7 +27,7 @@ func TestSimpleGetEncrypted(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-sse-c", "object-to-encrypt"
-	bktInfo := createTestBucket(tc.Context(), t, tc, bktName)
+	bktInfo := createTestBucket(tc, bktName)
 
 	content := "content"
 	putEncryptedObject(t, tc, bktName, objName, content)
@@ -48,7 +48,7 @@ func TestGetEncryptedRange(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-sse-c", "object-to-encrypt"
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 
 	var sb strings.Builder
 	for i := 0; i < 1<<16+11; i++ {
@@ -89,7 +89,7 @@ func TestGetEncryptedRange(t *testing.T) {
 func TestS3EncryptionSSECMultipartUpload(t *testing.T) {
 	tc := prepareHandlerContext(t)
 	bktName, objName := "bucket-for-sse-c-multipart-s3-tests", "multipart_enc"
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 
 	objLen := 30 * 1024 * 1024
 	partSize := objLen / 6
@@ -168,7 +168,7 @@ func multipartUploadEncrypted(t *testing.T, tc *handlerContext, bktName, objName
 }
 
 func createMultipartUpload(t *testing.T, tc *handlerContext, bktName, objName string, headers map[string]string) *InitiateMultipartUploadResponse {
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	setEncryptHeaders(r)
 	setHeaders(r, headers)
 	tc.Handler().CreateMultipartUploadHandler(w, r)
@@ -190,7 +190,7 @@ func completeMultipartUpload(t *testing.T, tc *handlerContext, bktName, objName,
 		})
 	}
 
-	w, r := prepareTestFullRequest(t, bktName, objName, query, complete)
+	w, r := prepareTestFullRequest(tc, bktName, objName, query, complete)
 	tc.Handler().CompleteMultipartUploadHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
@@ -204,7 +204,7 @@ func uploadPart(t *testing.T, tc *handlerContext, bktName, objName, uploadID str
 	query.Set(uploadIDQuery, uploadID)
 	query.Set(partNumberQuery, strconv.Itoa(num))
 
-	w, r := prepareTestRequestWithQuery(bktName, objName, query, partBody)
+	w, r := prepareTestRequestWithQuery(tc, bktName, objName, query, partBody)
 	setEncryptHeaders(r)
 	tc.Handler().UploadPartHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
@@ -218,9 +218,9 @@ func TestMultipartEncrypted(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-sse-c-multipart", "object-to-encrypt-multipart"
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	setEncryptHeaders(r)
 	tc.Handler().CreateMultipartUploadHandler(w, r)
 	multipartInitInfo := &InitiateMultipartUploadResponse{}
@@ -233,7 +233,7 @@ func TestMultipartEncrypted(t *testing.T) {
 	query := make(url.Values)
 	query.Set(uploadIDQuery, multipartInitInfo.UploadID)
 	query.Set(partNumberQuery, "1")
-	w, r = prepareTestRequestWithQuery(bktName, objName, query, part1)
+	w, r = prepareTestRequestWithQuery(tc, bktName, objName, query, part1)
 	setEncryptHeaders(r)
 	tc.Handler().UploadPartHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
@@ -243,7 +243,7 @@ func TestMultipartEncrypted(t *testing.T) {
 	query = make(url.Values)
 	query.Set(uploadIDQuery, multipartInitInfo.UploadID)
 	query.Set(partNumberQuery, "2")
-	w, r = prepareTestRequestWithQuery(bktName, objName, query, part2)
+	w, r = prepareTestRequestWithQuery(tc, bktName, objName, query, part2)
 	setEncryptHeaders(r)
 	tc.Handler().UploadPartHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
@@ -257,7 +257,7 @@ func TestMultipartEncrypted(t *testing.T) {
 			{ETag: part2ETag, PartNumber: 2},
 		},
 	}
-	w, r = prepareTestFullRequest(t, bktName, objName, query, complete)
+	w, r = prepareTestFullRequest(tc, bktName, objName, query, complete)
 	tc.Handler().CompleteMultipartUploadHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
@@ -271,14 +271,14 @@ func TestMultipartEncrypted(t *testing.T) {
 
 func putEncryptedObject(t *testing.T, tc *handlerContext, bktName, objName, content string) {
 	body := bytes.NewReader([]byte(content))
-	w, r := prepareTestPayloadRequest(bktName, objName, body)
+	w, r := prepareTestPayloadRequest(tc, bktName, objName, body)
 	setEncryptHeaders(r)
 	tc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
 
 func getEncryptedObject(t *testing.T, tc *handlerContext, bktName, objName string) ([]byte, http.Header) {
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	setEncryptHeaders(r)
 	tc.Handler().GetObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
@@ -288,7 +288,7 @@ func getEncryptedObject(t *testing.T, tc *handlerContext, bktName, objName strin
 }
 
 func getEncryptedObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, start, end int) []byte {
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	setEncryptHeaders(r)
 	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	tc.Handler().GetObjectHandler(w, r)

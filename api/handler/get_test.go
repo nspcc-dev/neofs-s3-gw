@@ -152,7 +152,7 @@ func TestGetRange(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-range", "object-to-range"
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 
 	content := "123456789abcdef"
 	putObjectContent(t, tc, bktName, objName, content)
@@ -172,13 +172,13 @@ func TestGetRange(t *testing.T) {
 
 func putObjectContent(t *testing.T, tc *handlerContext, bktName, objName, content string) {
 	body := bytes.NewReader([]byte(content))
-	w, r := prepareTestPayloadRequest(bktName, objName, body)
+	w, r := prepareTestPayloadRequest(tc, bktName, objName, body)
 	tc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
 
 func getObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, start, end int) []byte {
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	tc.Handler().GetObjectHandler(w, r)
 	assertStatus(t, w, http.StatusPartialContent)

@@ -1349,7 +1349,7 @@ func createAccessBox(t *testing.T) *accessbox.Box {
 }
 
 func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box) *data.BucketInfo {
-	w, r := prepareTestRequest(t, bktName, "", nil)
+	w, r := prepareTestRequest(tc, bktName, "", nil)
 	ctx := context.WithValue(r.Context(), api.BoxData, box)
 	r = r.WithContext(ctx)
 	tc.Handler().CreateBucketHandler(w, r)
@@ -1361,7 +1361,7 @@ func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessb
 }
 
 func putBucketACL(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box, header map[string]string) {
-	w, r := prepareTestRequest(t, bktName, "", nil)
+	w, r := prepareTestRequest(tc, bktName, "", nil)
 	for key, val := range header {
 		r.Header.Set(key, val)
 	}

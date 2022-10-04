@@ -12,7 +12,7 @@ import (
 	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -159,6 +159,9 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		config = cachesConfig[0]
 	}
 
+	var owner user.ID
+	user.IDFromKey(&owner, key.PrivateKey.PublicKey)
+
 	layerCfg := &Config{
 		Caches:      config,
 		AnonKey:     AnonymousKey{Key: key},
@@ -170,7 +173,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		layer: NewLayer(logger, tp, layerCfg),
 		bktInfo: &data.BucketInfo{
 			Name:  bktName,
-			Owner: *usertest.ID(),
+			Owner: owner,
 			CID:   bktID,
 		},
 		obj:       "obj1",

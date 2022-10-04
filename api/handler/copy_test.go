@@ -22,7 +22,7 @@ func TestCopyWithTaggingDirective(t *testing.T) {
 
 	bktName, objName := "bucket-for-copy", "object-from-copy"
 	objToCopy, objToCopy2 := "object-to-copy", "object-to-copy-2"
-	createBucketAndObject(t, tc, bktName, objName)
+	createBucketAndObject(tc, bktName, objName)
 
 	putObjectTagging(t, tc, bktName, objName, map[string]string{"key": "val"})
 
@@ -47,7 +47,7 @@ func TestCopyToItself(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-copy", "object-for-copy"
-	createBucketAndObject(t, tc, bktName, objName)
+	createBucketAndObject(tc, bktName, objName)
 
 	copyMeta := CopyMeta{MetadataDirective: replaceDirective}
 
@@ -64,7 +64,7 @@ func TestCopyToItself(t *testing.T) {
 }
 
 func copyObject(t *testing.T, tc *handlerContext, bktName, fromObject, toObject string, copyMeta CopyMeta, statusCode int) {
-	w, r := prepareTestRequest(t, bktName, toObject, nil)
+	w, r := prepareTestRequest(tc, bktName, toObject, nil)
 	r.Header.Set(api.AmzCopySource, bktName+"/"+fromObject)
 
 	r.Header.Set(api.AmzMetadataDirective, copyMeta.MetadataDirective)
@@ -95,7 +95,7 @@ func putObjectTagging(t *testing.T, tc *handlerContext, bktName, objName string,
 		})
 	}
 
-	w, r := prepareTestRequest(t, bktName, objName, body)
+	w, r := prepareTestRequest(tc, bktName, objName, body)
 	tc.Handler().PutObjectTaggingHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
@@ -104,7 +104,7 @@ func getObjectTagging(t *testing.T, tc *handlerContext, bktName, objName, versio
 	query := make(url.Values)
 	query.Add(api.QueryVersionID, version)
 
-	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
+	w, r := prepareTestFullRequest(tc, bktName, objName, query, nil)
 	tc.Handler().GetObjectTaggingHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 

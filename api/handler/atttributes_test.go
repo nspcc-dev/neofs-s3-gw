@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -13,33 +12,32 @@ import (
 )
 
 func TestGetObjectPartsAttributes(t *testing.T) {
-	ctx := context.Background()
 	hc := prepareHandlerContext(t)
 
 	bktName := "bucket-get-attributes"
 	objName, objMultipartName := "object", "object-multipart"
 
-	createTestBucket(ctx, t, hc, bktName)
+	createTestBucket(hc, bktName)
 
 	body := bytes.NewReader([]byte("content"))
-	w, r := prepareTestPayloadRequest(bktName, objName, body)
+	w, r := prepareTestPayloadRequest(hc, bktName, objName, body)
 	hc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
+	w, r = prepareTestRequest(hc, bktName, objName, nil)
 	r.Header.Set(api.AmzObjectAttributes, objectParts)
 	hc.Handler().GetObjectAttributesHandler(w, r)
 	result := &GetObjectAttributesResponse{}
 	parseTestResponse(t, w, result)
 	require.Nil(t, result.ObjectParts)
 
-	w, r = prepareTestRequest(t, bktName, objMultipartName, nil)
+	w, r = prepareTestRequest(hc, bktName, objMultipartName, nil)
 	hc.Handler().CreateMultipartUploadHandler(w, r)
 	multipartUpload := &InitiateMultipartUploadResponse{}
 	parseTestResponse(t, w, multipartUpload)
 
 	body2 := bytes.NewReader([]byte("content2"))
-	w, r = prepareTestPayloadRequest(bktName, objMultipartName, body2)
+	w, r = prepareTestPayloadRequest(hc, bktName, objMultipartName, body2)
 	query := make(url.Values)
 	query.Add(uploadIDHeaderName, multipartUpload.UploadID)
 	query.Add(partNumberHeaderName, "1")
@@ -54,14 +52,14 @@ func TestGetObjectPartsAttributes(t *testing.T) {
 			PartNumber: 1,
 		}},
 	}
-	w, r = prepareTestRequest(t, bktName, objMultipartName, completeUpload)
+	w, r = prepareTestRequest(hc, bktName, objMultipartName, completeUpload)
 	query = make(url.Values)
 	query.Add(uploadIDHeaderName, multipartUpload.UploadID)
 	r.URL.RawQuery = query.Encode()
 	hc.Handler().CompleteMultipartUploadHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objMultipartName, nil)
+	w, r = prepareTestRequest(hc, bktName, objMultipartName, nil)
 	r.Header.Set(api.AmzObjectAttributes, objectParts)
 	hc.Handler().GetObjectAttributesHandler(w, r)
 	result = &GetObjectAttributesResponse{}

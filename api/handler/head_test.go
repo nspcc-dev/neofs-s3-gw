@@ -6,81 +6,101 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConditionalHead(t *testing.T) {
-	ctx := context.Background()
 	tc := prepareHandlerContext(t)
 
-	bktName := "bucket-for-conditional"
-	createTestBucket(ctx, t, tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(ctx, bktName)
-	require.NoError(t, err)
+	bktName, objName := "bucket-for-conditional", "object"
+	_, objInfo := createBucketAndObject(tc, bktName, objName)
 
-	objName := "object"
-	objInfo := createTestObject(ctx, t, tc, bktInfo, objName)
-
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	tc.Handler().HeadObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
-
 	etag := w.Result().Header.Get(api.ETag)
-	lastModified := w.Result().Header.Get(api.LastModified)
-	_ = lastModified
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfMatch, etag)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	headers := map[string]string{api.IfMatch: etag}
+	headObject(t, tc, bktName, objName, headers, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfMatch, "etag")
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusPreconditionFailed)
+	headers = map[string]string{api.IfMatch: "etag"}
+	headObject(t, tc, bktName, objName, headers, http.StatusPreconditionFailed)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	unmodifiedSince := objInfo.Created.Add(time.Minute)
-	r.Header.Set(api.IfUnmodifiedSince, unmodifiedSince.Format(http.TimeFormat))
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	headers = map[string]string{api.IfUnmodifiedSince: objInfo.Created.Add(time.Minute).Format(http.TimeFormat)}
+	headObject(t, tc, bktName, objName, headers, http.StatusOK)
 
 	var zeroTime time.Time
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfUnmodifiedSince, zeroTime.UTC().Format(http.TimeFormat))
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusPreconditionFailed)
+	headers = map[string]string{api.IfUnmodifiedSince: zeroTime.UTC().Format(http.TimeFormat)}
+	headObject(t, tc, bktName, objName, headers, http.StatusPreconditionFailed)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfMatch, etag)
-	r.Header.Set(api.IfUnmodifiedSince, zeroTime.UTC().Format(http.TimeFormat))
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	headers = map[string]string{
+		api.IfMatch:           etag,
+		api.IfUnmodifiedSince: zeroTime.UTC().Format(http.TimeFormat),
+	}
+	headObject(t, tc, bktName, objName, headers, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfNoneMatch, etag)
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNotModified)
+	headers = map[string]string{api.IfNoneMatch: etag}
+	headObject(t, tc, bktName, objName, headers, http.StatusNotModified)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfNoneMatch, "etag")
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	headers = map[string]string{api.IfNoneMatch: "etag"}
+	headObject(t, tc, bktName, objName, headers, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfModifiedSince, zeroTime.UTC().Format(http.TimeFormat))
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	headers = map[string]string{api.IfModifiedSince: zeroTime.UTC().Format(http.TimeFormat)}
+	headObject(t, tc, bktName, objName, headers, http.StatusOK)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfModifiedSince, time.Now().Add(time.Minute).UTC().Format(http.TimeFormat))
-	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNotModified)
+	headers = map[string]string{api.IfModifiedSince: time.Now().Add(time.Minute).UTC().Format(http.TimeFormat)}
+	headObject(t, tc, bktName, objName, headers, http.StatusNotModified)
 
-	w, r = prepareTestRequest(t, bktName, objName, nil)
-	r.Header.Set(api.IfNoneMatch, etag)
-	r.Header.Set(api.IfModifiedSince, zeroTime.UTC().Format(http.TimeFormat))
+	headers = map[string]string{
+		api.IfNoneMatch:     etag,
+		api.IfModifiedSince: zeroTime.UTC().Format(http.TimeFormat),
+	}
+	headObject(t, tc, bktName, objName, headers, http.StatusNotModified)
+}
+
+func headObject(t *testing.T, tc *handlerContext, bktName, objName string, headers map[string]string, status int) {
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
+
+	for key, val := range headers {
+		r.Header.Set(key, val)
+	}
+
 	tc.Handler().HeadObjectHandler(w, r)
-	assertStatus(t, w, http.StatusNotModified)
+	assertStatus(t, w, status)
+}
+
+func TestInvalidAccessThroughCache(t *testing.T) {
+	tc := prepareHandlerContext(t)
+	bktName, objName := "bucket-for-cache", "obj-for-cache"
+	createBucketAndObject(tc, bktName, objName)
+
+	headObject(t, tc, bktName, objName, nil, http.StatusOK)
+
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
+	tc.Handler().HeadObjectHandler(w, r.WithContext(context.WithValue(r.Context(), api.BoxData, newTestAccessBox(t, nil))))
+	assertStatus(t, w, http.StatusForbidden)
+}
+
+func newTestAccessBox(t *testing.T, key *keys.PrivateKey) *accessbox.Box {
+	var err error
+	if key == nil {
+		key, err = keys.NewPrivateKey()
+		require.NoError(t, err)
+	}
+
+	var btoken bearer.Token
+	btoken.SetEACLTable(*eacl.NewTable())
+	err = btoken.Sign(key.PrivateKey)
+	require.NoError(t, err)
+
+	return &accessbox.Box{
+		Gate: &accessbox.GateData{
+			BearerToken: &btoken,
+		},
+	}
 }

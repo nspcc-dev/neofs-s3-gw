@@ -35,7 +35,7 @@ func TestDeleteObject(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-removal", "object-to-delete"
-	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+	bktInfo, objInfo := createBucketAndObject(tc, bktName, objName)
 
 	checkFound(t, tc, bktName, objName, emptyVersion)
 	deleteObject(t, tc, bktName, objName, emptyVersion)
@@ -61,7 +61,7 @@ func TestDeleteDeletedObject(t *testing.T) {
 
 	t.Run("unversioned bucket", func(t *testing.T) {
 		bktName, objName := "bucket-unversioned-removal", "object-to-delete"
-		createBucketAndObject(t, tc, bktName, objName)
+		createBucketAndObject(tc, bktName, objName)
 
 		versionID, isDeleteMarker := deleteObject(t, tc, bktName, objName, emptyVersion)
 		require.Empty(t, versionID)
@@ -116,7 +116,7 @@ func TestDeleteObjectUnversioned(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-removal-unversioned", "object-to-delete-unversioned"
-	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+	bktInfo, objInfo := createBucketAndObject(tc, bktName, objName)
 
 	checkFound(t, tc, bktName, objName, emptyVersion)
 	deleteObject(t, tc, bktName, objName, emptyVersion)
@@ -151,7 +151,7 @@ func TestDeleteObjectCombined(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-removal", "object-to-delete"
-	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+	bktInfo, objInfo := createBucketAndObject(tc, bktName, objName)
 
 	putBucketVersioning(t, tc, bktName, true)
 
@@ -168,7 +168,7 @@ func TestDeleteObjectSuspended(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-removal", "object-to-delete"
-	bktInfo, objInfo := createBucketAndObject(t, tc, bktName, objName)
+	bktInfo, objInfo := createBucketAndObject(tc, bktName, objName)
 
 	putBucketVersioning(t, tc, bktName, true)
 
@@ -188,7 +188,7 @@ func TestDeleteMarkers(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-removal", "object-to-delete"
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 	putBucketVersioning(t, tc, bktName, true)
 
 	checkNotFound(t, tc, bktName, objName, emptyVersion)
@@ -243,21 +243,21 @@ func TestDeleteObjectCheckMarkerReturn(t *testing.T) {
 	require.Equal(t, deleteMarkerVersion, deleteMarkerVersion2)
 }
 
-func createBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
-	bktInfo := createTestBucket(tc.Context(), t, tc, bktName)
+func createBucketAndObject(tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
+	bktInfo := createTestBucket(tc, bktName)
 
-	objInfo := createTestObject(tc.Context(), t, tc, bktInfo, objName)
+	objInfo := createTestObject(tc, bktInfo, objName)
 
 	return bktInfo, objInfo
 }
 
 func createVersionedBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 	putBucketVersioning(t, tc, bktName, true)
 
-	objInfo := createTestObject(tc.Context(), t, tc, bktInfo, objName)
+	objInfo := createTestObject(tc, bktInfo, objName)
 
 	return bktInfo, objInfo
 }
@@ -267,7 +267,7 @@ func putBucketVersioning(t *testing.T, tc *handlerContext, bktName string, enabl
 	if enabled {
 		cfg.Status = "Enabled"
 	}
-	w, r := prepareTestRequest(t, bktName, "", cfg)
+	w, r := prepareTestRequest(tc, bktName, "", cfg)
 	tc.Handler().PutBucketVersioningHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
@@ -276,7 +276,7 @@ func deleteObject(t *testing.T, tc *handlerContext, bktName, objName, version st
 	query := make(url.Values)
 	query.Add(api.QueryVersionID, version)
 
-	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
+	w, r := prepareTestFullRequest(tc, bktName, objName, query, nil)
 	tc.Handler().DeleteObjectHandler(w, r)
 	assertStatus(t, w, http.StatusNoContent)
 
@@ -284,7 +284,7 @@ func deleteObject(t *testing.T, tc *handlerContext, bktName, objName, version st
 }
 
 func deleteBucket(t *testing.T, tc *handlerContext, bktName string, code int) {
-	w, r := prepareTestRequest(t, bktName, "", nil)
+	w, r := prepareTestRequest(tc, bktName, "", nil)
 	tc.Handler().DeleteBucketHandler(w, r)
 	assertStatus(t, w, code)
 }
@@ -293,7 +293,7 @@ func checkNotFound(t *testing.T, tc *handlerContext, bktName, objName, version s
 	query := make(url.Values)
 	query.Add(api.QueryVersionID, version)
 
-	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
+	w, r := prepareTestFullRequest(tc, bktName, objName, query, nil)
 	tc.Handler().HeadObjectHandler(w, r)
 	assertStatus(t, w, http.StatusNotFound)
 }
@@ -302,13 +302,13 @@ func checkFound(t *testing.T, tc *handlerContext, bktName, objName, version stri
 	query := make(url.Values)
 	query.Add(api.QueryVersionID, version)
 
-	w, r := prepareTestFullRequest(t, bktName, objName, query, nil)
+	w, r := prepareTestFullRequest(tc, bktName, objName, query, nil)
 	tc.Handler().HeadObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
 
 func listVersions(t *testing.T, tc *handlerContext, bktName string) *ListObjectsVersionsResponse {
-	w, r := prepareTestRequest(t, bktName, "", nil)
+	w, r := prepareTestRequest(tc, bktName, "", nil)
 	tc.Handler().ListBucketObjectVersionsHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 	res := &ListObjectsVersionsResponse{}
@@ -318,13 +318,13 @@ func listVersions(t *testing.T, tc *handlerContext, bktName string) *ListObjects
 
 func putObject(t *testing.T, tc *handlerContext, bktName, objName string) {
 	body := bytes.NewReader([]byte("content"))
-	w, r := prepareTestPayloadRequest(bktName, objName, body)
+	w, r := prepareTestPayloadRequest(tc, bktName, objName, body)
 	tc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 }
 
 func createSuspendedBucket(t *testing.T, tc *handlerContext, bktName string) *data.BucketInfo {
-	createTestBucket(tc.Context(), t, tc, bktName)
+	createTestBucket(tc, bktName)
 	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 	putBucketVersioning(t, tc, bktName, false)

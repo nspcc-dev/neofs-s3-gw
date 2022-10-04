@@ -111,9 +111,9 @@ func TestPutObjectOverrideCopiesNumber(t *testing.T) {
 	tc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-copies-number", "object-for-copies-number"
-	bktInfo := createTestBucket(tc.Context(), t, tc, bktName)
+	bktInfo := createTestBucket(tc, bktName)
 
-	w, r := prepareTestRequest(t, bktName, objName, nil)
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	r.Header.Set(api.MetadataPrefix+strings.ToUpper(layer.AttributeNeofsCopiesNumber), "1")
 	tc.Handler().PutObjectHandler(w, r)
 
