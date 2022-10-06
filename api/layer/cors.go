@@ -64,7 +64,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		}
 	}
 
-	n.cache.PutCORS(p.BktInfo, cors)
+	n.cache.PutCORS(n.Owner(ctx), p.BktInfo, cors)
 
 	return nil
 }

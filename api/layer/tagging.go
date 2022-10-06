@@ -12,14 +12,10 @@ import (
 )
 
 func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error) {
-	var (
-		err  error
-		tags map[string]string
-	)
+	owner := n.Owner(ctx)
 
 	if len(p.VersionID) != 0 && p.VersionID != data.UnversionedObjectVersionID {
-		tags = n.cache.GetTagging(objectTaggingCacheKey(p))
-		if tags != nil {
+		if tags := n.cache.GetTagging(owner, objectTaggingCacheKey(p)); tags != nil {
 			return p.VersionID, tags, nil
 		}
 	}
@@ -30,12 +26,11 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 	}
 	p.VersionID = version.OID.EncodeToString()
 
-	tags = n.cache.GetTagging(objectTaggingCacheKey(p))
-	if tags != nil {
+	if tags := n.cache.GetTagging(owner, objectTaggingCacheKey(p)); tags != nil {
 		return p.VersionID, tags, nil
 	}
 
-	tags, err = n.treeService.GetObjectTagging(ctx, p.BktInfo, version)
+	tags, err := n.treeService.GetObjectTagging(ctx, p.BktInfo, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return "", nil, errors.GetAPIError(errors.ErrNoSuchKey)
@@ -43,7 +38,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *ObjectVersion) (string,
 		return "", nil, err
 	}
 
-	n.cache.PutTagging(objectTaggingCacheKey(p), tags)
+	n.cache.PutTagging(owner, objectTaggingCacheKey(p), tags)
 
 	return p.VersionID, tags, nil
 }
@@ -63,7 +58,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet m
 		return nil, err
 	}
 
-	n.cache.PutTagging(objectTaggingCacheKey(p), tagSet)
+	n.cache.PutTagging(n.Owner(ctx), objectTaggingCacheKey(p), tagSet)
 
 	return version, nil
 }
@@ -90,21 +85,18 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*dat
 }
 
 func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
-	var (
-		err  error
-		tags map[string]string
-	)
+	owner := n.Owner(ctx)
 
-	tags = n.cache.GetTagging(bucketTaggingCacheKey(bktInfo.CID))
-	if tags != nil {
+	if tags := n.cache.GetTagging(owner, bucketTaggingCacheKey(bktInfo.CID)); tags != nil {
 		return tags, nil
 	}
 
-	if tags, err = n.treeService.GetBucketTagging(ctx, bktInfo); err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+	tags, err := n.treeService.GetBucketTagging(ctx, bktInfo)
+	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 
-	n.cache.PutTagging(bucketTaggingCacheKey(bktInfo.CID), tags)
+	n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
 
 	return tags, nil
 }
@@ -114,7 +106,7 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 		return err
 	}
 
-	n.cache.PutTagging(bucketTaggingCacheKey(bktInfo.CID), tagSet)
+	n.cache.PutTagging(n.Owner(ctx), bucketTaggingCacheKey(bktInfo.CID), tagSet)
 
 	return nil
 }

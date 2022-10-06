@@ -107,7 +107,6 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 }
 
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
-	var err error
 	ownerID := n.Owner(ctx)
 	if p.LocationConstraint == "" {
 		p.LocationConstraint = api.DefaultLocationConstraint // s3tests_boto3.functional.test_s3:test_bucket_get_location
