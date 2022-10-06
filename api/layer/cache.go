@@ -142,13 +142,21 @@ func (c *Cache) PutList(owner user.ID, key cache.ObjectsListKey, list []*data.No
 	}
 }
 
-func (c *Cache) GetTagging(key string) map[string]string {
+func (c *Cache) GetTagging(owner user.ID, key string) map[string]string {
+	if !c.accessCache.Get(owner, key) {
+		return nil
+	}
+
 	return c.systemCache.GetTagging(key)
 }
 
-func (c *Cache) PutTagging(key string, tags map[string]string) {
+func (c *Cache) PutTagging(owner user.ID, key string, tags map[string]string) {
 	if err := c.systemCache.PutTagging(key, tags); err != nil {
 		c.logger.Error("couldn't cache tags", zap.Error(err))
+	}
+
+	if err := c.accessCache.Put(owner, key); err != nil {
+		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
 	}
 }
 
@@ -156,35 +164,64 @@ func (c *Cache) DeleteTagging(key string) {
 	c.systemCache.Delete(key)
 }
 
-func (c *Cache) GetLockInfo(key string) *data.LockInfo {
+func (c *Cache) GetLockInfo(owner user.ID, key string) *data.LockInfo {
+	if !c.accessCache.Get(owner, key) {
+		return nil
+	}
+
 	return c.systemCache.GetLockInfo(key)
 }
 
-func (c *Cache) PutLockInfo(key string, lockInfo *data.LockInfo) {
+func (c *Cache) PutLockInfo(owner user.ID, key string, lockInfo *data.LockInfo) {
 	if err := c.systemCache.PutLockInfo(key, lockInfo); err != nil {
 		c.logger.Error("couldn't cache lock info", zap.Error(err))
 	}
+
+	if err := c.accessCache.Put(owner, key); err != nil {
+		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
+	}
 }
 
-func (c *Cache) GetSettings(bktInfo *data.BucketInfo) *data.BucketSettings {
+func (c *Cache) GetSettings(owner user.ID, bktInfo *data.BucketInfo) *data.BucketSettings {
 	key := bktInfo.Name + bktInfo.SettingsObjectName()
+
+	if !c.accessCache.Get(owner, key) {
+		return nil
+	}
+
 	return c.systemCache.GetSettings(key)
 }
 
-func (c *Cache) PutSettings(bktInfo *data.BucketInfo, settings *data.BucketSettings) {
+func (c *Cache) PutSettings(owner user.ID, bktInfo *data.BucketInfo, settings *data.BucketSettings) {
 	key := bktInfo.Name + bktInfo.SettingsObjectName()
 	if err := c.systemCache.PutSettings(key, settings); err != nil {
 		c.logger.Warn("couldn't cache bucket settings", zap.String("bucket", bktInfo.Name), zap.Error(err))
 	}
+
+	if err := c.accessCache.Put(owner, key); err != nil {
+		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
+	}
 }
 
-func (c *Cache) GetCORS(bkt *data.BucketInfo) *data.CORSConfiguration {
-	return c.systemCache.GetCORS(bkt.Name + bkt.CORSObjectName())
+func (c *Cache) GetCORS(owner user.ID, bkt *data.BucketInfo) *data.CORSConfiguration {
+	key := bkt.Name + bkt.CORSObjectName()
+
+	if !c.accessCache.Get(owner, key) {
+		return nil
+	}
+
+	return c.systemCache.GetCORS(key)
 }
 
-func (c *Cache) PutCORS(bkt *data.BucketInfo, settings *data.CORSConfiguration) {
-	if err := c.systemCache.PutCORS(bkt.Name+bkt.CORSObjectName(), settings); err != nil {
+func (c *Cache) PutCORS(owner user.ID, bkt *data.BucketInfo, cors *data.CORSConfiguration) {
+	key := bkt.Name + bkt.CORSObjectName()
+
+	if err := c.systemCache.PutCORS(key, cors); err != nil {
 		c.logger.Warn("couldn't cache cors", zap.String("bucket", bkt.Name), zap.Error(err))
+	}
+
+	if err := c.accessCache.Put(owner, key); err != nil {
+		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
 	}
 }
 
@@ -192,14 +229,23 @@ func (c *Cache) DeleteCORS(bktInfo *data.BucketInfo) {
 	c.systemCache.Delete(bktInfo.Name + bktInfo.CORSObjectName())
 }
 
-func (c *Cache) GetNotificationConfiguration(bktInfo *data.BucketInfo) *data.NotificationConfiguration {
+func (c *Cache) GetNotificationConfiguration(owner user.ID, bktInfo *data.BucketInfo) *data.NotificationConfiguration {
 	key := bktInfo.Name + bktInfo.NotificationConfigurationObjectName()
+
+	if !c.accessCache.Get(owner, key) {
+		return nil
+	}
+
 	return c.systemCache.GetNotificationConfiguration(key)
 }
 
-func (c *Cache) PutNotificationConfiguration(bktInfo *data.BucketInfo, configuration *data.NotificationConfiguration) {
+func (c *Cache) PutNotificationConfiguration(owner user.ID, bktInfo *data.BucketInfo, configuration *data.NotificationConfiguration) {
 	key := bktInfo.Name + bktInfo.NotificationConfigurationObjectName()
 	if err := c.systemCache.PutNotificationConfiguration(key, configuration); err != nil {
 		c.logger.Warn("couldn't cache notification configuration", zap.String("bucket", bktInfo.Name), zap.Error(err))
+	}
+
+	if err := c.accessCache.Put(owner, key); err != nil {
+		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
 	}
 }

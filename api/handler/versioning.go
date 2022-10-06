@@ -8,7 +8,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"go.uber.org/zap"
 )
 
 func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
@@ -68,11 +67,8 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		h.log.Warn("couldn't get version settings object: default version settings will be used",
-			zap.String("request_id", reqInfo.RequestID),
-			zap.String("method", reqInfo.API),
-			zap.String("bucket_name", reqInfo.BucketName),
-			zap.Error(err))
+		h.logAndSendError(w, "couldn't get version settings", reqInfo, err)
+		return
 	}
 
 	if err = api.EncodeToResponse(w, formVersioningConfiguration(settings)); err != nil {

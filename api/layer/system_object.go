@@ -100,7 +100,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		return fmt.Errorf("couldn't put lock into tree: %w", err)
 	}
 
-	n.cache.PutLockInfo(lockObjectKey(p.ObjVersion), lockInfo)
+	n.cache.PutLockInfo(n.Owner(ctx), lockObjectKey(p.ObjVersion), lockInfo)
 
 	return nil
 }
@@ -124,7 +124,8 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 }
 
 func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*data.LockInfo, error) {
-	if lockInfo := n.cache.GetLockInfo(lockObjectKey(objVersion)); lockInfo != nil {
+	owner := n.Owner(ctx)
+	if lockInfo := n.cache.GetLockInfo(owner, lockObjectKey(objVersion)); lockInfo != nil {
 		return lockInfo, nil
 	}
 
@@ -141,13 +142,14 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		lockInfo = &data.LockInfo{}
 	}
 
-	n.cache.PutLockInfo(lockObjectKey(objVersion), lockInfo)
+	n.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
 
 	return lockInfo, nil
 }
 
 func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSConfiguration, error) {
-	if cors := n.cache.GetCORS(bkt); cors != nil {
+	owner := n.Owner(ctx)
+	if cors := n.cache.GetCORS(owner, bkt); cors != nil {
 		return cors, nil
 	}
 
@@ -172,7 +174,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSCo
 		return nil, fmt.Errorf("unmarshal cors: %w", err)
 	}
 
-	n.cache.PutCORS(bkt, cors)
+	n.cache.PutCORS(owner, bkt, cors)
 
 	return cors, nil
 }
@@ -183,7 +185,8 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 }
 
 func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	if settings := n.cache.GetSettings(bktInfo); settings != nil {
+	owner := n.Owner(ctx)
+	if settings := n.cache.GetSettings(owner, bktInfo); settings != nil {
 		return settings, nil
 	}
 
@@ -195,7 +198,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
 	}
 
-	n.cache.PutSettings(bktInfo, settings)
+	n.cache.PutSettings(owner, bktInfo, settings)
 
 	return settings, nil
 }
@@ -205,7 +208,7 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 
-	n.cache.PutSettings(p.BktInfo, p.Settings)
+	n.cache.PutSettings(n.Owner(ctx), p.BktInfo, p.Settings)
 
 	return nil
 }

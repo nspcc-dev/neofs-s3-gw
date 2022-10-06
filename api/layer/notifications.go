@@ -53,13 +53,14 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		}
 	}
 
-	n.cache.PutNotificationConfiguration(p.BktInfo, p.Configuration)
+	n.cache.PutNotificationConfiguration(n.Owner(ctx), p.BktInfo, p.Configuration)
 
 	return nil
 }
 
 func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
-	if conf := n.cache.GetNotificationConfiguration(bktInfo); conf != nil {
+	owner := n.Owner(ctx)
+	if conf := n.cache.GetNotificationConfiguration(owner, bktInfo); conf != nil {
 		return conf, nil
 	}
 
@@ -82,7 +83,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		}
 	}
 
-	n.cache.PutNotificationConfiguration(bktInfo, conf)
+	n.cache.PutNotificationConfiguration(owner, bktInfo, conf)
 
 	return conf, nil
 }
