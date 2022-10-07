@@ -49,13 +49,13 @@ func TestFormObjectLock(t *testing.T) {
 			bktInfo: &data.BucketInfo{ObjectLockEnabled: true},
 			config:  &data.ObjectLockConfiguration{Rule: &data.ObjectLockRule{DefaultRetention: &data.DefaultRetention{Mode: complianceMode, Days: 1}}},
 			header: map[string][]string{
-				api.AmzObjectLockRetainUntilDate: {time.Now().Format(time.RFC3339)},
+				api.AmzObjectLockRetainUntilDate: {time.Now().Add(time.Minute).Format(time.RFC3339)},
 				api.AmzObjectLockMode:            {governanceMode},
 				api.AmzObjectLockLegalHold:       {legalHoldOn},
 			},
 			expectedLock: &data.ObjectLock{
 				LegalHold: &data.LegalHoldLock{Enabled: true},
-				Retention: &data.RetentionLock{Until: time.Now()}},
+				Retention: &data.RetentionLock{Until: time.Now().Add(time.Minute)}},
 		},
 		{
 			name:          "lock disabled error",
@@ -97,22 +97,22 @@ func TestFormObjectLockFromRetention(t *testing.T) {
 			name: "basic compliance",
 			retention: &data.Retention{
 				Mode:            complianceMode,
-				RetainUntilDate: time.Now().Format(time.RFC3339),
+				RetainUntilDate: time.Now().Add(time.Minute).Format(time.RFC3339),
 			},
 			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{
-				Until:        time.Now(),
+				Until:        time.Now().Add(time.Minute),
 				IsCompliance: true}},
 		},
 		{
 			name: "basic governance",
 			retention: &data.Retention{
 				Mode:            governanceMode,
-				RetainUntilDate: time.Now().Format(time.RFC3339),
+				RetainUntilDate: time.Now().Add(time.Minute).Format(time.RFC3339),
 			},
 			header: map[string][]string{
 				api.AmzBypassGovernanceRetention: {strconv.FormatBool(true)},
 			},
-			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{Until: time.Now()}},
+			expectedLock: &data.ObjectLock{Retention: &data.RetentionLock{Until: time.Now().Add(time.Minute)}},
 		},
 		{
 			name: "error invalid mode",
@@ -478,7 +478,7 @@ func TestObjectRetention(t *testing.T) {
 	hc.Handler().GetObjectRetentionHandler(w, r)
 	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey))
 
-	retention := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Format(time.RFC3339)}
+	retention := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 	w, r = prepareTestRequest(t, bktName, objName, retention)
 	hc.Handler().PutObjectRetentionHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
@@ -487,12 +487,12 @@ func TestObjectRetention(t *testing.T) {
 	hc.Handler().GetObjectRetentionHandler(w, r)
 	assertRetention(t, w, retention)
 
-	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Format(time.RFC3339)}
+	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Add(time.Minute).Format(time.RFC3339)}
 	w, r = prepareTestRequest(t, bktName, objName, retention)
 	hc.Handler().PutObjectRetentionHandler(w, r)
 	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrInternalError))
 
-	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().UTC().Format(time.RFC3339)}
+	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 	w, r = prepareTestRequest(t, bktName, objName, retention)
 	r.Header.Set(api.AmzBypassGovernanceRetention, strconv.FormatBool(true))
 	hc.Handler().PutObjectRetentionHandler(w, r)
@@ -571,6 +571,60 @@ func TestPutObjectWithLock(t *testing.T) {
 	w, r = prepareTestRequest(t, bktName, objOverride, nil)
 	hc.Handler().GetObjectLegalHoldHandler(w, r)
 	assertLegalHold(t, w, legalHoldOn)
+}
+
+func TestPutLockErrors(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-lock-enabled", "object"
+	createTestBucketWithLock(hc.Context(), t, hc, bktName, nil)
+
+	headers := map[string]string{api.AmzObjectLockMode: complianceMode}
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrObjectLockInvalidHeaders)
+
+	delete(headers, api.AmzObjectLockMode)
+	headers[api.AmzObjectLockRetainUntilDate] = time.Now().Add(time.Minute).Format(time.RFC3339)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrObjectLockInvalidHeaders)
+
+	headers[api.AmzObjectLockMode] = "dummy"
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrUnknownWORMModeDirective)
+
+	headers[api.AmzObjectLockMode] = complianceMode
+	headers[api.AmzObjectLockRetainUntilDate] = time.Now().Format(time.RFC3339)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrPastObjectLockRetainDate)
+
+	headers[api.AmzObjectLockRetainUntilDate] = "dummy"
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrInvalidRetentionDate)
+
+	putObject(t, hc, bktName, objName)
+
+	retention := &data.Retention{Mode: governanceMode}
+	putObjectRetentionFailed(t, hc, bktName, objName, retention, apiErrors.ErrMalformedXML)
+
+	retention.Mode = "dummy"
+	retention.RetainUntilDate = time.Now().Add(time.Minute).UTC().Format(time.RFC3339)
+	putObjectRetentionFailed(t, hc, bktName, objName, retention, apiErrors.ErrMalformedXML)
+
+	retention.Mode = governanceMode
+	retention.RetainUntilDate = time.Now().UTC().Format(time.RFC3339)
+	putObjectRetentionFailed(t, hc, bktName, objName, retention, apiErrors.ErrPastObjectLockRetainDate)
+}
+
+func putObjectWithLockFailed(t *testing.T, hc *handlerContext, bktName, objName string, headers map[string]string, errCode apiErrors.ErrorCode) {
+	w, r := prepareTestRequest(t, bktName, objName, nil)
+
+	for key, val := range headers {
+		r.Header.Set(key, val)
+	}
+
+	hc.Handler().PutObjectHandler(w, r)
+	assertS3Error(t, w, apiErrors.GetAPIError(errCode))
+}
+
+func putObjectRetentionFailed(t *testing.T, hc *handlerContext, bktName, objName string, retention *data.Retention, errCode apiErrors.ErrorCode) {
+	w, r := prepareTestRequest(t, bktName, objName, retention)
+	hc.Handler().PutObjectRetentionHandler(w, r)
+	assertS3Error(t, w, apiErrors.GetAPIError(errCode))
 }
 
 func assertRetentionApproximate(t *testing.T, w *httptest.ResponseRecorder, retention *data.Retention, delta float64) {
