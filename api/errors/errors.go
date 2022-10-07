@@ -877,13 +877,13 @@ var errorCodes = errorCodeMap{
 	ErrPastObjectLockRetainDate: {
 		ErrCode:        ErrPastObjectLockRetainDate,
 		Code:           "InvalidRequest",
-		Description:    "the retain until date must be in the future",
+		Description:    "The retain until date must be in the future",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrUnknownWORMModeDirective: {
 		ErrCode:        ErrUnknownWORMModeDirective,
 		Code:           "InvalidRequest",
-		Description:    "unknown wormMode directive",
+		Description:    "Unknown wormMode directive",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrObjectLockInvalidHeaders: {

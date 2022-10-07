@@ -332,18 +332,28 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 	}
 
 	mode := header.Get(api.AmzObjectLockMode)
+	until := header.Get(api.AmzObjectLockRetainUntilDate)
+
+	if mode != "" && until == "" || mode == "" && until != "" {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrObjectLockInvalidHeaders)
+	}
+
 	if mode != "" {
 		if objectLock.Retention == nil {
 			objectLock.Retention = &data.RetentionLock{}
 		}
+
+		if mode != complianceMode && mode != governanceMode {
+			return nil, apiErrors.GetAPIError(apiErrors.ErrUnknownWORMModeDirective)
+		}
+
 		objectLock.Retention.IsCompliance = mode == complianceMode
 	}
 
-	until := header.Get(api.AmzObjectLockRetainUntilDate)
 	if until != "" {
 		retentionDate, err := time.Parse(time.RFC3339, until)
 		if err != nil {
-			return nil, fmt.Errorf("invalid header %s: '%s'", api.AmzObjectLockRetainUntilDate, until)
+			return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidRetentionDate)
 		}
 		if objectLock.Retention == nil {
 			objectLock.Retention = &data.RetentionLock{}
@@ -359,6 +369,10 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 			}
 			objectLock.Retention.ByPassedGovernance = bypass
 		}
+
+		if objectLock.Retention.Until.Before(time.Now()) {
+			return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
+		}
 	}
 
 	return objectLock, nil
@@ -372,12 +386,16 @@ func existLockHeaders(header http.Header) bool {
 
 func formObjectLockFromRetention(retention *data.Retention, header http.Header) (*data.ObjectLock, error) {
 	if retention.Mode != governanceMode && retention.Mode != complianceMode {
-		return nil, fmt.Errorf("invalid retention mode: %s", retention.Mode)
+		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
 	}
 
 	retentionDate, err := time.Parse(time.RFC3339, retention.RetainUntilDate)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't parse retain until date: %s", retention.RetainUntilDate)
+		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
+	}
+
+	if retentionDate.Before(time.Now()) {
+		return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
 	}
 
 	var bypass bool
