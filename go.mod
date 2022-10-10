@@ -10,8 +10,8 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/nspcc-dev/neo-go v0.99.2
-	github.com/nspcc-dev/neofs-api-go/v2 v2.13.2-0.20220827080658-9e17cdfc7647
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.6.0.20220906132707-71891029da36
+	github.com/nspcc-dev/neofs-api-go/v2 v2.13.2-0.20221005093543-3a91383f24a9
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.6.0.20221007102402-8c682641bfd2
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
@@ -20,12 +20,12 @@ require (
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.18.1
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
-	google.golang.org/grpc v1.41.0
+	google.golang.org/grpc v1.48.0
 	google.golang.org/protobuf v1.28.1
 )
 
 require (
-	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210521073959-f0d4d129b7f1 // indirect
+	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10 // indirect
 	//github.com/aws/aws-sdk-go-v2 v1.16.7 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
