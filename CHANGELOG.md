@@ -4,6 +4,9 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Added
+- Stop pool dial on SIGINT (#712)
+
 ### Fixed
 - Unrestricted access to not owned objects via cache (#713)
 
