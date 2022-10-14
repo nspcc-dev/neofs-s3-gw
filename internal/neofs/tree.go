@@ -91,13 +91,16 @@ const (
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
-func NewTreeClient(addr string, key *keys.PrivateKey) (*TreeClient, error) {
+func NewTreeClient(ctx context.Context, addr string, key *keys.PrivateKey) (*TreeClient, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("did not connect: %v", err)
 	}
 
 	c := tree.NewTreeServiceClient(conn)
+	if _, err = c.Healthcheck(ctx, &tree.HealthcheckRequest{}); err != nil {
+		return nil, fmt.Errorf("healthcheck: %w", err)
+	}
 
 	return &TreeClient{
 		key:     key,
