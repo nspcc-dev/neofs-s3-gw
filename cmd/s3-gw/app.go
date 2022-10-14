@@ -121,7 +121,7 @@ func (a *App) initLayer(ctx context.Context) {
 	a.initResolver()
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
-	treeService, err := neofs.NewTreeClient(treeServiceEndpoint, a.key)
+	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.key)
 	if err != nil {
 		a.log.Fatal("failed to create tree service", zap.Error(err))
 	}
