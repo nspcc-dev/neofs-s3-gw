@@ -2,7 +2,7 @@
 
 mkdir -p internal/neofs/services/tree 2>/dev/null
 
-REVISION="74c861342e19611dba534bb719aafda757f0d009"
+REVISION="feaa9eace7098c343598bf08fb50746a1e8d2deb"
 
 echo "tree service revision ${REVISION}"
 
