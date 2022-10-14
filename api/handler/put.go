@@ -197,7 +197,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
 		return
 	}
 
@@ -246,17 +246,18 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := h.obj.PutObject(r.Context(), params)
+	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
 	if err != nil {
 		_, err2 := io.Copy(io.Discard, r.Body)
 		err3 := r.Body.Close()
 		h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
 		return
 	}
+	objInfo := extendedObjInfo.ObjectInfo
 
 	s := &SendNotificationParams{
 		Event:            EventObjectCreatedPut,
-		NotificationInfo: data.NotificationInfoFromObject(info),
+		NotificationInfo: data.NotificationInfoFromObject(objInfo),
 		BktInfo:          bktInfo,
 		ReqInfo:          reqInfo,
 	}
@@ -265,19 +266,23 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
-		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, info); err != nil {
+		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
 		}
 	}
 
-	t := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: info.Name,
-		VersionID:  info.VersionID(),
-	}
 	if tagSet != nil {
-		if _, err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
+		tagPrm := &layer.PutObjectTaggingParams{
+			ObjectVersion: &layer.ObjectVersion{
+				BktInfo:    bktInfo,
+				ObjectName: objInfo.Name,
+				VersionID:  objInfo.VersionID(),
+			},
+			TagSet:      tagSet,
+			NodeVersion: extendedObjInfo.NodeVersion,
+		}
+		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
@@ -297,13 +302,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if settings.VersioningEnabled() {
-		w.Header().Set(api.AmzVersionID, info.VersionID())
+		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
 	if encryption.Enabled() {
 		addSSECHeaders(w.Header(), r.Header)
 	}
 
-	w.Header().Set(api.ETag, info.HashSum)
+	w.Header().Set(api.ETag, objInfo.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
@@ -431,15 +436,16 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		Header:  metadata,
 	}
 
-	info, err := h.obj.PutObject(r.Context(), params)
+	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
 	if err != nil {
 		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
 	}
+	objInfo := extendedObjInfo.ObjectInfo
 
 	s := &SendNotificationParams{
 		Event:            EventObjectCreatedPost,
-		NotificationInfo: data.NotificationInfoFromObject(info),
+		NotificationInfo: data.NotificationInfoFromObject(objInfo),
 		BktInfo:          bktInfo,
 		ReqInfo:          reqInfo,
 	}
@@ -453,20 +459,23 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set(api.AmzGrantWrite, "")
 		r.Header.Set(api.AmzGrantRead, "")
 
-		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, info); err != nil {
+		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
 		}
 	}
 
-	t := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: info.Name,
-		VersionID:  info.VersionID(),
-	}
-
 	if tagSet != nil {
-		if _, err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
+		tagPrm := &layer.PutObjectTaggingParams{
+			ObjectVersion: &layer.ObjectVersion{
+				BktInfo:    bktInfo,
+				ObjectName: objInfo.Name,
+				VersionID:  objInfo.VersionID(),
+			},
+			NodeVersion: extendedObjInfo.NodeVersion,
+		}
+
+		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
@@ -488,7 +497,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
 	} else if settings.VersioningEnabled() {
-		w.Header().Set(api.AmzVersionID, info.VersionID())
+		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
 
 	if redirectURL := auth.MultipartFormValue(r, "success_action_redirect"); redirectURL != "" {
@@ -503,9 +512,9 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		case "201":
 			status = http.StatusCreated
 			resp := &PostResponse{
-				Bucket: info.Bucket,
-				Key:    info.Name,
-				ETag:   info.HashSum,
+				Bucket: objInfo.Bucket,
+				Key:    objInfo.Name,
+				ETag:   objInfo.HashSum,
 			}
 			w.WriteHeader(status)
 			if _, err = w.Write(api.EncodeResponse(resp)); err != nil {
@@ -515,7 +524,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set(api.ETag, info.HashSum)
+	w.Header().Set(api.ETag, objInfo.HashSum)
 	w.WriteHeader(status)
 }
 

@@ -141,7 +141,7 @@ func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName stri
 		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),
 	}
 
-	objInfo, err := hc.Layer().PutObject(hc.Context(), &layer.PutObjectParams{
+	extObjInfo, err := hc.Layer().PutObject(hc.Context(), &layer.PutObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,
 		Size:    int64(len(content)),
@@ -150,7 +150,7 @@ func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName stri
 	})
 	require.NoError(hc.t, err)
 
-	return objInfo
+	return extObjInfo.ObjectInfo
 }
 
 func prepareTestRequest(hc *handlerContext, bktName, objName string, body interface{}) (*httptest.ResponseRecorder, *http.Request) {

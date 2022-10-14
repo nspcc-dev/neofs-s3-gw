@@ -68,12 +68,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.HeadObjectParams{
+	srcObjPrm := &layer.HeadObjectParams{
 		Object:    srcObject,
 		VersionID: versionID,
 	}
 
-	if p.BktInfo, err = h.getBucketAndCheckOwner(r, srcBucket, api.AmzSourceExpectedBucketOwner); err != nil {
+	if srcObjPrm.BktInfo, err = h.getBucketAndCheckOwner(r, srcBucket, api.AmzSourceExpectedBucketOwner); err != nil {
 		h.logAndSendError(w, "couldn't get source bucket", reqInfo, err)
 		return
 	}
@@ -97,11 +97,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	extendedSrcObjInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), srcObjPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
+	srcObjInfo := extendedSrcObjInfo.ObjectInfo
 
 	args, err := parseCopyObjectArgs(r.Header)
 	if err != nil {
@@ -125,13 +126,16 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		objVersion := &layer.ObjectVersion{
-			BktInfo:    p.BktInfo,
-			ObjectName: srcObject,
-			VersionID:  objInfo.VersionID(),
+		tagPrm := &layer.GetObjectTaggingParams{
+			ObjectVersion: &layer.ObjectVersion{
+				BktInfo:    srcObjPrm.BktInfo,
+				ObjectName: srcObject,
+				VersionID:  srcObjInfo.VersionID(),
+			},
+			NodeVersion: extendedSrcObjInfo.NodeVersion,
 		}
 
-		_, tagSet, err = h.obj.GetObjectTagging(r.Context(), objVersion)
+		_, tagSet, err = h.obj.GetObjectTagging(r.Context(), tagPrm)
 		if err != nil {
 			h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 			return
@@ -144,21 +148,21 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(objInfo.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(srcObjInfo.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
-	if err = checkPreconditions(objInfo, args.Conditional); err != nil {
+	if err = checkPreconditions(srcObjInfo, args.Conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed))
 		return
 	}
 
 	if metadata == nil {
-		if len(objInfo.ContentType) > 0 {
-			objInfo.Headers[api.ContentType] = objInfo.ContentType
+		if len(srcObjInfo.ContentType) > 0 {
+			srcObjInfo.Headers[api.ContentType] = srcObjInfo.ContentType
 		}
-		metadata = objInfo.Headers
+		metadata = srcObjInfo.Headers
 	} else if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		metadata[api.ContentType] = contentType
 	}
@@ -170,11 +174,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := &layer.CopyObjectParams{
-		SrcObject:   objInfo,
-		ScrBktInfo:  p.BktInfo,
+		SrcObject:   srcObjInfo,
+		ScrBktInfo:  srcObjPrm.BktInfo,
 		DstBktInfo:  dstBktInfo,
 		DstObject:   reqInfo.ObjectName,
-		SrcSize:     objInfo.Size,
+		SrcSize:     srcObjInfo.Size,
 		Header:      metadata,
 		Encryption:  encryptionParams,
 		CopiesNuber: copiesNumber,
@@ -187,16 +191,20 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	additional := []zap.Field{zap.String("src_bucket_name", srcBucket), zap.String("src_object_name", srcObject)}
-	if objInfo, err = h.obj.CopyObject(r.Context(), params); err != nil {
+	extendedDstObjInfo, err := h.obj.CopyObject(r.Context(), params)
+	if err != nil {
 		h.logAndSendError(w, "couldn't copy object", reqInfo, err, additional...)
 		return
-	} else if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: objInfo.Created.UTC().Format(time.RFC3339), ETag: objInfo.HashSum}); err != nil {
+	}
+	dstObjInfo := extendedDstObjInfo.ObjectInfo
+
+	if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: dstObjInfo.Created.UTC().Format(time.RFC3339), ETag: dstObjInfo.HashSum}); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err, additional...)
 		return
 	}
 
 	if containsACL {
-		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, objInfo)
+		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, dstObjInfo)
 		if err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
@@ -215,25 +223,29 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tagSet != nil {
-		t := &layer.ObjectVersion{
-			BktInfo:    dstBktInfo,
-			ObjectName: reqInfo.ObjectName,
-			VersionID:  objInfo.VersionID(),
+		tagPrm := &layer.PutObjectTaggingParams{
+			ObjectVersion: &layer.ObjectVersion{
+				BktInfo:    dstBktInfo,
+				ObjectName: reqInfo.ObjectName,
+				VersionID:  dstObjInfo.VersionID(),
+			},
+			TagSet:      tagSet,
+			NodeVersion: extendedDstObjInfo.NodeVersion,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), t, tagSet); err != nil {
+		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
 	}
 
 	h.log.Info("object is copied",
-		zap.String("bucket", objInfo.Bucket),
-		zap.String("object", objInfo.Name),
-		zap.Stringer("object_id", objInfo.ID))
+		zap.String("bucket", dstObjInfo.Bucket),
+		zap.String("object", dstObjInfo.Name),
+		zap.Stringer("object_id", dstObjInfo.ID))
 
 	s := &SendNotificationParams{
 		Event:            EventObjectCreatedCopy,
-		NotificationInfo: data.NotificationInfoFromObject(objInfo),
+		NotificationInfo: data.NotificationInfoFromObject(dstObjInfo),
 		BktInfo:          dstBktInfo,
 		ReqInfo:          reqInfo,
 	}

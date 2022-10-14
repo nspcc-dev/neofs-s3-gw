@@ -184,7 +184,7 @@ func ParseCompletedPartHeader(hdr string) (*Part, error) {
 }
 
 // PutObject stores object into NeoFS, took payload from io.Reader.
-func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error) {
+func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error) {
 	owner := n.Owner(ctx)
 
 	bktSettings, err := n.GetBucketSettings(ctx, p.BktInfo)
@@ -294,7 +294,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Object
 
 	n.cache.PutObjectWithName(owner, extendedObjInfo)
 
-	return objInfo, nil
+	return extendedObjInfo, nil
 }
 
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ExtendedObjectInfo, error) {
