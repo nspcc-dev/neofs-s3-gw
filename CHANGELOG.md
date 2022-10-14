@@ -9,6 +9,7 @@ This document outlines major changes between releases.
 
 ### Fixed
 - Unrestricted access to not owned objects via cache (#713)
+- Check tree service health (#699)
 
 ### Updating from v0.24.0
 New config parameters were added. Make sure the default parameters are appropriate for you.
