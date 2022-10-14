@@ -213,13 +213,13 @@ type (
 		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
 		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 
-		GetObjectTagging(ctx context.Context, p *ObjectVersion) (string, map[string]string, error)
-		PutObjectTagging(ctx context.Context, p *ObjectVersion, tagSet map[string]string) (*data.NodeVersion, error)
+		GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams) (string, map[string]string, error)
+		PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) (*data.NodeVersion, error)
 		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*data.NodeVersion, error)
 
-		PutObject(ctx context.Context, p *PutObjectParams) (*data.ObjectInfo, error)
+		PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error)
 
-		CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ObjectInfo, error)
+		CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ExtendedObjectInfo, error)
 
 		ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*ListObjectsInfoV1, error)
 		ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*ListObjectsInfoV2, error)
@@ -228,7 +228,7 @@ type (
 		DeleteObjects(ctx context.Context, p *DeleteObjectParams) []*VersionedObject
 
 		CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error
-		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ObjectInfo, error)
+		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ExtendedObjectInfo, error)
 		UploadPart(ctx context.Context, p *UploadPartParams) (string, error)
 		UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error)
 		ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error)
@@ -481,7 +481,7 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 }
 
 // CopyObject from one bucket into another bucket.
-func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ObjectInfo, error) {
+func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ExtendedObjectInfo, error) {
 	pr, pw := io.Pipe()
 
 	go func() {

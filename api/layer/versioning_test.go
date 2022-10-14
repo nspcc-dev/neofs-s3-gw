@@ -18,7 +18,7 @@ import (
 )
 
 func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
-	objInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
+	extObjInfo, err := tc.layer.PutObject(tc.ctx, &PutObjectParams{
 		BktInfo: tc.bktInfo,
 		Object:  tc.obj,
 		Size:    int64(len(content)),
@@ -27,7 +27,7 @@ func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 	})
 	require.NoError(tc.t, err)
 
-	return objInfo
+	return extObjInfo.ObjectInfo
 }
 
 func (tc *testContext) getObject(objectName, versionID string, needError bool) (*data.ObjectInfo, []byte) {

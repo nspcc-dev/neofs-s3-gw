@@ -399,19 +399,24 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		Parts: reqBody.Parts,
 	}
 
-	uploadData, objInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
+	uploadData, extendedObjInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
 	if err != nil {
 		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err, additional...)
 		return
 	}
+	objInfo := extendedObjInfo.ObjectInfo
 
 	if len(uploadData.TagSet) != 0 {
-		t := &layer.ObjectVersion{
-			BktInfo:    bktInfo,
-			ObjectName: objInfo.Name,
-			VersionID:  objInfo.VersionID(),
+		tagPrm := &layer.PutObjectTaggingParams{
+			ObjectVersion: &layer.ObjectVersion{
+				BktInfo:    bktInfo,
+				ObjectName: objInfo.Name,
+				VersionID:  objInfo.VersionID(),
+			},
+			TagSet:      uploadData.TagSet,
+			NodeVersion: extendedObjInfo.NodeVersion,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), t, uploadData.TagSet); err != nil {
+		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
 			return
 		}

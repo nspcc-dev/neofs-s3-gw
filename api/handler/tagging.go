@@ -38,13 +38,15 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+	tagPrm := &layer.PutObjectTaggingParams{
+		ObjectVersion: &layer.ObjectVersion{
+			BktInfo:    bktInfo,
+			ObjectName: reqInfo.ObjectName,
+			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+		},
+		TagSet: tagSet,
 	}
-
-	nodeVersion, err := h.obj.PutObjectTagging(r.Context(), p, tagSet)
+	nodeVersion, err := h.obj.PutObjectTagging(r.Context(), tagPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
@@ -83,13 +85,15 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: reqInfo.ObjectName,
-		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+	tagPrm := &layer.GetObjectTaggingParams{
+		ObjectVersion: &layer.ObjectVersion{
+			BktInfo:    bktInfo,
+			ObjectName: reqInfo.ObjectName,
+			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+		},
 	}
 
-	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), p)
+	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), tagPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 		return

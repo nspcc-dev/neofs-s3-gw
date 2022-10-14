@@ -349,7 +349,7 @@ func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 	return n + next, err
 }
 
-func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ObjectInfo, error) {
+func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ExtendedObjectInfo, error) {
 	for i := 1; i < len(p.Parts); i++ {
 		if p.Parts[i].PartNumber <= p.Parts[i-1].PartNumber {
 			return nil, nil, errors.GetAPIError(errors.ErrInvalidPartOrder)
@@ -433,7 +433,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	r.prm.bktInfo = p.Info.Bkt
 
-	obj, err := n.PutObject(ctx, &PutObjectParams{
+	extObjInfo, err := n.PutObject(ctx, &PutObjectParams{
 		BktInfo:      p.Info.Bkt,
 		Object:       p.Info.Key,
 		Reader:       r,
@@ -464,7 +464,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		n.cache.DeleteObject(addr)
 	}
 
-	return uploadData, obj, n.treeService.DeleteMultipartUpload(ctx, p.Info.Bkt, multipartInfo.ID)
+	return uploadData, extObjInfo, n.treeService.DeleteMultipartUpload(ctx, p.Info.Bkt, multipartInfo.ID)
 }
 
 func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error) {
