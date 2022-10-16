@@ -45,6 +45,7 @@ dep:
 	@CGO_ENABLED=0 \
 	go mod tidy -v && echo OK
 
+# Run `make %` in Golang container, for more information run `make help.docker/%`
 docker/%:
 	$(if $(filter $*,all $(BINS)), \
 		@echo "=> Running 'make $*' in clean Docker environment" && \
@@ -111,16 +112,18 @@ docker/lint:
 version:
 	@echo $(VERSION)
 
-# Clean up
+# Clean up files
 clean:
 	rm -rf .cache
 	rm -rf $(BINDIR)
 
+# Generate code from .proto files
 protoc:
-	# Protoc generate
 	@for f in `find . -type f -name '*.proto' -not -path './vendor/*'`; do \
 		echo "⇒ Processing $$f "; \
 		protoc \
 			--go_out=paths=source_relative:. $$f; \
 	done
 	rm -rf vendor
+
+include help.mk
