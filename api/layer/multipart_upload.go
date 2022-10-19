@@ -536,7 +536,7 @@ func (n *layer) AbortMultipartUpload(ctx context.Context, p *UploadInfoParams) e
 	for _, info := range parts {
 		if err = n.objectDelete(ctx, p.Bkt, info.OID); err != nil {
 			n.log.Warn("couldn't delete part", zap.String("cid", p.Bkt.CID.EncodeToString()),
-				zap.String("oid", info.OID.EncodeToString()), zap.Int("part number", info.Number))
+				zap.String("oid", info.OID.EncodeToString()), zap.Int("part number", info.Number), zap.Error(err))
 		}
 	}
 
