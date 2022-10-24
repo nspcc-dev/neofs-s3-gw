@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	cidtest "github.com/nspcc-dev/neofs-sdk-go/container/id/test"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -25,26 +25,26 @@ func getTestObjectsListConfig() *Config {
 func TestObjectsListCache(t *testing.T) {
 	var (
 		listSize        = 10
-		ids             []oid.ID
+		versions        []*data.NodeVersion
 		cidKey, cidKey2 = cidtest.ID(), cidtest.ID()
 	)
 
 	for i := 0; i < listSize; i++ {
-		ids = append(ids, oidtest.ID())
+		versions = append(versions, &data.NodeVersion{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}})
 	}
 
 	t.Run("lifetime", func(t *testing.T) {
 		var (
-			config   = getTestObjectsListConfig()
-			cache    = NewObjectsListCache(config)
-			cacheKey = ObjectsListKey{cid: cidKey}
+			config  = getTestObjectsListConfig()
+			cache   = NewObjectsListCache(config)
+			listKey = ObjectsListKey{cid: cidKey}
 		)
 
-		err := cache.Put(cacheKey, ids)
+		err := cache.PutVersions(listKey, versions)
 		require.NoError(t, err)
 
 		condition := func() bool {
-			return cache.Get(cacheKey) == nil
+			return cache.GetVersions(listKey) == nil
 		}
 
 		require.Never(t, condition, config.Lifetime, time.Second)
@@ -53,41 +53,41 @@ func TestObjectsListCache(t *testing.T) {
 
 	t.Run("get cache with empty prefix", func(t *testing.T) {
 		var (
-			cache    = NewObjectsListCache(getTestObjectsListConfig())
-			cacheKey = ObjectsListKey{cid: cidKey}
+			cache   = NewObjectsListCache(getTestObjectsListConfig())
+			listKey = ObjectsListKey{cid: cidKey}
 		)
-		err := cache.Put(cacheKey, ids)
+		err := cache.PutVersions(listKey, versions)
 		require.NoError(t, err)
 
-		actual := cache.Get(cacheKey)
+		actual := cache.GetVersions(listKey)
 
-		require.Equal(t, len(ids), len(actual))
-		for i := range ids {
-			require.Equal(t, ids[i], actual[i])
+		require.Equal(t, len(versions), len(actual))
+		for i := range versions {
+			require.Equal(t, versions[i], actual[i])
 		}
 	})
 
 	t.Run("get cache with prefix", func(t *testing.T) {
-		cacheKey := ObjectsListKey{
+		listKey := ObjectsListKey{
 			cid:    cidKey,
 			prefix: "dir",
 		}
 
 		cache := NewObjectsListCache(getTestObjectsListConfig())
-		err := cache.Put(cacheKey, ids)
+		err := cache.PutVersions(listKey, versions)
 		require.NoError(t, err)
 
-		actual := cache.Get(cacheKey)
+		actual := cache.GetVersions(listKey)
 
-		require.Equal(t, len(ids), len(actual))
-		for i := range ids {
-			require.Equal(t, ids[i], actual[i])
+		require.Equal(t, len(versions), len(actual))
+		for i := range versions {
+			require.Equal(t, versions[i], actual[i])
 		}
 	})
 
 	t.Run("get cache with other prefix", func(t *testing.T) {
 		var (
-			cacheKey = ObjectsListKey{
+			listKey = ObjectsListKey{
 				cid:    cidKey,
 				prefix: "dir",
 			}
@@ -99,16 +99,16 @@ func TestObjectsListCache(t *testing.T) {
 		)
 
 		cache := NewObjectsListCache(getTestObjectsListConfig())
-		err := cache.Put(cacheKey, ids)
+		err := cache.PutVersions(listKey, versions)
 		require.NoError(t, err)
 
-		actual := cache.Get(newKey)
+		actual := cache.GetVersions(newKey)
 		require.Nil(t, actual)
 	})
 
 	t.Run("get cache with non-existing key", func(t *testing.T) {
 		var (
-			cacheKey = ObjectsListKey{
+			listKey = ObjectsListKey{
 				cid: cidKey,
 			}
 			newKey = ObjectsListKey{
@@ -117,19 +117,19 @@ func TestObjectsListCache(t *testing.T) {
 		)
 
 		cache := NewObjectsListCache(getTestObjectsListConfig())
-		err := cache.Put(cacheKey, ids)
+		err := cache.PutVersions(listKey, versions)
 		require.NoError(t, err)
 
-		actual := cache.Get(newKey)
+		actual := cache.GetVersions(newKey)
 		require.Nil(t, actual)
 	})
 }
 
 func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	var (
-		id   = cidtest.ID()
-		oids = []oid.ID{oidtest.ID()}
-		keys []ObjectsListKey
+		id       = cidtest.ID()
+		versions = []*data.NodeVersion{{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}}}
+		keys     []ObjectsListKey
 	)
 
 	for _, p := range []string{"", "dir/", "dir/lol/"} {
@@ -141,12 +141,12 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 		config.Lifetime = time.Minute
 		cache := NewObjectsListCache(config)
 		for _, k := range keys {
-			err := cache.Put(k, oids)
+			err := cache.PutVersions(k, versions)
 			require.NoError(t, err)
 		}
 		cache.CleanCacheEntriesContainingObject("obj1", id)
 		for _, k := range keys {
-			list := cache.Get(k)
+			list := cache.GetVersions(k)
 			if k.prefix == "" {
 				require.Nil(t, list)
 			} else {
@@ -160,12 +160,12 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 		config.Lifetime = time.Minute
 		cache := NewObjectsListCache(config)
 		for _, k := range keys {
-			err := cache.Put(k, oids)
+			err := cache.PutVersions(k, versions)
 			require.NoError(t, err)
 		}
 		cache.CleanCacheEntriesContainingObject("dir/obj", id)
 		for _, k := range keys {
-			list := cache.Get(k)
+			list := cache.GetVersions(k)
 			if k.prefix == "" || k.prefix == "dir/" {
 				require.Nil(t, list)
 			} else {
@@ -179,12 +179,12 @@ func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 		config.Lifetime = time.Minute
 		cache := NewObjectsListCache(config)
 		for _, k := range keys {
-			err := cache.Put(k, oids)
+			err := cache.PutVersions(k, versions)
 			require.NoError(t, err)
 		}
 		cache.CleanCacheEntriesContainingObject("dir/lol/obj", id)
 		for _, k := range keys {
-			list := cache.Get(k)
+			list := cache.GetVersions(k)
 			require.Nil(t, list)
 		}
 	})
