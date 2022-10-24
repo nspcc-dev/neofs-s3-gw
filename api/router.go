@@ -149,6 +149,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			lw := &logResponseWriter{ResponseWriter: w}
+			reqInfo := GetReqInfo(r.Context())
 
 			// pass execution:
 			h.ServeHTTP(lw, r)
@@ -159,6 +160,8 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 					zap.Int("status", lw.statusCode),
 					zap.String("request_id", GetRequestID(r.Context())),
 					zap.String("method", mux.CurrentRoute(r).GetName()),
+					zap.String("bucket", reqInfo.BucketName),
+					zap.String("object", reqInfo.ObjectName),
 					zap.String("description", http.StatusText(lw.statusCode)))
 
 				return
@@ -168,6 +171,8 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 				zap.Int("status", lw.statusCode),
 				zap.String("request_id", GetRequestID(r.Context())),
 				zap.String("method", mux.CurrentRoute(r).GetName()),
+				zap.String("bucket", reqInfo.BucketName),
+				zap.String("object", reqInfo.ObjectName),
 				zap.String("description", http.StatusText(lw.statusCode)))
 		})
 	}
