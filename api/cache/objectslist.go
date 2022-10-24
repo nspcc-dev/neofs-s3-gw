@@ -9,7 +9,6 @@ import (
 	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 )
 
@@ -67,23 +66,6 @@ func NewObjectsListCache(config *Config) *ObjectsListCache {
 	return &ObjectsListCache{cache: gc, logger: config.Logger}
 }
 
-// Get returns a list of ObjectInfo.
-func (l *ObjectsListCache) Get(key ObjectsListKey) []oid.ID {
-	entry, err := l.cache.Get(key)
-	if err != nil {
-		return nil
-	}
-
-	result, ok := entry.([]oid.ID)
-	if !ok {
-		l.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", fmt.Sprintf("%T", result)))
-		return nil
-	}
-
-	return result
-}
-
 // GetVersions returns a list of ObjectInfo.
 func (l *ObjectsListCache) GetVersions(key ObjectsListKey) []*data.NodeVersion {
 	entry, err := l.cache.Get(key)
@@ -93,15 +75,12 @@ func (l *ObjectsListCache) GetVersions(key ObjectsListKey) []*data.NodeVersion {
 
 	result, ok := entry.([]*data.NodeVersion)
 	if !ok {
+		l.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
+			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
 	return result
-}
-
-// Put puts a list of objects to cache.
-func (l *ObjectsListCache) Put(key ObjectsListKey, oids []oid.ID) error {
-	return l.cache.Set(key, oids)
 }
 
 // PutVersions puts a list of object versions to cache.

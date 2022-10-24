@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cidtest "github.com/nspcc-dev/neofs-sdk-go/container/id/test"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -104,17 +103,17 @@ func TestObjectsListCacheType(t *testing.T) {
 
 	cnrID := cidtest.ID()
 	key := ObjectsListKey{cid: cnrID, prefix: "obj"}
-	objIDs := []oid.ID{oidtest.ID()}
+	versions := []*data.NodeVersion{{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}}}
 
-	err := cache.Put(key, objIDs)
+	err := cache.PutVersions(key, versions)
 	require.NoError(t, err)
-	val := cache.Get(key)
-	require.Equal(t, objIDs, val)
+	val := cache.GetVersions(key)
+	require.Equal(t, versions, val)
 	require.Equal(t, 0, observedLog.Len())
 
 	err = cache.cache.Set(key, "tmp")
 	require.NoError(t, err)
-	assertInvalidCacheEntry(t, cache.Get(key), observedLog)
+	assertInvalidCacheEntry(t, cache.GetVersions(key), observedLog)
 
 	err = cache.cache.Set("key", "tmp")
 	require.NoError(t, err)
