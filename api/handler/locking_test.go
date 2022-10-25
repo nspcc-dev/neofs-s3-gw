@@ -423,35 +423,31 @@ func TestObjectLegalHold(t *testing.T) {
 	objName := "obj-for-legal-hold"
 	createTestObject(hc, bktInfo, objName)
 
+	getObjectLegalHold(hc, bktName, objName, legalHoldOff)
+
+	putObjectLegalHold(hc, bktName, objName, legalHoldOn)
+	getObjectLegalHold(hc, bktName, objName, legalHoldOn)
+
+	// to make sure put hold is an idempotent operation
+	putObjectLegalHold(hc, bktName, objName, legalHoldOn)
+
+	putObjectLegalHold(hc, bktName, objName, legalHoldOff)
+	getObjectLegalHold(hc, bktName, objName, legalHoldOff)
+
+	// to make sure put hold is an idempotent operation
+	putObjectLegalHold(hc, bktName, objName, legalHoldOff)
+}
+
+func getObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
 	w, r := prepareTestRequest(hc, bktName, objName, nil)
 	hc.Handler().GetObjectLegalHoldHandler(w, r)
-	assertLegalHold(t, w, legalHoldOff)
+	assertLegalHold(hc.t, w, status)
+}
 
-	w, r = prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: legalHoldOn})
+func putObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
+	w, r := prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: status})
 	hc.Handler().PutObjectLegalHoldHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(hc, bktName, objName, nil)
-	hc.Handler().GetObjectLegalHoldHandler(w, r)
-	assertLegalHold(t, w, legalHoldOn)
-
-	// to make sure put hold is an idempotent operation
-	w, r = prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: legalHoldOn})
-	hc.Handler().PutObjectLegalHoldHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: legalHoldOff})
-	hc.Handler().PutObjectLegalHoldHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(hc, bktName, objName, nil)
-	hc.Handler().GetObjectLegalHoldHandler(w, r)
-	assertLegalHold(t, w, legalHoldOff)
-
-	// to make sure put hold is an idempotent operation
-	w, r = prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: legalHoldOff})
-	hc.Handler().PutObjectLegalHoldHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	assertStatus(hc.t, w, http.StatusOK)
 }
 
 func assertLegalHold(t *testing.T, w *httptest.ResponseRecorder, status string) {
@@ -471,38 +467,43 @@ func TestObjectRetention(t *testing.T) {
 	objName := "obj-for-retention"
 	createTestObject(hc, bktInfo, objName)
 
-	w, r := prepareTestRequest(hc, bktName, objName, nil)
-	hc.Handler().GetObjectRetentionHandler(w, r)
-	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey))
+	getObjectRetention(hc, bktName, objName, nil, apiErrors.ErrNoSuchKey)
 
 	retention := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
-	w, r = prepareTestRequest(hc, bktName, objName, retention)
-	hc.Handler().PutObjectRetentionHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(hc, bktName, objName, nil)
-	hc.Handler().GetObjectRetentionHandler(w, r)
-	assertRetention(t, w, retention)
+	putObjectRetention(hc, bktName, objName, retention, false, 0)
+	getObjectRetention(hc, bktName, objName, retention, 0)
 
 	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Add(time.Minute).Format(time.RFC3339)}
-	w, r = prepareTestRequest(hc, bktName, objName, retention)
-	hc.Handler().PutObjectRetentionHandler(w, r)
-	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrInternalError))
+	putObjectRetention(hc, bktName, objName, retention, false, apiErrors.ErrInternalError)
 
 	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
-	w, r = prepareTestRequest(hc, bktName, objName, retention)
-	r.Header.Set(api.AmzBypassGovernanceRetention, strconv.FormatBool(true))
-	hc.Handler().PutObjectRetentionHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	putObjectRetention(hc, bktName, objName, retention, true, 0)
+	getObjectRetention(hc, bktName, objName, retention, 0)
 
-	w, r = prepareTestRequest(hc, bktName, objName, nil)
+	putObjectRetention(hc, bktName, objName, retention, true, apiErrors.ErrInternalError)
+}
+
+func getObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, errCode apiErrors.ErrorCode) {
+	w, r := prepareTestRequest(hc, bktName, objName, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
-	assertRetention(t, w, retention)
+	if errCode == 0 {
+		assertRetention(hc.t, w, retention)
+	} else {
+		assertS3Error(hc.t, w, apiErrors.GetAPIError(errCode))
+	}
+}
 
-	w, r = prepareTestRequest(hc, bktName, objName, retention)
-	r.Header.Set(api.AmzBypassGovernanceRetention, strconv.FormatBool(true))
+func putObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, byPass bool, errCode apiErrors.ErrorCode) {
+	w, r := prepareTestRequest(hc, bktName, objName, retention)
+	if byPass {
+		r.Header.Set(api.AmzBypassGovernanceRetention, strconv.FormatBool(true))
+	}
 	hc.Handler().PutObjectRetentionHandler(w, r)
-	assertS3Error(t, w, apiErrors.GetAPIError(apiErrors.ErrInternalError))
+	if errCode == 0 {
+		assertStatus(hc.t, w, http.StatusOK)
+	} else {
+		assertS3Error(hc.t, w, apiErrors.GetAPIError(errCode))
+	}
 }
 
 func assertRetention(t *testing.T, w *httptest.ResponseRecorder, retention *data.Retention) {
@@ -530,25 +531,13 @@ func TestPutObjectWithLock(t *testing.T) {
 	createTestBucketWithLock(hc, bktName, lockConfig)
 
 	objDefault := "obj-default-retention"
+	putObject(t, hc, bktName, objDefault)
 
-	w, r := prepareTestRequest(hc, bktName, objDefault, nil)
-	hc.Handler().PutObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(hc, bktName, objDefault, nil)
-	hc.Handler().GetObjectRetentionHandler(w, r)
-	expectedRetention := &data.Retention{
-		Mode:            governanceMode,
-		RetainUntilDate: time.Now().Add(24 * time.Hour).Format(time.RFC3339),
-	}
-	assertRetentionApproximate(t, w, expectedRetention, 1)
-
-	w, r = prepareTestRequest(hc, bktName, objDefault, nil)
-	hc.Handler().GetObjectLegalHoldHandler(w, r)
-	assertLegalHold(t, w, legalHoldOff)
+	getObjectRetentionApproximate(hc, bktName, objDefault, governanceMode, time.Now().Add(24*time.Hour))
+	getObjectLegalHold(hc, bktName, objDefault, legalHoldOff)
 
 	objOverride := "obj-override-retention"
-	w, r = prepareTestRequest(hc, bktName, objOverride, nil)
+	w, r := prepareTestRequest(hc, bktName, objOverride, nil)
 	r.Header.Set(api.AmzObjectLockMode, complianceMode)
 	r.Header.Set(api.AmzObjectLockLegalHold, legalHoldOn)
 	r.Header.Set(api.AmzBypassGovernanceRetention, "true")
@@ -556,17 +545,18 @@ func TestPutObjectWithLock(t *testing.T) {
 	hc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
-	w, r = prepareTestRequest(hc, bktName, objOverride, nil)
-	hc.Handler().GetObjectRetentionHandler(w, r)
-	expectedRetention = &data.Retention{
-		Mode:            complianceMode,
-		RetainUntilDate: time.Now().Add(2 * 24 * time.Hour).Format(time.RFC3339),
-	}
-	assertRetentionApproximate(t, w, expectedRetention, 1)
+	getObjectRetentionApproximate(hc, bktName, objOverride, complianceMode, time.Now().Add(2*24*time.Hour))
+	getObjectLegalHold(hc, bktName, objOverride, legalHoldOn)
+}
 
-	w, r = prepareTestRequest(hc, bktName, objOverride, nil)
-	hc.Handler().GetObjectLegalHoldHandler(w, r)
-	assertLegalHold(t, w, legalHoldOn)
+func getObjectRetentionApproximate(hc *handlerContext, bktName, objName, mode string, untilDate time.Time) {
+	w, r := prepareTestRequest(hc, bktName, objName, nil)
+	hc.Handler().GetObjectRetentionHandler(w, r)
+	expectedRetention := &data.Retention{
+		Mode:            mode,
+		RetainUntilDate: untilDate.Format(time.RFC3339),
+	}
+	assertRetentionApproximate(hc.t, w, expectedRetention, 1)
 }
 
 func TestPutLockErrors(t *testing.T) {
