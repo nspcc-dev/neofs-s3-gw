@@ -154,16 +154,8 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 			// pass execution:
 			h.ServeHTTP(lw, r)
 
-			// Ignore <300 status codes
-			if lw.statusCode >= http.StatusMultipleChoices {
-				l.Error("something went wrong",
-					zap.Int("status", lw.statusCode),
-					zap.String("request_id", GetRequestID(r.Context())),
-					zap.String("method", mux.CurrentRoute(r).GetName()),
-					zap.String("bucket", reqInfo.BucketName),
-					zap.String("object", reqInfo.ObjectName),
-					zap.String("description", http.StatusText(lw.statusCode)))
-
+			// Ignore >400 status codes
+			if lw.statusCode >= http.StatusBadRequest {
 				return
 			}
 
