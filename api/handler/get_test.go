@@ -155,7 +155,7 @@ func TestGetRange(t *testing.T) {
 	createTestBucket(tc, bktName)
 
 	content := "123456789abcdef"
-	putObjectContent(t, tc, bktName, objName, content)
+	putObjectContent(tc, bktName, objName, content)
 
 	full := getObjectRange(t, tc, bktName, objName, 0, len(content)-1)
 	require.Equal(t, content, string(full))
@@ -170,11 +170,11 @@ func TestGetRange(t *testing.T) {
 	require.Equal(t, "bcdef", string(end))
 }
 
-func putObjectContent(t *testing.T, tc *handlerContext, bktName, objName, content string) {
+func putObjectContent(hc *handlerContext, bktName, objName, content string) {
 	body := bytes.NewReader([]byte(content))
-	w, r := prepareTestPayloadRequest(tc, bktName, objName, body)
-	tc.Handler().PutObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	w, r := prepareTestPayloadRequest(hc, bktName, objName, body)
+	hc.Handler().PutObjectHandler(w, r)
+	assertStatus(hc.t, w, http.StatusOK)
 }
 
 func getObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, start, end int) []byte {

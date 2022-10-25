@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -44,31 +43,14 @@ func TestParseContinuationToken(t *testing.T) {
 func TestListObjectNullVersions(t *testing.T) {
 	hc := prepareHandlerContext(t)
 
-	bktName := "bucket-versioning-enabled"
+	bktName, objName := "bucket-versioning-enabled", "object"
 	createTestBucket(hc, bktName)
 
-	objName := "object"
+	putObjectContent(hc, bktName, objName, "content")
+	putBucketVersioning(t, hc, bktName, true)
+	putObjectContent(hc, bktName, objName, "content2")
 
-	body := bytes.NewReader([]byte("content"))
-	w, r := prepareTestPayloadRequest(hc, bktName, objName, body)
-	hc.Handler().PutObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	versioning := &VersioningConfiguration{Status: "Enabled"}
-	w, r = prepareTestRequest(hc, bktName, objName, versioning)
-	hc.Handler().PutBucketVersioningHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	body2 := bytes.NewReader([]byte("content2"))
-	w, r = prepareTestPayloadRequest(hc, bktName, objName, body2)
-	hc.Handler().PutObjectHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	w, r = prepareTestRequest(hc, bktName, objName, nil)
-	hc.Handler().ListBucketObjectVersionsHandler(w, r)
-
-	result := &ListObjectsVersionsResponse{}
-	parseTestResponse(t, w, result)
+	result := listVersions(t, hc, bktName)
 
 	require.Len(t, result.Version, 2)
 	require.Equal(t, data.UnversionedObjectVersionID, result.Version[1].VersionID)

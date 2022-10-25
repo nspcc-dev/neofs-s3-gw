@@ -99,7 +99,7 @@ func TestS3EncryptionSSECMultipartUpload(t *testing.T) {
 		api.ContentType: "text/plain",
 	}
 
-	data := multipartUploadEncrypted(t, tc, bktName, objName, headers, objLen, partSize)
+	data := multipartUploadEncrypted(tc, bktName, objName, headers, objLen, partSize)
 	require.Equal(t, objLen, len(data))
 
 	resData, resHeader := getEncryptedObject(t, tc, bktName, objName)
@@ -143,8 +143,8 @@ func checkContentUsingRangeEnc(t *testing.T, tc *handlerContext, bktName, objNam
 	}
 }
 
-func multipartUploadEncrypted(t *testing.T, tc *handlerContext, bktName, objName string, headers map[string]string, objLen, partsSize int) (objData []byte) {
-	multipartInfo := createMultipartUpload(t, tc, bktName, objName, headers)
+func multipartUploadEncrypted(hc *handlerContext, bktName, objName string, headers map[string]string, objLen, partsSize int) (objData []byte) {
+	multipartInfo := createMultipartUploadEncrypted(hc, bktName, objName, headers)
 
 	var sum, currentPart int
 	var etags []string
@@ -158,26 +158,37 @@ func multipartUploadEncrypted(t *testing.T, tc *handlerContext, bktName, objName
 			adjustedSize = objLen - sum
 		}
 
-		etag, data := uploadPart(t, tc, bktName, objName, multipartInfo.UploadID, currentPart, adjustedSize)
+		etag, data := uploadPartEncrypted(hc, bktName, objName, multipartInfo.UploadID, currentPart, adjustedSize)
 		etags = append(etags, etag)
 		objData = append(objData, data...)
 	}
 
-	completeMultipartUpload(t, tc, bktName, objName, multipartInfo.UploadID, etags)
+	completeMultipartUpload(hc, bktName, objName, multipartInfo.UploadID, etags)
 	return
 }
 
-func createMultipartUpload(t *testing.T, tc *handlerContext, bktName, objName string, headers map[string]string) *InitiateMultipartUploadResponse {
-	w, r := prepareTestRequest(tc, bktName, objName, nil)
-	setEncryptHeaders(r)
+func createMultipartUploadEncrypted(hc *handlerContext, bktName, objName string, headers map[string]string) *InitiateMultipartUploadResponse {
+	return createMultipartUploadBase(hc, bktName, objName, true, headers)
+}
+
+func createMultipartUpload(hc *handlerContext, bktName, objName string, headers map[string]string) *InitiateMultipartUploadResponse {
+	return createMultipartUploadBase(hc, bktName, objName, false, headers)
+}
+
+func createMultipartUploadBase(hc *handlerContext, bktName, objName string, encrypted bool, headers map[string]string) *InitiateMultipartUploadResponse {
+	w, r := prepareTestRequest(hc, bktName, objName, nil)
+	if encrypted {
+		setEncryptHeaders(r)
+	}
 	setHeaders(r, headers)
-	tc.Handler().CreateMultipartUploadHandler(w, r)
+	hc.Handler().CreateMultipartUploadHandler(w, r)
 	multipartInitInfo := &InitiateMultipartUploadResponse{}
-	readResponse(t, w, http.StatusOK, multipartInitInfo)
+	readResponse(hc.t, w, http.StatusOK, multipartInitInfo)
 
 	return multipartInitInfo
 }
-func completeMultipartUpload(t *testing.T, tc *handlerContext, bktName, objName, uploadID string, partsETags []string) {
+
+func completeMultipartUpload(hc *handlerContext, bktName, objName, uploadID string, partsETags []string) {
 	query := make(url.Values)
 	query.Set(uploadIDQuery, uploadID)
 	complete := &CompleteMultipartUpload{
@@ -190,24 +201,34 @@ func completeMultipartUpload(t *testing.T, tc *handlerContext, bktName, objName,
 		})
 	}
 
-	w, r := prepareTestFullRequest(tc, bktName, objName, query, complete)
-	tc.Handler().CompleteMultipartUploadHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	w, r := prepareTestFullRequest(hc, bktName, objName, query, complete)
+	hc.Handler().CompleteMultipartUploadHandler(w, r)
+	assertStatus(hc.t, w, http.StatusOK)
 }
 
-func uploadPart(t *testing.T, tc *handlerContext, bktName, objName, uploadID string, num, size int) (string, []byte) {
+func uploadPartEncrypted(hc *handlerContext, bktName, objName, uploadID string, num, size int) (string, []byte) {
+	return uploadPartBase(hc, bktName, objName, true, uploadID, num, size)
+}
+
+func uploadPart(hc *handlerContext, bktName, objName, uploadID string, num, size int) (string, []byte) {
+	return uploadPartBase(hc, bktName, objName, false, uploadID, num, size)
+}
+
+func uploadPartBase(hc *handlerContext, bktName, objName string, encrypted bool, uploadID string, num, size int) (string, []byte) {
 	partBody := make([]byte, size)
 	_, err := rand.Read(partBody)
-	require.NoError(t, err)
+	require.NoError(hc.t, err)
 
 	query := make(url.Values)
 	query.Set(uploadIDQuery, uploadID)
 	query.Set(partNumberQuery, strconv.Itoa(num))
 
-	w, r := prepareTestRequestWithQuery(tc, bktName, objName, query, partBody)
-	setEncryptHeaders(r)
-	tc.Handler().UploadPartHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	w, r := prepareTestRequestWithQuery(hc, bktName, objName, query, partBody)
+	if encrypted {
+		setEncryptHeaders(r)
+	}
+	hc.Handler().UploadPartHandler(w, r)
+	assertStatus(hc.t, w, http.StatusOK)
 
 	return w.Header().Get(api.ETag), partBody
 }
@@ -215,57 +236,21 @@ func uploadPart(t *testing.T, tc *handlerContext, bktName, objName, uploadID str
 func TestMultipartEncrypted(t *testing.T) {
 	partSize := 5*1048576 + 1<<16 - 5 // 5MB (min part size) + 64kb (cipher block size) - 5 (to check corner range)
 
-	tc := prepareHandlerContext(t)
+	hc := prepareHandlerContext(t)
 
 	bktName, objName := "bucket-for-sse-c-multipart", "object-to-encrypt-multipart"
-	createTestBucket(tc, bktName)
+	createTestBucket(hc, bktName)
 
-	w, r := prepareTestRequest(tc, bktName, objName, nil)
-	setEncryptHeaders(r)
-	tc.Handler().CreateMultipartUploadHandler(w, r)
-	multipartInitInfo := &InitiateMultipartUploadResponse{}
-	readResponse(t, w, http.StatusOK, multipartInitInfo)
+	multipartInitInfo := createMultipartUploadEncrypted(hc, bktName, objName, map[string]string{})
+	part1ETag, part1 := uploadPartEncrypted(hc, bktName, objName, multipartInitInfo.UploadID, 1, partSize)
+	part2ETag, part2 := uploadPartEncrypted(hc, bktName, objName, multipartInitInfo.UploadID, 2, 5)
+	completeMultipartUpload(hc, bktName, objName, multipartInitInfo.UploadID, []string{part1ETag, part2ETag})
 
-	part1 := make([]byte, partSize)
-	for i := range part1 {
-		part1[i] = 'a'
-	}
-	query := make(url.Values)
-	query.Set(uploadIDQuery, multipartInitInfo.UploadID)
-	query.Set(partNumberQuery, "1")
-	w, r = prepareTestRequestWithQuery(tc, bktName, objName, query, part1)
-	setEncryptHeaders(r)
-	tc.Handler().UploadPartHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-	part1ETag := w.Header().Get(api.ETag)
-
-	part2 := []byte("part2")
-	query = make(url.Values)
-	query.Set(uploadIDQuery, multipartInitInfo.UploadID)
-	query.Set(partNumberQuery, "2")
-	w, r = prepareTestRequestWithQuery(tc, bktName, objName, query, part2)
-	setEncryptHeaders(r)
-	tc.Handler().UploadPartHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-	part2ETag := w.Header().Get(api.ETag)
-
-	query = make(url.Values)
-	query.Set(uploadIDQuery, multipartInitInfo.UploadID)
-	complete := &CompleteMultipartUpload{
-		Parts: []*layer.CompletedPart{
-			{ETag: part1ETag, PartNumber: 1},
-			{ETag: part2ETag, PartNumber: 2},
-		},
-	}
-	w, r = prepareTestFullRequest(tc, bktName, objName, query, complete)
-	tc.Handler().CompleteMultipartUploadHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
-
-	res, _ := getEncryptedObject(t, tc, bktName, objName)
+	res, _ := getEncryptedObject(t, hc, bktName, objName)
 	require.Equal(t, len(part1)+len(part2), len(res))
 	require.Equal(t, append(part1, part2...), res)
 
-	part2Range := getEncryptedObjectRange(t, tc, bktName, objName, len(part1), len(part1)+len(part2)-1)
+	part2Range := getEncryptedObjectRange(t, hc, bktName, objName, len(part1), len(part1)+len(part2)-1)
 	require.Equal(t, part2[0:], part2Range)
 }
 
