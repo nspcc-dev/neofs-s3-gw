@@ -16,15 +16,17 @@ import (
 )
 
 func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo *api.ReqInfo, err error, additional ...zap.Field) {
-	fields := []zap.Field{zap.String("request_id", reqInfo.RequestID),
+	code := api.WriteErrorResponse(w, reqInfo, transformToS3Error(err))
+	fields := []zap.Field{
+		zap.Int("status", code),
+		zap.String("request_id", reqInfo.RequestID),
 		zap.String("method", reqInfo.API),
-		zap.String("bucket_name", reqInfo.BucketName),
-		zap.String("object_name", reqInfo.ObjectName),
+		zap.String("bucket", reqInfo.BucketName),
+		zap.String("object", reqInfo.ObjectName),
+		zap.String("description", logText),
 		zap.Error(err)}
 	fields = append(fields, additional...)
-
-	h.log.Error(logText, fields...)
-	api.WriteErrorResponse(w, reqInfo, transformToS3Error(err))
+	h.log.Error("call method", fields...)
 }
 
 func transformToS3Error(err error) error {

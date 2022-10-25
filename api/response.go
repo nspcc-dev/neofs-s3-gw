@@ -110,7 +110,7 @@ var s3ErrorResponseMap = map[string]string{
 }
 
 // WriteErrorResponse writes error headers.
-func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
+func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) int {
 	code := http.StatusInternalServerError
 
 	if e, ok := err.(errors.Error); ok {
@@ -130,6 +130,7 @@ func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) {
 	errorResponse := getAPIErrorResponse(reqInfo, err)
 	encodedErrorResponse := EncodeResponse(errorResponse)
 	WriteResponse(w, code, encodedErrorResponse, MimeXML)
+	return code
 }
 
 // If none of the http routes match respond with appropriate errors.
