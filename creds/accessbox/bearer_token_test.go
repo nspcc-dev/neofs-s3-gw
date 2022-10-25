@@ -17,7 +17,7 @@ func assertBearerToken(t *testing.T, exp, act bearer.Token) {
 	require.Equal(t, exp.Marshal(), act.Marshal())
 }
 
-func Test_tokens_encrypt_decrypt(t *testing.T) {
+func TestTokensEncryptDecrypt(t *testing.T) {
 	var (
 		tkn  bearer.Token
 		tkn2 bearer.Token
@@ -43,7 +43,7 @@ func Test_tokens_encrypt_decrypt(t *testing.T) {
 	assertBearerToken(t, tkn, tkn2)
 }
 
-func Test_bearer_token_in_access_box(t *testing.T) {
+func TestBearerTokenInAccessBox(t *testing.T) {
 	var (
 		box  *AccessBox
 		box2 AccessBox
@@ -75,7 +75,7 @@ func Test_bearer_token_in_access_box(t *testing.T) {
 	assertBearerToken(t, tkn, *tkns.BearerToken)
 }
 
-func Test_session_token_in_access_box(t *testing.T) {
+func TestSessionTokenInAccessBox(t *testing.T) {
 	var (
 		box  *AccessBox
 		box2 AccessBox
@@ -110,7 +110,7 @@ func Test_session_token_in_access_box(t *testing.T) {
 	require.Equal(t, []*session.Container{tkn}, tkns.SessionTokens)
 }
 
-func Test_accessbox_multiple_keys(t *testing.T) {
+func TestAccessboxMultipleKeys(t *testing.T) {
 	var (
 		box *AccessBox
 		tkn bearer.Token
@@ -145,7 +145,7 @@ func Test_accessbox_multiple_keys(t *testing.T) {
 	}
 }
 
-func Test_unknown_key(t *testing.T) {
+func TestUnknownKey(t *testing.T) {
 	var (
 		box *AccessBox
 		tkn bearer.Token
