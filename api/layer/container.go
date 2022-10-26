@@ -55,7 +55,9 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 	cnr := *res
 
 	info.Owner = cnr.Owner()
-	info.Name = container.Name(cnr)
+	if domain := container.ReadDomain(cnr); domain.Name() != "" {
+		info.Name = domain.Name()
+	}
 	info.Created = container.CreatedAt(cnr)
 	info.LocationConstraint = cnr.Attribute(attributeLocationConstraint)
 
