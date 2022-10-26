@@ -4,13 +4,29 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
-### Added
-- Stop pool dial on SIGINT (#712)
+## [0.25.0] - 2022-10-31
 
 ### Fixed
+- Legal hold object lock enabling (#709)
+- Errors at object locking (#719)
 - Unrestricted access to not owned objects via cache (#713)
 - Check tree service health (#699)
 - Bucket names in listing (#733)
+
+### Added
+- Config reloading on SIGHUP (#702, #715, #716)
+- Stop pool dial on SIGINT (#712)
+
+### Changed
+- GitHub actions update (#710)
+- Makefile help (#725)
+- Optimized object tags setting (#669) 
+- Improved logging (#728)
+- Unified unit test names (#617)
+- Improved docs (#732)
+
+### Removed
+- Unused cache methods (#650)
 
 ### Updating from v0.24.0
 New config parameters were added. Make sure the default parameters are appropriate for you.
@@ -343,4 +359,5 @@ releases.
 [0.22.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.21.1...v0.22.0
 [0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...v0.24.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...master
+[0.25.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...v0.25.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...master
