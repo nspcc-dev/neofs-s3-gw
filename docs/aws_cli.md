@@ -44,6 +44,16 @@ $ aws s3api create-bucket --bucket %BUCKET_NAME --acl %ACL
 where `%ACL` can be represented by a hex encoded value or by keywords `public-read-write`, `private`, `public-read`. 
 If the parameter is not set, the default value is `private`.
 
+> **_NOTE:_**  Bucket creation uses async-poll approach. `BucketAlreadyOwnedByYou`
+> status can occur if the AWS CLI makes multiple attempts (see details
+> in [docs](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-retries.html)).
+> This status means successful bucket creation after several tries. When the
+> operation has not been completed in the entire wait time, timeout status outputs.
+> Timeout does not always mean failure of the operation: success can be checked
+> later by bucket getting/listing commands, or by repeating the creating command
+> (previous success will result in the status mentioned above). It is worth clarifying
+> that the final success of the bucket creation is not guaranteed after a timeout error.
+
 #### Deletion of a bucket 
 
 To delete a bucket, execute the following command:
