@@ -18,6 +18,13 @@ HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 
 .PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format image image-push dirty-image lint docker/lint version clean protoc
 
+# .deb package versioning
+OS_RELEASE = $(shell lsb_release -cs)
+PKG_VERSION ?= $(shell echo $(VERSION) | sed "s/^v//" | \
+			sed -E "s/(.*)-(g[a-fA-F0-9]{6,8})(.*)/\1\3~\2/" | \
+			sed "s/-/~/")-${OS_RELEASE}
+.PHONY: debpackage debclean			
+
 # Make all binaries
 all: $(BINS)
 
@@ -125,5 +132,17 @@ protoc:
 			--go_out=paths=source_relative:. $$f; \
 	done
 	rm -rf vendor
+
+# Package for Debian
+debpackage:
+	dch --package neofs-s3-gw \
+			--controlmaint \
+			--newversion $(PKG_VERSION) \
+			--distribution $(OS_RELEASE) \
+			"Please see CHANGELOG.md for code changes for $(VERSION)"
+	dpkg-buildpackage --no-sign -b
+
+debclean:
+	dh clean	
 
 include help.mk

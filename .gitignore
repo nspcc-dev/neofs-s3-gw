@@ -19,3 +19,6 @@ bin/
 # coverage
 coverage.txt
 coverage.html
+
+# debhelpers
+**/.debhelper
