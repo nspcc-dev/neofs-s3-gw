@@ -1,0 +1,14 @@
+Source: neofs-s3-gw
+Section: misc
+Priority: optional
+Maintainer: NeoSPCC <tech@nspcc.ru>
+Build-Depends: debhelper-compat (= 13), git, devscripts
+Standards-Version: 4.5.1
+Homepage: https://fs.neo.org/
+Vcs-Git: https://github.com/nspcc-dev/neofs-s3-gw.git
+Vcs-Browser: https://github.com/nspcc-dev/neofs-s3-gw
+
+Package: neofs-s3-gw
+Architecture: any
+Depends: ${misc:Depends}
+Description: NeoFS S3 gateway provides API compatible with Amazon S3 cloud storage service.
