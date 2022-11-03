@@ -149,20 +149,21 @@ There are some custom types used for brevity:
 
 ### Structure
 
-| Section      | Description                                       |
-|--------------|---------------------------------------------------|
-| no section   | [General parameters](#general-section)            |
-| `wallet`     | [Wallet configuration](#wallet-section)           |
-| `peers`      | [Nodes configuration](#peers-section)             |
-| `tls`        | [TLS configuration](#tls-section)                 |
-| `logger`     | [Logger configuration](#logger-section)           |
-| `tree`       | [Tree configuration](#tree-section)               |
-| `cache`      | [Cache configuration](#cache-section)             |
-| `nats`       | [NATS configuration](#nats-section)               |
-| `cors`       | [CORS configuration](#cors-section)               |
-| `pprof`      | [Pprof configuration](#pprof-section)             |
-| `prometheus` | [Prometheus configuration](#prometheus-section)   |
-| `neofs`      | [Parameters of requests to NeoFS](#neofs-section) |
+| Section            | Description                                                 |
+|--------------------|-------------------------------------------------------------|
+| no section         | [General parameters](#general-section)                      |
+| `wallet`           | [Wallet configuration](#wallet-section)                     |
+| `peers`            | [Nodes configuration](#peers-section)                       |
+| `placement_policy` | [Placement policy configuration](#placement_policy-section) |
+| `tls`              | [TLS configuration](#tls-section)                           |
+| `logger`           | [Logger configuration](#logger-section)                     |
+| `tree`             | [Tree configuration](#tree-section)                         |
+| `cache`            | [Cache configuration](#cache-section)                       |
+| `nats`             | [NATS configuration](#nats-section)                         |
+| `cors`             | [CORS configuration](#cors-section)                         |
+| `pprof`            | [Pprof configuration](#pprof-section)                       |
+| `prometheus`       | [Prometheus configuration](#prometheus-section)             |
+| `neofs`            | [Parameters of requests to NeoFS](#neofs-section)           |
 
 ### General section
 
@@ -186,8 +187,6 @@ pool_error_threshold: 100
 max_clients_count: 100
 max_clients_deadline: 30s
 
-default_policy: REP 3
-
 allowed_access_key_id_prefixes: 
    - Ck9BHsgKcnwfCTUSFm6pxhoNS4cBqgN2NQ8zVgPjqZDX
    - 3stjWenX15YwYzczMr88gy3CQr4NYFBQ8P7keGzH5QFn
@@ -205,7 +204,6 @@ allowed_access_key_id_prefixes:
 | `pool_error_threshold`           | `uint32`   |               | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
 | `max_clients_count`              | `int`      |               | `100`          | Limits for processing of clients' requests.                                                                                                                                                                       |
 | `max_clients_deadline`           | `duration` |               | `30s`          | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
-| `default_policy`                 | `string`   |               | `REP 3`        | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
 | `allowed_access_key_id_prefixes` | `[]string` |               |                | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                                                                                        |
 
 ### `wallet` section
@@ -253,6 +251,30 @@ peers:
 | `address`  | `string` |               | Address of storage node.                                                                                                                                |
 | `priority` | `int`    | `1`           | It allows to group nodes and don't switch group until all nodes with the same priority will be unhealthy. The lower the value, the higher the priority. |
 | `weight`   | `float`  | `1`           | Weight of node in the group with the same priority. Distribute requests to nodes proportionally to these values.                                        |
+
+
+### `placement_policy` section
+
+```yaml
+placement_policy:
+  default: REP 3
+  region_mapping: /path/to/mapping/rules.json
+```
+
+| Parameter        | Type     | Default value | Description                                                                                                                                                                                                       |
+|------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `default`        | `string` | `REP 3`       | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
+| `region_mapping` | `string` |               | Path to file that maps aws `LocationContraint` values to NeoFS placement policy. The similar to `--container-policy` flag in `neofs-s3-authmate` util.                                                            |
+
+File for `region_mapping` must contain something like this:
+
+```json
+{
+   "rep-3": "REP 3",
+   "complex": "REP 1 IN X CBF 1 SELECT 1 FROM * AS X",
+   "example-json-policy": "{\"replicas\":[{\"count\":3,\"selector\":\"SelASD0\"}],\"container_backup_factor\":3,\"selectors\":[{\"name\":\"SelASD0\",\"count\":3,\"filter\":\"*\"}],\"filters\":[]}"
+}
+```
 
 ### `tls` section
 
