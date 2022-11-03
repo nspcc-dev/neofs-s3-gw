@@ -24,11 +24,16 @@ type (
 
 	// Config contains data which handler needs to keep.
 	Config struct {
-		DefaultPolicy      netmap.PlacementPolicy
+		Policy             PlacementPolicy
 		DefaultMaxAge      int
 		NotificatorEnabled bool
 		TLSEnabled         bool
 		CopiesNumber       uint32
+	}
+
+	PlacementPolicy struct {
+		Default   netmap.PlacementPolicy
+		RegionMap map[string]netmap.PlacementPolicy
 	}
 )
 
