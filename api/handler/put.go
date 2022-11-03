@@ -667,12 +667,10 @@ func parseMetadata(r *http.Request) map[string]string {
 }
 
 func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		reqInfo = api.GetReqInfo(r.Context())
-		p       = layer.CreateBucketParams{
-			Name: reqInfo.BucketName,
-		}
-	)
+	reqInfo := api.GetReqInfo(r.Context())
+	p := &layer.CreateBucketParams{
+		Name: reqInfo.BucketName,
+	}
 
 	if err := checkBucketName(reqInfo.BucketName); err != nil {
 		h.logAndSendError(w, "invalid bucket name", reqInfo, err)
@@ -722,24 +720,11 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	useDefaultPolicy := true
-	if createParams.LocationConstraint != "" {
-		for _, placementPolicy := range policies {
-			if placementPolicy.LocationConstraint == createParams.LocationConstraint {
-				p.Policy = placementPolicy.Policy
-				p.LocationConstraint = createParams.LocationConstraint
-				useDefaultPolicy = false
-				break
-			}
-		}
-	}
-	if useDefaultPolicy {
-		p.Policy = h.cfg.DefaultPolicy
-	}
+	h.setPolicy(p, createParams.LocationConstraint, policies)
 
 	p.ObjectLockEnabled = isLockEnabled(r.Header)
 
-	bktInfo, err := h.obj.CreateBucket(r.Context(), &p)
+	bktInfo, err := h.obj.CreateBucket(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not create bucket", reqInfo, err)
 		return
@@ -760,6 +745,27 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("bucket is created", zap.Stringer("container_id", bktInfo.CID))
 
 	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func (h handler) setPolicy(prm *layer.CreateBucketParams, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
+	prm.Policy = h.cfg.Policy.Default
+
+	if locationConstraint == "" {
+		return
+	}
+
+	if policy, ok := h.cfg.Policy.RegionMap[locationConstraint]; ok {
+		prm.Policy = policy
+		prm.LocationConstraint = locationConstraint
+	}
+
+	for _, placementPolicy := range userPolicies {
+		if placementPolicy.LocationConstraint == locationConstraint {
+			prm.Policy = placementPolicy.Policy
+			prm.LocationConstraint = locationConstraint
+			return
+		}
+	}
 }
 
 func isLockEnabled(header http.Header) bool {

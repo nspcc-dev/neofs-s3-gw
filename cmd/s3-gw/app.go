@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -27,6 +28,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
+	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -596,41 +598,83 @@ func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
 }
 
 func getHandlerOptions(v *viper.Viper, l *zap.Logger) *handler.Config {
-	var (
-		cfg             handler.Config
-		err             error
-		policyStr       = handler.DefaultPolicy
-		defaultMaxAge   = handler.DefaultMaxAge
-		setCopiesNumber = handler.DefaultCopiesNumber
-	)
-
-	if v.IsSet(cfgDefaultPolicy) {
-		policyStr = v.GetString(cfgDefaultPolicy)
+	cfg := &handler.Config{
+		Policy: handler.PlacementPolicy{
+			RegionMap: make(map[string]netmap.PlacementPolicy),
+		},
+		DefaultMaxAge:      handler.DefaultMaxAge,
+		NotificatorEnabled: v.GetBool(cfgEnableNATS),
+		TLSEnabled:         v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile),
+		CopiesNumber:       handler.DefaultCopiesNumber,
 	}
 
-	if err = cfg.DefaultPolicy.DecodeString(policyStr); err != nil {
-		l.Fatal("couldn't parse container default policy",
-			zap.Error(err))
+	defaultPolicyStr := handler.DefaultPolicy
+	if v.IsSet(cfgPolicyDefault) {
+		defaultPolicyStr = v.GetString(cfgPolicyDefault)
+	}
+
+	if err := cfg.Policy.Default.DecodeString(defaultPolicyStr); err != nil {
+		l.Fatal("couldn't parse container default policy", zap.Error(err))
+	}
+
+	regionPolicyMap, err := parseRegionMap(v)
+	if err != nil {
+		l.Fatal("couldn't parse region mapping policy file", zap.Error(err))
+	}
+
+	for region, policy := range regionPolicyMap {
+		var pp netmap.PlacementPolicy
+		if err = pp.DecodeString(policy); err == nil {
+			cfg.Policy.RegionMap[region] = pp
+			continue
+		}
+
+		if err = pp.UnmarshalJSON([]byte(policy)); err == nil {
+			cfg.Policy.RegionMap[region] = pp
+			continue
+		}
+
+		l.Fatal("couldn't parse region mapping policy", zap.String("name", region), zap.Error(err))
 	}
 
 	if v.IsSet(cfgDefaultMaxAge) {
-		defaultMaxAge = v.GetInt(cfgDefaultMaxAge)
+		defaultMaxAge := v.GetInt(cfgDefaultMaxAge)
 
 		if defaultMaxAge <= 0 && defaultMaxAge != -1 {
 			l.Fatal("invalid defaultMaxAge",
 				zap.String("parameter", cfgDefaultMaxAge),
 				zap.String("value in config", strconv.Itoa(defaultMaxAge)))
 		}
+		cfg.DefaultMaxAge = defaultMaxAge
 	}
 
 	if val := v.GetUint32(cfgSetCopiesNumber); val > 0 {
-		setCopiesNumber = val
+		cfg.CopiesNumber = val
 	}
 
-	cfg.DefaultMaxAge = defaultMaxAge
-	cfg.NotificatorEnabled = v.GetBool(cfgEnableNATS)
-	cfg.TLSEnabled = v.IsSet(cfgTLSKeyFile) && v.IsSet(cfgTLSCertFile)
-	cfg.CopiesNumber = setCopiesNumber
+	return cfg
+}
 
-	return &cfg
+func parseRegionMap(v *viper.Viper) (map[string]string, error) {
+	regionMap := make(map[string]string)
+
+	filePath := v.GetString(cfgPolicyRegionMapFile)
+	if filePath == "" {
+		return regionMap, nil
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("coudln't read file '%s'", filePath)
+	}
+
+	if err = json.Unmarshal(data, &regionMap); err != nil {
+		return nil, fmt.Errorf("unmarshal policies: %w", err)
+	}
+
+	if _, ok := regionMap[api.DefaultLocationConstraint]; ok {
+		return nil, fmt.Errorf("config overrides %s location constraint", api.DefaultLocationConstraint)
+	}
+
+	return regionMap, nil
 }
