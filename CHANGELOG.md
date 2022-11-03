@@ -7,6 +7,24 @@ This document outlines major changes between releases.
 ### Fixed
 - Empty bucket policy (#740) 
 
+### Changed
+- Placement policy configuration (#568)
+
+### Updating from v0.25.0
+New config parameters were added. And old one `defaul_policy` were changed.
+```yaml
+placement_policy:
+  default: "REP 3"
+  region_mapping: /path/to/container/policies.json
+```
+
+Make sure you update the config accordingly:
+If you configure application using environment variables change:
+* `S3_GW_DEFAULT_POLICY` -> `S3_GW_PLACEMENT_POLICY_DEFAULT_POLICY`
+
+If you configure application using `.yaml` file change:
+* `defaul_policy` -> `placement_policy.default`
+
 ## [0.25.0] - 2022-10-31
 
 ### Fixed

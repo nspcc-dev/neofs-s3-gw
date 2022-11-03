@@ -110,10 +110,15 @@ nats:
   key_file: /path/to/key
   root_ca: /path/to/ca
 
-# Default policy of placing containers in NeoFS
-# If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway
-# will put the container with default policy. It can be specified via environment variable, e.g.:
-default_policy: REP 3
+# Parameters of NeoFS container placement policy
+placement_policy:
+  # Default policy of placing containers in NeoFS
+  # If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway
+  # will put the container with default policy.
+  default: REP 3
+  # Region to placement policy mapping json file.
+  # Path to container policy mapping. The same as '--container-policy' flag for authmate
+  region_mapping: /path/to/container/policy.json
 
 # CORS
 # value of Access-Control-Max-Age header if this value is not set in a rule. Has an int type.
