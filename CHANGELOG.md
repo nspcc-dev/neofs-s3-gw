@@ -7,6 +7,9 @@ This document outlines major changes between releases.
 ### Fixed
 - Empty bucket policy (#740) 
 
+### Added
+- Use client time as `now` in some requests (#726)
+
 ### Changed
 - Placement policy configuration (#568)
 
