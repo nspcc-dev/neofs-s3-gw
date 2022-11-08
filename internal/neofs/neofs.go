@@ -52,8 +52,7 @@ func NewNeoFS(p *pool.Pool) *NeoFS {
 }
 
 // TimeToEpoch implements neofs.NeoFS interface method.
-func (x *NeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
-	now := time.Now()
+func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uint64, uint64, error) {
 	dur := futureTime.Sub(now)
 	if dur < 0 {
 		return 0, 0, fmt.Errorf("time '%s' must be in the future (after %s)",
@@ -116,7 +115,12 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	cnr.SetPlacementPolicy(prm.Policy)
 	cnr.SetOwner(prm.Creator)
 	cnr.SetBasicACL(prm.BasicACL)
-	container.SetCreationTime(&cnr, time.Now())
+
+	creationTime := prm.CreationTime
+	if creationTime.IsZero() {
+		creationTime = time.Now()
+	}
+	container.SetCreationTime(&cnr, creationTime)
 
 	if prm.Name != "" {
 		var d container.Domain
@@ -227,7 +231,13 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 	a = object.NewAttribute()
 	a.SetKey(object.AttributeTimestamp)
-	a.SetValue(strconv.FormatInt(time.Now().Unix(), 10))
+
+	creationTime := prm.CreationTime
+	if creationTime.IsZero() {
+		creationTime = time.Now()
+	}
+	a.SetValue(strconv.FormatInt(creationTime.Unix(), 10))
+
 	attrs = append(attrs, *a)
 
 	for i := range prm.Attributes {
@@ -489,7 +499,7 @@ func (x *AuthmateNeoFS) ContainerExists(ctx context.Context, idCnr cid.ID) error
 
 // TimeToEpoch implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
-	return x.neoFS.TimeToEpoch(ctx, futureTime)
+	return x.neoFS.TimeToEpoch(ctx, time.Now(), futureTime)
 }
 
 // CreateContainer implements authmate.NeoFS interface method.

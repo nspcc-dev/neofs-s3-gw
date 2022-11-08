@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -22,6 +23,7 @@ type (
 		BktInfo          *data.BucketInfo
 		ReqInfo          *api.ReqInfo
 		User             string
+		Time             time.Time
 	}
 
 	NotificationConfiguration struct {
@@ -107,7 +109,7 @@ func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, err = h.checkBucketConfiguration(conf, reqInfo); err != nil {
+	if _, err = h.checkBucketConfiguration(r.Context(), conf, reqInfo); err != nil {
 		h.logAndSendError(w, "couldn't check bucket configuration", reqInfo, err)
 		return
 	}
@@ -164,13 +166,15 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 		p.User = bearer.ResolveIssuer(*box.Gate.BearerToken).EncodeToString()
 	}
 
+	p.Time = layer.TimeNow(ctx)
+
 	topics := filterSubjects(conf, p.Event, p.NotificationInfo.Name)
 
 	return h.notificator.SendNotifications(topics, p)
 }
 
 // checkBucketConfiguration checks notification configuration and generates an ID for configurations with empty ids.
-func (h *handler) checkBucketConfiguration(conf *data.NotificationConfiguration, r *api.ReqInfo) (completed bool, err error) {
+func (h *handler) checkBucketConfiguration(ctx context.Context, conf *data.NotificationConfiguration, r *api.ReqInfo) (completed bool, err error) {
 	if conf == nil {
 		return
 	}
@@ -189,7 +193,7 @@ func (h *handler) checkBucketConfiguration(conf *data.NotificationConfiguration,
 		}
 
 		if h.cfg.NotificatorEnabled {
-			if err = h.notificator.SendTestNotification(q.QueueArn, r.BucketName, r.RequestID, r.Host); err != nil {
+			if err = h.notificator.SendTestNotification(q.QueueArn, r.BucketName, r.RequestID, r.Host, layer.TimeNow(ctx)); err != nil {
 				return
 			}
 		} else {

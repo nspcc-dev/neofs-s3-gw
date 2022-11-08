@@ -75,7 +75,12 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	cnr.SetOwner(prm.Creator)
 	cnr.SetPlacementPolicy(prm.Policy)
 	cnr.SetBasicACL(prm.BasicACL)
-	container.SetCreationTime(&cnr, time.Now())
+
+	creationTime := prm.CreationTime
+	if creationTime.IsZero() {
+		creationTime = time.Now()
+	}
+	container.SetCreationTime(&cnr, creationTime)
 
 	if prm.Name != "" {
 		var d container.Domain
@@ -235,8 +240,8 @@ func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error
 	return nil
 }
 
-func (t *TestNeoFS) TimeToEpoch(_ context.Context, futureTime time.Time) (uint64, uint64, error) {
-	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Second()), nil
+func (t *TestNeoFS) TimeToEpoch(_ context.Context, now, futureTime time.Time) (uint64, uint64, error) {
+	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Sub(now).Seconds()), nil
 }
 
 func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {

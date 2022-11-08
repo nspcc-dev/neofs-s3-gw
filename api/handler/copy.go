@@ -184,7 +184,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		CopiesNuber: copiesNumber,
 	}
 
-	params.Lock, err = formObjectLock(dstBktInfo, settings.LockConfiguration, r.Header)
+	params.Lock, err = formObjectLock(r.Context(), dstBktInfo, settings.LockConfiguration, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not form object lock", reqInfo, err)
 		return

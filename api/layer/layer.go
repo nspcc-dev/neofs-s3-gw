@@ -306,6 +306,15 @@ func IsAuthenticatedRequest(ctx context.Context) bool {
 	return ok
 }
 
+// TimeNow returns client time from request or time.Now().
+func TimeNow(ctx context.Context) time.Time {
+	if now, ok := ctx.Value(api.ClientTime).(time.Time); ok {
+		return now
+	}
+
+	return time.Now()
+}
+
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) user.ID {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
@@ -565,7 +574,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			FilePath: obj.Name,
 		},
 		DeleteMarker: &data.DeleteMarkerInfo{
-			Created: time.Now(),
+			Created: TimeNow(ctx),
 			Owner:   n.Owner(ctx),
 		},
 		IsUnversioned: settings.VersioningSuspended(),

@@ -197,11 +197,11 @@ func (c *Controller) SendNotifications(topics map[string]string, p *handler.Send
 	return nil
 }
 
-func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID string) error {
+func (c *Controller) SendTestNotification(topic, bucketName, requestID, HostID string, now time.Time) error {
 	event := &TestEvent{
 		Service:   "NeoFS S3",
 		Event:     "s3:TestEvent",
-		Time:      time.Now(),
+		Time:      now,
 		Bucket:    bucketName,
 		RequestID: requestID,
 		HostID:    HostID,
@@ -222,7 +222,7 @@ func prepareEvent(p *handler.SendNotificationParams) *Event {
 				EventVersion: EventVersion21,
 				EventSource:  "neofs:s3",
 				AWSRegion:    "",
-				EventTime:    time.Now(),
+				EventTime:    p.Time,
 				EventName:    p.Event,
 				UserIdentity: UserIdentity{
 					PrincipalID: p.User,

@@ -143,7 +143,7 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		Key:          p.Info.Key,
 		UploadID:     p.Info.UploadID,
 		Owner:        n.Owner(ctx),
-		Created:      time.Now(),
+		Created:      TimeNow(ctx),
 		Meta:         make(map[string]string, metaSize),
 		CopiesNumber: p.CopiesNumber,
 	}
@@ -205,6 +205,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Creator:      bktInfo.Owner,
 		Attributes:   make([][2]string, 2),
 		Payload:      p.Reader,
+		CreationTime: TimeNow(ctx),
 		CopiesNumber: multipartInfo.CopiesNumber,
 	}
 
@@ -234,7 +235,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		OID:      id,
 		Size:     decSize,
 		ETag:     hex.EncodeToString(hash),
-		Created:  time.Now(),
+		Created:  prm.CreationTime,
 	}
 
 	oldPartID, err := n.treeService.AddPart(ctx, bktInfo, multipartInfo.ID, partInfo)

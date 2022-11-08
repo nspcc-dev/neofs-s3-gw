@@ -16,6 +16,9 @@ type KeyWrapper string
 // BoxData is an ID used to store accessbox.Box in a context.
 var BoxData = KeyWrapper("__context_box_key")
 
+// ClientTime is an ID used to store client time.Time in a context.
+var ClientTime = KeyWrapper("__context_client_time")
+
 // AttachUserAuth adds user authentication via center to router using log for logging.
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 	router.Use(func(h http.Handler) http.Handler {
@@ -35,7 +38,10 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 					return
 				}
 			} else {
-				ctx = context.WithValue(r.Context(), BoxData, box)
+				ctx = context.WithValue(r.Context(), BoxData, box.AccessBox)
+				if !box.ClientTime.IsZero() {
+					ctx = context.WithValue(ctx, ClientTime, box.ClientTime)
+				}
 			}
 
 			h.ServeHTTP(w, r.WithContext(ctx))

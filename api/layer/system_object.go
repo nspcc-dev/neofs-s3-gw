@@ -116,6 +116,7 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
 		Locks:        []oid.ID{objID},
+		CreationTime: TimeNow(ctx),
 		CopiesNumber: copiesNumber,
 	}
 
@@ -227,7 +228,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 	)
 
 	if lock.Retention != nil {
-		if _, expEpoch, err = n.neoFS.TimeToEpoch(ctx, lock.Retention.Until); err != nil {
+		if _, expEpoch, err = n.neoFS.TimeToEpoch(ctx, TimeNow(ctx), lock.Retention.Until); err != nil {
 			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
 

@@ -240,7 +240,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params.Lock, err = formObjectLock(bktInfo, settings.LockConfiguration, r.Header)
+	params.Lock, err = formObjectLock(r.Context(), bktInfo, settings.LockConfiguration, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not form object lock", reqInfo, err)
 		return

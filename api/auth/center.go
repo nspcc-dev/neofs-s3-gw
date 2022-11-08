@@ -33,7 +33,13 @@ var postPolicyCredentialRegexp = regexp.MustCompile(`(?P<access_key_id>[^/]+)/(?
 type (
 	// Center is a user authentication interface.
 	Center interface {
-		Authenticate(request *http.Request) (*accessbox.Box, error)
+		Authenticate(request *http.Request) (*Box, error)
+	}
+
+	// Box contains access box and additional info.
+	Box struct {
+		AccessBox  *accessbox.Box
+		ClientTime time.Time
 	}
 
 	center struct {
@@ -126,11 +132,12 @@ func (a *authHeader) getAddress() (oid.Address, error) {
 	return addr, nil
 }
 
-func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
+func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	var (
 		err                  error
 		authHdr              *authHeader
 		signatureDateTimeStr string
+		needClientTime       bool
 	)
 
 	queryValues := r.URL.Query()
@@ -166,6 +173,7 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 			return nil, err
 		}
 		signatureDateTimeStr = r.Header.Get(AmzDate)
+		needClientTime = true
 	}
 
 	signatureDateTime, err := time.Parse("20060102T150405Z", signatureDateTimeStr)
@@ -192,7 +200,12 @@ func (c *center) Authenticate(r *http.Request) (*accessbox.Box, error) {
 		return nil, err
 	}
 
-	return box, nil
+	result := &Box{AccessBox: box}
+	if needClientTime {
+		result.ClientTime = signatureDateTime
+	}
+
+	return result, nil
 }
 
 func (c center) checkAccessKeyID(accessKeyID string) error {
@@ -209,7 +222,7 @@ func (c center) checkAccessKeyID(accessKeyID string) error {
 	return apiErrors.GetAPIError(apiErrors.ErrAccessDenied)
 }
 
-func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
+func (c *center) checkFormData(r *http.Request) (*Box, error) {
 	if err := r.ParseMultipartForm(maxFormSizeMemory); err != nil {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidArgument)
 	}
@@ -251,7 +264,7 @@ func (c *center) checkFormData(r *http.Request) (*accessbox.Box, error) {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
 	}
 
-	return box, nil
+	return &Box{AccessBox: box}, nil
 }
 
 func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
