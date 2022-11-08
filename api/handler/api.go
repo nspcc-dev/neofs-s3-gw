@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -19,7 +20,7 @@ type (
 
 	Notificator interface {
 		SendNotifications(topics map[string]string, p *SendNotificationParams) error
-		SendTestNotification(topic, bucketName, requestID, HostID string) error
+		SendTestNotification(topic, bucketName, requestID, HostID string, now time.Time) error
 	}
 
 	// Config contains data which handler needs to keep.

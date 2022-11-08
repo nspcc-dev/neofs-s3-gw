@@ -30,6 +30,9 @@ type PrmContainerCreate struct {
 	// Name for the container.
 	Name string
 
+	// CreationTime value for Timestamp attribute
+	CreationTime time.Time
+
 	// Token of the container's creation session. Nil means session absence.
 	SessionToken *session.Container
 
@@ -93,6 +96,9 @@ type PrmObjectCreate struct {
 
 	// Key-value object attributes.
 	Attributes [][2]string
+
+	// Value for Timestamp attribute (optional).
+	CreationTime time.Time
 
 	// List of ids to lock (optional).
 	Locks []oid.ID
@@ -204,11 +210,11 @@ type NeoFS interface {
 	// It returns any error encountered which prevented the removal request from being sent.
 	DeleteObject(context.Context, PrmObjectDelete) error
 
-	// TimeToEpoch computes current epoch and the epoch that corresponds to the provided time.
+	// TimeToEpoch computes current epoch and the epoch that corresponds to the provided now and future time.
 	// Note:
-	// * time must be in the future
-	// * time will be ceil rounded to match epoch
+	// * future time must be after the now
+	// * future time will be ceil rounded to match epoch
 	//
 	// It returns any error encountered which prevented computing epochs.
-	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
+	TimeToEpoch(ctx context.Context, now time.Time, future time.Time) (uint64, uint64, error)
 }

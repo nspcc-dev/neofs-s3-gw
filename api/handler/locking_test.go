@@ -19,6 +19,8 @@ import (
 const defaultURL = "http://localhost/"
 
 func TestFormObjectLock(t *testing.T) {
+	ctx := context.Background()
+
 	for _, tc := range []struct {
 		name          string
 		bktInfo       *data.BucketInfo
@@ -73,7 +75,7 @@ func TestFormObjectLock(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			actualObjLock, err := formObjectLock(tc.bktInfo, tc.config, tc.header)
+			actualObjLock, err := formObjectLock(ctx, tc.bktInfo, tc.config, tc.header)
 			if tc.expectedError {
 				require.Error(t, err)
 				return
@@ -86,6 +88,8 @@ func TestFormObjectLock(t *testing.T) {
 }
 
 func TestFormObjectLockFromRetention(t *testing.T) {
+	ctx := context.Background()
+
 	for _, tc := range []struct {
 		name          string
 		retention     *data.Retention
@@ -132,7 +136,7 @@ func TestFormObjectLockFromRetention(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			actualObjLock, err := formObjectLockFromRetention(tc.retention, tc.header)
+			actualObjLock, err := formObjectLockFromRetention(ctx, tc.retention, tc.header)
 			if tc.expectedError {
 				require.Error(t, err)
 				return

@@ -30,6 +30,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		Creator:      p.BktInfo.Owner,
 		Payload:      bytes.NewReader(confXML),
 		Filepath:     p.BktInfo.NotificationConfigurationObjectName(),
+		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
 	}
 

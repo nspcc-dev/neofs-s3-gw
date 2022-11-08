@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/minio/sio"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -234,6 +233,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		PayloadSize:  uint64(p.Size),
 		Filepath:     p.Object,
 		Payload:      r,
+		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
 	}
 
@@ -281,7 +281,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Bucket:      p.BktInfo.Name,
 		Name:        p.Object,
 		Size:        p.Size,
-		Created:     time.Now(),
+		Created:     prm.CreationTime,
 		Headers:     p.Header,
 		ContentType: p.Header[api.ContentType],
 		HashSum:     newVersion.ETag,

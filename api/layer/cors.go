@@ -41,6 +41,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		Creator:      p.BktInfo.Owner,
 		Payload:      p.Reader,
 		Filepath:     p.BktInfo.CORSObjectName(),
+		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
 	}
 

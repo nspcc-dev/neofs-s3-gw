@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -116,7 +115,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
 		Owner:              ownerID,
-		Created:            time.Now(), // this can be a little incorrect since the real time is set later
+		Created:            TimeNow(ctx),
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
 	}
@@ -138,6 +137,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Policy:               p.Policy,
 		Name:                 p.Name,
 		SessionToken:         p.SessionContainerCreation,
+		CreationTime:         bktInfo.Created,
 		AdditionalAttributes: attributes,
 	})
 	if err != nil {

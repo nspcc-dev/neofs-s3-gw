@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -208,7 +209,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	lock, err := formObjectLockFromRetention(retention, r.Header)
+	lock, err := formObjectLockFromRetention(r.Context(), retention, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "invalid retention configuration", reqInfo, err)
 		return
@@ -300,7 +301,7 @@ func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 	return nil
 }
 
-func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConfiguration, header http.Header) (*data.ObjectLock, error) {
+func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConfiguration, header http.Header) (*data.ObjectLock, error) {
 	if !bktInfo.ObjectLockEnabled {
 		if existLockHeaders(header) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound)
@@ -318,7 +319,7 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 		retention := &data.RetentionLock{}
 		defaultRetention := defaultConfig.Rule.DefaultRetention
 		retention.IsCompliance = defaultRetention.Mode == complianceMode
-		now := time.Now()
+		now := layer.TimeNow(ctx)
 		if defaultRetention.Days != 0 {
 			retention.Until = now.Add(time.Duration(defaultRetention.Days) * dayDuration)
 		} else {
@@ -370,7 +371,7 @@ func formObjectLock(bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConf
 			objectLock.Retention.ByPassedGovernance = bypass
 		}
 
-		if objectLock.Retention.Until.Before(time.Now()) {
+		if objectLock.Retention.Until.Before(layer.TimeNow(ctx)) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
 		}
 	}
@@ -384,7 +385,7 @@ func existLockHeaders(header http.Header) bool {
 		header.Get(api.AmzObjectLockRetainUntilDate) != ""
 }
 
-func formObjectLockFromRetention(retention *data.Retention, header http.Header) (*data.ObjectLock, error) {
+func formObjectLockFromRetention(ctx context.Context, retention *data.Retention, header http.Header) (*data.ObjectLock, error) {
 	if retention.Mode != governanceMode && retention.Mode != complianceMode {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
 	}
@@ -394,7 +395,7 @@ func formObjectLockFromRetention(retention *data.Retention, header http.Header) 
 		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
 	}
 
-	if retentionDate.Before(time.Now()) {
+	if retentionDate.Before(layer.TimeNow(ctx)) {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
 	}
 
