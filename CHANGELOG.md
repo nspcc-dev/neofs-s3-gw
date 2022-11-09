@@ -13,6 +13,9 @@ This document outlines major changes between releases.
 - Timeout for individual operations in streaming RPC (#740)
 - Reload policies on SIGHUP (#747)
 
+### Added
+- Multiple server listeners (#742)
+
 ### Changed
 - Placement policy configuration (#568)
 
@@ -27,9 +30,15 @@ placement_policy:
 Make sure you update the config accordingly:
 If you configure application using environment variables change:
 * `S3_GW_DEFAULT_POLICY` -> `S3_GW_PLACEMENT_POLICY_DEFAULT_POLICY`
+* `S3_GW_LISTEN_ADDRESS` -> `S3_GW_SERVER_0_ADDRESS`
+* `S3_GW_TLS_CERT_FILE` -> `S3_GW_SERVER_0_TLS_CERT_FILE` (and set `S3_GW_SERVER_0_TLS_ENABLED=true`)
+* `S3_GW_TLS_KEY_FILE` -> `S3_GW_SERVER_0_TLS_KEY_FILE` (and set `S3_GW_SERVER_0_TLS_ENABLED=true`)
 
 If you configure application using `.yaml` file change:
 * `defaul_policy` -> `placement_policy.default`
+* `listen_address` -> `server.0.address`
+* `tls.cert_file` -> `server.0.tls.cert_file` (and set `server.0.tls.enabled: true`)
+* `tls.key_file` -> `server.0.tls.key_file` (and set `server.0.tls.enabled: true`)
 
 ## [0.25.0] - 2022-10-31
 

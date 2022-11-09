@@ -223,7 +223,7 @@ func newSettings() *viper.Viper {
 	flags.Int(cfgMaxClientsCount, defaultMaxClientsCount, "set max-clients count")
 	flags.Duration(cfgMaxClientsDeadline, defaultMaxClientsDeadline, "set max-clients deadline")
 
-	flags.String(cmdListenAddress, "0.0.0.0:8080", "set address to listen")
+	flags.String(cmdListenAddress, "0.0.0.0:8080", "set the main address to listen")
 	flags.String(cfgTLSCertFile, "", "TLS certificate file to use")
 	flags.String(cfgTLSKeyFile, "", "TLS key file to use")
 
