@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -1297,7 +1299,7 @@ func TestPutBucketACL(t *testing.T) {
 	tc := prepareHandlerContext(t)
 	bktName := "bucket-for-acl"
 
-	box := createAccessBox(t)
+	box, _ := createAccessBox(t)
 	bktInfo := createBucket(t, tc, bktName, box)
 
 	header := map[string]string{api.AmzACL: "public-read"}
@@ -1306,6 +1308,70 @@ func TestPutBucketACL(t *testing.T) {
 	header = map[string]string{api.AmzACL: "private"}
 	putBucketACL(t, tc, bktName, box, header)
 	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny)
+}
+
+func TestBucketPolicy(t *testing.T) {
+	hc := prepareHandlerContext(t)
+	bktName := "bucket-for-policy"
+
+	box, key := createAccessBox(t)
+	createBucket(t, hc, bktName, box)
+
+	bktPolicy := getBucketPolicy(hc, bktName)
+	for _, st := range bktPolicy.Statement {
+		if st.Effect == "Allow" {
+			require.Equal(t, hex.EncodeToString(key.PublicKey().Bytes()), st.Principal.CanonicalUser)
+			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource)
+		} else {
+			require.Equal(t, allUsersWildcard, st.Principal.AWS)
+			require.Equal(t, "Deny", st.Effect)
+			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource)
+		}
+	}
+
+	newPolicy := &bucketPolicy{
+		Statement: []statement{{
+			Effect:    "Allow",
+			Principal: principal{AWS: allUsersWildcard},
+			Action:    []string{s3GetObject},
+			Resource:  []string{arnAwsPrefix + "dummy"},
+		}},
+	}
+
+	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusInternalServerError)
+
+	newPolicy.Statement[0].Resource[0] = arnAwsPrefix + bktName
+	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusOK)
+
+	bktPolicy = getBucketPolicy(hc, bktName)
+	for _, st := range bktPolicy.Statement {
+		if st.Effect == "Allow" && st.Principal.AWS == allUsersWildcard {
+			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource)
+			require.ElementsMatch(t, []string{s3GetObject, s3ListBucket}, st.Action)
+		}
+	}
+}
+
+func getBucketPolicy(hc *handlerContext, bktName string) *bucketPolicy {
+	w, r := prepareTestRequest(hc, bktName, "", nil)
+	hc.Handler().GetBucketPolicyHandler(w, r)
+
+	assertStatus(hc.t, w, http.StatusOK)
+	policy := &bucketPolicy{}
+	err := json.NewDecoder(w.Result().Body).Decode(policy)
+	require.NoError(hc.t, err)
+	return policy
+}
+
+func putBucketPolicy(hc *handlerContext, bktName string, bktPolicy *bucketPolicy, box *accessbox.Box, status int) {
+	body, err := json.Marshal(bktPolicy)
+	require.NoError(hc.t, err)
+
+	w, r := prepareTestPayloadRequest(hc, bktName, "", bytes.NewReader(body))
+	ctx := context.WithValue(r.Context(), api.BoxData, box)
+	r = r.WithContext(ctx)
+	hc.Handler().PutBucketPolicyHandler(w, r)
+	assertStatus(hc.t, w, status)
 }
 
 func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo, action eacl.Action) {
@@ -1325,7 +1391,7 @@ func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo
 	}
 }
 
-func createAccessBox(t *testing.T) *accessbox.Box {
+func createAccessBox(t *testing.T) (*accessbox.Box, *keys.PrivateKey) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
@@ -1345,7 +1411,7 @@ func createAccessBox(t *testing.T) *accessbox.Box {
 		},
 	}
 
-	return box
+	return box, key
 }
 
 func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box) *data.BucketInfo {

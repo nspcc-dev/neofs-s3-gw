@@ -1001,6 +1001,10 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
 			r, ok := rr[trimmedResource]
 			if !ok {
+				if !strings.HasPrefix(trimmedResource, bktPolicy.Bucket) {
+					return nil, fmt.Errorf("resource '%s' must be in the same bucket '%s'", trimmedResource, bktPolicy.Bucket)
+				}
+
 				r = &astResource{
 					resourceInfo: resourceInfoFromName(trimmedResource, bktPolicy.Bucket),
 				}
@@ -1046,9 +1050,6 @@ func astToPolicy(ast *ast) *bucketPolicy {
 	bktPolicy := &bucketPolicy{}
 
 	for _, resource := range ast.Resources {
-		if len(resource.Version) == 0 {
-			continue
-		}
 		allowed, denied := triageOperations(resource.Operations)
 		handleResourceOperations(bktPolicy, allowed, eacl.ActionAllow, resource.Name())
 		handleResourceOperations(bktPolicy, denied, eacl.ActionDeny, resource.Name())
@@ -1080,7 +1081,7 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 		for action, ops := range actionToOpMap {
 			for _, op := range ops {
 				if !contains(userOps, op) {
-					break LOOP
+					continue LOOP
 				}
 			}
 			actions = append(actions, action)
