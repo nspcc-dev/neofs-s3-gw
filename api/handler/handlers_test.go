@@ -93,8 +93,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 		log: l,
 		obj: layer.NewLayer(l, tp, layerCfg),
 		cfg: &Config{
-			TLSEnabled: true,
-			Policy:     &placementPolicyMock{defaultPolicy: pp},
+			Policy: &placementPolicyMock{defaultPolicy: pp},
 		},
 	}
 

@@ -218,7 +218,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryption, err := h.formEncryptionParams(r.Header)
+	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -230,7 +230,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Reader:       r.Body,
 		Size:         r.ContentLength,
 		Header:       metadata,
-		Encryption:   encryption,
+		Encryption:   encryptionParams,
 		CopiesNumber: copiesNumber,
 	}
 
@@ -304,7 +304,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
-	if encryption.Enabled() {
+	if encryptionParams.Enabled() {
 		addSSECHeaders(w.Header(), r.Header)
 	}
 
@@ -326,16 +326,16 @@ func getCopiesNumberOrDefault(metadata map[string]string, defaultCopiesNumber ui
 	return uint32(copiesNumber), nil
 }
 
-func (h handler) formEncryptionParams(header http.Header) (enc encryption.Params, err error) {
-	sseCustomerAlgorithm := header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
-	sseCustomerKey := header.Get(api.AmzServerSideEncryptionCustomerKey)
-	sseCustomerKeyMD5 := header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
+func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
+	sseCustomerAlgorithm := r.Header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
+	sseCustomerKey := r.Header.Get(api.AmzServerSideEncryptionCustomerKey)
+	sseCustomerKeyMD5 := r.Header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
 
 	if len(sseCustomerAlgorithm) == 0 && len(sseCustomerKey) == 0 && len(sseCustomerKeyMD5) == 0 {
 		return
 	}
 
-	if !h.cfg.TLSEnabled {
+	if r.TLS == nil {
 		return enc, errorsStd.New("encryption available only when TLS is enabled")
 	}
 
