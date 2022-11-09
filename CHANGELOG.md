@@ -4,6 +4,9 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Fixed
+- Empty bucket policy (#740) 
+
 ## [0.25.0] - 2022-10-31
 
 ### Fixed
