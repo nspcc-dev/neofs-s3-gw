@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -284,6 +285,7 @@ func getEncryptedObjectRange(t *testing.T, tc *handlerContext, bktName, objName 
 }
 
 func setEncryptHeaders(r *http.Request) {
+	r.TLS = &tls.ConnectionState{}
 	r.Header.Set(api.AmzServerSideEncryptionCustomerAlgorithm, layer.AESEncryptionAlgorithm)
 	r.Header.Set(api.AmzServerSideEncryptionCustomerKey, aes256Key)
 	r.Header.Set(api.AmzServerSideEncryptionCustomerKeyMD5, aes256KeyMD5)

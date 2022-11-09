@@ -28,7 +28,6 @@ type (
 		Policy             PlacementPolicy
 		DefaultMaxAge      int
 		NotificatorEnabled bool
-		TLSEnabled         bool
 		CopiesNumber       uint32
 	}
 
