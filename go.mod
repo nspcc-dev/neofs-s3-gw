@@ -5,20 +5,20 @@ go 1.17
 require (
 	github.com/aws/aws-sdk-go v1.44.6
 	github.com/bluele/gcache v0.0.2
-	github.com/google/uuid v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
-	github.com/nspcc-dev/neo-go v0.99.2
-	github.com/nspcc-dev/neofs-api-go/v2 v2.13.2-0.20221005093543-3a91383f24a9
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.6.0.20221007102402-8c682641bfd2
+	github.com/nspcc-dev/neo-go v0.99.4
+	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.7.0.20221114144617-d047289182a1
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.0
 	github.com/urfave/cli/v2 v2.3.0
-	go.uber.org/zap v1.18.1
+	go.uber.org/zap v1.23.0
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	google.golang.org/grpc v1.48.0
 	google.golang.org/protobuf v1.28.1
@@ -49,8 +49,8 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20220111165707-25110be27d22 // indirect
 	github.com/nspcc-dev/hrw v1.0.9 // indirect
-	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20220809123759-3094d3e0c14b // indirect
-	github.com/nspcc-dev/neofs-contract v0.15.3 // indirect
+	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20220927123257-24c107e3a262 // indirect
+	github.com/nspcc-dev/neofs-contract v0.16.0 // indirect
 	github.com/nspcc-dev/neofs-crypto v0.4.0
 	github.com/nspcc-dev/rfc6979 v0.2.0 // indirect
 	github.com/nspcc-dev/tzhash v1.6.1 // indirect
@@ -67,8 +67,8 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/urfave/cli v1.22.5 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/atomic v1.10.0 // indirect
+	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f // indirect
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
