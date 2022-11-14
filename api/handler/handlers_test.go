@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -50,6 +51,18 @@ func (hc *handlerContext) Context() context.Context {
 	return hc.context
 }
 
+type placementPolicyMock struct {
+	defaultPolicy netmap.PlacementPolicy
+}
+
+func (p *placementPolicyMock) Default() netmap.PlacementPolicy {
+	return p.defaultPolicy
+}
+
+func (p *placementPolicyMock) Get(string) (netmap.PlacementPolicy, bool) {
+	return netmap.PlacementPolicy{}, false
+}
+
 func prepareHandlerContext(t *testing.T) *handlerContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -72,11 +85,16 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 		TreeService: layer.NewTreeService(),
 	}
 
+	var pp netmap.PlacementPolicy
+	err = pp.DecodeString("REP 1")
+	require.NoError(t, err)
+
 	h := &handler{
 		log: l,
 		obj: layer.NewLayer(l, tp, layerCfg),
 		cfg: &Config{
 			TLSEnabled: true,
+			Policy:     &placementPolicyMock{defaultPolicy: pp},
 		},
 	}
 

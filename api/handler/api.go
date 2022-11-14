@@ -32,9 +32,9 @@ type (
 		CopiesNumber       uint32
 	}
 
-	PlacementPolicy struct {
-		Default   netmap.PlacementPolicy
-		RegionMap map[string]netmap.PlacementPolicy
+	PlacementPolicy interface {
+		Default() netmap.PlacementPolicy
+		Get(string) (netmap.PlacementPolicy, bool)
 	}
 )
 

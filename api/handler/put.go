@@ -748,13 +748,13 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) setPolicy(prm *layer.CreateBucketParams, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
-	prm.Policy = h.cfg.Policy.Default
+	prm.Policy = h.cfg.Policy.Default()
 
 	if locationConstraint == "" {
 		return
 	}
 
-	if policy, ok := h.cfg.Policy.RegionMap[locationConstraint]; ok {
+	if policy, ok := h.cfg.Policy.Get(locationConstraint); ok {
 		prm.Policy = policy
 		prm.LocationConstraint = locationConstraint
 	}
