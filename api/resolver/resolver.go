@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/ns"
 )
@@ -180,7 +181,10 @@ func NewNNSResolver(address string) (*Resolver, error) {
 	}
 
 	resolveFunc := func(_ context.Context, name string) (cid.ID, error) {
-		cnrID, err := nns.ResolveContainerName(name)
+		var d container.Domain
+		d.SetName(name)
+
+		cnrID, err := nns.ResolveContainerDomain(d)
 		if err != nil {
 			return cid.ID{}, fmt.Errorf("couldn't resolve container '%s': %w", name, err)
 		}

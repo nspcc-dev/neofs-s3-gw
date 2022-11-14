@@ -6,6 +6,7 @@ This document outlines major changes between releases.
 
 ### Fixed
 - Empty bucket policy (#740) 
+- Big object removal (#749)
 
 ### Added
 - Use client time as `now` in some requests (#726)
