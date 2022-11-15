@@ -180,6 +180,7 @@ resolve_order:
   - dns
 
 connect_timeout: 10s
+stream_timeout: 10s
 healthcheck_timeout: 15s
 rebalance_interval: 60s
 pool_error_threshold: 100
@@ -199,6 +200,7 @@ allowed_access_key_id_prefixes:
 | `rpc_endpoint`                   | `string`   | yes           |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
 | `resolve_order`                  | `[]string` | yes           | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
 | `connect_timeout`                | `duration` |               | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
+| `stream_timeout`                 | `duration` |               | `10s`          | Timeout for individual operations in streaming RPC.                                                                                                                                                               |
 | `healthcheck_timeout`            | `duration` |               | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
 | `rebalance_interval`             | `duration` |               | `60s`          | Interval to check node health.                                                                                                                                                                                    |
 | `pool_error_threshold`           | `uint32`   |               | `100`          | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |

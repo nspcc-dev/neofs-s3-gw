@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 
 ### Added
 - Use client time as `now` in some requests (#726)
+- Timeout for individual operations in streaming RPC (#740)
 
 ### Changed
 - Placement policy configuration (#568)

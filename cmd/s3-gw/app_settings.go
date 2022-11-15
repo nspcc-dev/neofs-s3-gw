@@ -22,6 +22,7 @@ const (
 	defaultRebalanceInterval  = 60 * time.Second
 	defaultHealthcheckTimeout = 15 * time.Second
 	defaultConnectTimeout     = 10 * time.Second
+	defaultStreamTimeout      = 10 * time.Second
 	defaultShutdownTimeout    = 15 * time.Second
 
 	defaultPoolErrorThreshold uint32 = 100
@@ -47,6 +48,7 @@ const ( // Settings.
 
 	// Pool config.
 	cfgConnectTimeout     = "connect_timeout"
+	cfgStreamTimeout      = "stream_timeout"
 	cfgHealthcheckTimeout = "healthcheck_timeout"
 	cfgRebalanceInterval  = "rebalance_interval"
 	cfgPoolErrorThreshold = "pool_error_threshold"
@@ -214,6 +216,7 @@ func newSettings() *viper.Viper {
 
 	// pool:
 	v.SetDefault(cfgPoolErrorThreshold, defaultPoolErrorThreshold)
+	v.SetDefault(cfgStreamTimeout, defaultStreamTimeout)
 
 	v.SetDefault(cfgPProfAddress, "localhost:8085")
 	v.SetDefault(cfgPrometheusAddress, "localhost:8086")
