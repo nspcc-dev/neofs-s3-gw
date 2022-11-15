@@ -8,6 +8,9 @@ This document outlines major changes between releases.
 - Empty bucket policy (#740) 
 - Big object removal (#749)
 
+### Added
+- Timeout for individual operations in streaming RPC (#740)
+
 ## [0.25.0] - 2022-10-31
 
 ### Fixed

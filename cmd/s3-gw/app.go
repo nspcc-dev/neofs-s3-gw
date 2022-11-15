@@ -244,11 +244,17 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 	}
 	prm.SetNodeDialTimeout(connTimeout)
 
+	streamTimeout := cfg.GetDuration(cfgStreamTimeout)
+	if streamTimeout <= 0 {
+		streamTimeout = defaultStreamTimeout
+	}
+	prm.SetNodeStreamTimeout(streamTimeout)
+
 	healthCheckTimeout := cfg.GetDuration(cfgHealthcheckTimeout)
 	if healthCheckTimeout <= 0 {
 		healthCheckTimeout = defaultHealthcheckTimeout
 	}
-	prm.SetNodeDialTimeout(healthCheckTimeout)
+	prm.SetHealthcheckTimeout(healthCheckTimeout)
 
 	rebalanceInterval := cfg.GetDuration(cfgRebalanceInterval)
 	if rebalanceInterval <= 0 {
