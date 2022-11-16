@@ -406,7 +406,10 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 		hash.Write(buf)
 	})
 	id, err := n.neoFS.CreateObject(ctx, prm)
-	return id, hash.Sum(nil), err
+	if err != nil {
+		return oid.ID{}, nil, err
+	}
+	return id, hash.Sum(nil), nil
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.
