@@ -93,3 +93,4 @@ Also, you can configure domains using `.env` variables or `yaml` file.
 ## Credits 
 
 Please see [CREDITS](CREDITS.md) for details.
+-----------
