@@ -19,6 +19,9 @@ This document outlines major changes between releases.
 ### Changed
 - Placement policy configuration (#568)
 
+### Removed
+- Deprecated linters (#755)
+
 ### Updating from v0.25.0
 New config parameters were added. And old one `defaul_policy` were changed.
 ```yaml
