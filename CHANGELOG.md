@@ -4,12 +4,16 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.25.1] - 2022-10-30
+
 ### Fixed
 - Empty bucket policy (#740) 
 - Big object removal (#749)
+- Checksum panic (#741)
 
 ### Added
-- Timeout for individual operations in streaming RPC (#740)
+- Debian packaging (#737)
+- Timeout for individual operations in streaming RPC (#750)
 
 ## [0.25.0] - 2022-10-31
 
@@ -367,4 +371,5 @@ releases.
 [0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...v0.24.0
 [0.25.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...v0.25.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...master
+[0.25.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...v0.25.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.1...master
