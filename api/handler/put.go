@@ -20,8 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -224,7 +223,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := &layer.PutObjectParams{
+	params := &PutObjectParams{
 		BktInfo:      bktInfo,
 		Object:       reqInfo.ObjectName,
 		Reader:       r.Body,
@@ -234,7 +233,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		CopiesNumber: copiesNumber,
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
@@ -246,7 +245,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
+	extendedObjInfo, err := h.putObject(r.Context(), params)
 	if err != nil {
 		_, err2 := io.Copy(io.Discard, r.Body)
 		err3 := r.Body.Close()
@@ -273,8 +272,8 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tagSet != nil {
-		tagPrm := &layer.PutObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
+		tagPrm := &PutObjectTaggingParams{
+			ObjectVersion: &ObjectVersion{
 				BktInfo:    bktInfo,
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
@@ -282,20 +281,20 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			TagSet:      tagSet,
 			NodeVersion: extendedObjInfo.NodeVersion,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if _, err = h.putObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
 	}
 
 	if newEaclTable != nil {
-		p := &layer.PutBucketACLParams{
+		p := &PutBucketACLParams{
 			BktInfo:      bktInfo,
 			EACL:         newEaclTable,
 			SessionToken: sessionTokenEACL,
 		}
 
-		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+		if err = h.putBucketACL(r.Context(), p); err != nil {
 			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
 			return
 		}
@@ -313,7 +312,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getCopiesNumberOrDefault(metadata map[string]string, defaultCopiesNumber uint32) (uint32, error) {
-	copiesNumberStr, ok := metadata[layer.AttributeNeofsCopiesNumber]
+	copiesNumberStr, ok := metadata[AttributeNeofsCopiesNumber]
 	if !ok {
 		return defaultCopiesNumber, nil
 	}
@@ -339,7 +338,7 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 		return enc, errorsStd.New("encryption available only when TLS is enabled")
 	}
 
-	if sseCustomerAlgorithm != layer.AESEncryptionAlgorithm {
+	if sseCustomerAlgorithm != AESEncryptionAlgorithm {
 		return enc, errors.GetAPIError(errors.ErrInvalidEncryptionAlgorithm)
 	}
 
@@ -348,7 +347,7 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 		return enc, errors.GetAPIError(errors.ErrInvalidSSECustomerKey)
 	}
 
-	if len(key) != layer.AESKeySize {
+	if len(key) != AESKeySize {
 		return enc, errors.GetAPIError(errors.ErrInvalidSSECustomerKey)
 	}
 
@@ -422,13 +421,13 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
-	params := &layer.PutObjectParams{
+	params := &PutObjectParams{
 		BktInfo: bktInfo,
 		Object:  reqInfo.ObjectName,
 		Reader:  contentReader,
@@ -436,7 +435,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		Header:  metadata,
 	}
 
-	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
+	extendedObjInfo, err := h.putObject(r.Context(), params)
 	if err != nil {
 		h.logAndSendError(w, "could not upload object", reqInfo, err)
 		return
@@ -466,8 +465,8 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tagSet != nil {
-		tagPrm := &layer.PutObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
+		tagPrm := &PutObjectTaggingParams{
+			ObjectVersion: &ObjectVersion{
 				BktInfo:    bktInfo,
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
@@ -475,26 +474,26 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 			NodeVersion: extendedObjInfo.NodeVersion,
 		}
 
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if _, err = h.putObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
 	}
 
 	if newEaclTable != nil {
-		p := &layer.PutBucketACLParams{
+		p := &PutBucketACLParams{
 			BktInfo:      bktInfo,
 			EACL:         newEaclTable,
 			SessionToken: sessionTokenEACL,
 		}
 
-		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+		if err = h.putBucketACL(r.Context(), p); err != nil {
 			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
 			return
 		}
 	}
 
-	if settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo); err != nil {
+	if settings, err := h.getBucketSettings(r.Context(), bktInfo); err != nil {
 		h.log.Warn("couldn't get bucket versioning", zap.String("bucket name", reqInfo.BucketName), zap.Error(err))
 	} else if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
@@ -610,7 +609,7 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 		return nil, fmt.Errorf("could not translate policy to ast: %w", err)
 	}
 
-	bacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	bacl, err := h.getBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return nil, fmt.Errorf("could not get bucket eacl: %w", err)
 	}
@@ -668,7 +667,7 @@ func parseMetadata(r *http.Request) map[string]string {
 
 func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	p := &layer.CreateBucketParams{
+	p := &CreateBucketParams{
 		Name: reqInfo.BucketName,
 	}
 
@@ -703,7 +702,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var policies []*accessbox.ContainerPolicy
-	boxData, err := layer.GetBoxData(r.Context())
+	boxData, err := GetBoxData(r.Context())
 	if err == nil {
 		policies = boxData.Policies
 		p.SessionContainerCreation = boxData.Gate.SessionTokenForPut()
@@ -724,18 +723,18 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	p.ObjectLockEnabled = isLockEnabled(r.Header)
 
-	bktInfo, err := h.obj.CreateBucket(r.Context(), p)
+	bktInfo, err := h.createBucket(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not create bucket", reqInfo, err)
 		return
 	}
 
 	if p.ObjectLockEnabled {
-		sp := &layer.PutSettingsParams{
+		sp := &PutSettingsParams{
 			BktInfo:  bktInfo,
 			Settings: &data.BucketSettings{Versioning: data.VersioningEnabled},
 		}
-		if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
+		if err = h.putBucketSettings(r.Context(), sp); err != nil {
 			h.logAndSendError(w, "couldn't enable bucket versioning", reqInfo, err,
 				zap.String("container_id", bktInfo.CID.EncodeToString()))
 			return
@@ -747,7 +746,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
-func (h handler) setPolicy(prm *layer.CreateBucketParams, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
+func (h handler) setPolicy(prm *CreateBucketParams, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
 	prm.Policy = h.cfg.Policy.Default()
 
 	if locationConstraint == "" {

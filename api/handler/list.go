@@ -18,7 +18,7 @@ func (h *handler) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 		reqInfo = api.GetReqInfo(r.Context())
 	)
 
-	list, err := h.obj.ListBuckets(r.Context())
+	list, err := h.containerList(r.Context())
 	if err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return

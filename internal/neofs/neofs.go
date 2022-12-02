@@ -11,7 +11,7 @@ import (
 	"time"
 
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
@@ -105,7 +105,7 @@ var basicACLZero acl.Basic
 // CreateContainer implements neofs.NeoFS interface method.
 //
 // If prm.BasicACL is zero, 'eacl-public-read-write' is used.
-func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (cid.ID, error) {
+func (x *NeoFS) CreateContainer(ctx context.Context, prm handler.PrmContainerCreate) (cid.ID, error) {
 	if prm.BasicACL == basicACLZero {
 		prm.BasicACL = acl.PublicRWExtended
 	}
@@ -219,7 +219,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 }
 
 // CreateObject implements neofs.NeoFS interface method.
-func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oid.ID, error) {
+func (x *NeoFS) CreateObject(ctx context.Context, prm handler.PrmObjectCreate) (oid.ID, error) {
 	attrNum := len(prm.Attributes) + 1 // + creation time
 
 	if prm.Filepath != "" {
@@ -281,7 +281,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	if err != nil {
 		reason, ok := isErrAccessDenied(err)
 		if ok {
-			return oid.ID{}, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+			return oid.ID{}, fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 		}
 		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
@@ -299,7 +299,7 @@ func (x payloadReader) Read(p []byte) (int, error) {
 	n, err := x.ReadCloser.Read(p)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
-			return n, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+			return n, fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 		}
 	}
 
@@ -307,7 +307,7 @@ func (x payloadReader) Read(p []byte) (int, error) {
 }
 
 // ReadObject implements neofs.NeoFS interface method.
-func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer.ObjectPart, error) {
+func (x *NeoFS) ReadObject(ctx context.Context, prm handler.PrmObjectRead) (*handler.ObjectPart, error) {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
 	addr.SetObject(prm.Object)
@@ -326,7 +326,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			res, err := x.pool.GetObject(ctx, prmGet)
 			if err != nil {
 				if reason, ok := isErrAccessDenied(err); ok {
-					return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+					return nil, fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 				}
 
 				return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
@@ -341,7 +341,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 			res.Header.SetPayload(payload)
 
-			return &layer.ObjectPart{
+			return &handler.ObjectPart{
 				Head: &res.Header,
 			}, nil
 		}
@@ -358,26 +358,26 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		hdr, err := x.pool.HeadObject(ctx, prmHead)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
-				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+				return nil, fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 			}
 
 			return nil, fmt.Errorf("read object header via connection pool: %w", err)
 		}
 
-		return &layer.ObjectPart{
+		return &handler.ObjectPart{
 			Head: &hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
 		res, err := x.pool.GetObject(ctx, prmGet)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
-				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+				return nil, fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 			}
 
 			return nil, fmt.Errorf("init full payload range reading via connection pool: %w", err)
 		}
 
-		return &layer.ObjectPart{
+		return &handler.ObjectPart{
 			Payload: res.Payload,
 		}, nil
 	}
@@ -396,19 +396,19 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	res, err := x.pool.ObjectRange(ctx, prmRange)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
-			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+			return nil, fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 		}
 
 		return nil, fmt.Errorf("init payload range reading via connection pool: %w", err)
 	}
 
-	return &layer.ObjectPart{
+	return &handler.ObjectPart{
 		Payload: payloadReader{&res},
 	}, nil
 }
 
 // DeleteObject implements neofs.NeoFS interface method.
-func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) error {
+func (x *NeoFS) DeleteObject(ctx context.Context, prm handler.PrmObjectDelete) error {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
 	addr.SetObject(prm.Object)
@@ -425,7 +425,7 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 	err := x.pool.DeleteObject(ctx, prmDelete)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
-			return fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+			return fmt.Errorf("%w: %s", handler.ErrAccessDenied, reason)
 		}
 
 		return fmt.Errorf("mark object removal via connection pool: %w", err)
@@ -508,7 +508,7 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 	// allow reading objects to OTHERS in order to provide read access to S3 gateways
 	basicACL.AllowOp(acl.OpObjectGet, acl.RoleOthers)
 
-	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
+	return x.neoFS.CreateContainer(ctx, handler.PrmContainerCreate{
 		Creator:  prm.Owner,
 		Policy:   prm.Policy,
 		Name:     prm.FriendlyName,
@@ -518,7 +518,7 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 
 // ReadObjectPayload implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr oid.Address) ([]byte, error) {
-	res, err := x.neoFS.ReadObject(ctx, layer.PrmObjectRead{
+	res, err := x.neoFS.ReadObject(ctx, handler.PrmObjectRead{
 		Container:   addr.Container(),
 		Object:      addr.Object(),
 		WithPayload: true,
@@ -534,7 +534,7 @@ func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr oid.Address)
 
 // CreateObject implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (oid.ID, error) {
-	return x.neoFS.CreateObject(ctx, layer.PrmObjectCreate{
+	return x.neoFS.CreateObject(ctx, handler.PrmObjectCreate{
 		Creator:   prm.Creator,
 		Container: prm.Container,
 		Filepath:  prm.Filepath,

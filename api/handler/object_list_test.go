@@ -182,6 +182,7 @@ func prepareCommonListObjectsQuery(prefix, delimiter string, maxKeys int) url.Va
 	return query
 }
 
+// maxKeys -1 means omit value.
 func listObjectsV1(t *testing.T, tc *handlerContext, bktName, prefix, delimiter, marker string, maxKeys int) *ListObjectsV1Response {
 	query := prepareCommonListObjectsQuery(prefix, delimiter, maxKeys)
 	if len(marker) != 0 {

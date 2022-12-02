@@ -16,8 +16,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/resolver"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -31,7 +30,7 @@ type handlerContext struct {
 	owner   user.ID
 	t       *testing.T
 	h       *handler
-	tp      *layer.TestNeoFS
+	tp      *TestNeoFS
 	context context.Context
 }
 
@@ -39,16 +38,22 @@ func (hc *handlerContext) Handler() *handler {
 	return hc.h
 }
 
-func (hc *handlerContext) MockedPool() *layer.TestNeoFS {
+func (hc *handlerContext) MockedPool() *TestNeoFS {
 	return hc.tp
-}
-
-func (hc *handlerContext) Layer() layer.Client {
-	return hc.h.obj
 }
 
 func (hc *handlerContext) Context() context.Context {
 	return hc.context
+}
+
+func (hc *handlerContext) getObjectByID(objID oid.ID) *object.Object {
+	for _, obj := range hc.tp.Objects() {
+		id, _ := obj.ID()
+		if id.Equals(objID) {
+			return obj
+		}
+	}
+	return nil
 }
 
 type placementPolicyMock struct {
@@ -68,7 +73,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	require.NoError(t, err)
 
 	l := zap.NewExample()
-	tp := layer.NewTestNeoFS()
+	tp := NewTestNeoFS()
 
 	testResolver := &resolver.Resolver{Name: "test_resolver"}
 	testResolver.SetResolveFunc(func(_ context.Context, name string) (cid.ID, error) {
@@ -78,23 +83,20 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	var owner user.ID
 	user.IDFromKey(&owner, key.PrivateKey.PublicKey)
 
-	layerCfg := &layer.Config{
-		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
-		AnonKey:     layer.AnonymousKey{Key: key},
-		Resolver:    testResolver,
-		TreeService: layer.NewTreeService(),
-	}
-
 	var pp netmap.PlacementPolicy
 	err = pp.DecodeString("REP 1")
 	require.NoError(t, err)
 
 	h := &handler{
-		log: l,
-		obj: layer.NewLayer(l, tp, layerCfg),
+		log:         l,
+		cache:       NewCache(DefaultCachesConfigs(zap.NewExample())),
+		resolver:    testResolver,
+		treeService: NewTreeService(),
 		cfg: &Config{
-			Policy: &placementPolicyMock{defaultPolicy: pp},
+			Policy:  &placementPolicyMock{defaultPolicy: pp},
+			AnonKey: AnonymousKey{Key: key},
 		},
+		neoFS: tp,
 	}
 
 	return &handlerContext{
@@ -107,22 +109,22 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 }
 
 func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {
-	_, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
+	_, err := hc.MockedPool().CreateContainer(hc.Context(), PrmContainerCreate{
 		Creator: hc.owner,
 		Name:    bktName,
 	})
 	require.NoError(hc.t, err)
 
-	bktInfo, err := hc.Layer().GetBucketInfo(hc.Context(), bktName)
+	bktInfo, err := hc.h.getBucketInfo(hc.Context(), bktName)
 	require.NoError(hc.t, err)
 	return bktInfo
 }
 
 func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
-	cnrID, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
+	cnrID, err := hc.MockedPool().CreateContainer(hc.Context(), PrmContainerCreate{
 		Creator:              hc.owner,
 		Name:                 bktName,
-		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
+		AdditionalAttributes: [][2]string{{AttributeLockEnabled, "true"}},
 	})
 	require.NoError(hc.t, err)
 
@@ -135,7 +137,7 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 		Owner:             ownerID,
 	}
 
-	sp := &layer.PutSettingsParams{
+	sp := &PutSettingsParams{
 		BktInfo: bktInfo,
 		Settings: &data.BucketSettings{
 			Versioning:        data.VersioningEnabled,
@@ -143,7 +145,7 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 		},
 	}
 
-	err = hc.Layer().PutBucketSettings(hc.Context(), sp)
+	err = hc.h.putBucketSettings(hc.Context(), sp)
 	require.NoError(hc.t, err)
 
 	return bktInfo
@@ -158,7 +160,7 @@ func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName stri
 		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),
 	}
 
-	extObjInfo, err := hc.Layer().PutObject(hc.Context(), &layer.PutObjectParams{
+	extObjInfo, err := hc.h.putObject(hc.Context(), &PutObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,
 		Size:    int64(len(content)),
@@ -209,17 +211,17 @@ func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body i
 }
 
 func existInMockedNeoFS(tc *handlerContext, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) bool {
-	p := &layer.GetObjectParams{
+	p := &GetObjectParams{
 		BucketInfo: bktInfo,
 		ObjectInfo: objInfo,
 		Writer:     io.Discard,
 	}
 
-	return tc.Layer().GetObject(tc.Context(), p) == nil
+	return tc.h.getObject(tc.Context(), p) == nil
 }
 
 func listOIDsFromMockedNeoFS(t *testing.T, tc *handlerContext, bktName string) []oid.ID {
-	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	bktInfo, err := tc.h.getBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 
 	return tc.MockedPool().AllObjects(bktInfo.CID)

@@ -9,7 +9,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -27,15 +26,15 @@ type (
 	}
 
 	ObjectParts struct {
-		IsTruncated          bool   `xml:"IsTruncated,omitempty"`
-		MaxParts             int    `xml:"MaxParts,omitempty"`
-		NextPartNumberMarker int    `xml:"NextPartNumberMarker,omitempty"`
-		PartNumberMarker     int    `xml:"PartNumberMarker,omitempty"`
-		Parts                []Part `xml:"Part,omitempty"`
-		PartsCount           int    `xml:"PartsCount,omitempty"`
+		IsTruncated          bool      `xml:"IsTruncated,omitempty"`
+		MaxParts             int       `xml:"MaxParts,omitempty"`
+		NextPartNumberMarker int       `xml:"NextPartNumberMarker,omitempty"`
+		PartNumberMarker     int       `xml:"PartNumberMarker,omitempty"`
+		Parts                []ObjPart `xml:"Part,omitempty"`
+		PartsCount           int       `xml:"PartsCount,omitempty"`
 	}
 
-	Part struct {
+	ObjPart struct {
 		ChecksumSHA256 string `xml:"ChecksumSHA256,omitempty"`
 		PartNumber     int    `xml:"PartNumber,omitempty"`
 		Size           int    `xml:"Size,omitempty"`
@@ -52,7 +51,7 @@ type (
 
 const (
 	eTag         = "ETag"
-	checksum     = "Checksum"
+	checksumAttr = "Checksum"
 	objectParts  = "ObjectParts"
 	storageClass = "StorageClass"
 	objectSize   = "ObjectSize"
@@ -60,7 +59,7 @@ const (
 
 var validAttributes = map[string]struct{}{
 	eTag:         {},
-	checksum:     {},
+	checksumAttr: {},
 	objectParts:  {},
 	storageClass: {},
 	objectSize:   {},
@@ -81,13 +80,13 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := &layer.HeadObjectParams{
+	p := &HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: params.VersionID,
 	}
 
-	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
+	extendedInfo, err := h.getExtendedObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not fetch object info", reqInfo, err)
 		return
@@ -100,7 +99,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(FormEncryptionInfo(info.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
@@ -110,7 +109,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	bktSettings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
@@ -162,7 +161,7 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 	var err error
 	maxPartsVal := r.Header.Get(api.AmzMaxParts)
 	if maxPartsVal == "" {
-		res.MaxParts = layer.MaxSizePartsList
+		res.MaxParts = MaxSizePartsList
 	} else if res.MaxParts, err = strconv.Atoi(maxPartsVal); err != nil || res.MaxParts < 0 {
 		return nil, errors.GetAPIError(errors.ErrInvalidMaxKeys)
 	}
@@ -189,7 +188,7 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 			resp.StorageClass = "STANDARD"
 		case objectSize:
 			resp.ObjectSize = info.Size
-		case checksum:
+		case checksumAttr:
 			resp.Checksum = &Checksum{ChecksumSHA256: info.HashSum}
 		case objectParts:
 			parts, err := formUploadAttributes(info, p.MaxParts, p.PartNumberMarker)
@@ -205,20 +204,53 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 	return resp, nil
 }
 
+func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, delimiter string) *data.ObjectInfo {
+	dirName := tryDirectoryName(node, prefix, delimiter)
+	if len(dirName) == 0 {
+		return nil
+	}
+
+	return &data.ObjectInfo{
+		ID:             node.OID, // to use it as continuation token
+		CID:            bktInfo.CID,
+		IsDir:          true,
+		IsDeleteMarker: node.IsDeleteMarker(),
+		Bucket:         bktInfo.Name,
+		Name:           dirName,
+	}
+}
+
+// tryDirectoryName forms directory name by prefix and delimiter.
+// If node isn't a directory empty string is returned.
+// This function doesn't check if node has a prefix. It must do a caller.
+func tryDirectoryName(node *data.NodeVersion, prefix, delimiter string) string {
+	if len(delimiter) == 0 {
+		return ""
+	}
+
+	tail := strings.TrimPrefix(node.FilePath, prefix)
+	index := strings.Index(tail, delimiter)
+	if index >= 0 {
+		return prefix + tail[:index+1]
+	}
+
+	return ""
+}
+
 func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectParts, error) {
-	completedParts, ok := info.Headers[layer.UploadCompletedParts]
+	completedParts, ok := info.Headers[UploadCompletedParts]
 	if !ok {
 		return nil, nil
 	}
 
 	partInfos := strings.Split(completedParts, ",")
-	parts := make([]Part, len(partInfos))
+	parts := make([]ObjPart, len(partInfos))
 	for i, p := range partInfos {
-		part, err := layer.ParseCompletedPartHeader(p)
+		part, err := ParseCompletedPartHeader(p)
 		if err != nil {
 			return nil, fmt.Errorf("invalid completed part: %w", err)
 		}
-		parts[i] = Part{
+		parts[i] = ObjPart{
 			PartNumber:     part.PartNumber,
 			Size:           int(part.Size),
 			ChecksumSHA256: part.ETag,

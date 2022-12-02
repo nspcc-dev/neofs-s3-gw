@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
+	"github.com/nats-io/nats.go"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"go.uber.org/zap"
 )
@@ -13,14 +16,33 @@ import (
 type (
 	handler struct {
 		log         *zap.Logger
-		obj         layer.Client
-		notificator Notificator
 		cfg         *Config
+		neoFS       NeoFS
+		notificator Notificator
+		resolver    BucketResolver
+		cache       *Cache
+		treeService TreeService
+	}
+
+	// AnonymousKey contains data for anonymous requests.
+	AnonymousKey struct {
+		Key *keys.PrivateKey
 	}
 
 	Notificator interface {
 		SendNotifications(topics map[string]string, p *SendNotificationParams) error
 		SendTestNotification(topic, bucketName, requestID, HostID string, now time.Time) error
+
+		Subscribe(context.Context, string, MsgHandler) error
+		Listen(context.Context)
+	}
+
+	MsgHandler interface {
+		HandleMessage(context.Context, *nats.Msg) error
+	}
+
+	BucketResolver interface {
+		Resolve(ctx context.Context, name string) (cid.ID, error)
 	}
 
 	// Config contains data which handler needs to keep.
@@ -29,6 +51,11 @@ type (
 		DefaultMaxAge      int
 		NotificatorEnabled bool
 		CopiesNumber       uint32
+		AnonKey            AnonymousKey
+		Cache              *CachesConfig
+		Resolver           BucketResolver
+		TreeService        TreeService
+		NeoFS              NeoFS
 	}
 
 	PlacementPolicy interface {
@@ -47,10 +74,8 @@ const (
 var _ api.Handler = (*handler)(nil)
 
 // New creates new api.Handler using given logger and client.
-func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config) (api.Handler, error) {
+func New(ctx context.Context, log *zap.Logger, notificator Notificator, cfg *Config) (api.Handler, error) {
 	switch {
-	case obj == nil:
-		return nil, errors.New("empty NeoFS Object Layer")
 	case log == nil:
 		return nil, errors.New("empty logger")
 	}
@@ -61,10 +86,19 @@ func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config
 		return nil, errors.New("empty notificator")
 	}
 
-	return &handler{
+	h := &handler{
 		log:         log,
-		obj:         obj,
 		cfg:         cfg,
 		notificator: notificator,
-	}, nil
+		neoFS:       cfg.NeoFS,
+		resolver:    cfg.Resolver,
+		cache:       NewCache(cfg.Cache),
+		treeService: cfg.TreeService,
+	}
+
+	if cfg.NotificatorEnabled {
+		h.notificator.Listen(ctx)
+	}
+
+	return h, nil
 }

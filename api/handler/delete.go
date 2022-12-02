@@ -9,7 +9,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -60,7 +59,7 @@ type DeleteObjectsResponse struct {
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
-	versionedObject := []*layer.VersionedObject{{
+	versionedObject := []*VersionedObject{{
 		Name:      reqInfo.ObjectName,
 		VersionID: versionID,
 	}}
@@ -71,18 +70,18 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	bktSettings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	p := &layer.DeleteObjectParams{
+	p := &DeleteObjectParams{
 		BktInfo:  bktInfo,
 		Objects:  versionedObject,
 		Settings: bktSettings,
 	}
-	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
+	deletedObjects := h.deleteObjects(r.Context(), p)
 	deletedObject := deletedObjects[0]
 	if deletedObject.Error != nil {
 		if isErrObjectLocked(deletedObject.Error) {
@@ -176,10 +175,10 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	removed := make(map[string]*layer.VersionedObject)
-	toRemove := make([]*layer.VersionedObject, 0, len(requested.Objects))
+	removed := make(map[string]*VersionedObject)
+	toRemove := make([]*VersionedObject, 0, len(requested.Objects))
 	for _, obj := range requested.Objects {
-		versionedObj := &layer.VersionedObject{
+		versionedObj := &VersionedObject{
 			Name:      obj.ObjectName,
 			VersionID: obj.VersionID,
 		}
@@ -198,7 +197,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	bktSettings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
@@ -211,12 +210,12 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return nil
 	})
 
-	p := &layer.DeleteObjectParams{
+	p := &DeleteObjectParams{
 		BktInfo:  bktInfo,
 		Objects:  toRemove,
 		Settings: bktSettings,
 	}
-	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
+	deletedObjects := h.deleteObjects(r.Context(), p)
 
 	var errs []error
 	for _, obj := range deletedObjects {
@@ -270,12 +269,12 @@ func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	var sessionToken *session.Container
 
-	boxData, err := layer.GetBoxData(r.Context())
+	boxData, err := GetBoxData(r.Context())
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForDelete()
 	}
 
-	if err = h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{
+	if err = h.deleteBucket(r.Context(), &DeleteBucketParams{
 		BktInfo:      bktInfo,
 		SessionToken: sessionToken,
 	}); err != nil {

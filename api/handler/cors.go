@@ -1,13 +1,19 @@
 package handler
 
 import (
+	"bytes"
+	"context"
+	"encoding/xml"
+	errorsStd "errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -16,6 +22,8 @@ const (
 	DefaultMaxAge = 600
 	wildcard      = "*"
 )
+
+var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
 
 func (h *handler) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
@@ -26,7 +34,7 @@ func (h *handler) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
+	cors, err := h.getBucketCORS(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get cors", reqInfo, err)
 		return
@@ -47,13 +55,13 @@ func (h *handler) PutBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.PutCORSParams{
+	p := &PutCORSParams{
 		BktInfo:      bktInfo,
 		Reader:       r.Body,
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
-	if err = h.obj.PutBucketCORS(r.Context(), p); err != nil {
+	if err = h.putBucketCORS(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not put cors configuration", reqInfo, err)
 		return
 	}
@@ -70,7 +78,7 @@ func (h *handler) DeleteBucketCorsHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = h.obj.DeleteBucketCORS(r.Context(), bktInfo); err != nil {
+	if err = h.deleteBucketCORS(r.Context(), bktInfo); err != nil {
 		h.logAndSendError(w, "could not delete cors", reqInfo, err)
 	}
 
@@ -89,13 +97,13 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	if reqInfo.BucketName == "" {
 		return
 	}
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
 		h.log.Warn("get bucket info", zap.Error(err))
 		return
 	}
 
-	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
+	cors, err := h.getBucketCORS(r.Context(), bktInfo)
 	if err != nil {
 		h.log.Warn("get bucket cors", zap.Error(err))
 		return
@@ -137,7 +145,7 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	bktInfo, err := h.getBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
@@ -160,7 +168,7 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 		headers = strings.Split(requestHeaders, ", ")
 	}
 
-	cors, err := h.obj.GetBucketCORS(r.Context(), bktInfo)
+	cors, err := h.getBucketCORS(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get cors", reqInfo, err)
 		return
@@ -222,4 +230,102 @@ func sliceContains(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func (h *handler) putBucketCORS(ctx context.Context, p *PutCORSParams) error {
+	var (
+		buf  bytes.Buffer
+		tee  = io.TeeReader(p.Reader, &buf)
+		cors = &data.CORSConfiguration{}
+	)
+
+	if err := xml.NewDecoder(tee).Decode(cors); err != nil {
+		return fmt.Errorf("xml decode cors: %w", err)
+	}
+
+	if cors.CORSRules == nil {
+		return errors.GetAPIError(errors.ErrMalformedXML)
+	}
+
+	if err := checkCORS(cors); err != nil {
+		return err
+	}
+
+	prm := PrmObjectCreate{
+		Container:    p.BktInfo.CID,
+		Creator:      p.BktInfo.Owner,
+		Payload:      p.Reader,
+		Filepath:     p.BktInfo.CORSObjectName(),
+		CreationTime: TimeNow(ctx),
+		CopiesNumber: p.CopiesNumber,
+	}
+
+	objID, _, err := h.objectPutAndHash(ctx, prm, p.BktInfo)
+	if err != nil {
+		return fmt.Errorf("put system object: %w", err)
+	}
+
+	objIDToDelete, err := h.treeService.PutBucketCORS(ctx, p.BktInfo, objID)
+	objIDToDeleteNotFound := errorsStd.Is(err, ErrNoNodeToRemove)
+	if err != nil && !objIDToDeleteNotFound {
+		return err
+	}
+
+	if !objIDToDeleteNotFound {
+		if err = h.objectDelete(ctx, p.BktInfo, objIDToDelete); err != nil {
+			h.log.Error("couldn't delete cors object", zap.Error(err),
+				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
+				zap.String("bucket name", p.BktInfo.Name),
+				zap.String("objID", objIDToDelete.EncodeToString()))
+		}
+	}
+
+	h.cache.PutCORS(h.Owner(ctx), p.BktInfo, cors)
+
+	return nil
+}
+
+func (h *handler) getBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
+	cors, err := h.getCORS(ctx, bktInfo)
+	if err != nil {
+		if errorsStd.Is(err, ErrNodeNotFound) {
+			return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
+		}
+		return nil, err
+	}
+
+	return cors, nil
+}
+
+func (h *handler) deleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
+	objID, err := h.treeService.DeleteBucketCORS(ctx, bktInfo)
+	objIDNotFound := errorsStd.Is(err, ErrNoNodeToRemove)
+	if err != nil && !objIDNotFound {
+		return err
+	}
+	if !objIDNotFound {
+		if err = h.objectDelete(ctx, bktInfo, objID); err != nil {
+			return err
+		}
+	}
+
+	h.cache.DeleteCORS(bktInfo)
+
+	return nil
+}
+
+func checkCORS(cors *data.CORSConfiguration) error {
+	for _, r := range cors.CORSRules {
+		for _, m := range r.AllowedMethods {
+			if _, ok := supportedMethods[m]; !ok {
+				return errors.GetAPIErrorWithError(errors.ErrCORSUnsupportedMethod, fmt.Errorf("unsupported method is %s", m))
+			}
+		}
+		for _, h := range r.ExposeHeaders {
+			if h == wildcard {
+				return errors.GetAPIError(errors.ErrCORSWildcardExposeHeaders)
+			}
+		}
+	}
+	return nil
 }

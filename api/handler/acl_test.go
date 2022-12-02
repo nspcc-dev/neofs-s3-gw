@@ -1375,7 +1375,7 @@ func putBucketPolicy(hc *handlerContext, bktName string, bktPolicy *bucketPolicy
 }
 
 func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo, action eacl.Action) {
-	bktACL, err := tc.Layer().GetBucketACL(tc.Context(), bktInfo)
+	bktACL, err := tc.h.getBucketACL(tc.Context(), bktInfo)
 	require.NoError(t, err)
 
 	length := len(bktACL.EACL.Records())
@@ -1421,7 +1421,7 @@ func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessb
 	tc.Handler().CreateBucketHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
-	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	bktInfo, err := tc.h.getBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 	return bktInfo
 }

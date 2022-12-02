@@ -322,9 +322,9 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 				return
 			}
 
-			bktInfo, err := hc.Layer().GetBucketInfo(ctx, tc.bucket)
+			bktInfo, err := hc.h.getBucketInfo(ctx, tc.bucket)
 			require.NoError(t, err)
-			bktSettings, err := hc.Layer().GetBucketSettings(ctx, bktInfo)
+			bktSettings, err := hc.h.getBucketSettings(ctx, bktInfo)
 			require.NoError(t, err)
 			actualConf := bktSettings.LockConfiguration
 			require.True(t, bktSettings.VersioningEnabled())
@@ -631,4 +631,46 @@ func assertRetentionApproximate(t *testing.T, w *httptest.ResponseRecorder, rete
 	require.NoError(t, err)
 
 	require.InDelta(t, expectedUntil.Unix(), actualUntil.Unix(), delta)
+}
+
+func TestObjectLockAttributes(t *testing.T) {
+	hc := prepareHandlerContext(t)
+	bktName, objName := "bkt-name", "obj-name"
+
+	bktInfo := createTestBucket(hc, bktName)
+	putBucketVersioning(t, hc, bktName, true)
+
+	version1, _ := putObjectContent(hc, bktName, objName, "content obj1 v1")
+
+	p := &PutLockInfoParams{
+		ObjVersion: &ObjectVersion{
+			BktInfo:    bktInfo,
+			ObjectName: objName,
+			VersionID:  version1,
+		},
+		NewLock: &data.ObjectLock{
+			Retention: &data.RetentionLock{
+				Until: time.Now(),
+			},
+		},
+		CopiesNumber: 0,
+	}
+
+	err := hc.h.putLockInfo(hc.context, p)
+	require.NoError(t, err)
+
+	foundLock, err := hc.h.getLockInfo(hc.context, p.ObjVersion)
+	require.NoError(t, err)
+
+	lockObj := hc.getObjectByID(foundLock.Retention())
+	require.NotNil(t, lockObj)
+
+	expEpoch := false
+	for _, attr := range lockObj.Attributes() {
+		if attr.Key() == AttributeExpirationEpoch {
+			expEpoch = true
+		}
+	}
+
+	require.Truef(t, expEpoch, "system header __NEOFS__EXPIRATION_EPOCH presence")
 }

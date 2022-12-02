@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -114,15 +113,15 @@ func TestPutObjectOverrideCopiesNumber(t *testing.T) {
 	bktInfo := createTestBucket(tc, bktName)
 
 	w, r := prepareTestRequest(tc, bktName, objName, nil)
-	r.Header.Set(api.MetadataPrefix+strings.ToUpper(layer.AttributeNeofsCopiesNumber), "1")
+	r.Header.Set(api.MetadataPrefix+strings.ToUpper(AttributeNeofsCopiesNumber), "1")
 	tc.Handler().PutObjectHandler(w, r)
 
-	p := &layer.HeadObjectParams{
+	p := &HeadObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,
 	}
 
-	objInfo, err := tc.Layer().GetObjectInfo(tc.Context(), p)
+	objInfo, err := tc.h.getObjectInfo(tc.Context(), p)
 	require.NoError(t, err)
-	require.Equal(t, "1", objInfo.Headers[layer.AttributeNeofsCopiesNumber])
+	require.Equal(t, "1", objInfo.Headers[AttributeNeofsCopiesNumber])
 }

@@ -1,4 +1,4 @@
-package layer
+package handler
 
 import (
 	"context"
@@ -19,26 +19,19 @@ const (
 	AttributeExpirationEpoch = "__NEOFS__EXPIRATION_EPOCH"
 )
 
-type PutLockInfoParams struct {
-	ObjVersion   *ObjectVersion
-	NewLock      *data.ObjectLock
-	CopiesNumber uint32
-	NodeVersion  *data.NodeVersion // optional
-}
-
-func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err error) {
+func (h *handler) putLockInfo(ctx context.Context, p *PutLockInfoParams) (err error) {
 	newLock := p.NewLock
 	versionNode := p.NodeVersion
 	// sometimes node version can be provided from executing context
 	// if not, then receive node version from tree service
 	if versionNode == nil {
-		versionNode, err = n.getNodeVersionFromCacheOrNeofs(ctx, p.ObjVersion)
+		versionNode, err = h.getNodeVersionFromCacheOrNeofs(ctx, p.ObjVersion)
 		if err != nil {
 			return err
 		}
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, p.ObjVersion.BktInfo, versionNode.ID)
+	lockInfo, err := h.treeService.GetLock(ctx, p.ObjVersion.BktInfo, versionNode.ID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
@@ -68,7 +61,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 			}
 		}
 		lock := &data.ObjectLock{Retention: newLock.Retention}
-		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
+		retentionOID, err := h.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
 		if err != nil {
 			return err
 		}
@@ -78,40 +71,40 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	if newLock.LegalHold != nil {
 		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
 			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
+			legalHoldOID, err := h.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
 			if err != nil {
 				return err
 			}
 			lockInfo.SetLegalHold(legalHoldOID)
 		} else if !newLock.LegalHold.Enabled && lockInfo.IsLegalHoldSet() {
-			if err = n.objectDelete(ctx, p.ObjVersion.BktInfo, lockInfo.LegalHold()); err != nil {
+			if err = h.objectDelete(ctx, p.ObjVersion.BktInfo, lockInfo.LegalHold()); err != nil {
 				return fmt.Errorf("couldn't delete lock object '%s' to remove legal hold: %w", lockInfo.LegalHold().EncodeToString(), err)
 			}
 			lockInfo.ResetLegalHold()
 		}
 	}
 
-	if err = n.treeService.PutLock(ctx, p.ObjVersion.BktInfo, versionNode.ID, lockInfo); err != nil {
+	if err = h.treeService.PutLock(ctx, p.ObjVersion.BktInfo, versionNode.ID, lockInfo); err != nil {
 		return fmt.Errorf("couldn't put lock into tree: %w", err)
 	}
 
-	n.cache.PutLockInfo(n.Owner(ctx), lockObjectKey(p.ObjVersion), lockInfo)
+	h.cache.PutLockInfo(h.Owner(ctx), lockObjectKey(p.ObjVersion), lockInfo)
 
 	return nil
 }
 
-func (n *layer) getNodeVersionFromCacheOrNeofs(ctx context.Context, objVersion *ObjectVersion) (nodeVersion *data.NodeVersion, err error) {
+func (h *handler) getNodeVersionFromCacheOrNeofs(ctx context.Context, objVersion *ObjectVersion) (nodeVersion *data.NodeVersion, err error) {
 	// check cache if node version is stored inside extendedObjectVersion
-	nodeVersion = n.getNodeVersionFromCache(n.Owner(ctx), objVersion)
+	nodeVersion = h.getNodeVersionFromCache(h.Owner(ctx), objVersion)
 	if nodeVersion == nil {
 		// else get node version from tree service
-		return n.getNodeVersion(ctx, objVersion)
+		return h.getNodeVersion(ctx, objVersion)
 	}
 
 	return nodeVersion, nil
 }
 
-func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32) (oid.ID, error) {
+func (h *handler) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32) (oid.ID, error) {
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
@@ -121,27 +114,27 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	}
 
 	var err error
-	prm.Attributes, err = n.attributesFromLock(ctx, lock)
+	prm.Attributes, err = h.attributesFromLock(ctx, lock)
 	if err != nil {
 		return oid.ID{}, err
 	}
 
-	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
+	id, _, err := h.objectPutAndHash(ctx, prm, bktInfo)
 	return id, err
 }
 
-func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*data.LockInfo, error) {
-	owner := n.Owner(ctx)
-	if lockInfo := n.cache.GetLockInfo(owner, lockObjectKey(objVersion)); lockInfo != nil {
+func (h *handler) getLockInfo(ctx context.Context, objVersion *ObjectVersion) (*data.LockInfo, error) {
+	owner := h.Owner(ctx)
+	if lockInfo := h.cache.GetLockInfo(owner, lockObjectKey(objVersion)); lockInfo != nil {
 		return lockInfo, nil
 	}
 
-	versionNode, err := n.getNodeVersion(ctx, objVersion)
+	versionNode, err := h.getNodeVersion(ctx, objVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, objVersion.BktInfo, versionNode.ID)
+	lockInfo, err := h.treeService.GetLock(ctx, objVersion.BktInfo, versionNode.ID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
@@ -149,18 +142,18 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		lockInfo = &data.LockInfo{}
 	}
 
-	n.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
+	h.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
 
 	return lockInfo, nil
 }
 
-func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSConfiguration, error) {
-	owner := n.Owner(ctx)
-	if cors := n.cache.GetCORS(owner, bkt); cors != nil {
+func (h *handler) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSConfiguration, error) {
+	owner := h.Owner(ctx)
+	if cors := h.cache.GetCORS(owner, bkt); cors != nil {
 		return cors, nil
 	}
 
-	objID, err := n.treeService.GetBucketCORS(ctx, bkt)
+	objID, err := h.treeService.GetBucketCORS(ctx, bkt)
 	objIDNotFound := errorsStd.Is(err, ErrNodeNotFound)
 	if err != nil && !objIDNotFound {
 		return nil, err
@@ -170,7 +163,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSCo
 		return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
 	}
 
-	obj, err := n.objectGet(ctx, bkt, objID)
+	obj, err := h.objectGet(ctx, bkt, objID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +174,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSCo
 		return nil, fmt.Errorf("unmarshal cors: %w", err)
 	}
 
-	n.cache.PutCORS(owner, bkt, cors)
+	h.cache.PutCORS(owner, bkt, cors)
 
 	return cors, nil
 }
@@ -191,36 +184,17 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 	return ".lock." + objVersion.BktInfo.CID.EncodeToString() + "." + objVersion.ObjectName + "." + objVersion.VersionID
 }
 
-func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	owner := n.Owner(ctx)
-	if settings := n.cache.GetSettings(owner, bktInfo); settings != nil {
-		return settings, nil
-	}
-
-	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo)
-	if err != nil {
-		if !errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, err
-		}
-		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	}
-
-	n.cache.PutSettings(owner, bktInfo, settings)
-
-	return settings, nil
-}
-
-func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo, p.Settings); err != nil {
+func (h *handler) putBucketSettings(ctx context.Context, p *PutSettingsParams) error {
+	if err := h.treeService.PutSettingsNode(ctx, p.BktInfo, p.Settings); err != nil {
 		return fmt.Errorf("failed to get settings node: %w", err)
 	}
 
-	n.cache.PutSettings(n.Owner(ctx), p.BktInfo, p.Settings)
+	h.cache.PutSettings(h.Owner(ctx), p.BktInfo, p.Settings)
 
 	return nil
 }
 
-func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) ([][2]string, error) {
+func (h *handler) attributesFromLock(ctx context.Context, lock *data.ObjectLock) ([][2]string, error) {
 	var (
 		err      error
 		expEpoch uint64
@@ -228,7 +202,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 	)
 
 	if lock.Retention != nil {
-		if _, expEpoch, err = n.neoFS.TimeToEpoch(ctx, TimeNow(ctx), lock.Retention.Until); err != nil {
+		if _, expEpoch, err = h.neoFS.TimeToEpoch(ctx, TimeNow(ctx), lock.Retention.Until); err != nil {
 			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
 

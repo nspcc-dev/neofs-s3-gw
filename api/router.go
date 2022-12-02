@@ -77,7 +77,7 @@ type (
 		AppendCORSHeaders(w http.ResponseWriter, r *http.Request)
 		CreateMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		UploadPartHandler(http.ResponseWriter, *http.Request)
-		UploadPartCopy(w http.ResponseWriter, r *http.Request)
+		UploadPartCopyHandler(w http.ResponseWriter, r *http.Request)
 		CompleteMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		AbortMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		ListPartsHandler(w http.ResponseWriter, r *http.Request)
@@ -217,7 +217,7 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("headobject", h.HeadObjectHandler))).Name("HeadObject")
 		// CopyObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").Headers(hdrAmzCopySource, "").HandlerFunc(m.Handle(metrics.APIStats("uploadpartcopy", h.UploadPartCopy))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").Headers(hdrAmzCopySource, "").HandlerFunc(m.Handle(metrics.APIStats("uploadpartcopy", h.UploadPartCopyHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
 			Name("UploadPartCopy")
 		// PutObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(

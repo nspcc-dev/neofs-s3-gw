@@ -7,19 +7,18 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
 const sizeToDetectType = 512
 
-func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
+func getRangeToDetectContentType(maxSize int64) *RangeParams {
 	end := uint64(maxSize)
 	if sizeToDetectType < end {
 		end = sizeToDetectType
 	}
 
-	return &layer.RangeParams{
+	return &RangeParams{
 		Start: 0,
 		End:   end - 1,
 	}
@@ -40,13 +39,13 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.HeadObjectParams{
+	p := &HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
+	extendedInfo, err := h.getExtendedObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
@@ -59,7 +58,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(FormEncryptionInfo(info.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
@@ -69,28 +68,28 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := &layer.ObjectVersion{
+	t := &ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: info.Name,
 		VersionID:  info.VersionID(),
 	}
 
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
+	tagSet, lockInfo, err := h.getObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}
 
 	if len(info.ContentType) == 0 {
-		if info.ContentType = layer.MimeByFilePath(info.Name); len(info.ContentType) == 0 {
+		if info.ContentType = MimeByFilePath(info.Name); len(info.ContentType) == 0 {
 			buffer := bytes.NewBuffer(make([]byte, 0, sizeToDetectType))
-			getParams := &layer.GetObjectParams{
+			getParams := &GetObjectParams{
 				ObjectInfo: info,
 				Writer:     buffer,
 				Range:      getRangeToDetectContentType(info.Size),
 				BucketInfo: bktInfo,
 			}
-			if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+			if err = h.getObject(r.Context(), getParams); err != nil {
 				h.logAndSendError(w, "could not get object", reqInfo, err, zap.Stringer("oid", info.ID))
 				return
 			}
@@ -103,7 +102,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	bktSettings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return

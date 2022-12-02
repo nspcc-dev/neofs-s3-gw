@@ -19,10 +19,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/notifications"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -40,7 +39,6 @@ type (
 		pool *pool.Pool
 		key  *keys.PrivateKey
 		nc   *notifications.Controller
-		obj  layer.Client
 		api  api.Handler
 
 		servers []Server
@@ -115,47 +113,6 @@ func (a *App) init(ctx context.Context) {
 	a.initServers(ctx)
 }
 
-func (a *App) initLayer(ctx context.Context) {
-	a.initResolver()
-
-	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
-	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.key)
-	if err != nil {
-		a.log.Fatal("failed to create tree service", zap.Error(err))
-	}
-	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
-
-	// prepare random key for anonymous requests
-	randomKey, err := keys.NewPrivateKey()
-	if err != nil {
-		a.log.Fatal("couldn't generate random key", zap.Error(err))
-	}
-
-	layerCfg := &layer.Config{
-		Caches: getCacheOptions(a.cfg, a.log),
-		AnonKey: layer.AnonymousKey{
-			Key: randomKey,
-		},
-		Resolver:    a.bucketResolver,
-		TreeService: treeService,
-	}
-
-	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool), layerCfg)
-
-	if a.cfg.GetBool(cfgEnableNATS) {
-		nopts := getNotificationsOptions(a.cfg, a.log)
-		a.nc, err = notifications.NewController(nopts, a.log)
-		if err != nil {
-			a.log.Fatal("failed to enable notifications", zap.Error(err))
-		}
-
-		if err = a.obj.Initialize(ctx, a.nc); err != nil {
-			a.log.Fatal("couldn't initialize layer", zap.Error(err))
-		}
-	}
-}
-
 func newAppSettings(log *Logger, v *viper.Viper) *appSettings {
 	policies, err := newPlacementPolicy(getDefaultPolicyValue(v), v.GetString(cfgPolicyRegionMapFile))
 	if err != nil {
@@ -178,8 +135,62 @@ func getDefaultPolicyValue(v *viper.Viper) string {
 }
 
 func (a *App) initAPI(ctx context.Context) {
-	a.initLayer(ctx)
-	a.initHandler()
+	a.initResolver()
+
+	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
+	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.key)
+	if err != nil {
+		a.log.Fatal("failed to create tree service", zap.Error(err))
+	}
+	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
+
+	// prepare random key for anonymous requests
+	randomKey, err := keys.NewPrivateKey()
+	if err != nil {
+		a.log.Fatal("couldn't generate random key", zap.Error(err))
+	}
+
+	if a.cfg.GetBool(cfgEnableNATS) {
+		nopts := getNotificationsOptions(a.cfg, a.log)
+		a.nc, err = notifications.NewController(nopts, a.log)
+		if err != nil {
+			a.log.Fatal("failed to enable notifications", zap.Error(err))
+		}
+	}
+
+	cfg := &handler.Config{
+		Policy:             a.settings.policies,
+		DefaultMaxAge:      handler.DefaultMaxAge,
+		NotificatorEnabled: a.cfg.GetBool(cfgEnableNATS),
+		CopiesNumber:       handler.DefaultCopiesNumber,
+		AnonKey: handler.AnonymousKey{
+			Key: randomKey,
+		},
+		Cache:       getCacheOptions(a.cfg, a.log),
+		Resolver:    a.bucketResolver,
+		TreeService: treeService,
+		NeoFS:       neofs.NewNeoFS(a.pool),
+	}
+
+	if a.cfg.IsSet(cfgDefaultMaxAge) {
+		defaultMaxAge := a.cfg.GetInt(cfgDefaultMaxAge)
+
+		if defaultMaxAge <= 0 && defaultMaxAge != -1 {
+			a.log.Fatal("invalid defaultMaxAge",
+				zap.String("parameter", cfgDefaultMaxAge),
+				zap.String("value in config", strconv.Itoa(defaultMaxAge)))
+		}
+		cfg.DefaultMaxAge = defaultMaxAge
+	}
+
+	if val := a.cfg.GetUint32(cfgSetCopiesNumber); val > 0 {
+		cfg.CopiesNumber = val
+	}
+
+	a.api, err = handler.New(ctx, a.log, a.nc, cfg)
+	if err != nil {
+		a.log.Fatal("could not initialize API handler", zap.Error(err))
+	}
 }
 
 func (a *App) initMetrics() {
@@ -584,8 +595,8 @@ func getNotificationsOptions(v *viper.Viper, l *zap.Logger) *notifications.Optio
 	return &cfg
 }
 
-func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CachesConfig {
-	cacheCfg := layer.DefaultCachesConfigs(l)
+func getCacheOptions(v *viper.Viper, l *zap.Logger) *handler.CachesConfig {
+	cacheCfg := handler.DefaultCachesConfigs(l)
 
 	cacheCfg.Objects.Lifetime = getLifetime(v, l, cfgObjectsCacheLifetime, cacheCfg.Objects.Lifetime)
 	cacheCfg.Objects.Size = getSize(v, l, cfgObjectsCacheSize, cacheCfg.Objects.Size)
@@ -645,36 +656,6 @@ func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
 	cacheCfg.Size = getSize(v, l, cfgAccessBoxCacheSize, cacheCfg.Size)
 
 	return cacheCfg
-}
-
-func (a *App) initHandler() {
-	cfg := &handler.Config{
-		Policy:             a.settings.policies,
-		DefaultMaxAge:      handler.DefaultMaxAge,
-		NotificatorEnabled: a.cfg.GetBool(cfgEnableNATS),
-		CopiesNumber:       handler.DefaultCopiesNumber,
-	}
-
-	if a.cfg.IsSet(cfgDefaultMaxAge) {
-		defaultMaxAge := a.cfg.GetInt(cfgDefaultMaxAge)
-
-		if defaultMaxAge <= 0 && defaultMaxAge != -1 {
-			a.log.Fatal("invalid defaultMaxAge",
-				zap.String("parameter", cfgDefaultMaxAge),
-				zap.String("value in config", strconv.Itoa(defaultMaxAge)))
-		}
-		cfg.DefaultMaxAge = defaultMaxAge
-	}
-
-	if val := a.cfg.GetUint32(cfgSetCopiesNumber); val > 0 {
-		cfg.CopiesNumber = val
-	}
-
-	var err error
-	a.api, err = handler.New(a.log, a.obj, a.nc, cfg)
-	if err != nil {
-		a.log.Fatal("could not initialize API handler", zap.Error(err))
-	}
 }
 
 func readRegionMap(filePath string) (map[string]string, error) {
