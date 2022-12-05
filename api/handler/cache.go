@@ -1,4 +1,4 @@
-package layer
+package handler
 
 import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"

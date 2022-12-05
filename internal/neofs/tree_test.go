@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/stretchr/testify/require"
 )
 
@@ -108,11 +108,11 @@ func TestHandleError(t *testing.T) {
 		},
 		{
 			err:           errors.New("something not found"),
-			expectedError: layer.ErrNodeNotFound,
+			expectedError: handler.ErrNodeNotFound,
 		},
 		{
 			err:           errors.New("something is denied by some acl rule"),
-			expectedError: layer.ErrNodeAccessDenied,
+			expectedError: handler.ErrNodeAccessDenied,
 		},
 	} {
 		t.Run("", func(t *testing.T) {

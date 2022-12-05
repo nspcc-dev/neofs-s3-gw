@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,9 +32,9 @@ func TestSimpleGetEncrypted(t *testing.T) {
 	content := "content"
 	putEncryptedObject(t, tc, bktName, objName, content)
 
-	objInfo, err := tc.Layer().GetObjectInfo(tc.Context(), &layer.HeadObjectParams{BktInfo: bktInfo, Object: objName})
+	objInfo, err := tc.h.getObjectInfo(tc.Context(), &HeadObjectParams{BktInfo: bktInfo, Object: objName})
 	require.NoError(t, err)
-	obj, err := tc.MockedPool().ReadObject(tc.Context(), layer.PrmObjectRead{Container: bktInfo.CID, Object: objInfo.ID})
+	obj, err := tc.MockedPool().ReadObject(tc.Context(), PrmObjectRead{Container: bktInfo.CID, Object: objInfo.ID})
 	require.NoError(t, err)
 	encryptedContent, err := io.ReadAll(obj.Payload)
 	require.NoError(t, err)
@@ -193,10 +192,10 @@ func completeMultipartUpload(hc *handlerContext, bktName, objName, uploadID stri
 	query := make(url.Values)
 	query.Set(uploadIDQuery, uploadID)
 	complete := &CompleteMultipartUpload{
-		Parts: []*layer.CompletedPart{},
+		Parts: []*CompletedPart{},
 	}
 	for i, tag := range partsETags {
-		complete.Parts = append(complete.Parts, &layer.CompletedPart{
+		complete.Parts = append(complete.Parts, &CompletedPart{
 			ETag:       tag,
 			PartNumber: i + 1,
 		})
@@ -286,7 +285,7 @@ func getEncryptedObjectRange(t *testing.T, tc *handlerContext, bktName, objName 
 
 func setEncryptHeaders(r *http.Request) {
 	r.TLS = &tls.ConnectionState{}
-	r.Header.Set(api.AmzServerSideEncryptionCustomerAlgorithm, layer.AESEncryptionAlgorithm)
+	r.Header.Set(api.AmzServerSideEncryptionCustomerAlgorithm, AESEncryptionAlgorithm)
 	r.Header.Set(api.AmzServerSideEncryptionCustomerKey, aes256Key)
 	r.Header.Set(api.AmzServerSideEncryptionCustomerKeyMD5, aes256KeyMD5)
 }

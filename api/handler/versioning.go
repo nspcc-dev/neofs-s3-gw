@@ -7,7 +7,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
 func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +24,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
 		return
@@ -40,7 +39,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	newSettings := *settings
 	newSettings.Versioning = configuration.Status
 
-	p := &layer.PutSettingsParams{
+	p := &PutSettingsParams{
 		BktInfo:  bktInfo,
 		Settings: &newSettings,
 	}
@@ -50,7 +49,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = h.obj.PutBucketSettings(r.Context(), p); err != nil {
+	if err = h.putBucketSettings(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put update versioning settings", reqInfo, err)
 	}
 }
@@ -65,7 +64,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "couldn't get version settings", reqInfo, err)
 		return

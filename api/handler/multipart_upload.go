@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -48,18 +47,18 @@ type (
 	}
 
 	ListPartsResponse struct {
-		XMLName              xml.Name      `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
-		Bucket               string        `xml:"Bucket"`
-		Initiator            Initiator     `xml:"Initiator"`
-		IsTruncated          bool          `xml:"IsTruncated"`
-		Key                  string        `xml:"Key"`
-		MaxParts             int           `xml:"MaxParts,omitempty"`
-		NextPartNumberMarker int           `xml:"NextPartNumberMarker,omitempty"`
-		Owner                Owner         `xml:"Owner"`
-		Parts                []*layer.Part `xml:"Part"`
-		PartNumberMarker     int           `xml:"PartNumberMarker,omitempty"`
-		StorageClass         string        `xml:"StorageClass,omitempty"`
-		UploadID             string        `xml:"UploadId"`
+		XMLName              xml.Name  `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
+		Bucket               string    `xml:"Bucket"`
+		Initiator            Initiator `xml:"Initiator"`
+		IsTruncated          bool      `xml:"IsTruncated"`
+		Key                  string    `xml:"Key"`
+		MaxParts             int       `xml:"MaxParts,omitempty"`
+		NextPartNumberMarker int       `xml:"NextPartNumberMarker,omitempty"`
+		Owner                Owner     `xml:"Owner"`
+		Parts                []*Part   `xml:"Part"`
+		PartNumberMarker     int       `xml:"PartNumberMarker,omitempty"`
+		StorageClass         string    `xml:"StorageClass,omitempty"`
+		UploadID             string    `xml:"UploadId"`
 	}
 
 	MultipartUpload struct {
@@ -77,8 +76,8 @@ type (
 	}
 
 	CompleteMultipartUpload struct {
-		XMLName xml.Name               `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUpload"`
-		Parts   []*layer.CompletedPart `xml:"Part"`
+		XMLName xml.Name         `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUpload"`
+		Parts   []*CompletedPart `xml:"Part"`
 	}
 
 	UploadPartCopyResponse struct {
@@ -107,13 +106,13 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		zap.String("Key", reqInfo.ObjectName),
 	}
 
-	p := &layer.CreateMultipartParams{
-		Info: &layer.UploadInfoParams{
+	p := &CreateMultipartParams{
+		Info: &UploadInfoParams{
 			UploadID: uploadID.String(),
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		},
-		Data: &layer.UploadData{},
+		Data: &UploadData{},
 	}
 
 	if containsACLHeaders(r) {
@@ -154,7 +153,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err = h.obj.CreateMultipartUpload(r.Context(), p); err != nil {
+	if err = h.createMultipartUpload(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could create multipart upload", reqInfo, err, additional...)
 		return
 	}
@@ -210,13 +209,13 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	partNumber, err := strconv.Atoi(queryValues.Get(partNumberHeaderName))
-	if err != nil || partNumber < layer.UploadMinPartNumber || partNumber > layer.UploadMaxPartNumber {
+	if err != nil || partNumber < UploadMinPartNumber || partNumber > UploadMaxPartNumber {
 		h.logAndSendError(w, "invalid part number", reqInfo, errors.GetAPIError(errors.ErrInvalidPartNumber))
 		return
 	}
 
-	p := &layer.UploadPartParams{
-		Info: &layer.UploadInfoParams{
+	p := &UploadPartParams{
+		Info: &UploadInfoParams{
 			UploadID: uploadID,
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
@@ -232,7 +231,7 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash, err := h.obj.UploadPart(r.Context(), p)
+	hash, err := h.UploadPart(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not upload a part", reqInfo, err, additional...)
 		return
@@ -246,7 +245,7 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
-func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
+func (h *handler) UploadPartCopyHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		versionID   string
 		reqInfo     = api.GetReqInfo(r.Context())
@@ -256,7 +255,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	)
 
 	partNumber, err := strconv.Atoi(queryValues.Get(partNumberHeaderName))
-	if err != nil || partNumber < layer.UploadMinPartNumber || partNumber > layer.UploadMaxPartNumber {
+	if err != nil || partNumber < UploadMinPartNumber || partNumber > UploadMaxPartNumber {
 		h.logAndSendError(w, "invalid part number", reqInfo, errors.GetAPIError(errors.ErrInvalidPartNumber))
 		return
 	}
@@ -291,7 +290,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	srcInfo, err := h.obj.GetObjectInfo(r.Context(), &layer.HeadObjectParams{
+	srcInfo, err := h.getObjectInfo(r.Context(), &HeadObjectParams{
 		BktInfo:   srcBktInfo,
 		Object:    srcObject,
 		VersionID: versionID,
@@ -319,8 +318,8 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.UploadCopyParams{
-		Info: &layer.UploadInfoParams{
+	p := &UploadCopyParams{
+		Info: &UploadInfoParams{
 			UploadID: uploadID,
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
@@ -337,12 +336,12 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = p.Info.Encryption.MatchObjectEncryption(layer.FormEncryptionInfo(srcInfo.Headers)); err != nil {
+	if err = p.Info.Encryption.MatchObjectEncryption(FormEncryptionInfo(srcInfo.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
-	info, err := h.obj.UploadPartCopy(r.Context(), p)
+	info, err := h.uploadPartCopy(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not upload part copy", reqInfo, err, additional...)
 		return
@@ -375,7 +374,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		sessionTokenSetEACL *session.Container
 
 		uploadID   = r.URL.Query().Get(uploadIDHeaderName)
-		uploadInfo = &layer.UploadInfoParams{
+		uploadInfo = &UploadInfoParams{
 			UploadID: uploadID,
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
@@ -394,12 +393,12 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	c := &layer.CompleteMultipartParams{
+	c := &CompleteMultipartParams{
 		Info:  uploadInfo,
 		Parts: reqBody.Parts,
 	}
 
-	uploadData, extendedObjInfo, err := h.obj.CompleteMultipartUpload(r.Context(), c)
+	uploadData, extendedObjInfo, err := h.completeMultipartUpload(r.Context(), c)
 	if err != nil {
 		h.logAndSendError(w, "could not complete multipart upload", reqInfo, err, additional...)
 		return
@@ -407,8 +406,8 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	objInfo := extendedObjInfo.ObjectInfo
 
 	if len(uploadData.TagSet) != 0 {
-		tagPrm := &layer.PutObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
+		tagPrm := &PutObjectTaggingParams{
+			ObjectVersion: &ObjectVersion{
 				BktInfo:    bktInfo,
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
@@ -416,7 +415,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			TagSet:      uploadData.TagSet,
 			NodeVersion: extendedObjInfo.NodeVersion,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if _, err = h.putObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
 			return
 		}
@@ -459,7 +458,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	bktSettings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 	}
@@ -492,7 +491,7 @@ func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Req
 		queryValues = reqInfo.URL.Query()
 		delimiter   = queryValues.Get("delimiter")
 		prefix      = queryValues.Get("prefix")
-		maxUploads  = layer.MaxSizeUploadsList
+		maxUploads  = MaxSizeUploadsList
 	)
 
 	if queryValues.Get("max-uploads") != "" {
@@ -506,7 +505,7 @@ func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	p := &layer.ListMultipartUploadsParams{
+	p := &ListMultipartUploadsParams{
 		Bkt:            bktInfo,
 		Delimiter:      delimiter,
 		EncodingType:   queryValues.Get("encoding-type"),
@@ -516,7 +515,7 @@ func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Req
 		UploadIDMarker: queryValues.Get("upload-id-marker"),
 	}
 
-	list, err := h.obj.ListMultipartUploads(r.Context(), p)
+	list, err := h.listMultipartUploads(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not list multipart uploads", reqInfo, err)
 		return
@@ -542,7 +541,7 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 		queryValues = reqInfo.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
 		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
-		maxParts    = layer.MaxSizePartsList
+		maxParts    = MaxSizePartsList
 	)
 
 	if queryValues.Get("max-parts") != "" {
@@ -551,7 +550,7 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "invalid MaxParts", reqInfo, errors.GetAPIError(errors.ErrInvalidMaxParts), additional...)
 			return
 		}
-		if val < layer.MaxSizePartsList {
+		if val < MaxSizePartsList {
 			maxParts = val
 		}
 	}
@@ -563,8 +562,8 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	p := &layer.ListPartsParams{
-		Info: &layer.UploadInfoParams{
+	p := &ListPartsParams{
+		Info: &UploadInfoParams{
 			UploadID: uploadID,
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
@@ -579,7 +578,7 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := h.obj.ListParts(r.Context(), p)
+	list, err := h.listParts(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not list parts", reqInfo, err, additional...)
 		return
@@ -602,7 +601,7 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 	uploadID := reqInfo.URL.Query().Get(uploadIDHeaderName)
 	additional := []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
 
-	p := &layer.UploadInfoParams{
+	p := &UploadInfoParams{
 		UploadID: uploadID,
 		Bkt:      bktInfo,
 		Key:      reqInfo.ObjectName,
@@ -614,7 +613,7 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err = h.obj.AbortMultipartUpload(r.Context(), p); err != nil {
+	if err = h.abortMultipartUpload(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not abort multipart upload", reqInfo, err, additional...)
 		return
 	}
@@ -622,7 +621,7 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func encodeListMultipartUploadsToResponse(info *layer.ListMultipartUploadsInfo, params *layer.ListMultipartUploadsParams) *ListMultipartUploadsResponse {
+func encodeListMultipartUploadsToResponse(info *ListMultipartUploadsInfo, params *ListMultipartUploadsParams) *ListMultipartUploadsResponse {
 	res := ListMultipartUploadsResponse{
 		Bucket:             params.Bkt.Name,
 		CommonPrefixes:     fillPrefixes(info.Prefixes, params.EncodingType),
@@ -660,7 +659,7 @@ func encodeListMultipartUploadsToResponse(info *layer.ListMultipartUploadsInfo, 
 	return &res
 }
 
-func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPartsParams) *ListPartsResponse {
+func encodeListPartsToResponse(info *ListPartsInfo, params *ListPartsParams) *ListPartsResponse {
 	return &ListPartsResponse{
 		XMLName: xml.Name{},
 		Bucket:  params.Info.Bkt.Name,

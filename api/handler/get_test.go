@@ -8,24 +8,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFetchRangeHeader(t *testing.T) {
 	for _, tc := range []struct {
 		header   string
-		expected *layer.RangeParams
+		expected *RangeParams
 		fullSize uint64
 		err      bool
 	}{
-		{header: "bytes=0-256", expected: &layer.RangeParams{Start: 0, End: 256}, fullSize: 257, err: false},
-		{header: "bytes=0-0", expected: &layer.RangeParams{Start: 0, End: 0}, fullSize: 1, err: false},
-		{header: "bytes=0-256", expected: &layer.RangeParams{Start: 0, End: 255}, fullSize: 256, err: false},
-		{header: "bytes=0-", expected: &layer.RangeParams{Start: 0, End: 99}, fullSize: 100, err: false},
-		{header: "bytes=-10", expected: &layer.RangeParams{Start: 90, End: 99}, fullSize: 100, err: false},
+		{header: "bytes=0-256", expected: &RangeParams{Start: 0, End: 256}, fullSize: 257, err: false},
+		{header: "bytes=0-0", expected: &RangeParams{Start: 0, End: 0}, fullSize: 1, err: false},
+		{header: "bytes=0-256", expected: &RangeParams{Start: 0, End: 255}, fullSize: 256, err: false},
+		{header: "bytes=0-", expected: &RangeParams{Start: 0, End: 99}, fullSize: 100, err: false},
+		{header: "bytes=-10", expected: &RangeParams{Start: 90, End: 99}, fullSize: 100, err: false},
 		{header: "", err: false},
 		{header: "bytes=-1-256", err: true},
 		{header: "bytes=256-0", err: true},
@@ -170,11 +170,13 @@ func TestGetRange(t *testing.T) {
 	require.Equal(t, "bcdef", string(end))
 }
 
-func putObjectContent(hc *handlerContext, bktName, objName, content string) {
+func putObjectContent(hc *handlerContext, bktName, objName, content string) (version string, etag string) {
 	body := bytes.NewReader([]byte(content))
 	w, r := prepareTestPayloadRequest(hc, bktName, objName, body)
 	hc.Handler().PutObjectHandler(w, r)
 	assertStatus(hc.t, w, http.StatusOK)
+
+	return w.Header().Get(api.AmzVersionID), w.Header().Get(api.ETag)
 }
 
 func getObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, start, end int) []byte {

@@ -9,7 +9,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
@@ -27,7 +26,7 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := h.obj.ListObjectsV1(r.Context(), params)
+	list, err := h.listObjectsV1(r.Context(), params)
 	if err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
@@ -38,7 +37,7 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *ListObjectsV1Response {
+func encodeV1(p *ListObjectsParamsV1, list *ListObjectsInfoV1) *ListObjectsV1Response {
 	res := &ListObjectsV1Response{
 		Name:         p.BktInfo.Name,
 		EncodingType: p.Encode,
@@ -71,7 +70,7 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := h.obj.ListObjectsV2(r.Context(), params)
+	list, err := h.listObjectsV2(r.Context(), params)
 	if err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
@@ -82,7 +81,7 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *ListObjectsV2Response {
+func encodeV2(p *ListObjectsParamsV2, list *ListObjectsInfoV2) *ListObjectsV2Response {
 	res := &ListObjectsV2Response{
 		Name:                  p.BktInfo.Name,
 		EncodingType:          p.Encode,
@@ -103,9 +102,9 @@ func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *List
 	return res
 }
 
-func parseListObjectsArgsV1(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV1, error) {
+func parseListObjectsArgsV1(reqInfo *api.ReqInfo) (*ListObjectsParamsV1, error) {
 	var (
-		res         layer.ListObjectsParamsV1
+		res         ListObjectsParamsV1
 		queryValues = reqInfo.URL.Query()
 	)
 
@@ -120,9 +119,9 @@ func parseListObjectsArgsV1(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV1, e
 	return &res, nil
 }
 
-func parseListObjectsArgsV2(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV2, error) {
+func parseListObjectsArgsV2(reqInfo *api.ReqInfo) (*ListObjectsParamsV2, error) {
 	var (
-		res         layer.ListObjectsParamsV2
+		res         ListObjectsParamsV2
 		queryValues = reqInfo.URL.Query()
 	)
 
@@ -142,10 +141,10 @@ func parseListObjectsArgsV2(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV2, e
 	return &res, nil
 }
 
-func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, error) {
+func parseListObjectArgs(reqInfo *api.ReqInfo) (*ListObjectsParamsCommon, error) {
 	var (
 		err         error
-		res         layer.ListObjectsParamsCommon
+		res         ListObjectsParamsCommon
 		queryValues = reqInfo.URL.Query()
 	)
 
@@ -223,7 +222,7 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	info, err := h.obj.ListObjectVersions(r.Context(), p)
+	info, err := h.listObjectVersions(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 		return
@@ -235,10 +234,10 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 	}
 }
 
-func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVersionsParams, error) {
+func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*ListObjectVersionsParams, error) {
 	var (
 		err         error
-		res         layer.ListObjectVersionsParams
+		res         ListObjectVersionsParams
 		queryValues = reqInfo.URL.Query()
 	)
 
@@ -257,7 +256,7 @@ func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVers
 	return &res, nil
 }
 
-func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, bucketName string) *ListObjectsVersionsResponse {
+func encodeListObjectVersionsToResponse(info *ListObjectVersionsInfo, bucketName string) *ListObjectsVersionsResponse {
 	res := ListObjectsVersionsResponse{
 		Name:                bucketName,
 		IsTruncated:         info.IsTruncated,

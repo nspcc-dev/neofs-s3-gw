@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 )
 
@@ -114,14 +113,14 @@ func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	p := &layer.PutBucketNotificationConfigurationParams{
+	p := &PutBucketNotificationConfigurationParams{
 		RequestInfo:   reqInfo,
 		BktInfo:       bktInfo,
 		Configuration: conf,
 		CopiesNumber:  h.cfg.CopiesNumber,
 	}
 
-	if err = h.obj.PutBucketNotificationConfiguration(r.Context(), p); err != nil {
+	if err = h.putBucketNotificationConfiguration(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put bucket configuration", reqInfo, err)
 		return
 	}
@@ -136,7 +135,7 @@ func (h *handler) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	conf, err := h.obj.GetBucketNotificationConfiguration(r.Context(), bktInfo)
+	conf, err := h.getBucketNotificationConfiguration(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket notification configuration", reqInfo, err)
 		return
@@ -153,7 +152,7 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 		return nil
 	}
 
-	conf, err := h.obj.GetBucketNotificationConfiguration(ctx, p.BktInfo)
+	conf, err := h.getBucketNotificationConfiguration(ctx, p.BktInfo)
 	if err != nil {
 		return fmt.Errorf("failed to get notification configuration: %w", err)
 	}
@@ -161,12 +160,12 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 		return nil
 	}
 
-	box, err := layer.GetBoxData(ctx)
+	box, err := GetBoxData(ctx)
 	if err == nil && box.Gate.BearerToken != nil {
 		p.User = bearer.ResolveIssuer(*box.Gate.BearerToken).EncodeToString()
 	}
 
-	p.Time = layer.TimeNow(ctx)
+	p.Time = TimeNow(ctx)
 
 	topics := filterSubjects(conf, p.Event, p.NotificationInfo.Name)
 
@@ -193,7 +192,7 @@ func (h *handler) checkBucketConfiguration(ctx context.Context, conf *data.Notif
 		}
 
 		if h.cfg.NotificatorEnabled {
-			if err = h.notificator.SendTestNotification(q.QueueArn, r.BucketName, r.RequestID, r.Host, layer.TimeNow(ctx)); err != nil {
+			if err = h.notificator.SendTestNotification(q.QueueArn, r.BucketName, r.RequestID, r.Host, TimeNow(ctx)); err != nil {
 				return
 			}
 		} else {

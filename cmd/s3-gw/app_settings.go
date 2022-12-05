@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/pflag"

@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
 const (
@@ -51,7 +50,7 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
 		return
@@ -61,12 +60,12 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 	newSettings := *settings
 	newSettings.LockConfiguration = lockingConf
 
-	sp := &layer.PutSettingsParams{
+	sp := &PutSettingsParams{
 		BktInfo:  bktInfo,
 		Settings: &newSettings,
 	}
 
-	if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
+	if err = h.putBucketSettings(r.Context(), sp); err != nil {
 		h.logAndSendError(w, "couldn't put bucket settings", reqInfo, err)
 		return
 	}
@@ -87,7 +86,7 @@ func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
 		return
@@ -132,8 +131,8 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.PutLockInfoParams{
-		ObjVersion: &layer.ObjectVersion{
+	p := &PutLockInfoParams{
+		ObjVersion: &ObjectVersion{
 			BktInfo:    bktInfo,
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
@@ -146,7 +145,7 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
-	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
+	if err = h.putLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't head put legal hold", reqInfo, err)
 		return
 	}
@@ -167,13 +166,13 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.ObjectVersion{
+	p := &ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	lockInfo, err := h.obj.GetLockInfo(r.Context(), p)
+	lockInfo, err := h.getLockInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
 		return
@@ -215,8 +214,8 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.PutLockInfoParams{
-		ObjVersion: &layer.ObjectVersion{
+	p := &PutLockInfoParams{
+		ObjVersion: &ObjectVersion{
 			BktInfo:    bktInfo,
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
@@ -225,7 +224,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
-	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
+	if err = h.putLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
 		return
 	}
@@ -246,13 +245,13 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	p := &layer.ObjectVersion{
+	p := &ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	lockInfo, err := h.obj.GetLockInfo(r.Context(), p)
+	lockInfo, err := h.getLockInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "couldn't head lock object", reqInfo, err)
 		return
@@ -319,7 +318,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 		retention := &data.RetentionLock{}
 		defaultRetention := defaultConfig.Rule.DefaultRetention
 		retention.IsCompliance = defaultRetention.Mode == complianceMode
-		now := layer.TimeNow(ctx)
+		now := TimeNow(ctx)
 		if defaultRetention.Days != 0 {
 			retention.Until = now.Add(time.Duration(defaultRetention.Days) * dayDuration)
 		} else {
@@ -371,7 +370,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 			objectLock.Retention.ByPassedGovernance = bypass
 		}
 
-		if objectLock.Retention.Until.Before(layer.TimeNow(ctx)) {
+		if objectLock.Retention.Until.Before(TimeNow(ctx)) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
 		}
 	}
@@ -395,7 +394,7 @@ func formObjectLockFromRetention(ctx context.Context, retention *data.Retention,
 		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
 	}
 
-	if retentionDate.Before(layer.TimeNow(ctx)) {
+	if retentionDate.Before(TimeNow(ctx)) {
 		return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
 	}
 

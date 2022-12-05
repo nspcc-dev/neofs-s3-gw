@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +21,7 @@ type conditionalArgs struct {
 	IfNoneMatch       string
 }
 
-func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
+func fetchRangeHeader(headers http.Header, fullSize uint64) (*RangeParams, error) {
 	const prefix = "bytes="
 	rangeHeader := headers.Get("Range")
 	if len(rangeHeader) == 0 {
@@ -61,7 +60,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	if err0 != nil || err1 != nil || start > end || start > fullSize {
 		return nil, errors.GetAPIError(errors.ErrInvalidRange)
 	}
-	return &layer.RangeParams{Start: start, End: end}, nil
+	return &RangeParams{Start: start, End: end}, nil
 }
 
 func overrideResponseHeaders(h http.Header, query url.Values) {
@@ -84,8 +83,8 @@ func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.E
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 
-	if len(info.Headers[layer.AttributeEncryptionAlgorithm]) > 0 {
-		h.Set(api.ContentLength, info.Headers[layer.AttributeDecryptedSize])
+	if len(info.Headers[AttributeEncryptionAlgorithm]) > 0 {
+		h.Set(api.ContentLength, info.Headers[AttributeDecryptedSize])
 		addSSECHeaders(h, requestHeader)
 	} else {
 		h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
@@ -106,7 +105,7 @@ func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.E
 	}
 
 	for key, val := range info.Headers {
-		if layer.IsSystemHeader(key) {
+		if IsSystemHeader(key) {
 			continue
 		}
 		h[api.MetadataPrefix+key] = []string{val}
@@ -115,7 +114,7 @@ func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.E
 
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		params *layer.RangeParams
+		params *RangeParams
 
 		reqInfo = api.GetReqInfo(r.Context())
 	)
@@ -132,13 +131,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.HeadObjectParams{
+	p := &HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
+	extendedInfo, err := h.getExtendedObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
@@ -156,14 +155,14 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(FormEncryptionInfo(info.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
 	fullSize := info.Size
 	if encryptionParams.Enabled() {
-		if fullSize, err = strconv.ParseInt(info.Headers[layer.AttributeDecryptedSize], 10, 64); err != nil {
+		if fullSize, err = strconv.ParseInt(info.Headers[AttributeDecryptedSize], 10, 64); err != nil {
 			h.logAndSendError(w, "invalid decrypted size header", reqInfo, errors.GetAPIError(errors.ErrBadRequest))
 			return
 		}
@@ -174,19 +173,19 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := &layer.ObjectVersion{
+	t := &ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: info.Name,
 		VersionID:  info.VersionID(),
 	}
 
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
+	tagSet, lockInfo, err := h.getObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
 	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}
 
-	if layer.IsAuthenticatedRequest(r.Context()) {
+	if IsAuthenticatedRequest(r.Context()) {
 		overrideResponseHeaders(w.Header(), reqInfo.URL.Query())
 	}
 
@@ -195,7 +194,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	bktSettings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
@@ -208,14 +207,14 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	getParams := &layer.GetObjectParams{
+	getParams := &GetObjectParams{
 		ObjectInfo: info,
 		Writer:     w,
 		Range:      params,
 		BucketInfo: bktInfo,
 		Encryption: encryptionParams,
 	}
-	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+	if err = h.getObject(r.Context(), getParams); err != nil {
 		h.logAndSendError(w, "could not get object", reqInfo, err)
 	}
 }
@@ -268,7 +267,7 @@ func parseHTTPTime(data string) (*time.Time, error) {
 	return &result, nil
 }
 
-func writeRangeHeaders(w http.ResponseWriter, params *layer.RangeParams, size int64) {
+func writeRangeHeaders(w http.ResponseWriter, params *RangeParams, size int64) {
 	w.Header().Set(api.AcceptRanges, "bytes")
 	w.Header().Set(api.ContentRange, fmt.Sprintf("bytes %d-%d/%d", params.Start, params.End, size))
 	w.Header().Set(api.ContentLength, strconv.FormatUint(params.End-params.Start+1, 10))

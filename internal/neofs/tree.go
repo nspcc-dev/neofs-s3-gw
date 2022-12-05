@@ -12,7 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
@@ -293,7 +293,7 @@ func (c *TreeClient) GetSettingsNode(ctx context.Context, bktInfo *data.BucketIn
 
 func (c *TreeClient) PutSettingsNode(ctx context.Context, bktInfo *data.BucketInfo, settings *data.BucketSettings) error {
 	node, err := c.getSystemNode(ctx, bktInfo, []string{settingsFileName}, []string{})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
+	isErrNotFound := errors.Is(err, handler.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -319,7 +319,7 @@ func (c *TreeClient) GetNotificationConfigurationNode(ctx context.Context, bktIn
 
 func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, bktInfo, []string{notifConfFileName}, []string{oidKV})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
+	isErrNotFound := errors.Is(err, handler.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return oid.ID{}, fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -332,7 +332,7 @@ func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, bktIn
 		if _, err = c.addNode(ctx, bktInfo, systemTree, 0, meta); err != nil {
 			return oid.ID{}, err
 		}
-		return oid.ID{}, layer.ErrNoNodeToRemove
+		return oid.ID{}, handler.ErrNoNodeToRemove
 	}
 
 	return node.ObjID, c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
@@ -349,7 +349,7 @@ func (c *TreeClient) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo
 
 func (c *TreeClient) PutBucketCORS(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, bktInfo, []string{corsFilename}, []string{oidKV})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
+	isErrNotFound := errors.Is(err, handler.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return oid.ID{}, fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -362,7 +362,7 @@ func (c *TreeClient) PutBucketCORS(ctx context.Context, bktInfo *data.BucketInfo
 		if _, err = c.addNode(ctx, bktInfo, systemTree, 0, meta); err != nil {
 			return oid.ID{}, err
 		}
-		return oid.ID{}, layer.ErrNoNodeToRemove
+		return oid.ID{}, handler.ErrNoNodeToRemove
 	}
 
 	return node.ObjID, c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
@@ -370,7 +370,7 @@ func (c *TreeClient) PutBucketCORS(ctx context.Context, bktInfo *data.BucketInfo
 
 func (c *TreeClient) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
 	node, err := c.getSystemNode(ctx, bktInfo, []string{corsFilename}, []string{oidKV})
-	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
+	if err != nil && !errors.Is(err, handler.ErrNodeNotFound) {
 		return oid.ID{}, err
 	}
 
@@ -378,7 +378,7 @@ func (c *TreeClient) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketI
 		return node.ObjID, c.removeNode(ctx, bktInfo, systemTree, node.ID)
 	}
 
-	return oid.ID{}, layer.ErrNoNodeToRemove
+	return oid.ID{}, handler.ErrNoNodeToRemove
 }
 
 func (c *TreeClient) GetObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) (map[string]string, error) {
@@ -460,7 +460,7 @@ func (c *TreeClient) GetBucketTagging(ctx context.Context, bktInfo *data.BucketI
 
 func (c *TreeClient) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
 	node, err := c.getSystemNode(ctx, bktInfo, []string{bucketTaggingFilename}, []string{})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
+	isErrNotFound := errors.Is(err, handler.ErrNodeNotFound)
 	if err != nil && !isErrNotFound {
 		return fmt.Errorf("couldn't get node: %w", err)
 	}
@@ -483,7 +483,7 @@ func (c *TreeClient) PutBucketTagging(ctx context.Context, bktInfo *data.BucketI
 
 func (c *TreeClient) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
 	node, err := c.getSystemNode(ctx, bktInfo, []string{bucketTaggingFilename}, nil)
-	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
+	if err != nil && !errors.Is(err, handler.ErrNodeNotFound) {
 		return err
 	}
 
@@ -553,7 +553,7 @@ func (c *TreeClient) GetLatestVersion(ctx context.Context, bktInfo *data.BucketI
 	}
 
 	if len(nodes) == 0 {
-		return nil, layer.ErrNodeNotFound
+		return nil, handler.ErrNodeNotFound
 	}
 
 	return newNodeVersion(objectName, nodes[0])
@@ -605,7 +605,7 @@ func (c *TreeClient) getPrefixNodeID(ctx context.Context, bktInfo *data.BucketIn
 	}
 
 	if len(intermediateNodes) == 0 {
-		return 0, layer.ErrNodeNotFound
+		return 0, handler.ErrNodeNotFound
 	}
 	if len(intermediateNodes) > 1 {
 		return 0, fmt.Errorf("found more than one intermediate nodes")
@@ -617,7 +617,7 @@ func (c *TreeClient) getPrefixNodeID(ctx context.Context, bktInfo *data.BucketIn
 func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, bktInfo *data.BucketInfo, treeID, prefix string, latestOnly bool) ([]*tree.GetSubTreeResponse_Body, string, error) {
 	rootID, tailPrefix, err := c.determinePrefixNode(ctx, bktInfo, treeID, prefix)
 	if err != nil {
-		if errors.Is(err, layer.ErrNodeNotFound) {
+		if errors.Is(err, handler.ErrNodeNotFound) {
 			return nil, "", nil
 		}
 		return nil, "", err
@@ -625,7 +625,7 @@ func (c *TreeClient) getSubTreeByPrefix(ctx context.Context, bktInfo *data.Bucke
 
 	subTree, err := c.getSubTree(ctx, bktInfo, treeID, rootID, 2)
 	if err != nil {
-		if errors.Is(err, layer.ErrNodeNotFound) {
+		if errors.Is(err, handler.ErrNodeNotFound) {
 			return nil, "", nil
 		}
 		return nil, "", err
@@ -812,7 +812,7 @@ func (c *TreeClient) getUnversioned(ctx context.Context, bktInfo *data.BucketInf
 	}
 
 	if len(nodes) != 1 {
-		return nil, layer.ErrNodeNotFound
+		return nil, handler.ErrNodeNotFound
 	}
 
 	return nodes[0], nil
@@ -894,7 +894,7 @@ func (c *TreeClient) GetMultipartUpload(ctx context.Context, bktInfo *data.Bucke
 		}
 	}
 
-	return nil, layer.ErrNodeNotFound
+	return nil, handler.ErrNodeNotFound
 }
 
 func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error) {
@@ -931,7 +931,7 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 		if _, err = c.addNode(ctx, bktInfo, systemTree, multipartNodeID, meta); err != nil {
 			return oid.ID{}, err
 		}
-		return oid.ID{}, layer.ErrNoNodeToRemove
+		return oid.ID{}, handler.ErrNoNodeToRemove
 	}
 
 	return oldObjIDToDelete, c.moveNode(ctx, bktInfo, systemTree, foundPartID, multipartNodeID, meta)
@@ -1074,7 +1074,7 @@ func (c *TreeClient) addVersion(ctx context.Context, bktInfo *data.BucketInfo, t
 			return node.ID, c.clearOutdatedVersionInfo(ctx, bktInfo, treeID, node.ID)
 		}
 
-		if !errors.Is(err, layer.ErrNodeNotFound) {
+		if !errors.Is(err, handler.ErrNodeNotFound) {
 			return 0, err
 		}
 	}
@@ -1107,7 +1107,7 @@ func (c *TreeClient) getVersions(ctx context.Context, bktInfo *data.BucketInfo, 
 	}
 	nodes, err := c.getNodes(ctx, p)
 	if err != nil {
-		if errors.Is(err, layer.ErrNodeNotFound) {
+		if errors.Is(err, handler.ErrNodeNotFound) {
 			return nil, nil
 		}
 		return nil, err
@@ -1210,7 +1210,7 @@ func (c *TreeClient) getNode(ctx context.Context, bktInfo *data.BucketInfo, tree
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, layer.ErrNodeNotFound
+		return nil, handler.ErrNodeNotFound
 	}
 	if len(nodes) != 1 {
 		return nil, fmt.Errorf("found more than one node")
@@ -1252,9 +1252,9 @@ func (c *TreeClient) getNodes(ctx context.Context, p *getNodesParams) ([]*tree.G
 
 func handleError(msg string, err error) error {
 	if strings.Contains(err.Error(), "not found") {
-		return fmt.Errorf("%w: %s", layer.ErrNodeNotFound, err.Error())
+		return fmt.Errorf("%w: %s", handler.ErrNodeNotFound, err.Error())
 	} else if strings.Contains(err.Error(), "is denied by") {
-		return fmt.Errorf("%w: %s", layer.ErrNodeAccessDenied, err.Error())
+		return fmt.Errorf("%w: %s", handler.ErrNodeAccessDenied, err.Error())
 	}
 	return fmt.Errorf("%s: %w", msg, err)
 }

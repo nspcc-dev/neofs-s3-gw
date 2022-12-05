@@ -1,7 +1,11 @@
-package layer
+package handler
 
 import (
+	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -150,4 +154,22 @@ func TestTryDirectory(t *testing.T) {
 			require.Equal(t, tc.result, info)
 		})
 	}
+}
+
+func TestWrapReader(t *testing.T) {
+	src := make([]byte, 1024*1024+1)
+	_, err := rand.Read(src)
+	require.NoError(t, err)
+	h := sha256.Sum256(src)
+
+	streamHash := sha256.New()
+	reader := bytes.NewReader(src)
+	wrappedReader := wrapReader(reader, 64*1024, func(buf []byte) {
+		streamHash.Write(buf)
+	})
+
+	dst, err := io.ReadAll(wrappedReader)
+	require.NoError(t, err)
+	require.Equal(t, src, dst)
+	require.Equal(t, h[:], streamHash.Sum(nil))
 }

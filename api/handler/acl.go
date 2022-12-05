@@ -19,7 +19,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -167,7 +166,7 @@ func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	bucketACL, err := h.getBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
 		return
@@ -180,7 +179,7 @@ func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, error) {
-	box, err := layer.GetBoxData(ctx)
+	box, err := getBoxData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +242,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Container) (bool, error) {
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	bucketACL, err := h.getBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return false, fmt.Errorf("could not get bucket eacl: %w", err)
 	}
@@ -267,13 +266,13 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 		return false, fmt.Errorf("could not translate ast to table: %w", err)
 	}
 
-	p := &layer.PutBucketACLParams{
+	p := &PutBucketACLParams{
 		BktInfo:      bktInfo,
 		EACL:         table,
 		SessionToken: sessionToken,
 	}
 
-	if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+	if err = h.putBucketACL(r.Context(), p); err != nil {
 		return false, fmt.Errorf("could not put bucket acl: %w", err)
 	}
 
@@ -289,19 +288,19 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	bucketACL, err := h.getBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
 		return
 	}
 
-	prm := &layer.HeadObjectParams{
+	prm := &HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), prm)
+	objInfo, err := h.getObjectInfo(r.Context(), prm)
 	if err != nil {
 		h.logAndSendError(w, "could not object info", reqInfo, err)
 		return
@@ -333,13 +332,13 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.HeadObjectParams{
+	p := &HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: versionID,
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
+	objInfo, err := h.getObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
@@ -397,7 +396,7 @@ func (h *handler) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	bucketACL, err := h.getBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
 		return
@@ -1326,7 +1325,7 @@ func isWriteOperation(op eacl.Operation) bool {
 	return op == eacl.OperationDelete || op == eacl.OperationPut
 }
 
-func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+func (h *handler) encodeObjectACL(bucketACL *BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
 	res := &AccessControlPolicy{
 		Owner: Owner{
 			ID:          bucketACL.Info.Owner.String(),
@@ -1394,7 +1393,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 	return res
 }
 
-func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicy {
+func (h *handler) encodeBucketACL(bucketName string, bucketACL *BucketACL) *AccessControlPolicy {
 	return h.encodeObjectACL(bucketACL, bucketName, "")
 }
 

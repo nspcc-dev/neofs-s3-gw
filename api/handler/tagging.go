@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -38,15 +37,15 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tagPrm := &layer.PutObjectTaggingParams{
-		ObjectVersion: &layer.ObjectVersion{
+	tagPrm := &PutObjectTaggingParams{
+		ObjectVersion: &ObjectVersion{
 			BktInfo:    bktInfo,
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 		},
 		TagSet: tagSet,
 	}
-	nodeVersion, err := h.obj.PutObjectTagging(r.Context(), tagPrm)
+	nodeVersion, err := h.putObjectTagging(r.Context(), tagPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
@@ -79,21 +78,21 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	settings, err := h.getBucketSettings(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	tagPrm := &layer.GetObjectTaggingParams{
-		ObjectVersion: &layer.ObjectVersion{
+	tagPrm := &GetObjectTaggingParams{
+		ObjectVersion: &ObjectVersion{
 			BktInfo:    bktInfo,
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 		},
 	}
 
-	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), tagPrm)
+	versionID, tagSet, err := h.getObjectTagging(r.Context(), tagPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 		return
@@ -116,13 +115,13 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	p := &layer.ObjectVersion{
+	p := &ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	nodeVersion, err := h.obj.DeleteObjectTagging(r.Context(), p)
+	nodeVersion, err := h.deleteObjectTagging(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
@@ -161,7 +160,7 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = h.obj.PutBucketTagging(r.Context(), bktInfo, tagSet); err != nil {
+	if err = h.putBucketTagging(r.Context(), bktInfo, tagSet); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
@@ -176,7 +175,7 @@ func (h *handler) GetBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tagSet, err := h.obj.GetBucketTagging(r.Context(), bktInfo)
+	tagSet, err := h.getBucketTagging(r.Context(), bktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 		return
@@ -197,7 +196,7 @@ func (h *handler) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = h.obj.DeleteBucketTagging(r.Context(), bktInfo); err != nil {
+	if err = h.deleteBucketTagging(r.Context(), bktInfo); err != nil {
 		h.logAndSendError(w, "could not delete bucket tagging", reqInfo, err)
 		return
 	}

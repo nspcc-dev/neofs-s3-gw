@@ -10,7 +10,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -68,7 +67,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	srcObjPrm := &layer.HeadObjectParams{
+	srcObjPrm := &HeadObjectParams{
 		Object:    srcObject,
 		VersionID: versionID,
 	}
@@ -84,7 +83,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
+	settings, err := h.getBucketSettings(r.Context(), dstBktInfo)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
@@ -97,7 +96,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	extendedSrcObjInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), srcObjPrm)
+	extendedSrcObjInfo, err := h.getExtendedObjectInfo(r.Context(), srcObjPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
@@ -126,8 +125,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		tagPrm := &layer.GetObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
+		tagPrm := &GetObjectTaggingParams{
+			ObjectVersion: &ObjectVersion{
 				BktInfo:    srcObjPrm.BktInfo,
 				ObjectName: srcObject,
 				VersionID:  srcObjInfo.VersionID(),
@@ -135,7 +134,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			NodeVersion: extendedSrcObjInfo.NodeVersion,
 		}
 
-		_, tagSet, err = h.obj.GetObjectTagging(r.Context(), tagPrm)
+		_, tagSet, err = h.getObjectTagging(r.Context(), tagPrm)
 		if err != nil {
 			h.logAndSendError(w, "could not get object tagging", reqInfo, err)
 			return
@@ -148,7 +147,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(srcObjInfo.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(FormEncryptionInfo(srcObjInfo.Headers)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
 		return
 	}
@@ -173,7 +172,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := &layer.CopyObjectParams{
+	params := &CopyObjectParams{
 		SrcObject:   srcObjInfo,
 		ScrBktInfo:  srcObjPrm.BktInfo,
 		DstBktInfo:  dstBktInfo,
@@ -191,7 +190,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	additional := []zap.Field{zap.String("src_bucket_name", srcBucket), zap.String("src_object_name", srcObject)}
-	extendedDstObjInfo, err := h.obj.CopyObject(r.Context(), params)
+	extendedDstObjInfo, err := h.copyObject(r.Context(), params)
 	if err != nil {
 		h.logAndSendError(w, "couldn't copy object", reqInfo, err, additional...)
 		return
@@ -210,21 +209,21 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		p := &layer.PutBucketACLParams{
+		p := &PutBucketACLParams{
 			BktInfo:      dstBktInfo,
 			EACL:         newEaclTable,
 			SessionToken: sessionTokenEACL,
 		}
 
-		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
+		if err = h.putBucketACL(r.Context(), p); err != nil {
 			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
 			return
 		}
 	}
 
 	if tagSet != nil {
-		tagPrm := &layer.PutObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
+		tagPrm := &PutObjectTaggingParams{
+			ObjectVersion: &ObjectVersion{
 				BktInfo:    dstBktInfo,
 				ObjectName: reqInfo.ObjectName,
 				VersionID:  dstObjInfo.VersionID(),
@@ -232,7 +231,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			TagSet:      tagSet,
 			NodeVersion: extendedDstObjInfo.NodeVersion,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if _, err = h.putObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}

@@ -253,7 +253,7 @@ func createBucketAndObject(tc *handlerContext, bktName, objName string) (*data.B
 
 func createVersionedBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
 	createTestBucket(tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	bktInfo, err := tc.h.getBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 	putBucketVersioning(t, tc, bktName, true)
 
@@ -325,7 +325,7 @@ func putObject(t *testing.T, tc *handlerContext, bktName, objName string) {
 
 func createSuspendedBucket(t *testing.T, tc *handlerContext, bktName string) *data.BucketInfo {
 	createTestBucket(tc, bktName)
-	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	bktInfo, err := tc.h.getBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
 	putBucketVersioning(t, tc, bktName, false)
 	return bktInfo

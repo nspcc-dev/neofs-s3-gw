@@ -9,7 +9,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"go.uber.org/zap"
 )
 
@@ -42,7 +41,7 @@ type (
 	}
 
 	Stream struct {
-		h  layer.MsgHandler
+		h  handler.MsgHandler
 		ch chan *nats.Msg
 	}
 
@@ -131,7 +130,7 @@ func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 	}, nil
 }
 
-func (c *Controller) Subscribe(ctx context.Context, topic string, handler layer.MsgHandler) error {
+func (c *Controller) Subscribe(ctx context.Context, topic string, handler handler.MsgHandler) error {
 	ch := make(chan *nats.Msg, 1)
 
 	c.mu.RLock()
