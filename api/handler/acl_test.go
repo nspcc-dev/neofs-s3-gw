@@ -1137,11 +1137,8 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))
 	}
-	resInfo := &resourceInfo{
-		Bucket: "bucketName",
-	}
 
-	actualTable, err := bucketACLToTable(acl, resInfo)
+	actualTable, err := bucketACLToTable(acl)
 	require.NoError(t, err)
 	require.Equal(t, expectedTable.Records(), actualTable.Records())
 }

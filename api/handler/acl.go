@@ -1407,11 +1407,7 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 	return false
 }
 
-func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Table, error) {
-	if !resInfo.IsBucket() {
-		return nil, fmt.Errorf("allowed only bucket acl")
-	}
-
+func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	var found bool
 	table := eacl.NewTable()
 
