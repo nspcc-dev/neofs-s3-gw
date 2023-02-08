@@ -726,13 +726,13 @@ func TestBucketAclToPolicy(t *testing.T) {
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}},
 	}
 
@@ -792,19 +792,19 @@ func TestObjectAclToPolicy(t *testing.T) {
 				ID:   id,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}},
 	}
 
@@ -861,7 +861,7 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 				ID:   id,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}},
 	}
 
@@ -982,13 +982,13 @@ func TestParseCannedACLHeaders(t *testing.T) {
 				DisplayName: address,
 				Type:        acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}},
 	}
 
@@ -1023,37 +1023,37 @@ func TestParseACLHeaders(t *testing.T) {
 				DisplayName: address,
 				Type:        acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user1",
 				Type: acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user2",
 				Type: acpCanonicalUser,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user2",
 				Type: acpCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user3",
 				Type: acpCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}},
 	}
 
@@ -1114,13 +1114,13 @@ func TestBucketAclToTable(t *testing.T) {
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}},
 	}
 
@@ -1168,13 +1168,13 @@ func TestObjectAclToAst(t *testing.T) {
 				ID:   id,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
 				Type: acpCanonicalUser,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		},
 		},
 	}
@@ -1237,13 +1237,13 @@ func TestBucketAclToAst(t *testing.T) {
 					ID:   id2,
 					Type: acpCanonicalUser,
 				},
-				Permission: aclWrite,
+				Permission: awsPermWrite,
 			}, {
 				Grantee: &Grantee{
 					URI:  allUsersGroup,
 					Type: acpGroup,
 				},
-				Permission: aclRead,
+				Permission: awsPermRead,
 			},
 		},
 	}

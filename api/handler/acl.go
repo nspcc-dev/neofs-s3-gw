@@ -56,13 +56,17 @@ const (
 	s3GetObjectVersion           = "s3:GetObjectVersion"
 )
 
-// AWSACL is aws permission constants.
-type AWSACL string
+// enum of Amazon S3 ACL permissions.
+type amazonS3Permission string
 
+// various access permissions defined in
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_Grant.html.
+//
+// See also https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html#permissions.
 const (
-	aclFullControl AWSACL = "FULL_CONTROL"
-	aclWrite       AWSACL = "WRITE"
-	aclRead        AWSACL = "READ"
+	awsPermFullControl amazonS3Permission = "FULL_CONTROL"
+	awsPermWrite       amazonS3Permission = "WRITE"
+	awsPermRead        amazonS3Permission = "READ"
 )
 
 // GranteeType is aws grantee permission type constants.
@@ -471,7 +475,7 @@ func parseACLHeaders(header http.Header, key *keys.PublicKey) (*AccessControlPol
 			DisplayName: key.Address(),
 			Type:        acpCanonicalUser,
 		},
-		Permission: aclFullControl,
+		Permission: awsPermFullControl,
 	}}
 
 	cannedACL := header.Get(api.AmzACL)
@@ -521,14 +525,14 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 	return list, nil
 }
 
-func grantHdrToPermission(grant string) (AWSACL, error) {
+func grantHdrToPermission(grant string) (amazonS3Permission, error) {
 	switch grant {
 	case api.AmzGrantFullControl:
-		return aclFullControl, nil
+		return awsPermFullControl, nil
 	case api.AmzGrantRead:
-		return aclRead, nil
+		return awsPermRead, nil
 	case api.AmzGrantWrite:
-		return aclWrite, nil
+		return awsPermWrite, nil
 	}
 	return "", fmt.Errorf("unsuppoted header: %s", grant)
 }
@@ -585,7 +589,7 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		})
 	case cannedACLAuthRead:
 		fallthrough
@@ -595,7 +599,7 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 				URI:  allUsersGroup,
 				Type: acpGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		})
 	default:
 		return nil, errors.GetAPIError(errors.ErrInvalidArgument)
@@ -1201,14 +1205,14 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 	}
 
 	results := []statement{
-		getAllowStatement(resInfo, acl.Owner.ID, aclFullControl),
+		getAllowStatement(resInfo, acl.Owner.ID, awsPermFullControl),
 	}
 
 	// Expect to have at least 1 full control grant for owner which is set in
 	// parseACLHeaders(). If there is no other grants, then user sets private
 	// canned ACL, which is processed in this branch.
 	if len(acl.AccessControlList) < 2 {
-		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, aclFullControl)}, results...)
+		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, awsPermFullControl)}, results...)
 	}
 
 	for _, grant := range acl.AccessControlList {
@@ -1231,7 +1235,7 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 	}, nil
 }
 
-func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+func getAllowStatement(resInfo *resourceInfo, id string, permission amazonS3Permission) statement {
 	state := statement{
 		Effect: "Allow",
 		Principal: principal{
@@ -1248,7 +1252,7 @@ func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) stat
 	return state
 }
 
-func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+func getDenyStatement(resInfo *resourceInfo, id string, permission amazonS3Permission) statement {
 	state := statement{
 		Effect: "Deny",
 		Principal: principal{
@@ -1265,20 +1269,20 @@ func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) state
 	return state
 }
 
-func getActions(permission AWSACL, isBucket bool) []string {
+func getActions(permission amazonS3Permission, isBucket bool) []string {
 	var res []string
 	switch permission {
-	case aclRead:
+	case awsPermRead:
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads}
 		} else {
 			res = []string{s3GetObject, s3GetObjectVersion}
 		}
-	case aclWrite:
+	case awsPermWrite:
 		if isBucket {
 			res = []string{s3PutObject, s3DeleteObject}
 		}
-	case aclFullControl:
+	case awsPermFullControl:
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads, s3PutObject, s3DeleteObject}
 		} else {
@@ -1310,13 +1314,13 @@ func actionToEffect(action eacl.Action) string {
 	}
 }
 
-func permissionToOperations(permission AWSACL) []eacl.Operation {
+func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 	switch permission {
-	case aclFullControl:
+	case awsPermFullControl:
 		return fullOps
-	case aclRead:
+	case awsPermRead:
 		return readOps
-	case aclWrite:
+	case awsPermWrite:
 		return writeOps
 	}
 	return nil
@@ -1361,7 +1365,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 	}
 
 	for key, val := range m {
-		permission := aclFullControl
+		permission := awsPermFullControl
 		read := true
 		for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
 			if !contains(val, op) && !isWriteOperation(op) {
@@ -1370,7 +1374,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 		}
 
 		if read {
-			permission = aclFullControl
+			permission = awsPermFullControl
 		} else {
 			h.log.Warn("some acl not fully mapped")
 		}
@@ -1459,7 +1463,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 }
 
 func isValidGrant(grant *Grant) bool {
-	return (grant.Permission == aclFullControl || grant.Permission == aclRead || grant.Permission == aclWrite) &&
+	return (grant.Permission == awsPermFullControl || grant.Permission == awsPermRead || grant.Permission == awsPermWrite) &&
 		(grant.Grantee.Type == acpCanonicalUser || (grant.Grantee.Type == acpGroup && grant.Grantee.URI == allUsersGroup))
 }
 

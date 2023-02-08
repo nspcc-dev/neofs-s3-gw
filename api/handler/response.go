@@ -65,7 +65,7 @@ type AccessControlPolicy struct {
 // Grant is container for Grantee data.
 type Grant struct {
 	Grantee    *Grantee
-	Permission AWSACL
+	Permission amazonS3Permission
 }
 
 // Grantee is info about access rights of some actor.
