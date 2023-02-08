@@ -1407,8 +1407,6 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 	return false
 }
 
-type getRecordFunc func(op eacl.Operation) *eacl.Record
-
 func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Table, error) {
 	if !resInfo.IsBucket() {
 		return nil, fmt.Errorf("allowed only bucket acl")
@@ -1430,12 +1428,24 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 			found = true
 		}
 
-		getRecord, err := getRecordFunction(grant.Grantee)
-		if err != nil {
-			return nil, fmt.Errorf("record func from grantee: %w", err)
+		var recordFromOp func(eacl.Operation) *eacl.Record
+
+		switch grant.Grantee.Type {
+		default:
+			return nil, fmt.Errorf("unknown grantee type: %s", grant.Grantee.Type)
+		case acpCanonicalUser:
+			key, err := keys.NewPublicKeyFromString(grant.Grantee.ID)
+			if err != nil {
+				return nil, fmt.Errorf("grantee ID to public key (%s): %w", grant.Grantee.ID, err)
+			}
+
+			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecord(op, key) }
+		case acpGroup:
+			recordFromOp = func(op eacl.Operation) *eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
 		}
+
 		for _, op := range permissionToOperations(grant.Permission) {
-			table.AddRecord(getRecord(op))
+			table.AddRecord(recordFromOp(op))
 		}
 	}
 
@@ -1450,25 +1460,6 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 	}
 
 	return table, nil
-}
-
-func getRecordFunction(grantee *Grantee) (getRecordFunc, error) {
-	switch grantee.Type {
-	case acpAmazonCustomerByEmail:
-	case acpCanonicalUser:
-		pk, err := keys.NewPublicKeyFromString(grantee.ID)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't parse canonical ID %s: %w", grantee.ID, err)
-		}
-		return func(op eacl.Operation) *eacl.Record {
-			return getAllowRecord(op, pk)
-		}, nil
-	case acpGroup:
-		return func(op eacl.Operation) *eacl.Record {
-			return getOthersRecord(op, eacl.ActionAllow)
-		}, nil
-	}
-	return nil, fmt.Errorf("unknown type: %s", grantee.Type)
 }
 
 func isValidGrant(grant *Grant) bool {
