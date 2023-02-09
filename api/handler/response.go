@@ -68,8 +68,8 @@ type Grant struct {
 	Permission amazonS3Permission
 }
 
-// NewGrantee initializes new Grantee with specified GranteeType.
-func NewGrantee(t GranteeType) *Grantee {
+// NewGrantee initializes new Grantee with specified granteeType.
+func NewGrantee(t granteeType) *Grantee {
 	return &Grantee{
 		Type: t,
 	}
@@ -89,7 +89,7 @@ type Grantee struct {
 	ID string
 	// Type of grantee.
 	// Required.
-	Type GranteeType
+	Type granteeType
 	// URI of the grantee group.
 	// Optional.
 	URI string
@@ -121,7 +121,7 @@ func (x Grantee) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 		XMLName xml.Name `xml:"Grantee"`
 		granteeXMLBody
 		XMLNS string      `xml:"xmlns:xsi,attr"`
-		Type  GranteeType `xml:"xsi:type,attr"`
+		Type  granteeType `xml:"xsi:type,attr"`
 	}{
 		granteeXMLBody: granteeXMLBody{
 			DisplayName:  &x.DisplayName,
@@ -140,7 +140,7 @@ func (x Grantee) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 func (x *Grantee) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	err := d.DecodeElement(&struct {
 		granteeXMLBody
-		Type *GranteeType `xml:"type,attr"`
+		Type *granteeType `xml:"type,attr"`
 	}{
 		granteeXMLBody: granteeXMLBody{
 			DisplayName:  &x.DisplayName,
@@ -157,7 +157,7 @@ func (x *Grantee) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	switch x.Type {
 	default:
 		return fmt.Errorf("invalid grantee type '%s'", x.Type)
-	case acpCanonicalUser, acpGroup, acpAmazonCustomerByEmail:
+	case granteeCanonicalUser, granteeGroup, granteeAmazonCustomerByEmail:
 	}
 
 	return nil
