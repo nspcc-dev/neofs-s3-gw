@@ -68,24 +68,99 @@ type Grant struct {
 	Permission amazonS3Permission
 }
 
-// Grantee is info about access rights of some actor.
-type Grantee struct {
-	XMLName      xml.Name    `xml:"Grantee"`
-	XMLNS        string      `xml:"xmlns:xsi,attr"`
-	ID           string      `xml:"ID,omitempty"`
-	DisplayName  string      `xml:"DisplayName,omitempty"`
-	EmailAddress string      `xml:"EmailAddress,omitempty"`
-	URI          string      `xml:"URI,omitempty"`
-	Type         GranteeType `xml:"xsi:type,attr"`
-}
-
-// NewGrantee creates new grantee using workaround
-// https://github.com/golang/go/issues/9519#issuecomment-252196382
+// NewGrantee initializes new Grantee with specified GranteeType.
 func NewGrantee(t GranteeType) *Grantee {
 	return &Grantee{
-		XMLNS: "http://www.w3.org/2001/XMLSchema-instance",
-		Type:  t,
+		Type: t,
 	}
+}
+
+// Grantee represents container (not NeoFS) for the person being granted
+// permissions specified in https://docs.aws.amazon.com/AmazonS3/latest/API/API_Grantee.html.
+type Grantee struct {
+	// Screen name of the grantee.
+	// Optional.
+	DisplayName string
+	// Email address of the grantee.
+	// Optional.
+	EmailAddress string
+	// The canonical user ID of the grantee.
+	// Optional.
+	ID string
+	// Type of grantee.
+	// Required.
+	Type GranteeType
+	// URI of the grantee group.
+	// Optional.
+	URI string
+}
+
+// layout of <Grantee> tag for XML encoding of Grantee, see Grantee.MarshalXML,
+// Grantee.UnmarshalXML.
+type granteeXMLBody struct {
+	DisplayName  *string `xml:"DisplayName,omitempty"`
+	EmailAddress *string `xml:"EmailAddress,omitempty"`
+	ID           *string `xml:"ID,omitempty"`
+	URI          *string `xml:"URI,omitempty"`
+}
+
+// MarshalXML provides xml.Marshaler for Grantee.
+//
+// XML scheme of Grantee is described in Amazon S3 docs
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html.
+//
+// MarshalXML overrides default encoding of Grantee layout because currently
+// xml.Marshal doesn't provide convenient approach to work with prefixes in XML
+// namespaces. According to docs, Grantee.Type is an attribute from the
+// namespace with 'xsi' prefix.
+//
+// Here we use workaround proposed in corresponding Go issue
+// https://github.com/golang/go/issues/9519#issuecomment-252196382.
+func (x Grantee) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
+	return e.Encode(struct {
+		XMLName xml.Name `xml:"Grantee"`
+		granteeXMLBody
+		XMLNS string      `xml:"xmlns:xsi,attr"`
+		Type  GranteeType `xml:"xsi:type,attr"`
+	}{
+		granteeXMLBody: granteeXMLBody{
+			DisplayName:  &x.DisplayName,
+			EmailAddress: &x.EmailAddress,
+			ID:           &x.ID,
+			URI:          &x.URI,
+		},
+		XMLNS: "http://www.w3.org/2001/XMLSchema-instance",
+		Type:  x.Type,
+	})
+}
+
+// UnmarshalXML MarshalXML provides xml.Unmarshaler for Grantee.
+//
+// See MarshalXML for details.
+func (x *Grantee) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	err := d.DecodeElement(&struct {
+		granteeXMLBody
+		Type *GranteeType `xml:"type,attr"`
+	}{
+		granteeXMLBody: granteeXMLBody{
+			DisplayName:  &x.DisplayName,
+			EmailAddress: &x.EmailAddress,
+			ID:           &x.ID,
+			URI:          &x.URI,
+		},
+		Type: &x.Type,
+	}, &start)
+	if err != nil {
+		return err
+	}
+
+	switch x.Type {
+	default:
+		return fmt.Errorf("invalid grantee type '%s'", x.Type)
+	case acpCanonicalUser, acpGroup, acpAmazonCustomerByEmail:
+	}
+
+	return nil
 }
 
 // Owner -- bucket owner/principal.
