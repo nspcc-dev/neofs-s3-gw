@@ -688,9 +688,8 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
 	}
-	resInfo := &resourceInfo{Bucket: reqInfo.BucketName}
 
-	p.EACL, err = bucketACLToTable(bktACL, resInfo)
+	p.EACL, err = bucketACLToTable(bktACL)
 	if err != nil {
 		h.logAndSendError(w, "could translate bucket acl to eacl", reqInfo, err)
 		return
