@@ -4,6 +4,11 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.26.1] - 2023-02-22
+
+### Fixed
+- Incorrect error count in pool component (#767)
+
 ## [0.26.0] - 2022-12-28
 
 ### Added
@@ -407,4 +412,6 @@ releases.
 [0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...v0.24.0
 [0.25.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...v0.25.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...master
+[0.26.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...v0.26.0
+[0.26.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.0...v0.26.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.1...master
