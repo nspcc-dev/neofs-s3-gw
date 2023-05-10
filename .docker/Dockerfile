@@ -1,4 +1,4 @@
-FROM golang:1.19 as builder
+FROM golang:1.20 as builder
 
 ARG BUILD=now
 ARG REPO=github.com/nspcc-dev/neofs-s3-gw
