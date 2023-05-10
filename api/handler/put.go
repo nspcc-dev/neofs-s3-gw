@@ -112,7 +112,7 @@ var errInvalidCondition = fmt.Errorf("invalid condition")
 func (p *policyCondition) UnmarshalJSON(data []byte) error {
 	var (
 		ok bool
-		v  interface{}
+		v  any
 	)
 
 	if err := json.Unmarshal(data, &v); err != nil {
@@ -120,7 +120,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 	}
 
 	switch v := v.(type) {
-	case []interface{}:
+	case []any:
 		if len(v) != 3 {
 			return errInvalidCondition
 		}
@@ -145,7 +145,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 			p.Key = strings.ToLower(strings.TrimPrefix(key, "$"))
 		}
 
-	case map[string]interface{}:
+	case map[string]any:
 		p.Matching = "eq"
 		for key, val := range v {
 			p.Key = strings.ToLower(key)

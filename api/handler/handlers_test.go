@@ -170,11 +170,11 @@ func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName stri
 	return extObjInfo.ObjectInfo
 }
 
-func prepareTestRequest(hc *handlerContext, bktName, objName string, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestRequest(hc *handlerContext, bktName, objName string, body any) (*httptest.ResponseRecorder, *http.Request) {
 	return prepareTestFullRequest(hc, bktName, objName, make(url.Values), body)
 }
 
-func prepareTestFullRequest(hc *handlerContext, bktName, objName string, query url.Values, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestFullRequest(hc *handlerContext, bktName, objName string, query url.Values, body any) (*httptest.ResponseRecorder, *http.Request) {
 	rawBody, err := xml.Marshal(body)
 	require.NoError(hc.t, err)
 
@@ -202,7 +202,7 @@ func prepareTestPayloadRequest(hc *handlerContext, bktName, objName string, payl
 	return w, r
 }
 
-func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body interface{}) {
+func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body any) {
 	assertStatus(t, response, http.StatusOK)
 	err := xml.NewDecoder(response.Result().Body).Decode(body)
 	require.NoError(t, err)
@@ -233,7 +233,7 @@ func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
 	}
 }
 
-func readResponse(t *testing.T, w *httptest.ResponseRecorder, status int, model interface{}) {
+func readResponse(t *testing.T, w *httptest.ResponseRecorder, status int, model any) {
 	assertStatus(t, w, status)
 	err := xml.NewDecoder(w.Result().Body).Decode(model)
 	require.NoError(t, err)

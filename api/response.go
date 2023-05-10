@@ -179,7 +179,7 @@ func WriteResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 }
 
 // EncodeResponse encodes the response headers into XML format.
-func EncodeResponse(response interface{}) []byte {
+func EncodeResponse(response any) []byte {
 	var bytesBuffer bytes.Buffer
 	bytesBuffer.WriteString(xml.Header)
 	_ = xml.
@@ -189,7 +189,7 @@ func EncodeResponse(response interface{}) []byte {
 }
 
 // EncodeToResponse encodes the response into ResponseWriter.
-func EncodeToResponse(w http.ResponseWriter, response interface{}) error {
+func EncodeToResponse(w http.ResponseWriter, response any) error {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(xmlHeader); err != nil {
