@@ -3,12 +3,14 @@ package layer
 import (
 	"encoding/hex"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
@@ -148,6 +150,72 @@ func TestTryDirectory(t *testing.T) {
 			}
 
 			require.Equal(t, tc.result, info)
+		})
+	}
+}
+
+func Test_extractHeaders(t *testing.T) {
+	type args struct {
+		headers map[string]string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		headers map[string]string
+		mime    string
+		created time.Time
+	}{
+		{
+			name: "empty",
+			args: args{
+				headers: map[string]string{},
+			},
+			headers: map[string]string{},
+			mime:    "",
+			created: time.Time{},
+		},
+		{
+			name: "mime",
+			args: args{
+				headers: map[string]string{
+					object.AttributeFilePath:    "",
+					object.AttributeContentType: "mime",
+				},
+			},
+			headers: map[string]string{},
+			mime:    "mime",
+			created: time.Time{},
+		},
+		{
+			name: "mime+created",
+			args: args{
+				headers: map[string]string{
+					object.AttributeFilePath:    "",
+					object.AttributeContentType: "mime",
+					object.AttributeTimestamp:   "123456789",
+					"custom-header":             "some val 1231",
+				},
+			},
+			headers: map[string]string{
+				"custom-header": "some val 1231",
+			},
+			mime:    "mime",
+			created: time.Unix(123456789, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1, got2 := extractHeaders(tt.args.headers)
+			if !reflect.DeepEqual(got, tt.headers) {
+				t.Errorf("extractHeaders() got = %v, headers %v", got, tt.headers)
+			}
+			if got1 != tt.mime {
+				t.Errorf("extractHeaders() got1 = %v, headers %v", got1, tt.mime)
+			}
+			if !reflect.DeepEqual(got2, tt.created) {
+				t.Errorf("extractHeaders() got2 = %v, headers %v", got2, tt.created)
+			}
 		})
 	}
 }
