@@ -164,7 +164,7 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 	return nil, fmt.Errorf("object not found %s", addr)
 }
 
-func (t *TestNeoFS) CreateObject(ctx context.Context, prm PrmObjectCreate) (oid.ID, error) {
+func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return oid.ID{}, err
