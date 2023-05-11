@@ -25,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
@@ -237,7 +238,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
-	prm.SetKey(&key.PrivateKey)
+	prm.SetSigner(neofsecdsa.SignerRFC6979(key.PrivateKey))
 	logger.Info("using credentials", zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
 
 	for _, peer := range fetchPeers(logger, cfg) {

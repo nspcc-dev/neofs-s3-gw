@@ -2,7 +2,6 @@ package layer
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -322,7 +321,9 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	}
 
 	var ownerID user.ID
-	user.IDFromKey(&ownerID, (ecdsa.PublicKey)(*n.EphemeralKey()))
+	if err := user.IDFromKey(&ownerID, n.EphemeralKey().Bytes()); err != nil {
+		panic(fmt.Errorf("id from key: %w", err))
+	}
 
 	return ownerID
 }

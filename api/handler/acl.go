@@ -191,10 +191,7 @@ func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, er
 		return nil, err
 	}
 
-	var btoken v2acl.BearerToken
-	box.Gate.BearerToken.WriteToV2(&btoken)
-
-	key, err := keys.NewPublicKeyFromBytes(btoken.GetSignature().GetKey(), elliptic.P256())
+	key, err := keys.NewPublicKeyFromBytes(box.Gate.BearerToken.SigningKeyBytes(), elliptic.P256())
 	if err != nil {
 		return nil, fmt.Errorf("public key from bytes: %w", err)
 	}

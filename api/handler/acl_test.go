@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -1393,7 +1394,7 @@ func createAccessBox(t *testing.T) (*accessbox.Box, *keys.PrivateKey) {
 	require.NoError(t, err)
 
 	var bearerToken bearer.Token
-	err = bearerToken.Sign(key.PrivateKey)
+	err = bearerToken.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey))
 	require.NoError(t, err)
 
 	tok := new(session.Container)

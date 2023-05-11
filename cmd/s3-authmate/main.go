@@ -24,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
@@ -687,7 +688,7 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate
 	log.Debug("prepare connection pool")
 
 	var prm pool.InitParameters
-	prm.SetKey(cfg.Key)
+	prm.SetSigner(neofsecdsa.SignerRFC6979(*cfg.Key))
 	prm.SetNodeDialTimeout(cfg.DialTimeout)
 	prm.SetHealthcheckTimeout(cfg.HealthcheckTimeout)
 	prm.SetNodeStreamTimeout(cfg.StreamTimeout)
