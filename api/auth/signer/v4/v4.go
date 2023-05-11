@@ -793,14 +793,7 @@ const doubleSpace = "  "
 func stripExcessSpaces(vals []string) {
 	var j, k, l, m, spaces int
 	for i, str := range vals {
-		// Trim trailing spaces
-		for j = len(str) - 1; j >= 0 && str[j] == ' '; j-- {
-		}
-
-		// Trim leading spaces
-		for k = 0; k < j && str[k] == ' '; k++ {
-		}
-		str = str[k : j+1]
+		str = strings.TrimSpace(str)
 
 		// Strip multiple spaces.
 		j = strings.Index(str, doubleSpace)

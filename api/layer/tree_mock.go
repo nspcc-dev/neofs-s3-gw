@@ -59,17 +59,17 @@ func (t *TreeServiceMock) DeleteObjectTagging(_ context.Context, bktInfo *data.B
 	return nil
 }
 
-func (t *TreeServiceMock) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
+func (t *TreeServiceMock) GetBucketTagging(_ context.Context, _ *data.BucketInfo) (map[string]string, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
+func (t *TreeServiceMock) PutBucketTagging(_ context.Context, _ *data.BucketInfo, _ map[string]string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
+func (t *TreeServiceMock) DeleteBucketTagging(_ context.Context, _ *data.BucketInfo) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -100,23 +100,23 @@ func (t *TreeServiceMock) GetSettingsNode(_ context.Context, bktInfo *data.Bucke
 	return settings, nil
 }
 
-func (t *TreeServiceMock) GetNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
+func (t *TreeServiceMock) GetNotificationConfigurationNode(_ context.Context, _ *data.BucketInfo) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error) {
+func (t *TreeServiceMock) PutNotificationConfigurationNode(_ context.Context, _ *data.BucketInfo, _ oid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
+func (t *TreeServiceMock) GetBucketCORS(_ context.Context, _ *data.BucketInfo) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutBucketCORS(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error) {
+func (t *TreeServiceMock) PutBucketCORS(_ context.Context, _ *data.BucketInfo, _ oid.ID) (oid.ID, error) {
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
+func (t *TreeServiceMock) DeleteBucketCORS(_ context.Context, _ *data.BucketInfo) (oid.ID, error) {
 	panic("implement me")
 }
 
@@ -293,7 +293,7 @@ func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, bktInfo *data
 	return nil
 }
 
-func (t *TreeServiceMock) GetMultipartUploadsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.MultipartInfo, error) {
+func (t *TreeServiceMock) GetMultipartUploadsByPrefix(_ context.Context, _ *data.BucketInfo, _ string) ([]*data.MultipartInfo, error) {
 	panic("implement me")
 }
 
@@ -386,7 +386,7 @@ LOOP:
 	return nil
 }
 
-func (t *TreeServiceMock) PutLock(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64, lock *data.LockInfo) error {
+func (t *TreeServiceMock) PutLock(_ context.Context, bktInfo *data.BucketInfo, nodeID uint64, lock *data.LockInfo) error {
 	cnrLockMap, ok := t.locks[bktInfo.CID.EncodeToString()]
 	if !ok {
 		t.locks[bktInfo.CID.EncodeToString()] = map[uint64]*data.LockInfo{
@@ -400,7 +400,7 @@ func (t *TreeServiceMock) PutLock(ctx context.Context, bktInfo *data.BucketInfo,
 	return nil
 }
 
-func (t *TreeServiceMock) GetLock(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64) (*data.LockInfo, error) {
+func (t *TreeServiceMock) GetLock(_ context.Context, bktInfo *data.BucketInfo, nodeID uint64) (*data.LockInfo, error) {
 	cnrLockMap, ok := t.locks[bktInfo.CID.EncodeToString()]
 	if !ok {
 		return nil, nil

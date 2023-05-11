@@ -477,7 +477,7 @@ type logWrapper struct {
 	log *zap.Logger
 }
 
-func (l *logWrapper) Printf(format string, args ...interface{}) {
+func (l *logWrapper) Printf(format string, args ...any) {
 	l.log.Info(fmt.Sprintf(format, args...))
 }
 

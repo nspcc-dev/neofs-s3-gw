@@ -363,11 +363,8 @@ func bindFlags(v *viper.Viper, flags *pflag.FlagSet) error {
 	if err := v.BindPFlag(cfgServer+".0."+cfgTLSKeyFile, flags.Lookup(cfgTLSKeyFile)); err != nil {
 		return err
 	}
-	if err := v.BindPFlag(cfgServer+".0."+cfgTLSCertFile, flags.Lookup(cfgTLSCertFile)); err != nil {
-		return err
-	}
 
-	return nil
+	return v.BindPFlag(cfgServer+".0."+cfgTLSCertFile, flags.Lookup(cfgTLSCertFile))
 }
 
 func readConfig(v *viper.Viper) error {

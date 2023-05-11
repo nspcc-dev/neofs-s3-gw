@@ -194,7 +194,7 @@ func TestNotificationConfigurationCacheType(t *testing.T) {
 	assertInvalidCacheEntry(t, cache.GetNotificationConfiguration(key), observedLog)
 }
 
-func assertInvalidCacheEntry(t *testing.T, val interface{}, observedLog *observer.ObservedLogs) {
+func assertInvalidCacheEntry(t *testing.T, val any, observedLog *observer.ObservedLogs) {
 	require.Nil(t, val)
 	require.Equal(t, 1, observedLog.Len())
 	require.Equal(t, observedLog.All()[0].Message, "invalid cache entry type")

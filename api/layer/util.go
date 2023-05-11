@@ -62,24 +62,31 @@ func userHeaders(attrs []object.Attribute) map[string]string {
 	return result
 }
 
-func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectInfo {
+func extractHeaders(headers map[string]string) (map[string]string, string, time.Time) {
 	var (
 		mimeType string
 		creation time.Time
 	)
 
-	headers := userHeaders(meta.Attributes())
 	delete(headers, object.AttributeFilePath)
 	if contentType, ok := headers[object.AttributeContentType]; ok {
 		mimeType = contentType
 		delete(headers, object.AttributeContentType)
 	}
-	if val, ok := headers[object.AttributeTimestamp]; !ok {
-		// ignore empty value
-	} else if dt, err := strconv.ParseInt(val, 10, 64); err == nil {
-		creation = time.Unix(dt, 0)
-		delete(headers, object.AttributeTimestamp)
+
+	if val, ok := headers[object.AttributeTimestamp]; ok {
+		if dt, err := strconv.ParseInt(val, 10, 64); err == nil {
+			creation = time.Unix(dt, 0)
+			delete(headers, object.AttributeTimestamp)
+		}
 	}
+
+	return headers, mimeType, creation
+}
+
+func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectInfo {
+	attributes := userHeaders(meta.Attributes())
+	customHeaders, mimeType, creation := extractHeaders(attributes)
 
 	objID, _ := meta.ID()
 	payloadChecksum, _ := meta.PayloadChecksum()
@@ -92,7 +99,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		Name:        filepathFromObject(meta),
 		Created:     creation,
 		ContentType: mimeType,
-		Headers:     headers,
+		Headers:     customHeaders,
 		Owner:       *meta.OwnerID(),
 		Size:        int64(meta.PayloadSize()),
 		HashSum:     hex.EncodeToString(payloadChecksum.Value()),

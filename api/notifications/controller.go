@@ -131,7 +131,7 @@ func NewController(p *Options, l *zap.Logger) (*Controller, error) {
 	}, nil
 }
 
-func (c *Controller) Subscribe(ctx context.Context, topic string, handler layer.MsgHandler) error {
+func (c *Controller) Subscribe(_ context.Context, topic string, handler layer.MsgHandler) error {
 	ch := make(chan *nats.Msg, 1)
 
 	c.mu.RLock()
