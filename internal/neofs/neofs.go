@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -274,7 +275,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	if prm.BearerToken != nil {
 		prmPut.UseBearer(*prm.BearerToken)
 	} else {
-		prmPut.UseKey(prm.PrivateKey)
+		prmPut.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
 	idObj, err := x.pool.PutObject(ctx, prmPut)
@@ -318,7 +319,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	if prm.BearerToken != nil {
 		prmGet.UseBearer(*prm.BearerToken)
 	} else {
-		prmGet.UseKey(prm.PrivateKey)
+		prmGet.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
 	if prm.WithHeader {
@@ -352,7 +353,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		if prm.BearerToken != nil {
 			prmHead.UseBearer(*prm.BearerToken)
 		} else {
-			prmHead.UseKey(prm.PrivateKey)
+			prmHead.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 		}
 
 		hdr, err := x.pool.HeadObject(ctx, prmHead)
@@ -390,7 +391,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	if prm.BearerToken != nil {
 		prmRange.UseBearer(*prm.BearerToken)
 	} else {
-		prmRange.UseKey(prm.PrivateKey)
+		prmRange.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
 	res, err := x.pool.ObjectRange(ctx, prmRange)
@@ -419,7 +420,7 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 	if prm.BearerToken != nil {
 		prmDelete.UseBearer(*prm.BearerToken)
 	} else {
-		prmDelete.UseKey(prm.PrivateKey)
+		prmDelete.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
 	err := x.pool.DeleteObject(ctx, prmDelete)
