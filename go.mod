@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/minio/sio v0.3.0
-	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
+	github.com/nats-io/nats.go v1.13.1-0.20220308171302-2f2f6968e98d
 	github.com/nspcc-dev/neo-go v0.100.1
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.8
@@ -47,7 +47,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
-	github.com/nats-io/nats-server/v2 v2.7.1 // indirect
+	github.com/nats-io/nats-server/v2 v2.7.4 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20220111165707-25110be27d22 // indirect
