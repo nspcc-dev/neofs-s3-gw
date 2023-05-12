@@ -185,6 +185,7 @@ func (a *App) initAPI(ctx context.Context) {
 
 func (a *App) initMetrics() {
 	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.pool))
+	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
 
