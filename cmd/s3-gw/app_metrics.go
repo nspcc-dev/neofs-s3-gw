@@ -43,6 +43,7 @@ type GateMetrics struct {
 
 type stateMetrics struct {
 	healthCheck prometheus.Gauge
+	gwVersion   *prometheus.GaugeVec
 }
 
 type poolMetricsCollector struct {
@@ -80,6 +81,14 @@ func newStateMetrics() *stateMetrics {
 			Name:      "health",
 			Help:      "Current S3 gateway state",
 		}),
+		gwVersion: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Help:      "Gateway version",
+				Name:      "version",
+				Namespace: namespace,
+			},
+			[]string{"version"},
+		),
 	}
 }
 
@@ -237,4 +246,8 @@ func NewPrometheusService(v *viper.Viper, log *zap.Logger) *Service {
 		serviceType: "Prometheus",
 		log:         log.With(zap.String("service", "Prometheus")),
 	}
+}
+
+func (g *GateMetrics) SetGWVersion(ver string) {
+	g.gwVersion.WithLabelValues(ver).Add(1)
 }
