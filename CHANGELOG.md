@@ -4,6 +4,22 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.27.0] - 2023-05-19
+
+### Fixed
+- Grantee XML decoding (#768)
+
+### Added
+- Version metric (#779)
+
+### Changed
+- Go 1.17 is no longer supported, 1.20 used by default for builds (#776)
+- SDK dependency is now at 1.0.0-rc.8 (#777)
+- golang.org/x/net dependency is now at 0.10.0 fixing some security issues there (#777)
+- github.com/nats-io/nats-server/v2 update to 2.7.4 fixing CVE-2022-26652 (#778)
+
+### Removed
+
 ## [0.26.1] - 2023-02-22
 
 ### Fixed
@@ -414,4 +430,5 @@ releases.
 [0.25.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...v0.25.0
 [0.26.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...v0.26.0
 [0.26.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.0...v0.26.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.1...master
+[0.27.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.0...v0.27.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...master
