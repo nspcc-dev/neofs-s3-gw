@@ -1,0 +1,212 @@
+name:  Run automated system tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  release:
+    types:
+      - published # check what's that
+  workflow_dispatch:
+    inputs:
+      neofs-s3-gw_ref:
+        description: 'neofs-s3-gw ref. Default ref - latest master. Examples: v0.27.0, 8fdcc6d7e798e6511be8806b81894622e72d7fdc, branch_name'
+        required: false
+        default: ''
+
+permissions: write-all
+
+env:
+  WORKDIR: ${{ github.workspace }}
+  #S3_GW_IMAGE: 'localbuild/neofs-s3-gw'
+  #S3_GW_VERSION: ${{ github.sha }}
+  S3_GW_IP: '192.168.130.82'
+  S3_GW_PORT: '8080'
+  S3_TESTS_CONFIG: 's3tests.conf'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout neofs-s3-gw repository
+        uses: actions/checkout@v3
+        with:
+          repository: nspcc-dev/neofs-s3-gw
+          # ref: ${{ github.sha }}
+          path: neofs-s3-gw
+
+      - name: Checkout s3-tests repository
+        uses: actions/checkout@v3
+        with:
+          repository: nspcc-dev/s3-tests
+          ref: master
+          path: s3-tests
+
+      - name: Checkout neofs-dev-env repository
+        uses: actions/checkout@v3
+        with:
+          repository: nspcc-dev/neofs-dev-env
+          ref: master
+          path: neofs-dev-env
+
+      - name: Checkout neofs-s3-dev-env repository
+        uses: actions/checkout@v3
+        with:
+          repository: nspcc-dev/neofs-s3-dev-env
+          ref: authmate_pull_fix  # temp until branch is merged
+          path: neofs-s3-dev-env
+
+################################################################
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          cache: true
+          go-version: '1.20'
+      - run: go version
+
+################################################################
+      - name: Get TAG for docker images
+        run: |
+          echo "CURRENT_TAG=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
+        working-directory: neofs-s3-gw
+
+################################################################
+
+      - name: Build neofs-s3-gw docker image
+        run: |
+          make image
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+        working-directory: neofs-s3-gw
+
+#################################################################
+
+      - name: Add NeoFS S3-gw TAGs to s3-gw-test env config
+        run: |
+          sed -i -e 's/S3_GW_IMAGE=.*$/S3_GW_IMAGE=${{ env.CURRENT_TAG }}/' .github/test-env
+
+          echo "####### DEBUGGING INFO: ##############"
+          realpath .github/test-env
+          cat .github/test-env
+        working-directory: neofs-s3-gw
+
+      - name: Copy test-env file to .env for neofs-dev-env
+        run: |
+          cp .github/test-env ${GITHUB_WORKSPACE}/neofs-dev-env/.env
+        working-directory: neofs-s3-gw
+
+################################################################
+
+      - name: Prepare hosts
+        timeout-minutes: 5
+        run: |
+          echo "####### DEBUGGING INFO: ##############"
+          realpath .env
+          cat .env
+
+          make get
+          sudo ./bin/update_hosts.sh
+          sudo chmod a+w vendor/hosts
+        working-directory: neofs-dev-env
+
+      - name: Prepare test environment
+        timeout-minutes: 30
+        run: |
+          make prepare-test-env
+          echo "$(pwd)/vendor" >> $GITHUB_PATH
+        working-directory: neofs-dev-env
+
+      - name: Set zero fee
+        run: |
+          make update.container_fee val=0 && make update.container_alias_fee val=0
+        working-directory: neofs-dev-env
+
+################################################################
+      - name: Copy test-env file to .env for neofs-s3-dev-env
+        run: |
+          cp .github/test-env ${GITHUB_WORKSPACE}/neofs-s3-dev-env/.env
+        working-directory: neofs-s3-gw
+
+      - name: Prepare test S3-gw test env
+        run: |
+          make prepare.s3-gw
+        working-directory: neofs-s3-dev-env
+
+      - name: Copy s3tests config to s3-tests directory
+        run: |
+          cp services/s3-gw/s3tests.conf ${GITHUB_WORKSPACE}/s3-tests/${S3_TESTS_CONFIG}
+          prepareTestConfig
+        working-directory: neofs-s3-dev-env
+
+      - name: Tune s3tests config
+        run: |
+          sed -i -e 's/host =.*\$/host = ${S3_GW_IP}/' \
+                 -e 's/port =.*\$/port = ${S3_GW_PORT}/' ${S3_TESTS_CONFIG}
+        working-directory: neofs-s3-dev-env
+
+      - name: Setup test env
+        run:
+            bootstrap
+        working-directory: s3-tests
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#       # - name: Setup test env
+#       #   run: |
+#       #     cd s3-tests
+#       #     apt-get update
+#       #     apt-get install -y virtualenv
+#       #     bash bootstrap
+
+#       # - name: Run tests
+#       #   run: |
+#       #     cd s3-tests
+#       #     S3TEST_CONF=${S3_TESTS_CONFIG} ./virtualenv/bin/nosetests -v -s s3tests_boto3.functional
+#       #     exit_status=$?
+#       #     if [[ $exit_status -ne 0 ]]; then
+#       #       echo "Tests failed"
+#       #       exit 1
+#       #     fi
+
+#       # - name: Clean up
+#       #   run: |
+#       #     cd devenv
+#       #     make down
+#       #     make clean
+
+#       # - name: Always cleanup
+#       #   run: |
+#       #     rm -rf ${{ env.WORKDIR }}
+
+#       # - name: Set build result
+#       #   if: ${{ always() }}
+#       #   run: |
+#       #     echo "Build completed successfully"
+
+#       # - name: Fail on test failure
+#       #   if: ${{ failure() }}
+#       #   run: |
+#       #     echo "Tests failed"
+#       #     exit 1
