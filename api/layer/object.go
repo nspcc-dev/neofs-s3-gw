@@ -19,7 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
-	"github.com/nspcc-dev/neofs-sdk-go/client"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -372,7 +372,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 
 	meta, err := n.objectHead(ctx, bkt, foundVersion.OID)
 	if err != nil {
-		if client.IsErrObjectNotFound(err) {
+		if errors.Is(err, apistatus.ErrObjectNotFound) {
 			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
 		}
 		return nil, err
