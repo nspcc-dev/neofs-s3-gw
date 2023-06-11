@@ -262,7 +262,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 	if prm.BearerToken != nil {
 		prmPut.UseBearer(*prm.BearerToken)
-	} else {
+	} else if prm.PrivateKey != nil {
 		prmPut.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
@@ -301,7 +301,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 	if prm.BearerToken != nil {
 		prmGet.UseBearer(*prm.BearerToken)
-	} else {
+	} else if prm.PrivateKey != nil {
 		prmGet.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
@@ -334,7 +334,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 		if prm.BearerToken != nil {
 			prmHead.UseBearer(*prm.BearerToken)
-		} else {
+		} else if prm.PrivateKey != nil {
 			prmHead.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 		}
 
@@ -369,7 +369,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 	if prm.BearerToken != nil {
 		prmRange.UseBearer(*prm.BearerToken)
-	} else {
+	} else if prm.PrivateKey != nil {
 		prmRange.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
@@ -393,7 +393,7 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 
 	if prm.BearerToken != nil {
 		prmDelete.UseBearer(*prm.BearerToken)
-	} else {
+	} else if prm.PrivateKey != nil {
 		prmDelete.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
