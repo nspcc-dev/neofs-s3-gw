@@ -118,14 +118,14 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	if creationTime.IsZero() {
 		creationTime = time.Now()
 	}
-	container.SetCreationTime(&cnr, creationTime)
+	cnr.SetCreationTime(creationTime)
 
 	if prm.Name != "" {
 		var d container.Domain
 		d.SetName(prm.Name)
 
-		container.WriteDomain(&cnr, d)
-		container.SetName(&cnr, prm.Name)
+		cnr.WriteDomain(d)
+		cnr.SetName(prm.Name)
 	}
 
 	for i := range prm.AdditionalAttributes {

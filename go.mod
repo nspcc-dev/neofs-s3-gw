@@ -11,7 +11,7 @@ require (
 	github.com/nats-io/nats.go v1.13.1-0.20220308171302-2f2f6968e98d
 	github.com/nspcc-dev/neo-go v0.100.1
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.9
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.9.0.20230606101007-79edfa63bbc9
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5

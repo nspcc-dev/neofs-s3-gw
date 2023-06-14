@@ -61,7 +61,7 @@ func (t *TestNeoFS) AddObject(key string, obj *object.Object) {
 
 func (t *TestNeoFS) ContainerID(name string) (cid.ID, error) {
 	for id, cnr := range t.containers {
-		if container.Name(*cnr) == name {
+		if cnr.Name() == name {
 			var cnrID cid.ID
 			return cnrID, cnrID.DecodeString(id)
 		}
@@ -80,14 +80,14 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	if creationTime.IsZero() {
 		creationTime = time.Now()
 	}
-	container.SetCreationTime(&cnr, creationTime)
+	cnr.SetCreationTime(creationTime)
 
 	if prm.Name != "" {
 		var d container.Domain
 		d.SetName(prm.Name)
 
-		container.WriteDomain(&cnr, d)
-		container.SetName(&cnr, prm.Name)
+		cnr.WriteDomain(d)
+		cnr.SetName(prm.Name)
 	}
 
 	for i := range prm.AdditionalAttributes {
