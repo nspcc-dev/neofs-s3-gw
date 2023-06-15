@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: nspcc-dev/neofs-s3-gw
-          # ref: ${{ github.sha }}
+          ref: ${{ github.sha }}
           path: neofs-s3-gw
 
       - name: Checkout s3-tests repository
@@ -86,7 +86,8 @@ jobs:
 
       - name: Add NeoFS S3-gw TAGs to s3-gw-test env config
         run: |
-          sed -i -e 's/S3_GW_IMAGE=.*$/S3_GW_IMAGE=${{ env.CURRENT_TAG }}/' .github/test-env
+          # sed -i -e 's/S3_GW_IMAGE=.*$/S3_GW_IMAGE=${{ env.CURRENT_TAG }}/' .github/test-env
+          sed -i -e 's/S3_GW_VERSION=.*$/S3_GW_VERSION=${{ env.CURRENT_TAG }}/' .github/test-env
 
           echo "####### DEBUGGING INFO: ##############"
           realpath .github/test-env
@@ -125,10 +126,63 @@ jobs:
         working-directory: neofs-dev-env
 
 ################################################################
+
+      - name: Log environment
+        run: |
+          echo "Check free space"
+          df -h
+          echo "=========================================="
+
+          echo "Check /etc/hosts"
+          cat /etc/hosts
+          echo "=========================================="
+
+          echo "Check docker images"
+          docker images
+          echo "=========================================="
+
+          echo "Check docker ps"
+          docker ps
+          echo "=========================================="
+
+          echo "Check neo-go version"
+          neo-go --version
+          echo "=========================================="
+
+          # echo "Check neofs-s3-authmate version"
+          # neofs-s3-authmate --version
+          # echo "=========================================="
+
+          # echo "Check neofs-s3-gw version"
+          # echo "=========================================="
+          # neofs-s3-gw --version
+          # echo "=========================================="
+
+          echo "Check neofs-adm version"
+          neofs-adm --version
+          echo "=========================================="
+
+          echo "Check neofs-cli version"
+          neofs-cli --version
+          echo "=========================================="
+
+          echo "Check vendor dir"
+          ls -lah "${GITHUB_WORKSPACE}/neofs-dev-env/vendor"
+          echo "=========================================="
+
+        working-directory: neofs-dev-env
+
+################################################################
+
+
+
       - name: Copy test-env file to .env for neofs-s3-dev-env
         run: |
           cp .github/test-env ${GITHUB_WORKSPACE}/neofs-s3-dev-env/.env
         working-directory: neofs-s3-gw
+
+      - name: tmate session
+        uses: mxschmitt/action-tmate@v3
 
       - name: Prepare test S3-gw test env
         run: |
