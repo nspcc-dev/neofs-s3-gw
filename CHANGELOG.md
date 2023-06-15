@@ -4,6 +4,15 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.27.1] - 2023-06-15
+
+### Fixed
+- authmate panic (#787)
+- wrong return code logged for PutBucketVersioning (#792)
+
+### Changed
+- SDK dependency updated to RC9+ (#785, #789)
+
 ## [0.27.0] - 2023-05-19
 
 ### Fixed
@@ -431,4 +440,5 @@ releases.
 [0.26.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...v0.26.0
 [0.26.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.0...v0.26.1
 [0.27.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.1...v0.27.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...master
+[0.27.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...v0.27.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.1...master
