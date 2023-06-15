@@ -4,19 +4,43 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.27.0] - 2023-05-19
+
 ### Fixed
-- Empty bucket policy (#740) 
-- Big object removal (#749)
+- Grantee XML decoding (#768)
+
+### Added
+- Version metric (#779)
+
+### Changed
+- Go 1.17 is no longer supported, 1.20 used by default for builds (#776)
+- SDK dependency is now at 1.0.0-rc.8 (#777)
+- golang.org/x/net dependency is now at 0.10.0 fixing some security issues there (#777)
+- github.com/nats-io/nats-server/v2 update to 2.7.4 fixing CVE-2022-26652 (#778)
+
+### Removed
+
+## [0.26.1] - 2023-02-22
+
+### Fixed
+- Incorrect error count in pool component (#767)
+
+## [0.26.0] - 2022-12-28
 
 ### Added
 - Use client time as `now` in some requests (#726)
-- Timeout for individual operations in streaming RPC (#740)
 - Reload policies on SIGHUP (#747)
+- Authmate flags for pool timeouts (#760)
+- Multiple server listeners (#742)
 
 ### Changed
 - Placement policy configuration (#568)
+- Improved debug logging of CID and OID values (#754)
 
-### Updating from v0.25.0
+### Removed
+- Deprecated linters (#755)
+
+### Updating from v0.25.1
 New config parameters were added. And old one `defaul_policy` were changed.
 ```yaml
 placement_policy:
@@ -27,9 +51,26 @@ placement_policy:
 Make sure you update the config accordingly:
 If you configure application using environment variables change:
 * `S3_GW_DEFAULT_POLICY` -> `S3_GW_PLACEMENT_POLICY_DEFAULT_POLICY`
+* `S3_GW_LISTEN_ADDRESS` -> `S3_GW_SERVER_0_ADDRESS`
+* `S3_GW_TLS_CERT_FILE` -> `S3_GW_SERVER_0_TLS_CERT_FILE` (and set `S3_GW_SERVER_0_TLS_ENABLED=true`)
+* `S3_GW_TLS_KEY_FILE` -> `S3_GW_SERVER_0_TLS_KEY_FILE` (and set `S3_GW_SERVER_0_TLS_ENABLED=true`)
 
 If you configure application using `.yaml` file change:
 * `defaul_policy` -> `placement_policy.default`
+* `listen_address` -> `server.0.address`
+* `tls.cert_file` -> `server.0.tls.cert_file` (and set `server.0.tls.enabled: true`)
+* `tls.key_file` -> `server.0.tls.key_file` (and set `server.0.tls.enabled: true`)
+
+## [0.25.1] - 2022-10-30
+
+### Fixed
+- Empty bucket policy (#740)
+- Big object removal (#749)
+- Checksum panic (#741)
+
+### Added
+- Debian packaging (#737)
+- Timeout for individual operations in streaming RPC (#750)
 
 ## [0.25.0] - 2022-10-31
 
@@ -387,4 +428,7 @@ releases.
 [0.23.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.22.0...v0.23.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.23.0...v0.24.0
 [0.25.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.24.0...v0.25.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...master
+[0.26.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.25.0...v0.26.0
+[0.26.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.0...v0.26.1
+[0.27.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.1...v0.27.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...master

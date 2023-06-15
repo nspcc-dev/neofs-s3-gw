@@ -56,22 +56,28 @@ const (
 	s3GetObjectVersion           = "s3:GetObjectVersion"
 )
 
-// AWSACL is aws permission constants.
-type AWSACL string
+// enum of Amazon S3 ACL permissions.
+type amazonS3Permission string
 
+// various access permissions defined in
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_Grant.html.
+//
+// See also https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html#permissions.
 const (
-	aclFullControl AWSACL = "FULL_CONTROL"
-	aclWrite       AWSACL = "WRITE"
-	aclRead        AWSACL = "READ"
+	awsPermFullControl amazonS3Permission = "FULL_CONTROL"
+	awsPermWrite       amazonS3Permission = "WRITE"
+	awsPermRead        amazonS3Permission = "READ"
 )
 
-// GranteeType is aws grantee permission type constants.
-type GranteeType string
+// enum of Amazon S3 ACL permission grantees.
+type granteeType string
 
+// various grantee types defined in
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_Grantee.html
 const (
-	acpCanonicalUser         GranteeType = "CanonicalUser"
-	acpAmazonCustomerByEmail GranteeType = "AmazonCustomerByEmail"
-	acpGroup                 GranteeType = "Group"
+	granteeCanonicalUser         granteeType = "CanonicalUser"
+	granteeAmazonCustomerByEmail granteeType = "AmazonCustomerByEmail"
+	granteeGroup                 granteeType = "Group"
 )
 
 type bucketPolicy struct {
@@ -185,10 +191,7 @@ func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, er
 		return nil, err
 	}
 
-	var btoken v2acl.BearerToken
-	box.Gate.BearerToken.WriteToV2(&btoken)
-
-	key, err := keys.NewPublicKeyFromBytes(btoken.GetSignature().GetKey(), elliptic.P256())
+	key, err := keys.NewPublicKeyFromBytes(box.Gate.BearerToken.SigningKeyBytes(), elliptic.P256())
 	if err != nil {
 		return nil, fmt.Errorf("public key from bytes: %w", err)
 	}
@@ -469,9 +472,9 @@ func parseACLHeaders(header http.Header, key *keys.PublicKey) (*AccessControlPol
 		Grantee: &Grantee{
 			ID:          hex.EncodeToString(key.Bytes()),
 			DisplayName: key.Address(),
-			Type:        acpCanonicalUser,
+			Type:        granteeCanonicalUser,
 		},
-		Permission: aclFullControl,
+		Permission: awsPermFullControl,
 	}}
 
 	cannedACL := header.Get(api.AmzACL)
@@ -509,7 +512,7 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 	}
 
 	for _, grantee := range grantees {
-		if grantee.Type == acpAmazonCustomerByEmail || (grantee.Type == acpGroup && grantee.URI != allUsersGroup) {
+		if grantee.Type == granteeAmazonCustomerByEmail || (grantee.Type == granteeGroup && grantee.URI != allUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
 		}
 
@@ -521,14 +524,14 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 	return list, nil
 }
 
-func grantHdrToPermission(grant string) (AWSACL, error) {
+func grantHdrToPermission(grant string) (amazonS3Permission, error) {
 	switch grant {
 	case api.AmzGrantFullControl:
-		return aclFullControl, nil
+		return awsPermFullControl, nil
 	case api.AmzGrantRead:
-		return aclRead, nil
+		return awsPermRead, nil
 	case api.AmzGrantWrite:
-		return aclWrite, nil
+		return awsPermWrite, nil
 	}
 	return "", fmt.Errorf("unsuppoted header: %s", grant)
 }
@@ -559,17 +562,17 @@ func formGrantee(granteeType, value string) (*Grantee, error) {
 	case "id":
 		return &Grantee{
 			ID:   value,
-			Type: acpCanonicalUser,
+			Type: granteeCanonicalUser,
 		}, nil
 	case "uri":
 		return &Grantee{
 			URI:  value,
-			Type: acpGroup,
+			Type: granteeGroup,
 		}, nil
 	case "emailAddress":
 		return &Grantee{
 			EmailAddress: value,
-			Type:         acpAmazonCustomerByEmail,
+			Type:         granteeAmazonCustomerByEmail,
 		}, nil
 	}
 	// do not return grantee type to avoid sensitive data logging (#489)
@@ -583,9 +586,9 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 		acp.AccessControlList = append(acp.AccessControlList, &Grant{
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		})
 	case cannedACLAuthRead:
 		fallthrough
@@ -593,9 +596,9 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 		acp.AccessControlList = append(acp.AccessControlList, &Grant{
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		})
 	default:
 		return nil, errors.GetAPIError(errors.ErrInvalidArgument)
@@ -1173,12 +1176,12 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 	}
 
 	for _, grant := range acl.AccessControlList {
-		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
+		if grant.Grantee.Type == granteeAmazonCustomerByEmail || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI != allUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		var groupGrantee bool
-		if grant.Grantee.Type == acpGroup {
+		if grant.Grantee.Type == granteeGroup {
 			groupGrantee = true
 		} else if grant.Grantee.ID == acl.Owner.ID {
 			continue
@@ -1201,23 +1204,23 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 	}
 
 	results := []statement{
-		getAllowStatement(resInfo, acl.Owner.ID, aclFullControl),
+		getAllowStatement(resInfo, acl.Owner.ID, awsPermFullControl),
 	}
 
 	// Expect to have at least 1 full control grant for owner which is set in
 	// parseACLHeaders(). If there is no other grants, then user sets private
 	// canned ACL, which is processed in this branch.
 	if len(acl.AccessControlList) < 2 {
-		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, aclFullControl)}, results...)
+		results = append([]statement{getDenyStatement(resInfo, allUsersWildcard, awsPermFullControl)}, results...)
 	}
 
 	for _, grant := range acl.AccessControlList {
-		if grant.Grantee.Type == acpAmazonCustomerByEmail || (grant.Grantee.Type == acpGroup && grant.Grantee.URI != allUsersGroup) {
+		if grant.Grantee.Type == granteeAmazonCustomerByEmail || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI != allUsersGroup) {
 			return nil, stderrors.New("unsupported grantee type")
 		}
 
 		user := grant.Grantee.ID
-		if grant.Grantee.Type == acpGroup {
+		if grant.Grantee.Type == granteeGroup {
 			user = allUsersWildcard
 		} else if user == acl.Owner.ID {
 			continue
@@ -1231,7 +1234,7 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 	}, nil
 }
 
-func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+func getAllowStatement(resInfo *resourceInfo, id string, permission amazonS3Permission) statement {
 	state := statement{
 		Effect: "Allow",
 		Principal: principal{
@@ -1248,7 +1251,7 @@ func getAllowStatement(resInfo *resourceInfo, id string, permission AWSACL) stat
 	return state
 }
 
-func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) statement {
+func getDenyStatement(resInfo *resourceInfo, id string, permission amazonS3Permission) statement {
 	state := statement{
 		Effect: "Deny",
 		Principal: principal{
@@ -1265,20 +1268,20 @@ func getDenyStatement(resInfo *resourceInfo, id string, permission AWSACL) state
 	return state
 }
 
-func getActions(permission AWSACL, isBucket bool) []string {
+func getActions(permission amazonS3Permission, isBucket bool) []string {
 	var res []string
 	switch permission {
-	case aclRead:
+	case awsPermRead:
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads}
 		} else {
 			res = []string{s3GetObject, s3GetObjectVersion}
 		}
-	case aclWrite:
+	case awsPermWrite:
 		if isBucket {
 			res = []string{s3PutObject, s3DeleteObject}
 		}
-	case aclFullControl:
+	case awsPermFullControl:
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads, s3PutObject, s3DeleteObject}
 		} else {
@@ -1310,13 +1313,13 @@ func actionToEffect(action eacl.Action) string {
 	}
 }
 
-func permissionToOperations(permission AWSACL) []eacl.Operation {
+func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 	switch permission {
-	case aclFullControl:
+	case awsPermFullControl:
 		return fullOps
-	case aclRead:
+	case awsPermRead:
 		return readOps
-	case aclWrite:
+	case awsPermWrite:
 		return writeOps
 	}
 	return nil
@@ -1361,7 +1364,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 	}
 
 	for key, val := range m {
-		permission := aclFullControl
+		permission := awsPermFullControl
 		read := true
 		for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
 			if !contains(val, op) && !isWriteOperation(op) {
@@ -1370,17 +1373,17 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 		}
 
 		if read {
-			permission = aclFullControl
+			permission = awsPermFullControl
 		} else {
 			h.log.Warn("some acl not fully mapped")
 		}
 
 		var grantee *Grantee
 		if key == allUsersGroup {
-			grantee = NewGrantee(acpGroup)
+			grantee = NewGrantee(granteeGroup)
 			grantee.URI = allUsersGroup
 		} else {
-			grantee = NewGrantee(acpCanonicalUser)
+			grantee = NewGrantee(granteeCanonicalUser)
 			grantee.ID = key
 		}
 
@@ -1407,13 +1410,7 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 	return false
 }
 
-type getRecordFunc func(op eacl.Operation) *eacl.Record
-
-func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Table, error) {
-	if !resInfo.IsBucket() {
-		return nil, fmt.Errorf("allowed only bucket acl")
-	}
-
+func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	var found bool
 	table := eacl.NewTable()
 
@@ -1430,12 +1427,24 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 			found = true
 		}
 
-		getRecord, err := getRecordFunction(grant.Grantee)
-		if err != nil {
-			return nil, fmt.Errorf("record func from grantee: %w", err)
+		var recordFromOp func(eacl.Operation) *eacl.Record
+
+		switch grant.Grantee.Type {
+		default:
+			return nil, fmt.Errorf("unknown grantee type: %s", grant.Grantee.Type)
+		case granteeCanonicalUser:
+			key, err := keys.NewPublicKeyFromString(grant.Grantee.ID)
+			if err != nil {
+				return nil, fmt.Errorf("grantee ID to public key (%s): %w", grant.Grantee.ID, err)
+			}
+
+			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecord(op, key) }
+		case granteeGroup:
+			recordFromOp = func(op eacl.Operation) *eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
 		}
+
 		for _, op := range permissionToOperations(grant.Permission) {
-			table.AddRecord(getRecord(op))
+			table.AddRecord(recordFromOp(op))
 		}
 	}
 
@@ -1452,28 +1461,9 @@ func bucketACLToTable(acp *AccessControlPolicy, resInfo *resourceInfo) (*eacl.Ta
 	return table, nil
 }
 
-func getRecordFunction(grantee *Grantee) (getRecordFunc, error) {
-	switch grantee.Type {
-	case acpAmazonCustomerByEmail:
-	case acpCanonicalUser:
-		pk, err := keys.NewPublicKeyFromString(grantee.ID)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't parse canonical ID %s: %w", grantee.ID, err)
-		}
-		return func(op eacl.Operation) *eacl.Record {
-			return getAllowRecord(op, pk)
-		}, nil
-	case acpGroup:
-		return func(op eacl.Operation) *eacl.Record {
-			return getOthersRecord(op, eacl.ActionAllow)
-		}, nil
-	}
-	return nil, fmt.Errorf("unknown type: %s", grantee.Type)
-}
-
 func isValidGrant(grant *Grant) bool {
-	return (grant.Permission == aclFullControl || grant.Permission == aclRead || grant.Permission == aclWrite) &&
-		(grant.Grantee.Type == acpCanonicalUser || (grant.Grantee.Type == acpGroup && grant.Grantee.URI == allUsersGroup))
+	return (grant.Permission == awsPermFullControl || grant.Permission == awsPermRead || grant.Permission == awsPermWrite) &&
+		(grant.Grantee.Type == granteeCanonicalUser || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI == allUsersGroup))
 }
 
 func getAllowRecord(op eacl.Operation, pk *keys.PublicKey) *eacl.Record {

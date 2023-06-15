@@ -161,6 +161,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 
 			l.Info("call method",
 				zap.Int("status", lw.statusCode),
+				zap.String("host", r.Host),
 				zap.String("request_id", GetRequestID(r.Context())),
 				zap.String("method", mux.CurrentRoute(r).GetName()),
 				zap.String("bucket", reqInfo.BucketName),
@@ -171,7 +172,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 }
 
 // GetRequestID returns the request ID from the response writer or the context.
-func GetRequestID(v interface{}) string {
+func GetRequestID(v any) string {
 	switch t := v.(type) {
 	case context.Context:
 		return GetReqInfo(t).RequestID

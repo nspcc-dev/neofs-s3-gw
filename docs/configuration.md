@@ -62,6 +62,8 @@ $ neofs-s3-gw --listen_address 192.168.130.130:443 \
   --tls.key_file=key.pem --tls.cert_file=cert.pem
 ```
 
+Using these flag you can configure only one address. To set multiple addresses use yaml config. 
+
 ### RPC endpoint and resolving of bucket names
 
 To set RPC endpoint specify a value of parameter `-r` or `--rpc_endpoint`. The parameter is **required if** another
@@ -95,7 +97,7 @@ $ neofs-s3-gw --healthcheck_timeout 15s --connect_timeout 1m --rebalance_interva
 ### Monitoring and metrics
 
 Pprof and Prometheus are integrated into the gateway. To enable them, use `--pprof` and `--metrics` flags or
-`S3_GW_PPROF`/`S3_GW_METRICS` environment variables.
+`S3_GW_PPROF_ENABLED`/`S3_GW_PROMETHEUS_ENABLED` environment variables.
 
 ## YAML file and environment variables
 
@@ -155,7 +157,7 @@ There are some custom types used for brevity:
 | `wallet`           | [Wallet configuration](#wallet-section)                     |
 | `peers`            | [Nodes configuration](#peers-section)                       |
 | `placement_policy` | [Placement policy configuration](#placement_policy-section) |
-| `tls`              | [TLS configuration](#tls-section)                           |
+| `server`           | [Server configuration](#server-section)                     |
 | `logger`           | [Logger configuration](#logger-section)                     |
 | `tree`             | [Tree configuration](#tree-section)                         |
 | `cache`            | [Cache configuration](#cache-section)                       |
@@ -168,8 +170,6 @@ There are some custom types used for brevity:
 ### General section
 
 ```yaml
-listen_address: 0.0.0.0:8084
-
 listen_domains:
    - s3dev.neofs.devenv
    - s3dev2.neofs.devenv
@@ -195,7 +195,6 @@ allowed_access_key_id_prefixes:
 
 | Parameter                        | Type       | SIGHUP reload | Default value  | Description                                                                                                                                                                                                       |
 |----------------------------------|------------|---------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `listen_address`                 | `string`   |               | `0.0.0.0:8080` | The address that the gateway is listening on.                                                                                                                                                                     |
 | `listen_domains`                 | `[]string` |               |                | Domains to be able to use virtual-hosted-style access to bucket.                                                                                                                                                  |
 | `rpc_endpoint`                   | `string`   | yes           |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
 | `resolve_order`                  | `[]string` | yes           | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
@@ -266,7 +265,7 @@ placement_policy:
 | Parameter        | Type     | SIGHUP reload | Default value | Description                                                                                                                                                                                                       |
 |------------------|----------|---------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `default`        | `string` | yes           | `REP 3`       | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
-| `region_mapping` | `string` | yes           |               | Path to file that maps aws `LocationContraint` values to NeoFS placement policy. The similar to `--container-policy` flag in `neofs-s3-authmate` util.                                                            |
+| `region_mapping` | `string` | yes           |               | Path to file that maps aws `LocationContraint` values to NeoFS placement policy. The similar to `--container-policy` flag in `neofs-s3-authmate` util, see in [docs](./authmate.md#containers-policy)             |
 
 File for `region_mapping` must contain something like this:
 
@@ -281,18 +280,30 @@ File for `region_mapping` must contain something like this:
 **Note:** on SIGHUP reload policies will be updated only if both parameters are valid. 
 So if you change `default` to some valid value and set invalid path in `region_mapping` the `default` value won't be changed.
 
-### `tls` section
+### `server` section
+
+You can specify several listeners for server. For example, for `http` and `https`.
 
 ```yaml
-tls:
-  cert_file: /path/to/cert
-  key_file: /path/to/key
+server:
+  - address: 0.0.0.0:8080
+    tls:
+      enabled: false
+      cert_file: /path/to/cert
+      key_file: /path/to/key
+  - address: 0.0.0.0:8081
+    tls:
+      enabled: true
+      cert_file: /path/to/another/cert
+      key_file: /path/to/another/key
 ```
 
-| Parameter   | Type     | SIGHUP reload | Default value | Description                  |
-|-------------|----------|---------------|---------------|------------------------------|
-| `cert_file` | `string` | yes           |               | Path to the TLS certificate. |
-| `key_file`  | `string` | yes           |               | Path to the key.             |
+| Parameter       | Type     | SIGHUP reload | Default value  | Description                                   |
+|-----------------|----------|---------------|----------------|-----------------------------------------------|
+| `address`       | `string` |               | `0.0.0.0:8080` | The address that the gateway is listening on. |
+| `tls.enabled`   | `bool`   |               | false          | Enable TLS or not.                            |
+| `tls.cert_file` | `string` | yes           |                | Path to the TLS certificate.                  |
+| `tls.key_file`  | `string` | yes           |                | Path to the key.                              |
 
 ### `logger` section
 

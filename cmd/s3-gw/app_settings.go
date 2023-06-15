@@ -42,7 +42,9 @@ const ( // Settings.
 	cmdWallet           = "wallet"
 	cmdAddress          = "address"
 
-	// HTTPS/TLS.
+	// Server.
+	cfgServer      = "server"
+	cfgTLSEnabled  = "tls.enabled"
 	cfgTLSKeyFile  = "tls.key_file"
 	cfgTLSCertFile = "tls.cert_file"
 
@@ -94,7 +96,6 @@ const ( // Settings.
 	cfgPProfEnabled      = "pprof.enabled"
 	cfgPProfAddress      = "pprof.address"
 
-	cfgListenAddress = "listen_address"
 	cfgListenDomains = "listen_domains"
 
 	// Peers.
@@ -117,6 +118,8 @@ const ( // Settings.
 	cmdConfig  = "config"
 	cmdPProf   = "pprof"
 	cmdMetrics = "metrics"
+
+	cmdListenAddress = "listen_address"
 
 	// Configuration of parameters of requests to NeoFS.
 	// Number of the object copies to consider PUT to NeoFS successful.
@@ -167,6 +170,28 @@ func fetchPeers(l *zap.Logger, v *viper.Viper) []pool.NodeParam {
 	return nodes
 }
 
+func fetchServers(v *viper.Viper) []ServerInfo {
+	var servers []ServerInfo
+
+	for i := 0; ; i++ {
+		key := cfgServer + "." + strconv.Itoa(i) + "."
+
+		var serverInfo ServerInfo
+		serverInfo.Address = v.GetString(key + "address")
+		serverInfo.TLS.Enabled = v.GetBool(key + cfgTLSEnabled)
+		serverInfo.TLS.KeyFile = v.GetString(key + cfgTLSKeyFile)
+		serverInfo.TLS.CertFile = v.GetString(key + cfgTLSCertFile)
+
+		if serverInfo.Address == "" {
+			break
+		}
+
+		servers = append(servers, serverInfo)
+	}
+
+	return servers
+}
+
 func newSettings() *viper.Viper {
 	v := viper.New()
 
@@ -198,7 +223,7 @@ func newSettings() *viper.Viper {
 	flags.Int(cfgMaxClientsCount, defaultMaxClientsCount, "set max-clients count")
 	flags.Duration(cfgMaxClientsDeadline, defaultMaxClientsDeadline, "set max-clients deadline")
 
-	flags.String(cfgListenAddress, "0.0.0.0:8080", "set address to listen")
+	flags.String(cmdListenAddress, "0.0.0.0:8080", "set the main address to listen")
 	flags.String(cfgTLSCertFile, "", "TLS certificate file to use")
 	flags.String(cfgTLSKeyFile, "", "TLS key file to use")
 
@@ -221,27 +246,17 @@ func newSettings() *viper.Viper {
 	v.SetDefault(cfgPProfAddress, "localhost:8085")
 	v.SetDefault(cfgPrometheusAddress, "localhost:8086")
 
-	// Binding flags
-	if err := v.BindPFlag(cfgPProfEnabled, flags.Lookup(cmdPProf)); err != nil {
-		panic(err)
-	}
-	if err := v.BindPFlag(cfgPrometheusEnabled, flags.Lookup(cmdMetrics)); err != nil {
-		panic(err)
-	}
-
-	if err := v.BindPFlags(flags); err != nil {
-		panic(err)
-	}
-
-	if err := v.BindPFlag(cfgWalletPath, flags.Lookup(cmdWallet)); err != nil {
-		panic(err)
-	}
-	if err := v.BindPFlag(cfgWalletAddress, flags.Lookup(cmdAddress)); err != nil {
-		panic(err)
+	// Bind flags
+	if err := bindFlags(v, flags); err != nil {
+		panic(fmt.Errorf("bind flags: %w", err))
 	}
 
 	if err := flags.Parse(os.Args); err != nil {
 		panic(err)
+	}
+
+	if v.IsSet(cfgServer+".0."+cfgTLSKeyFile) && v.IsSet(cfgServer+".0."+cfgTLSCertFile) {
+		v.Set(cfgServer+".0."+cfgTLSEnabled, true)
 	}
 
 	if resolveMethods != nil {
@@ -252,6 +267,7 @@ func newSettings() *viper.Viper {
 		for i := range *peers {
 			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".address", (*peers)[i])
 			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".weight", 1)
+			v.SetDefault(cfgPeers+"."+strconv.Itoa(i)+".priority", 1)
 		}
 	}
 
@@ -304,6 +320,51 @@ func newSettings() *viper.Viper {
 	}
 
 	return v
+}
+
+func bindFlags(v *viper.Viper, flags *pflag.FlagSet) error {
+	if err := v.BindPFlag(cfgPProfEnabled, flags.Lookup(cmdPProf)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgPrometheusEnabled, flags.Lookup(cmdMetrics)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cmdConfig, flags.Lookup(cmdConfig)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgWalletPath, flags.Lookup(cmdWallet)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgWalletAddress, flags.Lookup(cmdAddress)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgHealthcheckTimeout, flags.Lookup(cfgHealthcheckTimeout)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgConnectTimeout, flags.Lookup(cfgConnectTimeout)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgRebalanceInterval, flags.Lookup(cfgRebalanceInterval)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgMaxClientsCount, flags.Lookup(cfgMaxClientsCount)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgMaxClientsDeadline, flags.Lookup(cfgMaxClientsDeadline)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgRPCEndpoint, flags.Lookup(cfgRPCEndpoint)); err != nil {
+		return err
+	}
+
+	if err := v.BindPFlag(cfgServer+".0.address", flags.Lookup(cmdListenAddress)); err != nil {
+		return err
+	}
+	if err := v.BindPFlag(cfgServer+".0."+cfgTLSKeyFile, flags.Lookup(cfgTLSKeyFile)); err != nil {
+		return err
+	}
+
+	return v.BindPFlag(cfgServer+".0."+cfgTLSCertFile, flags.Lookup(cfgTLSCertFile))
 }
 
 func readConfig(v *viper.Viper) error {

@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -89,10 +90,7 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uin
 
 // Container implements neofs.NeoFS interface method.
 func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Container, error) {
-	var prm pool.PrmContainerGet
-	prm.SetContainerID(idCnr)
-
-	res, err := x.pool.GetContainer(ctx, prm)
+	res, err := x.pool.GetContainer(ctx, idCnr)
 	if err != nil {
 		return nil, fmt.Errorf("read container via connection pool: %w", err)
 	}
@@ -120,14 +118,14 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	if creationTime.IsZero() {
 		creationTime = time.Now()
 	}
-	container.SetCreationTime(&cnr, creationTime)
+	cnr.SetCreationTime(creationTime)
 
 	if prm.Name != "" {
 		var d container.Domain
 		d.SetName(prm.Name)
 
-		container.WriteDomain(&cnr, d)
-		container.SetName(&cnr, prm.Name)
+		cnr.WriteDomain(d)
+		cnr.SetName(prm.Name)
 	}
 
 	for i := range prm.AdditionalAttributes {
@@ -140,7 +138,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	var prmPut pool.PrmContainerPut
-	prmPut.SetContainer(cnr)
 	prmPut.SetWaitParams(x.await)
 
 	if prm.SessionToken != nil {
@@ -148,7 +145,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	// send request to save the container
-	idCnr, err := x.pool.PutContainer(ctx, prmPut)
+	idCnr, err := x.pool.PutContainer(ctx, cnr, prmPut)
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
@@ -158,10 +155,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 
 // UserContainers implements neofs.NeoFS interface method.
 func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error) {
-	var prm pool.PrmContainerList
-	prm.SetOwnerID(id)
-
-	r, err := x.pool.ListContainers(ctx, prm)
+	r, err := x.pool.ListContainers(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("list user containers via connection pool: %w", err)
 	}
@@ -172,14 +166,13 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 // SetContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error {
 	var prm pool.PrmContainerSetEACL
-	prm.SetTable(table)
 	prm.SetWaitParams(x.await)
 
 	if sessionToken != nil {
 		prm.WithinSession(*sessionToken)
 	}
 
-	err := x.pool.SetEACL(ctx, prm)
+	err := x.pool.SetEACL(ctx, table, prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
 	}
@@ -189,10 +182,7 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionT
 
 // ContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, error) {
-	var prm pool.PrmContainerEACL
-	prm.SetContainerID(id)
-
-	res, err := x.pool.GetEACL(ctx, prm)
+	res, err := x.pool.GetEACL(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("read eACL via connection pool: %w", err)
 	}
@@ -203,14 +193,13 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 // DeleteContainer implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container) error {
 	var prm pool.PrmContainerDelete
-	prm.SetContainerID(id)
 	prm.SetWaitParams(x.await)
 
 	if token != nil {
 		prm.SetSessionToken(*token)
 	}
 
-	err := x.pool.DeleteContainer(ctx, prm)
+	err := x.pool.DeleteContainer(ctx, id, prm)
 	if err != nil {
 		return fmt.Errorf("delete container via connection pool: %w", err)
 	}
@@ -273,8 +262,8 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 	if prm.BearerToken != nil {
 		prmPut.UseBearer(*prm.BearerToken)
-	} else {
-		prmPut.UseKey(prm.PrivateKey)
+	} else if prm.PrivateKey != nil {
+		prmPut.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
 	idObj, err := x.pool.PutObject(ctx, prmPut)
@@ -308,22 +297,17 @@ func (x payloadReader) Read(p []byte) (int, error) {
 
 // ReadObject implements neofs.NeoFS interface method.
 func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer.ObjectPart, error) {
-	var addr oid.Address
-	addr.SetContainer(prm.Container)
-	addr.SetObject(prm.Object)
-
 	var prmGet pool.PrmObjectGet
-	prmGet.SetAddress(addr)
 
 	if prm.BearerToken != nil {
 		prmGet.UseBearer(*prm.BearerToken)
-	} else {
-		prmGet.UseKey(prm.PrivateKey)
+	} else if prm.PrivateKey != nil {
+		prmGet.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
 	if prm.WithHeader {
 		if prm.WithPayload {
-			res, err := x.pool.GetObject(ctx, prmGet)
+			res, err := x.pool.GetObject(ctx, prm.Container, prm.Object, prmGet)
 			if err != nil {
 				if reason, ok := isErrAccessDenied(err); ok {
 					return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -347,15 +331,14 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		}
 
 		var prmHead pool.PrmObjectHead
-		prmHead.SetAddress(addr)
 
 		if prm.BearerToken != nil {
 			prmHead.UseBearer(*prm.BearerToken)
-		} else {
-			prmHead.UseKey(prm.PrivateKey)
+		} else if prm.PrivateKey != nil {
+			prmHead.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 		}
 
-		hdr, err := x.pool.HeadObject(ctx, prmHead)
+		hdr, err := x.pool.HeadObject(ctx, prm.Container, prm.Object, prmHead)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -368,7 +351,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			Head: &hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
-		res, err := x.pool.GetObject(ctx, prmGet)
+		res, err := x.pool.GetObject(ctx, prm.Container, prm.Object, prmGet)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -383,17 +366,14 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	}
 
 	var prmRange pool.PrmObjectRange
-	prmRange.SetAddress(addr)
-	prmRange.SetOffset(prm.PayloadRange[0])
-	prmRange.SetLength(prm.PayloadRange[1])
 
 	if prm.BearerToken != nil {
 		prmRange.UseBearer(*prm.BearerToken)
-	} else {
-		prmRange.UseKey(prm.PrivateKey)
+	} else if prm.PrivateKey != nil {
+		prmRange.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
-	res, err := x.pool.ObjectRange(ctx, prmRange)
+	res, err := x.pool.ObjectRange(ctx, prm.Container, prm.Object, prm.PayloadRange[0], prm.PayloadRange[1], prmRange)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -409,20 +389,15 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 // DeleteObject implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) error {
-	var addr oid.Address
-	addr.SetContainer(prm.Container)
-	addr.SetObject(prm.Object)
-
 	var prmDelete pool.PrmObjectDelete
-	prmDelete.SetAddress(addr)
 
 	if prm.BearerToken != nil {
 		prmDelete.UseBearer(*prm.BearerToken)
-	} else {
-		prmDelete.UseKey(prm.PrivateKey)
+	} else if prm.PrivateKey != nil {
+		prmDelete.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
 	}
 
-	err := x.pool.DeleteObject(ctx, prmDelete)
+	err := x.pool.DeleteObject(ctx, prm.Container, prm.Object, prmDelete)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)

@@ -112,7 +112,7 @@ var errInvalidCondition = fmt.Errorf("invalid condition")
 func (p *policyCondition) UnmarshalJSON(data []byte) error {
 	var (
 		ok bool
-		v  interface{}
+		v  any
 	)
 
 	if err := json.Unmarshal(data, &v); err != nil {
@@ -120,7 +120,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 	}
 
 	switch v := v.(type) {
-	case []interface{}:
+	case []any:
 		if len(v) != 3 {
 			return errInvalidCondition
 		}
@@ -145,7 +145,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 			p.Key = strings.ToLower(strings.TrimPrefix(key, "$"))
 		}
 
-	case map[string]interface{}:
+	case map[string]any:
 		p.Matching = "eq"
 		for key, val := range v {
 			p.Key = strings.ToLower(key)
@@ -218,7 +218,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encryption, err := h.formEncryptionParams(r.Header)
+	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
@@ -230,7 +230,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Reader:       r.Body,
 		Size:         r.ContentLength,
 		Header:       metadata,
-		Encryption:   encryption,
+		Encryption:   encryptionParams,
 		CopiesNumber: copiesNumber,
 	}
 
@@ -304,7 +304,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
-	if encryption.Enabled() {
+	if encryptionParams.Enabled() {
 		addSSECHeaders(w.Header(), r.Header)
 	}
 
@@ -326,16 +326,16 @@ func getCopiesNumberOrDefault(metadata map[string]string, defaultCopiesNumber ui
 	return uint32(copiesNumber), nil
 }
 
-func (h handler) formEncryptionParams(header http.Header) (enc encryption.Params, err error) {
-	sseCustomerAlgorithm := header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
-	sseCustomerKey := header.Get(api.AmzServerSideEncryptionCustomerKey)
-	sseCustomerKeyMD5 := header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
+func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
+	sseCustomerAlgorithm := r.Header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
+	sseCustomerKey := r.Header.Get(api.AmzServerSideEncryptionCustomerKey)
+	sseCustomerKeyMD5 := r.Header.Get(api.AmzServerSideEncryptionCustomerKeyMD5)
 
 	if len(sseCustomerAlgorithm) == 0 && len(sseCustomerKey) == 0 && len(sseCustomerKeyMD5) == 0 {
 		return
 	}
 
-	if !h.cfg.TLSEnabled {
+	if r.TLS == nil {
 		return enc, errorsStd.New("encryption available only when TLS is enabled")
 	}
 
@@ -688,9 +688,8 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
 	}
-	resInfo := &resourceInfo{Bucket: reqInfo.BucketName}
 
-	p.EACL, err = bucketACLToTable(bktACL, resInfo)
+	p.EACL, err = bucketACLToTable(bktACL)
 	if err != nil {
 		h.logAndSendError(w, "could translate bucket acl to eacl", reqInfo, err)
 		return
@@ -730,6 +729,9 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.log.Info("bucket is created", zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", reqInfo.BucketName), zap.Stringer("container_id", bktInfo.CID))
+
 	if p.ObjectLockEnabled {
 		sp := &layer.PutSettingsParams{
 			BktInfo:  bktInfo,
@@ -741,8 +743,6 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	h.log.Info("bucket is created", zap.Stringer("container_id", bktInfo.CID))
 
 	api.WriteSuccessResponseHeadersOnly(w)
 }

@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/viper"
@@ -46,9 +44,10 @@ type (
 		obj  layer.Client
 		api  api.Handler
 
+		servers []Server
+
 		metrics        *appMetrics
 		bucketResolver *resolver.BucketResolver
-		tlsProvider    *certProvider
 		services       []*Service
 		settings       *appSettings
 		maxClients     api.MaxClients
@@ -65,15 +64,6 @@ type (
 	Logger struct {
 		logger *zap.Logger
 		lvl    zap.AtomicLevel
-	}
-
-	certProvider struct {
-		Enabled bool
-
-		mu       sync.RWMutex
-		certPath string
-		keyPath  string
-		cert     *tls.Certificate
 	}
 
 	appMetrics struct {
@@ -123,7 +113,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 func (a *App) init(ctx context.Context) {
 	a.initAPI(ctx)
 	a.initMetrics()
-	a.initTLSProvider()
+	a.initServers(ctx)
 }
 
 func (a *App) initLayer(ctx context.Context) {
@@ -195,6 +185,7 @@ func (a *App) initAPI(ctx context.Context) {
 
 func (a *App) initMetrics() {
 	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.pool))
+	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
 
@@ -203,12 +194,6 @@ func (a *App) initResolver() {
 	a.bucketResolver, err = resolver.NewBucketResolver(a.getResolverConfig())
 	if err != nil {
 		a.log.Fatal("failed to create resolver", zap.Error(err))
-	}
-}
-
-func (a *App) initTLSProvider() {
-	a.tlsProvider = &certProvider{
-		Enabled: a.cfg.IsSet(cfgTLSCertFile) || a.cfg.IsSet(cfgTLSKeyFile),
 	}
 }
 
@@ -254,7 +239,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
-	prm.SetKey(&key.PrivateKey)
+	prm.SetSigner(neofsecdsa.SignerRFC6979(key.PrivateKey))
 	logger.Info("using credentials", zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
 
 	for _, peer := range fetchPeers(logger, cfg) {
@@ -290,6 +275,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		errorThreshold = defaultPoolErrorThreshold
 	}
 	prm.SetErrorThreshold(errorThreshold)
+	prm.SetLogger(logger)
 
 	p, err := pool.NewPool(prm)
 	if err != nil {
@@ -401,44 +387,6 @@ func (m *appMetrics) Shutdown() {
 	m.mu.Unlock()
 }
 
-func (p *certProvider) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	if !p.Enabled {
-		return nil, errors.New("cert provider: disabled")
-	}
-
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.cert, nil
-}
-
-func (p *certProvider) UpdateCert(certPath, keyPath string) error {
-	if !p.Enabled {
-		return fmt.Errorf("tls disabled")
-	}
-
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		return fmt.Errorf("cannot load TLS key pair from certFile '%s' and keyFile '%s': %w", certPath, keyPath, err)
-	}
-
-	p.mu.Lock()
-	p.certPath = certPath
-	p.keyPath = keyPath
-	p.cert = &cert
-	p.mu.Unlock()
-	return nil
-}
-
-func (p *certProvider) FilePaths() (string, string) {
-	if !p.Enabled {
-		return "", ""
-	}
-
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.certPath, p.keyPath
-}
-
 func remove(list []string, element string) []string {
 	for i, item := range list {
 		if item == element {
@@ -485,34 +433,15 @@ func (a *App) Serve(ctx context.Context) {
 
 	a.startServices()
 
-	go func() {
-		addr := a.cfg.GetString(cfgListenAddress)
-		a.log.Info("starting server", zap.String("bind", addr))
+	for i := range a.servers {
+		go func(i int) {
+			a.log.Info("starting server", zap.String("address", a.servers[i].Address()))
 
-		var lic net.ListenConfig
-		ln, err := lic.Listen(ctx, "tcp", addr)
-		if err != nil {
-			a.log.Fatal("could not prepare listener", zap.Error(err))
-		}
-
-		if a.tlsProvider.Enabled {
-			certFile := a.cfg.GetString(cfgTLSCertFile)
-			keyFile := a.cfg.GetString(cfgTLSKeyFile)
-
-			a.log.Info("using certificate", zap.String("cert", certFile), zap.String("key", keyFile))
-			if err = a.tlsProvider.UpdateCert(certFile, keyFile); err != nil {
-				a.log.Fatal("failed to update cert", zap.Error(err))
+			if err := srv.Serve(a.servers[i].Listener()); err != nil && err != http.ErrServerClosed {
+				a.log.Fatal("listen and serve", zap.Error(err))
 			}
-
-			ln = tls.NewListener(ln, &tls.Config{
-				GetCertificate: a.tlsProvider.GetCertificate,
-			})
-		}
-
-		if err = srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			a.log.Fatal("listen and serve", zap.Error(err))
-		}
-	}()
+		}(i)
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP)
@@ -558,8 +487,8 @@ func (a *App) configReload() {
 		a.log.Warn("failed to reload resolvers", zap.Error(err))
 	}
 
-	if err := a.tlsProvider.UpdateCert(a.cfg.GetString(cfgTLSCertFile), a.cfg.GetString(cfgTLSKeyFile)); err != nil {
-		a.log.Warn("failed to reload TLS certs", zap.Error(err))
+	if err := a.updateServers(); err != nil {
+		a.log.Warn("failed to reload server parameters", zap.Error(err))
 	}
 
 	a.stopServices()
@@ -586,6 +515,8 @@ func (a *App) updateSettings() {
 }
 
 func (a *App) startServices() {
+	a.services = a.services[:0]
+
 	pprofService := NewPprofService(a.cfg, a.log)
 	a.services = append(a.services, pprofService)
 	go pprofService.Start()
@@ -593,6 +524,40 @@ func (a *App) startServices() {
 	prometheusService := NewPrometheusService(a.cfg, a.log)
 	a.services = append(a.services, prometheusService)
 	go prometheusService.Start()
+}
+
+func (a *App) initServers(ctx context.Context) {
+	serversInfo := fetchServers(a.cfg)
+
+	a.servers = make([]Server, len(serversInfo))
+	for i, serverInfo := range serversInfo {
+		a.log.Info("added server",
+			zap.String("address", serverInfo.Address), zap.Bool("tls enabled", serverInfo.TLS.Enabled),
+			zap.String("tls cert", serverInfo.TLS.CertFile), zap.String("tls key", serverInfo.TLS.KeyFile))
+		a.servers[i] = newServer(ctx, serverInfo, a.log)
+	}
+}
+
+func (a *App) updateServers() error {
+	serversInfo := fetchServers(a.cfg)
+
+	if len(serversInfo) != len(a.servers) {
+		return fmt.Errorf("invalid servers configuration: amount mismatch: old '%d', new '%d", len(a.servers), len(serversInfo))
+	}
+
+	for i, serverInfo := range serversInfo {
+		if serverInfo.Address != a.servers[i].Address() {
+			return fmt.Errorf("invalid servers configuration: addresses mismatch: old '%s', new '%s", a.servers[i].Address(), serverInfo.Address)
+		}
+
+		if serverInfo.TLS.Enabled {
+			if err := a.servers[i].UpdateCert(serverInfo.TLS.CertFile, serverInfo.TLS.KeyFile); err != nil {
+				return fmt.Errorf("failed to update tls certs: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (a *App) stopServices() {
@@ -690,7 +655,6 @@ func (a *App) initHandler() {
 		Policy:             a.settings.policies,
 		DefaultMaxAge:      handler.DefaultMaxAge,
 		NotificatorEnabled: a.cfg.GetBool(cfgEnableNATS),
-		TLSEnabled:         a.cfg.IsSet(cfgTLSKeyFile) && a.cfg.IsSet(cfgTLSCertFile),
 		CopiesNumber:       handler.DefaultCopiesNumber,
 	}
 

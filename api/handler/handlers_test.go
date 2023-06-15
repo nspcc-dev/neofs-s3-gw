@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -76,7 +77,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	})
 
 	var owner user.ID
-	user.IDFromKey(&owner, key.PrivateKey.PublicKey)
+	require.NoError(t, user.IDFromSigner(&owner, neofsecdsa.SignerRFC6979(key.PrivateKey)))
 
 	layerCfg := &layer.Config{
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
@@ -93,8 +94,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 		log: l,
 		obj: layer.NewLayer(l, tp, layerCfg),
 		cfg: &Config{
-			TLSEnabled: true,
-			Policy:     &placementPolicyMock{defaultPolicy: pp},
+			Policy: &placementPolicyMock{defaultPolicy: pp},
 		},
 	}
 
@@ -171,11 +171,11 @@ func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName stri
 	return extObjInfo.ObjectInfo
 }
 
-func prepareTestRequest(hc *handlerContext, bktName, objName string, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestRequest(hc *handlerContext, bktName, objName string, body any) (*httptest.ResponseRecorder, *http.Request) {
 	return prepareTestFullRequest(hc, bktName, objName, make(url.Values), body)
 }
 
-func prepareTestFullRequest(hc *handlerContext, bktName, objName string, query url.Values, body interface{}) (*httptest.ResponseRecorder, *http.Request) {
+func prepareTestFullRequest(hc *handlerContext, bktName, objName string, query url.Values, body any) (*httptest.ResponseRecorder, *http.Request) {
 	rawBody, err := xml.Marshal(body)
 	require.NoError(hc.t, err)
 
@@ -203,7 +203,7 @@ func prepareTestPayloadRequest(hc *handlerContext, bktName, objName string, payl
 	return w, r
 }
 
-func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body interface{}) {
+func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body any) {
 	assertStatus(t, response, http.StatusOK)
 	err := xml.NewDecoder(response.Result().Body).Decode(body)
 	require.NoError(t, err)
@@ -234,7 +234,7 @@ func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
 	}
 }
 
-func readResponse(t *testing.T, w *httptest.ResponseRecorder, status int, model interface{}) {
+func readResponse(t *testing.T, w *httptest.ResponseRecorder, status int, model any) {
 	assertStatus(t, w, status)
 	err := xml.NewDecoder(w.Result().Body).Decode(model)
 	require.NoError(t, err)

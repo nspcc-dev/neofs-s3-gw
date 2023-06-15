@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+# Do not try to strip Go binaries
+export DEB_BUILD_OPTIONS := nostrip
+SERVICE = neofs-s3-gw
+
+%:
+	dh $@
+
+override_dh_installsystemd:
+		dh_installsystemd --no-enable --no-start $(SERVICE).service		
+
+override_dh_installchangelogs:
+		dh_installchangelogs -k CHANGELOG.md		
+		
+

@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	bearertest "github.com/nspcc-dev/neofs-sdk-go/bearer/test"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -137,8 +138,8 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	bearerToken := bearertest.Token()
-	require.NoError(t, bearerToken.Sign(key.PrivateKey))
+	bearerToken := bearertest.Token(t)
+	require.NoError(t, bearerToken.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey)))
 
 	ctx := context.WithValue(context.Background(), api.BoxData, &accessbox.Box{
 		Gate: &accessbox.GateData{
@@ -160,7 +161,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	}
 
 	var owner user.ID
-	user.IDFromKey(&owner, key.PrivateKey.PublicKey)
+	require.NoError(t, user.IDFromSigner(&owner, neofsecdsa.SignerRFC6979(key.PrivateKey)))
 
 	layerCfg := &Config{
 		Caches:      config,

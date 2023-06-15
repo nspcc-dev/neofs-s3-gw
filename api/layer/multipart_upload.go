@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/minio/sio"
+	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
@@ -227,6 +228,13 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	if err != nil {
 		return nil, err
 	}
+
+	reqInfo := api.GetReqInfo(ctx)
+	n.log.Debug("upload part",
+		zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", bktInfo.Name), zap.Stringer("cid", bktInfo.CID),
+		zap.String("multipart upload", p.Info.UploadID),
+		zap.Int("part number", p.PartNumber), zap.String("object", p.Info.Key), zap.Stringer("oid", id))
 
 	partInfo := &data.PartInfo{
 		Key:      p.Info.Key,
@@ -609,9 +617,23 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.
 	}
 
 	res := make(map[int]*data.PartInfo, len(parts))
-	for _, part := range parts {
+	partsNumbers := make([]int, len(parts))
+	oids := make([]string, len(parts))
+	for i, part := range parts {
 		res[part.Number] = part
+		partsNumbers[i] = part.Number
+		oids[i] = part.OID.EncodeToString()
 	}
+
+	reqInfo := api.GetReqInfo(ctx)
+	n.log.Debug("part details",
+		zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", p.Bkt.Name),
+		zap.Stringer("cid", p.Bkt.CID),
+		zap.String("object", p.Key),
+		zap.String("upload id", p.UploadID),
+		zap.Ints("part numbers", partsNumbers),
+		zap.Strings("oids", oids))
 
 	return multipartInfo, res, nil
 }

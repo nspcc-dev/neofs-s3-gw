@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -724,15 +725,15 @@ func TestBucketAclToPolicy(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}},
 	}
 
@@ -790,21 +791,21 @@ func TestObjectAclToPolicy(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				ID:   id,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}},
 	}
 
@@ -859,9 +860,9 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				ID:   id,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}},
 	}
 
@@ -980,15 +981,15 @@ func TestParseCannedACLHeaders(t *testing.T) {
 			Grantee: &Grantee{
 				ID:          id,
 				DisplayName: address,
-				Type:        acpCanonicalUser,
+				Type:        granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}},
 	}
 
@@ -1021,39 +1022,39 @@ func TestParseACLHeaders(t *testing.T) {
 			Grantee: &Grantee{
 				ID:          id,
 				DisplayName: address,
-				Type:        acpCanonicalUser,
+				Type:        granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user1",
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user2",
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user2",
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}, {
 			Grantee: &Grantee{
 				ID:   "user3",
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}},
 	}
 
@@ -1112,15 +1113,15 @@ func TestBucketAclToTable(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				URI:  allUsersGroup,
-				Type: acpGroup,
+				Type: granteeGroup,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclWrite,
+			Permission: awsPermWrite,
 		}},
 	}
 
@@ -1137,11 +1138,8 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))
 	}
-	resInfo := &resourceInfo{
-		Bucket: "bucketName",
-	}
 
-	actualTable, err := bucketACLToTable(acl, resInfo)
+	actualTable, err := bucketACLToTable(acl)
 	require.NoError(t, err)
 	require.Equal(t, expectedTable.Records(), actualTable.Records())
 }
@@ -1169,15 +1167,15 @@ func TestObjectAclToAst(t *testing.T) {
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
 				ID:   id,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclFullControl,
+			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
 				ID:   id2,
-				Type: acpCanonicalUser,
+				Type: granteeCanonicalUser,
 			},
-			Permission: aclRead,
+			Permission: awsPermRead,
 		},
 		},
 	}
@@ -1238,15 +1236,15 @@ func TestBucketAclToAst(t *testing.T) {
 			{
 				Grantee: &Grantee{
 					ID:   id2,
-					Type: acpCanonicalUser,
+					Type: granteeCanonicalUser,
 				},
-				Permission: aclWrite,
+				Permission: awsPermWrite,
 			}, {
 				Grantee: &Grantee{
 					URI:  allUsersGroup,
-					Type: acpGroup,
+					Type: granteeGroup,
 				},
-				Permission: aclRead,
+				Permission: awsPermRead,
 			},
 		},
 	}
@@ -1396,7 +1394,7 @@ func createAccessBox(t *testing.T) (*accessbox.Box, *keys.PrivateKey) {
 	require.NoError(t, err)
 
 	var bearerToken bearer.Token
-	err = bearerToken.Sign(key.PrivateKey)
+	err = bearerToken.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey))
 	require.NoError(t, err)
 
 	tok := new(session.Container)
