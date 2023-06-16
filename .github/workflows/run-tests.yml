@@ -68,7 +68,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.7'
+          python-version: '3.8'
       - run: python --version
 
 ################################################################
@@ -81,13 +81,13 @@ jobs:
 
       - name: Build neofs-s3-gw docker image
         run: |
+          cp .github/test-env .env #looks ugly, but I want to try
           make image
         working-directory: neofs-s3-gw
 
       - name: Build neofs-s3-gw binaries
         run: |
           make
-          # echo "$(pwd)/bin" >> $GITHUB_PATH
         working-directory: neofs-s3-gw
 
 
@@ -189,8 +189,8 @@ jobs:
 
       - name: Copy test-env file to .env for neofs-s3-dev-env
         run: |
-          cp .github/test-env ${GITHUB_WORKSPACE}/neofs-s3-dev-env/.env
-        working-directory: neofs-s3-gw
+          cp .env ${GITHUB_WORKSPACE}/neofs-s3-dev-env/.env
+        working-directory: neofs-dev-env
 
       - name: Copy neofs-s3-authmate for neofs-s3-dev-env
         run: |
@@ -220,8 +220,7 @@ jobs:
 
       - name: Setup test env
         run: |
-          python3.7 -m venv virtualenv
-          source virtualenv/bin/activate
+          python3.8 -m venv virtualenv
           ./bootstrap
         working-directory: s3-tests
 

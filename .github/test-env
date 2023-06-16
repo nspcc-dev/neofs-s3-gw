@@ -43,7 +43,7 @@ S3_GW_VERSION=_TAG_
 S3_GW_IMAGE=nspccdev/neofs-s3-gw
 S3_GW_PLATFORM=linux-amd64
 S3_GW_HOST=s3.neofs.devenv
-S3_GW_TLS=False
+S3_GW_TLS=True
 
 # Coredns
 COREDNS_VERSION=v016
