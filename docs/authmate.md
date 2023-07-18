@@ -32,9 +32,9 @@ potentially).
 To generate a wallet for a gateway, run the following command:
 
 ```shell
-$ ./neo-go wallet init -a -w wallet.json
+$ ./neo-go wallet init -a -w gate.wallet.json
 
-Enter the name of the account > AccountTestName
+Enter the name of the account > GateWallet
 Enter passphrase > 
 Confirm passphrase > 
 
@@ -44,7 +44,7 @@ Confirm passphrase >
  		{
  			"address": "NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p",
  			"key": "6PYUFyYpJ1JGyMrYV8NqeUFLKfpEVHsGGjCYtTDkjnKaSgYizRBZxVerte",
- 			"label": "AccountTestName",
+ 			"label": "GateWallet",
  			"contract": {
  				"script": "DCECXCsUZPwUyKHs6nAyyCvJ5s/vLwZkkVtWNC0zWzH8a9dBVuezJw==",
  				"parameters": [
@@ -68,27 +68,73 @@ Confirm passphrase >
  		"Tokens": null
  	}
  }
-
-wallet is successfully created, the file location is wallet.json
 ```
 
-To get the public key from the wallet:
+wallet is successfully created, the file location is gate.wallet.json. This wallet should be used in gate config.
+See `wallet` section in gate configuration.
+
+To get the public key from the gate wallet:
 ```shell
-$ ./bin/neo-go wallet dump-keys -w wallet.json
+$ ./bin/neo-go wallet dump-keys -w gate.wallet.json
 
 NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7
 ```
+
+This public key will be used for user secret issuing.
 
 ## Issuance of a secret
 
 To issue a secret means to create Bearer and, optionally, Session tokens and
 put them as an object into a container on the NeoFS network.
 
+### Generation of wallet
+
+If you already have a personal wallet, you may skip this step.
+If you don't, generate a new account with `neo-go` CLI:
+
+```
+$ ./neo-go wallet init -a -w user.wallet.json
+Enter the name of the account > UserAccount
+Enter new password > 
+Confirm password > 
+
+{
+ 	"version": "1.0",
+ 	"accounts": [
+ 		{
+ 			"address": "NWxHG3Bjn4SdPaWRQGWAERfDQNdLa2DgDZ",
+ 			"key": "6PYUsjA1mFrAR7juCUaMuXyk9P1ewwmYFPu8qC9P5vR2nyvWgTGdHpyURm",
+ 			"label": "UserAccount",
+ 			"contract": {
+ 				"script": "DCEDI4ISLZ0UxeO1B9mHqI4iuD6L3A0pbqkkSD55C20yF7FBVuezJw==",
+ 				"parameters": [
+ 					{
+ 						"name": "parameter0",
+ 						"type": "Signature"
+ 					}
+ 				],
+ 				"deployed": false
+ 			},
+ 			"lock": false,
+ 			"isDefault": false
+ 		}
+ 	],
+ 	"scrypt": {
+ 		"n": 16384,
+ 		"r": 8,
+ 		"p": 8
+ 	},
+ 	"extra": {
+ 		"Tokens": null
+ 	}
+ }
+```
+
 ### CLI parameters
 
 **Required parameters:**
-* `--wallet` is a path to a wallet `.json` file. You can provide a passphrase to decrypt
+* `--wallet` is a path to a user's wallet `.json` file. You can provide a passphrase to decrypt
 a wallet via environment variable `AUTHMATE_WALLET_PASSPHRASE`, or you will be asked to enter a passphrase 
 interactively. You can also specify an account address to use from a wallet using the `--address` parameter.
 * `--peer` is an address of a NeoFS peer to connect to
@@ -105,12 +151,12 @@ You can issue a secret using the parameters above only. The tool will
 
 E.g.:
 ```shell
-$ neofs-s3-authmate issue-secret --wallet wallet.json \
+$ neofs-s3-authmate issue-secret --wallet user.wallet.json \
  --peer 192.168.130.71:8080 \
- --gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf\
+ --gate-public-key 025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7\
  --gate-public-key 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967
  
- Enter password for wallet.json > 
+ Enter password for user.wallet.json > 
  
 {
   "access_key_id": "5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM",
@@ -137,13 +183,13 @@ the secret. Format of `access_key_id`: `%cid0%oid`, where 0(zero) is a delimiter
 
 ### Bearer tokens
 
-Creation of bearer tokens is mandatory.
+Creation of bearer tokens is mandatory. Users wallet (not gate wallet) should be used in `--wallet` parameter. 
 
 Rules for a bearer token can be set via parameter `--bearer-rules` (json-string and file path allowed):
 ```shell
-$ neofs-s3-authmate issue-secret --wallet wallet.json \
+$ neofs-s3-authmate issue-secret --wallet user.wallet.json \
 --peer 192.168.130.71:8080 \
---gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
+--gate-public-key 025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7 \
 --bearer-rules bearer-rules.json  
 ```
 where content of `bearer-rules.json`:
@@ -195,9 +241,9 @@ If bearer rules are not set, a token will be auto-generated with a value:
 With a session token, there are 3 options: 
 1. append `--session-tokens` parameter with your custom rules in json format (as a string or file path). E.g.:
 ```shell
-$ neofs-s3-authmate issue-secret --wallet wallet.json \
+$ neofs-s3-authmate issue-secret --wallet user.wallet.json \
 --peer 192.168.130.71:8080 \
---gate-public-key 0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf \
+--gate-public-key 025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7 \
 --session-tokens session.json
 ```
 where content of `session.json`:
