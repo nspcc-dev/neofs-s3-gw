@@ -1,4 +1,4 @@
-package errors
+package s3errors
 
 import (
 	"fmt"
@@ -270,7 +270,7 @@ const (
 
 	ErrPostPolicyConditionInvalidFormat
 
-	//CORS configuration errors.
+	// CORS configuration errors.
 	ErrCORSUnsupportedMethod
 	ErrCORSWildcardExposeHeaders
 )

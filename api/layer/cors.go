@@ -9,7 +9,7 @@ import (
 	"io"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -29,7 +29,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 	}
 
 	if cors.CORSRules == nil {
-		return errors.GetAPIError(errors.ErrMalformedXML)
+		return s3errors.GetAPIError(s3errors.ErrMalformedXML)
 	}
 
 	if err := checkCORS(cors); err != nil {
@@ -74,7 +74,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 	cors, err := n.getCORS(ctx, bktInfo)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
 		}
 		return nil, err
 	}
@@ -103,12 +103,12 @@ func checkCORS(cors *data.CORSConfiguration) error {
 	for _, r := range cors.CORSRules {
 		for _, m := range r.AllowedMethods {
 			if _, ok := supportedMethods[m]; !ok {
-				return errors.GetAPIErrorWithError(errors.ErrCORSUnsupportedMethod, fmt.Errorf("unsupported method is %s", m))
+				return s3errors.GetAPIErrorWithError(s3errors.ErrCORSUnsupportedMethod, fmt.Errorf("unsupported method is %s", m))
 			}
 		}
 		for _, h := range r.ExposeHeaders {
 			if h == wildcard {
-				return errors.GetAPIError(errors.ErrCORSWildcardExposeHeaders)
+				return s3errors.GetAPIError(s3errors.ErrCORSWildcardExposeHeaders)
 			}
 		}
 	}

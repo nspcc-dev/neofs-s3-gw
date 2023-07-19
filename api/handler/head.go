@@ -6,8 +6,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +60,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
-		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}

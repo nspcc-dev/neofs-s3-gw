@@ -18,7 +18,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
-	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -104,12 +104,12 @@ func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *ca
 func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 	submatches := c.reg.GetSubmatches(header)
 	if len(submatches) != authHeaderPartsNum {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
+		return nil, s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed)
 	}
 
 	accessKey := strings.Split(submatches["access_key_id"], "0")
 	if len(accessKey) != accessKeyPartsNum {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 
 	signedFields := strings.Split(submatches["signed_header_fields"], ";")
@@ -127,7 +127,7 @@ func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 func (a *authHeader) getAddress() (oid.Address, error) {
 	var addr oid.Address
 	if err := addr.DecodeString(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
-		return addr, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
+		return addr, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 	return addr, nil
 }
@@ -219,12 +219,12 @@ func (c center) checkAccessKeyID(accessKeyID string) error {
 		}
 	}
 
-	return apiErrors.GetAPIError(apiErrors.ErrAccessDenied)
+	return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 }
 
 func (c *center) checkFormData(r *http.Request) (*Box, error) {
 	if err := r.ParseMultipartForm(maxFormSizeMemory); err != nil {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidArgument)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 	}
 
 	if err := prepareForm(r.MultipartForm); err != nil {
@@ -238,7 +238,7 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 
 	submatches := c.postReg.GetSubmatches(MultipartFormValue(r, "x-amz-credential"))
 	if len(submatches) != 4 {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrAuthorizationHeaderMalformed)
+		return nil, s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed)
 	}
 
 	signatureDateTime, err := time.Parse("20060102T150405Z", MultipartFormValue(r, "x-amz-date"))
@@ -248,7 +248,7 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 
 	var addr oid.Address
 	if err = addr.DecodeString(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidAccessKeyID)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 
 	box, err := c.cli.GetBox(r.Context(), addr)
@@ -261,7 +261,7 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 
 	signature := signStr(secret, service, region, signatureDateTime, policy)
 	if signature != MultipartFormValue(r, "x-amz-signature") {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
+		return nil, s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch)
 	}
 
 	return &Box{AccessBox: box}, nil
@@ -296,10 +296,10 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 	if authHeader.IsPresigned {
 		now := time.Now()
 		if signatureDateTime.Add(authHeader.Expiration).Before(now) {
-			return apiErrors.GetAPIError(apiErrors.ErrExpiredPresignRequest)
+			return s3errors.GetAPIError(s3errors.ErrExpiredPresignRequest)
 		}
 		if now.Before(signatureDateTime) {
-			return apiErrors.GetAPIError(apiErrors.ErrBadRequest)
+			return s3errors.GetAPIError(s3errors.ErrBadRequest)
 		}
 		if _, err := signer.Presign(request, nil, authHeader.Service, authHeader.Region, authHeader.Expiration, signatureDateTime); err != nil {
 			return fmt.Errorf("failed to pre-sign temporary HTTP request: %w", err)
@@ -314,7 +314,7 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 	}
 
 	if authHeader.SignatureV4 != signature {
-		return apiErrors.GetAPIError(apiErrors.ErrSignatureDoesNotMatch)
+		return s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch)
 	}
 
 	return nil

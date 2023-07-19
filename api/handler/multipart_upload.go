@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -211,7 +211,7 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 
 	partNumber, err := strconv.Atoi(queryValues.Get(partNumberHeaderName))
 	if err != nil || partNumber < layer.UploadMinPartNumber || partNumber > layer.UploadMaxPartNumber {
-		h.logAndSendError(w, "invalid part number", reqInfo, errors.GetAPIError(errors.ErrInvalidPartNumber))
+		h.logAndSendError(w, "invalid part number", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
 		return
 	}
 
@@ -257,7 +257,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 
 	partNumber, err := strconv.Atoi(queryValues.Get(partNumberHeaderName))
 	if err != nil || partNumber < layer.UploadMinPartNumber || partNumber > layer.UploadMaxPartNumber {
-		h.logAndSendError(w, "invalid part number", reqInfo, errors.GetAPIError(errors.ErrInvalidPartNumber))
+		h.logAndSendError(w, "invalid part number", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
 		return
 	}
 
@@ -275,7 +275,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	srcRange, err := parseRange(r.Header.Get(api.AmzCopySourceRange))
 	if err != nil {
 		h.logAndSendError(w, "could not parse copy range", reqInfo,
-			errors.GetAPIError(errors.ErrInvalidCopyPartRange), additional...)
+			s3errors.GetAPIError(s3errors.ErrInvalidCopyPartRange), additional...)
 		return
 	}
 
@@ -297,9 +297,9 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		VersionID: versionID,
 	})
 	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchKey) && versionID != "" {
+		if s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) && versionID != "" {
 			h.logAndSendError(w, "could not head source object version", reqInfo,
-				errors.GetAPIError(errors.ErrBadRequest), additional...)
+				s3errors.GetAPIError(s3errors.ErrBadRequest), additional...)
 			return
 		}
 		h.logAndSendError(w, "could not head source object", reqInfo, err, additional...)
@@ -309,12 +309,12 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	args, err := parseCopyObjectArgs(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse copy object args", reqInfo,
-			errors.GetAPIError(errors.ErrInvalidCopyPartRange), additional...)
+			s3errors.GetAPIError(s3errors.ErrInvalidCopyPartRange), additional...)
 		return
 	}
 
 	if err = checkPreconditions(srcInfo, args.Conditional); err != nil {
-		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed),
+		h.logAndSendError(w, "precondition failed", reqInfo, s3errors.GetAPIError(s3errors.ErrPreconditionFailed),
 			additional...)
 		return
 	}
@@ -338,7 +338,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = p.Info.Encryption.MatchObjectEncryption(layer.FormEncryptionInfo(srcInfo.Headers)); err != nil {
-		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
@@ -386,11 +386,11 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	reqBody := new(CompleteMultipartUpload)
 	if err = xml.NewDecoder(r.Body).Decode(reqBody); err != nil {
 		h.logAndSendError(w, "could not read complete multipart upload xml", reqInfo,
-			errors.GetAPIError(errors.ErrMalformedXML), additional...)
+			s3errors.GetAPIError(s3errors.ErrMalformedXML), additional...)
 		return
 	}
 	if len(reqBody.Parts) == 0 {
-		h.logAndSendError(w, "invalid xml with parts", reqInfo, errors.GetAPIError(errors.ErrMalformedXML), additional...)
+		h.logAndSendError(w, "invalid xml with parts", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML), additional...)
 		return
 	}
 
@@ -498,7 +498,7 @@ func (h *handler) ListMultipartUploadsHandler(w http.ResponseWriter, r *http.Req
 	if queryValues.Get("max-uploads") != "" {
 		val, err := strconv.Atoi(queryValues.Get("max-uploads"))
 		if err != nil || val < 0 {
-			h.logAndSendError(w, "invalid maxUploads", reqInfo, errors.GetAPIError(errors.ErrInvalidMaxUploads))
+			h.logAndSendError(w, "invalid maxUploads", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidMaxUploads))
 			return
 		}
 		if val < maxUploads {
@@ -548,7 +548,7 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 	if queryValues.Get("max-parts") != "" {
 		val, err := strconv.Atoi(queryValues.Get("max-parts"))
 		if err != nil || val < 0 {
-			h.logAndSendError(w, "invalid MaxParts", reqInfo, errors.GetAPIError(errors.ErrInvalidMaxParts), additional...)
+			h.logAndSendError(w, "invalid MaxParts", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidMaxParts), additional...)
 			return
 		}
 		if val < layer.MaxSizePartsList {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -86,7 +86,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	deletedObject := deletedObjects[0]
 	if deletedObject.Error != nil {
 		if isErrObjectLocked(deletedObject.Error) {
-			h.logAndSendError(w, "object is locked", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+			h.logAndSendError(w, "object is locked", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		} else {
 			h.logAndSendError(w, "could not delete object", reqInfo, deletedObject.Error)
 		}
@@ -158,21 +158,21 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	// Content-Md5 is required and should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header[api.ContentMD5]; !ok {
-		h.logAndSendError(w, "missing Content-MD5", reqInfo, errors.GetAPIError(errors.ErrMissingContentMD5))
+		h.logAndSendError(w, "missing Content-MD5", reqInfo, s3errors.GetAPIError(s3errors.ErrMissingContentMD5))
 		return
 	}
 
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
-		h.logAndSendError(w, "missing Content-Length", reqInfo, errors.GetAPIError(errors.ErrMissingContentLength))
+		h.logAndSendError(w, "missing Content-Length", reqInfo, s3errors.GetAPIError(s3errors.ErrMissingContentLength))
 		return
 	}
 
 	// Unmarshal list of keys to be deleted.
 	requested := &DeleteObjectsRequest{}
 	if err := xml.NewDecoder(r.Body).Decode(requested); err != nil {
-		h.logAndSendError(w, "couldn't decode body", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
+		h.logAndSendError(w, "couldn't decode body", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
 		return
 	}
 
@@ -222,7 +222,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	for _, obj := range deletedObjects {
 		if obj.Error != nil {
 			code := "BadRequest"
-			if s3err, ok := obj.Error.(errors.Error); ok {
+			if s3err, ok := obj.Error.(s3errors.Error); ok {
 				code = s3err.Code
 			}
 			response.Errors = append(response.Errors, DeleteError{

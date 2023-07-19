@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,7 +90,7 @@ func TestCheckRules(t *testing.T) {
 			{Name: "sfx", Value: "asd"},
 		}
 		err := checkRules(rules)
-		require.ErrorIs(t, err, errors.GetAPIError(errors.ErrFilterNameInvalid))
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrFilterNameInvalid))
 	})
 
 	t.Run("incorrect rules with repeating suffix", func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestCheckRules(t *testing.T) {
 			{Name: "prefix", Value: "jk"},
 		}
 		err := checkRules(rules)
-		require.ErrorIs(t, err, errors.GetAPIError(errors.ErrFilterNameSuffix))
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrFilterNameSuffix))
 	})
 
 	t.Run("incorrect rules with repeating prefix", func(t *testing.T) {
@@ -110,6 +110,6 @@ func TestCheckRules(t *testing.T) {
 			{Name: "prefix", Value: "asdf"},
 		}
 		err := checkRules(rules)
-		require.ErrorIs(t, err, errors.GetAPIError(errors.ErrFilterNamePrefix))
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrFilterNamePrefix))
 	})
 }
