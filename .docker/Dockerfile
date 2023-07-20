@@ -10,11 +10,11 @@ COPY . /src
 RUN make
 
 # Executable image
-FROM alpine AS neofs-s3-gw
-RUN apk add --no-cache bash ca-certificates
+FROM scratch
 
 WORKDIR /
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /src/bin/neofs-s3-gw /bin/neofs-s3-gw
 COPY --from=builder /src/bin/neofs-s3-authmate /bin/neofs-s3-authmate
 
