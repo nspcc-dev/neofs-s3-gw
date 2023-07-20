@@ -18,8 +18,8 @@ import (
 	v2acl "github.com/nspcc-dev/neofs-api-go/v2/acl"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -221,7 +221,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
-		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
+		h.logAndSendError(w, "could not parse bucket acl", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
 		return
 	}
 
@@ -356,7 +356,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
-		h.logAndSendError(w, "could not parse bucket acl", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
+		h.logAndSendError(w, "could not parse bucket acl", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
 		return
 	}
 
@@ -423,7 +423,7 @@ func checkOwner(info *data.BucketInfo, owner string) error {
 
 	// may need to convert owner to appropriate format
 	if info.Owner.String() != owner {
-		return errors.GetAPIError(errors.ErrAccessDenied)
+		return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 	}
 
 	return nil
@@ -543,7 +543,7 @@ func parseGrantee(grantees string) ([]*Grantee, error) {
 	for _, pair := range split {
 		split2 := strings.Split(pair, "=")
 		if len(split2) != 2 {
-			return nil, errors.GetAPIError(errors.ErrInvalidArgument)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 		}
 
 		grantee, err := formGrantee(split2[0], split2[1])
@@ -601,7 +601,7 @@ func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessContro
 			Permission: awsPermRead,
 		})
 	default:
-		return nil, errors.GetAPIError(errors.ErrInvalidArgument)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 	}
 
 	return acp, nil

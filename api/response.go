@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 )
 
@@ -113,7 +113,7 @@ var s3ErrorResponseMap = map[string]string{
 func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) int {
 	code := http.StatusInternalServerError
 
-	if e, ok := err.(errors.Error); ok {
+	if e, ok := err.(s3errors.Error); ok {
 		code = e.HTTPStatusCode
 
 		switch e.Code {
@@ -136,7 +136,7 @@ func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) int 
 // If none of the http routes match respond with appropriate errors.
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
-	WriteErrorResponse(w, GetReqInfo(r.Context()), errors.Error{
+	WriteErrorResponse(w, GetReqInfo(r.Context()), s3errors.Error{
 		Code:           "UnknownAPIRequest",
 		Description:    desc,
 		HTTPStatusCode: http.StatusBadRequest,
@@ -231,7 +231,7 @@ func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
 	code := "InternalError"
 	desc := err.Error()
 
-	if e, ok := err.(errors.Error); ok {
+	if e, ok := err.(s3errors.Error); ok {
 		code = e.Code
 		desc = e.Description
 	}

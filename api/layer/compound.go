@@ -5,7 +5,7 @@ import (
 	errorsStd "errors"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 )
 
 func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectVersion, nodeVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
@@ -29,7 +29,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo, nodeVersion)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, nil, errors.GetAPIError(errors.ErrNoSuchKey)
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 		return nil, nil, err
 	}

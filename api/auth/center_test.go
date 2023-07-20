@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,12 +35,12 @@ func TestAuthHeaderParse(t *testing.T) {
 		},
 		{
 			header:   strings.ReplaceAll(defaultHeader, "Signature=2811ccb9e242f41426738fb1f", ""),
-			err:      errors.GetAPIError(errors.ErrAuthorizationHeaderMalformed),
+			err:      s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed),
 			expected: nil,
 		},
 		{
 			header:   strings.ReplaceAll(defaultHeader, "oid0cid", "oidcid"),
-			err:      errors.GetAPIError(errors.ErrInvalidAccessKeyID),
+			err:      s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID),
 			expected: nil,
 		},
 	} {
@@ -51,7 +51,7 @@ func TestAuthHeaderParse(t *testing.T) {
 }
 
 func TestAuthHeaderGetAddress(t *testing.T) {
-	defaulErr := errors.GetAPIError(errors.ErrInvalidAccessKeyID)
+	defaulErr := s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 
 	for _, tc := range []struct {
 		authHeader *authHeader

@@ -6,7 +6,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -54,7 +54,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	tags, err := n.treeService.GetObjectTagging(ctx, p.ObjectVersion.BktInfo, nodeVersion)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return "", nil, errors.GetAPIError(errors.ErrNoSuchKey)
+			return "", nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 		return "", nil, err
 	}
@@ -77,7 +77,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 	err = n.treeService.PutObjectTagging(ctx, p.ObjectVersion.BktInfo, nodeVersion, p.TagSet)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*dat
 	err = n.treeService.DeleteObjectTagging(ctx, p.BktInfo, version)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, errors.GetAPIError(errors.ErrNoSuchKey)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 		return nil, err
 	}
@@ -169,12 +169,12 @@ func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (
 			}
 		}
 		if version == nil {
-			err = errors.GetAPIError(errors.ErrNoSuchVersion)
+			err = s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 	}
 
 	if err == nil && version.IsDeleteMarker() && !objVersion.NoErrorOnDeleteMarker || errorsStd.Is(err, ErrNodeNotFound) {
-		return nil, errors.GetAPIError(errors.ErrNoSuchKey)
+		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 	}
 
 	if err == nil && version != nil && !version.IsDeleteMarker() {

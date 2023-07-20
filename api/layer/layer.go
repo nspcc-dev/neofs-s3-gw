@@ -14,8 +14,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -353,7 +353,7 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 	containerID, err := n.ResolveBucket(ctx, name)
 	if err != nil {
 		n.log.Debug("bucket not found", zap.Error(err))
-		return nil, errors.GetAPIError(errors.ErrNoSuchBucket)
+		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchBucket)
 	}
 
 	return n.containerInfo(ctx, containerID)
@@ -607,8 +607,8 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 }
 
 func dismissNotFoundError(obj *VersionedObject) *VersionedObject {
-	if errors.IsS3Error(obj.Error, errors.ErrNoSuchKey) ||
-		errors.IsS3Error(obj.Error, errors.ErrNoSuchVersion) {
+	if s3errors.IsS3Error(obj.Error, s3errors.ErrNoSuchKey) ||
+		s3errors.IsS3Error(obj.Error, s3errors.ErrNoSuchVersion) {
 		obj.Error = nil
 	}
 
@@ -646,17 +646,17 @@ func (n *layer) DeleteObjects(ctx context.Context, p *DeleteObjectParams) []*Ver
 func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
 	bktInfo, err := n.GetBucketInfo(ctx, p.Name)
 	if err != nil {
-		if errors.IsS3Error(err, errors.ErrNoSuchBucket) {
+		if s3errors.IsS3Error(err, s3errors.ErrNoSuchBucket) {
 			return n.createContainer(ctx, p)
 		}
 		return nil, err
 	}
 
 	if p.SessionContainerCreation != nil && session.IssuedBy(*p.SessionContainerCreation, bktInfo.Owner) {
-		return nil, errors.GetAPIError(errors.ErrBucketAlreadyOwnedByYou)
+		return nil, s3errors.GetAPIError(s3errors.ErrBucketAlreadyOwnedByYou)
 	}
 
-	return nil, errors.GetAPIError(errors.ErrBucketAlreadyExists)
+	return nil, s3errors.GetAPIError(s3errors.ErrBucketAlreadyExists)
 }
 
 func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
@@ -679,7 +679,7 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return err
 	}
 	if len(nodeVersions) != 0 {
-		return errors.GetAPIError(errors.ErrBucketNotEmpty)
+		return s3errors.GetAPIError(s3errors.ErrBucketNotEmpty)
 	}
 
 	n.cache.DeleteBucket(p.BktInfo.Name)

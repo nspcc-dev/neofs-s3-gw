@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -31,8 +31,8 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 					ctx = r.Context()
 				} else {
 					log.Error("failed to pass authentication", zap.Error(err))
-					if _, ok := err.(errors.Error); !ok {
-						err = errors.GetAPIError(errors.ErrAccessDenied)
+					if _, ok := err.(s3errors.Error); !ok {
+						err = s3errors.GetAPIError(s3errors.ErrAccessDenied)
 					}
 					WriteErrorResponse(w, GetReqInfo(r.Context()), err)
 					return

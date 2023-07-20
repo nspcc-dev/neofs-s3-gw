@@ -12,7 +12,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -268,23 +268,23 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		bucket        string
-		expectedError apiErrors.Error
+		expectedError s3errors.Error
 		noError       bool
 		configuration *data.ObjectLockConfiguration
 	}{
 		{
 			name:          "bkt not found",
-			expectedError: apiErrors.GetAPIError(apiErrors.ErrNoSuchBucket),
+			expectedError: s3errors.GetAPIError(s3errors.ErrNoSuchBucket),
 		},
 		{
 			name:          "bkt lock disabled",
 			bucket:        bktLockDisabled,
-			expectedError: apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotAllowed),
+			expectedError: s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotAllowed),
 		},
 		{
 			name:          "invalid configuration",
 			bucket:        bktLockEnabled,
-			expectedError: apiErrors.GetAPIError(apiErrors.ErrInternalError),
+			expectedError: s3errors.GetAPIError(s3errors.ErrInternalError),
 			configuration: &data.ObjectLockConfiguration{ObjectLockEnabled: "dummy"},
 		},
 		{
@@ -357,18 +357,18 @@ func TestGetBucketLockConfigurationHandler(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		bucket        string
-		expectedError apiErrors.Error
+		expectedError s3errors.Error
 		noError       bool
 		expectedConf  *data.ObjectLockConfiguration
 	}{
 		{
 			name:          "bkt not found",
-			expectedError: apiErrors.GetAPIError(apiErrors.ErrNoSuchBucket),
+			expectedError: s3errors.GetAPIError(s3errors.ErrNoSuchBucket),
 		},
 		{
 			name:          "bkt lock disabled",
 			bucket:        bktLockDisabled,
-			expectedError: apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound),
+			expectedError: s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound),
 		},
 		{
 			name:         "bkt lock enabled empty default",
@@ -405,7 +405,7 @@ func TestGetBucketLockConfigurationHandler(t *testing.T) {
 	}
 }
 
-func assertS3Error(t *testing.T, w *httptest.ResponseRecorder, expectedError apiErrors.Error) {
+func assertS3Error(t *testing.T, w *httptest.ResponseRecorder, expectedError s3errors.Error) {
 	actualErrorResponse := &api.ErrorResponse{}
 	err := xml.NewDecoder(w.Result().Body).Decode(actualErrorResponse)
 	require.NoError(t, err)
@@ -413,7 +413,7 @@ func assertS3Error(t *testing.T, w *httptest.ResponseRecorder, expectedError api
 	require.Equal(t, expectedError.HTTPStatusCode, w.Code)
 	require.Equal(t, expectedError.Code, actualErrorResponse.Code)
 
-	if expectedError.ErrCode != apiErrors.ErrInternalError {
+	if expectedError.ErrCode != s3errors.ErrInternalError {
 		require.Equal(t, expectedError.Description, actualErrorResponse.Message)
 	}
 }
@@ -471,33 +471,33 @@ func TestObjectRetention(t *testing.T) {
 	objName := "obj-for-retention"
 	createTestObject(hc, bktInfo, objName)
 
-	getObjectRetention(hc, bktName, objName, nil, apiErrors.ErrNoSuchKey)
+	getObjectRetention(hc, bktName, objName, nil, s3errors.ErrNoSuchKey)
 
 	retention := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 	putObjectRetention(hc, bktName, objName, retention, false, 0)
 	getObjectRetention(hc, bktName, objName, retention, 0)
 
 	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Add(time.Minute).Format(time.RFC3339)}
-	putObjectRetention(hc, bktName, objName, retention, false, apiErrors.ErrInternalError)
+	putObjectRetention(hc, bktName, objName, retention, false, s3errors.ErrInternalError)
 
 	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 	putObjectRetention(hc, bktName, objName, retention, true, 0)
 	getObjectRetention(hc, bktName, objName, retention, 0)
 
-	putObjectRetention(hc, bktName, objName, retention, true, apiErrors.ErrInternalError)
+	putObjectRetention(hc, bktName, objName, retention, true, s3errors.ErrInternalError)
 }
 
-func getObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, errCode apiErrors.ErrorCode) {
+func getObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, errCode s3errors.ErrorCode) {
 	w, r := prepareTestRequest(hc, bktName, objName, nil)
 	hc.Handler().GetObjectRetentionHandler(w, r)
 	if errCode == 0 {
 		assertRetention(hc.t, w, retention)
 	} else {
-		assertS3Error(hc.t, w, apiErrors.GetAPIError(errCode))
+		assertS3Error(hc.t, w, s3errors.GetAPIError(errCode))
 	}
 }
 
-func putObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, byPass bool, errCode apiErrors.ErrorCode) {
+func putObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, byPass bool, errCode s3errors.ErrorCode) {
 	w, r := prepareTestRequest(hc, bktName, objName, retention)
 	if byPass {
 		r.Header.Set(api.AmzBypassGovernanceRetention, strconv.FormatBool(true))
@@ -506,7 +506,7 @@ func putObjectRetention(hc *handlerContext, bktName, objName string, retention *
 	if errCode == 0 {
 		assertStatus(hc.t, w, http.StatusOK)
 	} else {
-		assertS3Error(hc.t, w, apiErrors.GetAPIError(errCode))
+		assertS3Error(hc.t, w, s3errors.GetAPIError(errCode))
 	}
 }
 
@@ -570,37 +570,37 @@ func TestPutLockErrors(t *testing.T) {
 	createTestBucketWithLock(hc, bktName, nil)
 
 	headers := map[string]string{api.AmzObjectLockMode: complianceMode}
-	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrObjectLockInvalidHeaders)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, s3errors.ErrObjectLockInvalidHeaders)
 
 	delete(headers, api.AmzObjectLockMode)
 	headers[api.AmzObjectLockRetainUntilDate] = time.Now().Add(time.Minute).Format(time.RFC3339)
-	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrObjectLockInvalidHeaders)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, s3errors.ErrObjectLockInvalidHeaders)
 
 	headers[api.AmzObjectLockMode] = "dummy"
-	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrUnknownWORMModeDirective)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, s3errors.ErrUnknownWORMModeDirective)
 
 	headers[api.AmzObjectLockMode] = complianceMode
 	headers[api.AmzObjectLockRetainUntilDate] = time.Now().Format(time.RFC3339)
-	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrPastObjectLockRetainDate)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, s3errors.ErrPastObjectLockRetainDate)
 
 	headers[api.AmzObjectLockRetainUntilDate] = "dummy"
-	putObjectWithLockFailed(t, hc, bktName, objName, headers, apiErrors.ErrInvalidRetentionDate)
+	putObjectWithLockFailed(t, hc, bktName, objName, headers, s3errors.ErrInvalidRetentionDate)
 
 	putObject(t, hc, bktName, objName)
 
 	retention := &data.Retention{Mode: governanceMode}
-	putObjectRetentionFailed(t, hc, bktName, objName, retention, apiErrors.ErrMalformedXML)
+	putObjectRetentionFailed(t, hc, bktName, objName, retention, s3errors.ErrMalformedXML)
 
 	retention.Mode = "dummy"
 	retention.RetainUntilDate = time.Now().Add(time.Minute).UTC().Format(time.RFC3339)
-	putObjectRetentionFailed(t, hc, bktName, objName, retention, apiErrors.ErrMalformedXML)
+	putObjectRetentionFailed(t, hc, bktName, objName, retention, s3errors.ErrMalformedXML)
 
 	retention.Mode = governanceMode
 	retention.RetainUntilDate = time.Now().UTC().Format(time.RFC3339)
-	putObjectRetentionFailed(t, hc, bktName, objName, retention, apiErrors.ErrPastObjectLockRetainDate)
+	putObjectRetentionFailed(t, hc, bktName, objName, retention, s3errors.ErrPastObjectLockRetainDate)
 }
 
-func putObjectWithLockFailed(t *testing.T, hc *handlerContext, bktName, objName string, headers map[string]string, errCode apiErrors.ErrorCode) {
+func putObjectWithLockFailed(t *testing.T, hc *handlerContext, bktName, objName string, headers map[string]string, errCode s3errors.ErrorCode) {
 	w, r := prepareTestRequest(hc, bktName, objName, nil)
 
 	for key, val := range headers {
@@ -608,13 +608,13 @@ func putObjectWithLockFailed(t *testing.T, hc *handlerContext, bktName, objName 
 	}
 
 	hc.Handler().PutObjectHandler(w, r)
-	assertS3Error(t, w, apiErrors.GetAPIError(errCode))
+	assertS3Error(t, w, s3errors.GetAPIError(errCode))
 }
 
-func putObjectRetentionFailed(t *testing.T, hc *handlerContext, bktName, objName string, retention *data.Retention, errCode apiErrors.ErrorCode) {
+func putObjectRetentionFailed(t *testing.T, hc *handlerContext, bktName, objName string, retention *data.Retention, errCode s3errors.ErrorCode) {
 	w, r := prepareTestRequest(hc, bktName, objName, retention)
 	hc.Handler().PutObjectRetentionHandler(w, r)
-	assertS3Error(t, w, apiErrors.GetAPIError(errCode))
+	assertS3Error(t, w, s3errors.GetAPIError(errCode))
 }
 
 func assertRetentionApproximate(t *testing.T, w *httptest.ResponseRecorder, retention *data.Retention, delta float64) {

@@ -6,8 +6,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 )
 
 func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +15,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 
 	configuration := new(VersioningConfiguration)
 	if err := xml.NewDecoder(r.Body).Decode(configuration); err != nil {
-		h.logAndSendError(w, "couldn't decode versioning configuration", reqInfo, errors.GetAPIError(errors.ErrIllegalVersioningConfigurationException))
+		h.logAndSendError(w, "couldn't decode versioning configuration", reqInfo, s3errors.GetAPIError(s3errors.ErrIllegalVersioningConfigurationException))
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if configuration.Status != data.VersioningEnabled && configuration.Status != data.VersioningSuspended {
-		h.logAndSendError(w, "invalid versioning configuration", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
+		h.logAndSendError(w, "invalid versioning configuration", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
 		return
 	}
 
@@ -46,7 +46,7 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if p.Settings.VersioningSuspended() && bktInfo.ObjectLockEnabled {
-		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, errors.GetAPIError(errors.ErrObjectLockConfigurationVersioningCannotBeChanged))
+		h.logAndSendError(w, "couldn't suspend bucket versioning", reqInfo, s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationVersioningCannotBeChanged))
 		return
 	}
 

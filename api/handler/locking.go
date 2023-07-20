@@ -10,8 +10,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 )
 
 const (
@@ -36,7 +36,7 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "couldn't put object locking configuration", reqInfo,
-			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotAllowed))
+			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotAllowed))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "object lock disabled", reqInfo,
-			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound))
 		return
 	}
 
@@ -116,7 +116,7 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "object lock disabled", reqInfo,
-			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound))
 		return
 	}
 
@@ -163,7 +163,7 @@ func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "object lock disabled", reqInfo,
-			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound))
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "object lock disabled", reqInfo,
-			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound))
 		return
 	}
 
@@ -242,7 +242,7 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 
 	if !bktInfo.ObjectLockEnabled {
 		h.logAndSendError(w, "object lock disabled", reqInfo,
-			apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound))
+			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound))
 		return
 	}
 
@@ -259,7 +259,7 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if !lockInfo.IsRetentionSet() {
-		h.logAndSendError(w, "retention lock isn't set", reqInfo, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey))
+		h.logAndSendError(w, "retention lock isn't set", reqInfo, s3errors.GetAPIError(s3errors.ErrNoSuchKey))
 		return
 	}
 
@@ -304,7 +304,7 @@ func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig *data.ObjectLockConfiguration, header http.Header) (*data.ObjectLock, error) {
 	if !bktInfo.ObjectLockEnabled {
 		if existLockHeaders(header) {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrObjectLockConfigurationNotFound)
+			return nil, s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound)
 		}
 		return nil, nil
 	}
@@ -336,7 +336,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 	until := header.Get(api.AmzObjectLockRetainUntilDate)
 
 	if mode != "" && until == "" || mode == "" && until != "" {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrObjectLockInvalidHeaders)
+		return nil, s3errors.GetAPIError(s3errors.ErrObjectLockInvalidHeaders)
 	}
 
 	if mode != "" {
@@ -345,7 +345,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 		}
 
 		if mode != complianceMode && mode != governanceMode {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrUnknownWORMModeDirective)
+			return nil, s3errors.GetAPIError(s3errors.ErrUnknownWORMModeDirective)
 		}
 
 		objectLock.Retention.IsCompliance = mode == complianceMode
@@ -354,7 +354,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 	if until != "" {
 		retentionDate, err := time.Parse(time.RFC3339, until)
 		if err != nil {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrInvalidRetentionDate)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidRetentionDate)
 		}
 		if objectLock.Retention == nil {
 			objectLock.Retention = &data.RetentionLock{}
@@ -372,7 +372,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 		}
 
 		if objectLock.Retention.Until.Before(layer.TimeNow(ctx)) {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
+			return nil, s3errors.GetAPIError(s3errors.ErrPastObjectLockRetainDate)
 		}
 	}
 
@@ -387,16 +387,16 @@ func existLockHeaders(header http.Header) bool {
 
 func formObjectLockFromRetention(ctx context.Context, retention *data.Retention, header http.Header) (*data.ObjectLock, error) {
 	if retention.Mode != governanceMode && retention.Mode != complianceMode {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
+		return nil, s3errors.GetAPIError(s3errors.ErrMalformedXML)
 	}
 
 	retentionDate, err := time.Parse(time.RFC3339, retention.RetainUntilDate)
 	if err != nil {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrMalformedXML)
+		return nil, s3errors.GetAPIError(s3errors.ErrMalformedXML)
 	}
 
 	if retentionDate.Before(layer.TimeNow(ctx)) {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrPastObjectLockRetainDate)
+		return nil, s3errors.GetAPIError(s3errors.ErrPastObjectLockRetainDate)
 	}
 
 	var bypass bool

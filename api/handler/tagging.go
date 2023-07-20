@@ -10,8 +10,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -207,7 +207,7 @@ func (h *handler) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Requ
 func readTagSet(reader io.Reader) (map[string]string, error) {
 	tagging := new(Tagging)
 	if err := xml.NewDecoder(reader).Decode(tagging); err != nil {
-		return nil, errors.GetAPIError(errors.ErrMalformedXML)
+		return nil, s3errors.GetAPIError(s3errors.ErrMalformedXML)
 	}
 
 	if err := checkTagSet(tagging.TagSet); err != nil {
@@ -236,7 +236,7 @@ func encodeTagging(tagSet map[string]string) *Tagging {
 
 func checkTagSet(tagSet []Tag) error {
 	if len(tagSet) > maxTags {
-		return errors.GetAPIError(errors.ErrInvalidTagsSizeExceed)
+		return s3errors.GetAPIError(s3errors.ErrInvalidTagsSizeExceed)
 	}
 
 	for _, tag := range tagSet {
@@ -250,21 +250,21 @@ func checkTagSet(tagSet []Tag) error {
 
 func checkTag(tag Tag) error {
 	if len(tag.Key) < 1 || len(tag.Key) > keyTagMaxLength {
-		return errors.GetAPIError(errors.ErrInvalidTagKey)
+		return s3errors.GetAPIError(s3errors.ErrInvalidTagKey)
 	}
 	if len(tag.Value) > valueTagMaxLength {
-		return errors.GetAPIError(errors.ErrInvalidTagValue)
+		return s3errors.GetAPIError(s3errors.ErrInvalidTagValue)
 	}
 
 	if strings.HasPrefix(tag.Key, "aws:") {
-		return errors.GetAPIError(errors.ErrInvalidTagKey)
+		return s3errors.GetAPIError(s3errors.ErrInvalidTagKey)
 	}
 
 	if !isValidTag(tag.Key) {
-		return errors.GetAPIError(errors.ErrInvalidTagKey)
+		return s3errors.GetAPIError(s3errors.ErrInvalidTagKey)
 	}
 	if !isValidTag(tag.Value) {
-		return errors.GetAPIError(errors.ErrInvalidTagValue)
+		return s3errors.GetAPIError(s3errors.ErrInvalidTagValue)
 	}
 
 	return nil
