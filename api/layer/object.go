@@ -18,7 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	apiErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -312,13 +312,13 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 	node, err := n.treeService.GetLatestVersion(ctx, bkt, objectName)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 		return nil, err
 	}
 
 	if node.IsDeleteMarker() {
-		return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchKey)
+		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 	}
 
 	meta, err := n.objectHead(ctx, bkt, node.OID)
@@ -344,7 +344,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		foundVersion, err = n.treeService.GetUnversioned(ctx, bkt, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
-				return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 			}
 			return nil, err
 		}
@@ -361,7 +361,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 			}
 		}
 		if foundVersion == nil {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 	}
 
@@ -373,7 +373,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 	meta, err := n.objectHead(ctx, bkt, foundVersion.OID)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectNotFound) {
-			return nil, apiErrors.GetAPIError(apiErrors.ErrNoSuchVersion)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 		return nil, err
 	}

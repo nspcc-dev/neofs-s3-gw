@@ -19,9 +19,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -81,11 +81,11 @@ func (p *postPolicy) CheckField(key string, value string) error {
 	}
 	cond := p.condition(key)
 	if cond == nil {
-		return errors.GetAPIError(errors.ErrPostPolicyConditionInvalidFormat)
+		return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 	}
 
 	if !cond.match(value) {
-		return errors.GetAPIError(errors.ErrPostPolicyConditionInvalidFormat)
+		return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 	}
 
 	return nil
@@ -340,26 +340,26 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 	}
 
 	if sseCustomerAlgorithm != layer.AESEncryptionAlgorithm {
-		return enc, errors.GetAPIError(errors.ErrInvalidEncryptionAlgorithm)
+		return enc, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionAlgorithm)
 	}
 
 	key, err := base64.StdEncoding.DecodeString(sseCustomerKey)
 	if err != nil {
-		return enc, errors.GetAPIError(errors.ErrInvalidSSECustomerKey)
+		return enc, s3errors.GetAPIError(s3errors.ErrInvalidSSECustomerKey)
 	}
 
 	if len(key) != layer.AESKeySize {
-		return enc, errors.GetAPIError(errors.ErrInvalidSSECustomerKey)
+		return enc, s3errors.GetAPIError(s3errors.ErrInvalidSSECustomerKey)
 	}
 
 	keyMD5, err := base64.StdEncoding.DecodeString(sseCustomerKeyMD5)
 	if err != nil {
-		return enc, errors.GetAPIError(errors.ErrSSECustomerKeyMD5Mismatch)
+		return enc, s3errors.GetAPIError(s3errors.ErrSSECustomerKeyMD5Mismatch)
 	}
 
 	md5Sum := md5.Sum(key)
 	if !bytes.Equal(md5Sum[:], keyMD5) {
-		return enc, errors.GetAPIError(errors.ErrSSECustomerKeyMD5Mismatch)
+		return enc, s3errors.GetAPIError(s3errors.ErrSSECustomerKeyMD5Mismatch)
 	}
 
 	params, err := encryption.NewParams(key)
@@ -418,7 +418,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		reqInfo.ObjectName = strings.ReplaceAll(reqInfo.ObjectName, "${filename}", head.Filename)
 	}
 	if !policy.CheckContentLength(size) {
-		h.logAndSendError(w, "invalid content-length", reqInfo, errors.GetAPIError(errors.ErrInvalidArgument))
+		h.logAndSendError(w, "invalid content-length", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
 		return
 	}
 
@@ -539,7 +539,7 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 			return nil, fmt.Errorf("could not unmarshal policy: %w", err)
 		}
 		if policy.Expiration.Before(time.Now()) {
-			return nil, fmt.Errorf("policy is expired: %w", errors.GetAPIError(errors.ErrInvalidArgument))
+			return nil, fmt.Errorf("policy is expired: %w", s3errors.GetAPIError(s3errors.ErrInvalidArgument))
 		}
 		policy.empty = false
 	}
@@ -570,7 +570,7 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 	for _, cond := range policy.Conditions {
 		if cond.Key == "bucket" {
 			if !cond.match(reqInfo.BucketName) {
-				return nil, errors.GetAPIError(errors.ErrPostPolicyConditionInvalidFormat)
+				return nil, s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 			}
 		}
 	}
@@ -638,10 +638,10 @@ func parseTaggingHeader(header http.Header) (map[string]string, error) {
 	if tagging := header.Get(api.AmzTagging); len(tagging) > 0 {
 		queries, err := url.ParseQuery(tagging)
 		if err != nil {
-			return nil, errors.GetAPIError(errors.ErrInvalidArgument)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 		}
 		if len(queries) > maxTags {
-			return nil, errors.GetAPIError(errors.ErrInvalidTagsSizeExceed)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidTagsSizeExceed)
 		}
 		tagSet = make(map[string]string, len(queries))
 		for k, v := range queries {
@@ -710,12 +710,12 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if p.SessionContainerCreation == nil {
-		h.logAndSendError(w, "couldn't find session token for put", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+		h.logAndSendError(w, "couldn't find session token for put", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		return
 	}
 
 	if p.SessionEACL == nil {
-		h.logAndSendError(w, "couldn't find session token for setEACL", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+		h.logAndSendError(w, "couldn't find session token for setEACL", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		return
 	}
 
@@ -776,27 +776,27 @@ func isLockEnabled(header http.Header) bool {
 
 func checkBucketName(bucketName string) error {
 	if len(bucketName) < 3 || len(bucketName) > 63 {
-		return errors.GetAPIError(errors.ErrInvalidBucketName)
+		return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 	}
 
 	if strings.HasPrefix(bucketName, "xn--") || strings.HasSuffix(bucketName, "-s3alias") {
-		return errors.GetAPIError(errors.ErrInvalidBucketName)
+		return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 	}
 	if net.ParseIP(bucketName) != nil {
-		return errors.GetAPIError(errors.ErrInvalidBucketName)
+		return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 	}
 
 	labels := strings.Split(bucketName, ".")
 	for _, label := range labels {
 		if len(label) == 0 {
-			return errors.GetAPIError(errors.ErrInvalidBucketName)
+			return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 		}
 		for i, r := range label {
 			if !isAlphaNum(r) && r != '-' {
-				return errors.GetAPIError(errors.ErrInvalidBucketName)
+				return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 			}
 			if (i == 0 || i == len(label)-1) && r == '-' {
-				return errors.GetAPIError(errors.ErrInvalidBucketName)
+				return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 			}
 		}
 	}
@@ -815,7 +815,7 @@ func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
 
 	params := new(createBucketParams)
 	if err := xml.NewDecoder(r.Body).Decode(params); err != nil {
-		return nil, errors.GetAPIError(errors.ErrMalformedXML)
+		return nil, s3errors.GetAPIError(s3errors.ErrMalformedXML)
 	}
 	return params, nil
 }

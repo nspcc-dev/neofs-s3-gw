@@ -8,7 +8,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	gwErrors "github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -47,7 +47,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 		log.Error("could not fetch container", zap.Error(err))
 
 		if errors.Is(err, apistatus.ErrContainerNotFound) {
-			return nil, gwErrors.GetAPIError(gwErrors.ErrNoSuchBucket)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchBucket)
 		}
 		return nil, fmt.Errorf("get neofs container: %w", err)
 	}

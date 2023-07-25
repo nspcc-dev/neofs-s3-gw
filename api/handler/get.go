@@ -10,8 +10,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -29,7 +29,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 		return nil, nil
 	}
 	if fullSize == 0 {
-		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 	}
 	if !strings.HasPrefix(rangeHeader, prefix) {
 		return nil, fmt.Errorf("unknown unit in range header")
@@ -59,7 +59,7 @@ func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams,
 	}
 
 	if err0 != nil || err1 != nil || start > end || start > fullSize {
-		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 	}
 	return &layer.RangeParams{Start: start, End: end}, nil
 }
@@ -157,14 +157,14 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
-		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
 	fullSize := info.Size
 	if encryptionParams.Enabled() {
 		if fullSize, err = strconv.ParseInt(info.Headers[layer.AttributeDecryptedSize], 10, 64); err != nil {
-			h.logAndSendError(w, "invalid decrypted size header", reqInfo, errors.GetAPIError(errors.ErrBadRequest))
+			h.logAndSendError(w, "invalid decrypted size header", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 			return
 		}
 	}
@@ -181,7 +181,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
-	if err != nil && !errors.IsS3Error(err, errors.ErrNoSuchKey) {
+	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}
@@ -222,17 +222,17 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 func checkPreconditions(info *data.ObjectInfo, args *conditionalArgs) error {
 	if len(args.IfMatch) > 0 && args.IfMatch != info.HashSum {
-		return errors.GetAPIError(errors.ErrPreconditionFailed)
+		return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
 	}
 	if len(args.IfNoneMatch) > 0 && args.IfNoneMatch == info.HashSum {
-		return errors.GetAPIError(errors.ErrNotModified)
+		return s3errors.GetAPIError(s3errors.ErrNotModified)
 	}
 	if args.IfModifiedSince != nil && info.Created.Before(*args.IfModifiedSince) {
-		return errors.GetAPIError(errors.ErrNotModified)
+		return s3errors.GetAPIError(s3errors.ErrNotModified)
 	}
 	if args.IfUnmodifiedSince != nil && info.Created.After(*args.IfUnmodifiedSince) {
 		if len(args.IfMatch) == 0 {
-			return errors.GetAPIError(errors.ErrPreconditionFailed)
+			return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
 		}
 	}
 

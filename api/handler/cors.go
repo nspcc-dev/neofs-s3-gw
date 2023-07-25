@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -145,12 +145,12 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 
 	origin := r.Header.Get(api.Origin)
 	if origin == "" {
-		h.logAndSendError(w, "origin request header needed", reqInfo, errors.GetAPIError(errors.ErrBadRequest))
+		h.logAndSendError(w, "origin request header needed", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 	}
 
 	method := r.Header.Get(api.AccessControlRequestMethod)
 	if method == "" {
-		h.logAndSendError(w, "Access-Control-Request-Method request header needed", reqInfo, errors.GetAPIError(errors.ErrBadRequest))
+		h.logAndSendError(w, "Access-Control-Request-Method request header needed", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 		return
 	}
 
@@ -197,7 +197,7 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	h.logAndSendError(w, "Forbidden", reqInfo, errors.GetAPIError(errors.ErrAccessDenied))
+	h.logAndSendError(w, "Forbidden", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 }
 
 func checkSubslice(slice []string, subSlice []string) bool {

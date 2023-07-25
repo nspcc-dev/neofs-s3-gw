@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 )
 
@@ -105,7 +105,7 @@ func (h *handler) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Re
 
 	conf := &data.NotificationConfiguration{}
 	if err = xml.NewDecoder(r.Body).Decode(conf); err != nil {
-		h.logAndSendError(w, "couldn't decode notification configuration", reqInfo, errors.GetAPIError(errors.ErrMalformedXML))
+		h.logAndSendError(w, "couldn't decode notification configuration", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *handler) checkBucketConfiguration(ctx context.Context, conf *data.Notif
 	}
 
 	if conf.TopicConfigurations != nil || conf.LambdaFunctionConfigurations != nil {
-		return completed, errors.GetAPIError(errors.ErrNotificationTopicNotSupported)
+		return completed, s3errors.GetAPIError(s3errors.ErrNotificationTopicNotSupported)
 	}
 
 	for i, q := range conf.QueueConfigurations {
@@ -214,13 +214,13 @@ func checkRules(rules []data.FilterRule) error {
 
 	for _, r := range rules {
 		if r.Name != filterRuleSuffixName && r.Name != filterRulePrefixName {
-			return errors.GetAPIError(errors.ErrFilterNameInvalid)
+			return s3errors.GetAPIError(s3errors.ErrFilterNameInvalid)
 		}
 		if _, ok := names[r.Name]; ok {
 			if r.Name == filterRuleSuffixName {
-				return errors.GetAPIError(errors.ErrFilterNameSuffix)
+				return s3errors.GetAPIError(s3errors.ErrFilterNameSuffix)
 			}
-			return errors.GetAPIError(errors.ErrFilterNamePrefix)
+			return s3errors.GetAPIError(s3errors.ErrFilterNamePrefix)
 		}
 
 		names[r.Name] = struct{}{}
@@ -232,7 +232,7 @@ func checkRules(rules []data.FilterRule) error {
 func checkEvents(events []string) error {
 	for _, e := range events {
 		if _, ok := validEvents[e]; !ok {
-			return errors.GetAPIError(errors.ErrEventNotification)
+			return s3errors.GetAPIError(s3errors.ErrEventNotification)
 		}
 	}
 

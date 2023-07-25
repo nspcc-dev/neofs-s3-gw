@@ -14,8 +14,8 @@ import (
 	"github.com/minio/sio"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -176,13 +176,13 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
-			return "", errors.GetAPIError(errors.ErrNoSuchUpload)
+			return "", s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 		return "", err
 	}
 
 	if p.Size > uploadMaxSize {
-		return "", errors.GetAPIError(errors.ErrEntityTooLarge)
+		return "", s3errors.GetAPIError(s3errors.ErrEntityTooLarge)
 	}
 
 	objInfo, err := n.uploadPart(ctx, multipartInfo, p)
@@ -197,7 +197,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 	if err := p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
-		return nil, errors.GetAPIError(errors.ErrInvalidEncryptionParameters)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
 	}
 
 	bktInfo := p.Info.Bkt
@@ -278,7 +278,7 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
-			return nil, errors.GetAPIError(errors.ErrNoSuchUpload)
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 		return nil, err
 	}
@@ -287,11 +287,11 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	if p.Range != nil {
 		size = int64(p.Range.End - p.Range.Start + 1)
 		if p.Range.End > uint64(p.SrcObjInfo.Size) {
-			return nil, errors.GetAPIError(errors.ErrInvalidCopyPartRangeSource)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidCopyPartRangeSource)
 		}
 	}
 	if size > uploadMaxSize {
-		return nil, errors.GetAPIError(errors.ErrEntityTooLarge)
+		return nil, s3errors.GetAPIError(s3errors.ErrEntityTooLarge)
 	}
 
 	pr, pw := io.Pipe()
@@ -361,7 +361,7 @@ func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ExtendedObjectInfo, error) {
 	for i := 1; i < len(p.Parts); i++ {
 		if p.Parts[i].PartNumber <= p.Parts[i-1].PartNumber {
-			return nil, nil, errors.GetAPIError(errors.ErrInvalidPartOrder)
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrInvalidPartOrder)
 		}
 	}
 
@@ -372,7 +372,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 
 	if len(partsInfo) < len(p.Parts) {
-		return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
+		return nil, nil, s3errors.GetAPIError(s3errors.ErrInvalidPart)
 	}
 
 	var multipartObjetSize int64
@@ -383,11 +383,11 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	for i, part := range p.Parts {
 		partInfo := partsInfo[part.PartNumber]
 		if partInfo == nil || part.ETag != partInfo.ETag {
-			return nil, nil, errors.GetAPIError(errors.ErrInvalidPart)
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrInvalidPart)
 		}
 		// for the last part we have no minimum size limit
 		if i != len(p.Parts)-1 && partInfo.Size < uploadMinSize {
-			return nil, nil, errors.GetAPIError(errors.ErrEntityTooSmall)
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrEntityTooSmall)
 		}
 		parts = append(parts, partInfo)
 		multipartObjetSize += partInfo.Size // even if encryption is enabled size is actual (decrypted)
@@ -457,7 +457,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			zap.String("uploadKey", p.Info.Key),
 			zap.Error(err))
 
-		return nil, nil, errors.GetAPIError(errors.ErrInternalError)
+		return nil, nil, s3errors.GetAPIError(s3errors.ErrInternalError)
 	}
 
 	var addr oid.Address
@@ -562,7 +562,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 	if err = p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
-		return nil, errors.GetAPIError(errors.ErrInvalidEncryptionParameters)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
 	}
 
 	res.Owner = multipartInfo.Owner
@@ -606,7 +606,7 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Bkt, p.Key, p.UploadID)
 	if err != nil {
 		if stderrors.Is(err, ErrNodeNotFound) {
-			return nil, nil, errors.GetAPIError(errors.ErrNoSuchUpload)
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 		return nil, nil, err
 	}

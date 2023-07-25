@@ -9,8 +9,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -30,16 +30,16 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 }
 
 func transformToS3Error(err error) error {
-	if _, ok := err.(errors.Error); ok {
+	if _, ok := err.(s3errors.Error); ok {
 		return err
 	}
 
 	if errorsStd.Is(err, layer.ErrAccessDenied) ||
 		errorsStd.Is(err, layer.ErrNodeAccessDenied) {
-		return errors.GetAPIError(errors.ErrAccessDenied)
+		return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 	}
 
-	return errors.GetAPIError(errors.ErrInternalError)
+	return s3errors.GetAPIError(s3errors.ErrInternalError)
 }
 
 func (h *handler) getBucketAndCheckOwner(r *http.Request, bucket string, header ...string) (*data.BucketInfo, error) {
@@ -70,26 +70,26 @@ func parseRange(s string) (*layer.RangeParams, error) {
 	prefix := "bytes="
 
 	if !strings.HasPrefix(s, prefix) {
-		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 	}
 
 	s = strings.TrimPrefix(s, prefix)
 
 	valuesStr := strings.Split(s, "-")
 	if len(valuesStr) != 2 {
-		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 	}
 
 	values := make([]uint64, 0, len(valuesStr))
 	for _, v := range valuesStr {
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, errors.GetAPIError(errors.ErrInvalidRange)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 		}
 		values = append(values, num)
 	}
 	if values[0] > values[1] {
-		return nil, errors.GetAPIError(errors.ErrInvalidRange)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 	}
 
 	return &layer.RangeParams{
@@ -105,7 +105,7 @@ func getSessionTokenSetEACL(ctx context.Context) (*session.Container, error) {
 	}
 	sessionToken := boxData.Gate.SessionTokenForSetEACL()
 	if sessionToken == nil {
-		return nil, errors.GetAPIError(errors.ErrAccessDenied)
+		return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 	}
 
 	return sessionToken, nil

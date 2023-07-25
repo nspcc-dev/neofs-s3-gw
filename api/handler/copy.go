@@ -9,8 +9,8 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -32,7 +32,7 @@ var copySourceMatcher = auth.NewRegexpMatcher(regexp.MustCompile(`^/?(?P<bucket_
 func path2BucketObject(path string) (string, string, error) {
 	matches := copySourceMatcher.GetSubmatches(path)
 	if len(matches) != 2 {
-		return "", "", errors.GetAPIError(errors.ErrInvalidRequest)
+		return "", "", s3errors.GetAPIError(s3errors.ErrInvalidRequest)
 	}
 
 	return matches["bucket_name"], matches["object_name"], nil
@@ -111,7 +111,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isCopyingToItselfForbidden(reqInfo, srcBucket, srcObject, settings, args) {
-		h.logAndSendError(w, "copying to itself without changing anything", reqInfo, errors.GetAPIError(errors.ErrInvalidCopyDest))
+		h.logAndSendError(w, "copying to itself without changing anything", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidCopyDest))
 		return
 	}
 
@@ -149,12 +149,12 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(srcObjInfo.Headers)); err != nil {
-		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
 	if err = checkPreconditions(srcObjInfo, args.Conditional); err != nil {
-		h.logAndSendError(w, "precondition failed", reqInfo, errors.GetAPIError(errors.ErrPreconditionFailed))
+		h.logAndSendError(w, "precondition failed", reqInfo, s3errors.GetAPIError(s3errors.ErrPreconditionFailed))
 		return
 	}
 
@@ -288,12 +288,12 @@ func parseCopyObjectArgs(headers http.Header) (*copyObjectArgs, error) {
 
 	copyArgs.MetadataDirective = headers.Get(api.AmzMetadataDirective)
 	if !isValidDirective(copyArgs.MetadataDirective) {
-		return nil, errors.GetAPIError(errors.ErrInvalidMetadataDirective)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidMetadataDirective)
 	}
 
 	copyArgs.TaggingDirective = headers.Get(api.AmzTaggingDirective)
 	if !isValidDirective(copyArgs.TaggingDirective) {
-		return nil, errors.GetAPIError(errors.ErrInvalidTaggingDirective)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidTaggingDirective)
 	}
 
 	return copyArgs, nil

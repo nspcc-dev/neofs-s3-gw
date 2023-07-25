@@ -8,8 +8,8 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"go.uber.org/zap"
 )
 
@@ -101,7 +101,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
-		h.logAndSendError(w, "encryption doesn't match object", reqInfo, errors.GetAPIError(errors.ErrBadRequest), zap.Error(err))
+		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
 
@@ -148,13 +148,13 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 
 	attributesVal := r.Header.Get(api.AmzObjectAttributes)
 	if attributesVal == "" {
-		return nil, errors.GetAPIError(errors.ErrInvalidAttributeName)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAttributeName)
 	}
 
 	attributes := strings.Split(attributesVal, ",")
 	for _, a := range attributes {
 		if _, ok := validAttributes[a]; !ok {
-			return nil, errors.GetAPIError(errors.ErrInvalidAttributeName)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidAttributeName)
 		}
 		res.Attributes = append(res.Attributes, a)
 	}
@@ -164,13 +164,13 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 	if maxPartsVal == "" {
 		res.MaxParts = layer.MaxSizePartsList
 	} else if res.MaxParts, err = strconv.Atoi(maxPartsVal); err != nil || res.MaxParts < 0 {
-		return nil, errors.GetAPIError(errors.ErrInvalidMaxKeys)
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidMaxKeys)
 	}
 
 	markerVal := r.Header.Get(api.AmzPartNumberMarker)
 	if markerVal != "" {
 		if res.PartNumberMarker, err = strconv.Atoi(markerVal); err != nil || res.PartNumberMarker < 0 {
-			return nil, errors.GetAPIError(errors.ErrInvalidPartNumberMarker)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidPartNumberMarker)
 		}
 	}
 
@@ -240,7 +240,7 @@ func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectP
 			}
 		}
 		if !found {
-			return nil, errors.GetAPIError(errors.ErrInvalidPartNumberMarker)
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidPartNumberMarker)
 		}
 	}
 

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
@@ -167,7 +167,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSCo
 	}
 
 	if objIDNotFound {
-		return nil, errors.GetAPIError(errors.ErrNoSuchCORSConfiguration)
+		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
 	}
 
 	obj, err := n.objectGet(ctx, bkt, objID)
