@@ -82,12 +82,12 @@ jobs:
       - name: Build neofs-s3-gw docker image
         run: |
           cp .github/test-env .env #looks ugly, but I want to try
-          make image
+          make
         working-directory: neofs-s3-gw
 
       - name: Build neofs-s3-gw binaries
         run: |
-          make
+          make image
         working-directory: neofs-s3-gw
 
 
