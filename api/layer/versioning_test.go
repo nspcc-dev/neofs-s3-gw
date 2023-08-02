@@ -165,7 +165,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 	layerCfg := &Config{
 		Caches:      config,
-		AnonKey:     AnonymousKey{Key: key},
+		GateKey:     key,
 		TreeService: NewTreeService(),
 	}
 

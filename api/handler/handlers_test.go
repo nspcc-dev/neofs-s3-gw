@@ -85,7 +85,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 
 	layerCfg := &layer.Config{
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
-		AnonKey:     layer.AnonymousKey{Key: key},
+		GateKey:     key,
 		Resolver:    testResolver,
 		TreeService: layer.NewTreeService(),
 	}

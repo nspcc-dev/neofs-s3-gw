@@ -43,7 +43,7 @@ type (
 	layer struct {
 		neoFS       NeoFS
 		log         *zap.Logger
-		anonKey     AnonymousKey
+		gateKey     *keys.PrivateKey
 		resolver    resolver.Resolver
 		ncontroller EventListener
 		cache       *Cache
@@ -53,14 +53,9 @@ type (
 	Config struct {
 		ChainAddress string
 		Caches       *CachesConfig
-		AnonKey      AnonymousKey
+		GateKey      *keys.PrivateKey
 		Resolver     resolver.Resolver
 		TreeService  TreeService
-	}
-
-	// AnonymousKey contains data for anonymous requests.
-	AnonymousKey struct {
-		Key *keys.PrivateKey
 	}
 
 	// GetObjectParams stores object get request parameters.
@@ -182,7 +177,6 @@ type (
 	// Client provides S3 API client interface.
 	Client interface {
 		Initialize(ctx context.Context, c EventListener) error
-		EphemeralKey() *keys.PublicKey
 
 		GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
 		PutBucketSettings(ctx context.Context, p *PutSettingsParams) error
@@ -268,15 +262,11 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 	return &layer{
 		neoFS:       neoFS,
 		log:         log,
-		anonKey:     config.AnonKey,
+		gateKey:     config.GateKey,
 		resolver:    config.Resolver,
 		cache:       NewCache(config.Caches),
 		treeService: config.TreeService,
 	}
-}
-
-func (n *layer) EphemeralKey() *keys.PublicKey {
-	return n.anonKey.Key.PublicKey()
 }
 
 func (n *layer) Initialize(ctx context.Context, c EventListener) error {
@@ -318,7 +308,7 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	}
 
 	var ownerID user.ID
-	if err := user.IDFromKey(&ownerID, n.EphemeralKey().Bytes()); err != nil {
+	if err := user.IDFromKey(&ownerID, n.gateKey.PublicKey().Bytes()); err != nil {
 		panic(fmt.Errorf("id from key: %w", err))
 	}
 
@@ -333,7 +323,7 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwne
 		}
 	}
 
-	prm.PrivateKey = &n.anonKey.Key.PrivateKey
+	prm.PrivateKey = &n.gateKey.PrivateKey
 }
 
 // GetBucketInfo returns bucket info by name.

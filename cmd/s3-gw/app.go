@@ -126,17 +126,9 @@ func (a *App) initLayer(ctx context.Context) {
 	}
 	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
 
-	// prepare random key for anonymous requests
-	randomKey, err := keys.NewPrivateKey()
-	if err != nil {
-		a.log.Fatal("couldn't generate random key", zap.Error(err))
-	}
-
 	layerCfg := &layer.Config{
-		Caches: getCacheOptions(a.cfg, a.log),
-		AnonKey: layer.AnonymousKey{
-			Key: randomKey,
-		},
+		Caches:      getCacheOptions(a.cfg, a.log),
+		GateKey:     a.key,
 		Resolver:    a.resolverContainer,
 		TreeService: treeService,
 	}
