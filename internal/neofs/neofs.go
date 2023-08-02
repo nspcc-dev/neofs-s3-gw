@@ -14,16 +14,17 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/stat"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -31,8 +32,9 @@ import (
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool  *pool.Pool
-	await pool.WaitParams
+	pool       *pool.Pool
+	await      pool.WaitParams
+	gateSigner user.Signer
 }
 
 const (
@@ -41,14 +43,15 @@ const (
 )
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
-func NewNeoFS(p *pool.Pool) *NeoFS {
+func NewNeoFS(p *pool.Pool, signer user.Signer) *NeoFS {
 	var await pool.WaitParams
 	await.SetPollInterval(defaultPollInterval)
 	await.SetTimeout(defaultPollTimeout)
 
 	return &NeoFS{
-		pool:  p,
-		await: await,
+		pool:       p,
+		await:      await,
+		gateSigner: signer,
 	}
 }
 
@@ -60,7 +63,7 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uin
 			futureTime.Format(time.RFC3339), now.Format(time.RFC3339))
 	}
 
-	networkInfo, err := x.pool.NetworkInfo(ctx)
+	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
 	if err != nil {
 		return 0, 0, fmt.Errorf("get network info via client: %w", err)
 	}
@@ -132,7 +135,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		cnr.SetAttribute(prm.AdditionalAttributes[i][0], prm.AdditionalAttributes[i][1])
 	}
 
-	err := pool.SyncContainerWithNetwork(ctx, &cnr, x.pool)
+	err := client.SyncContainerWithNetwork(ctx, &cnr, x.pool)
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("sync container with the network state: %w", err)
 	}
@@ -145,7 +148,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	// send request to save the container
-	idCnr, err := x.pool.PutContainer(ctx, cnr, prmPut)
+	idCnr, err := x.pool.PutContainer(ctx, cnr, x.gateSigner, prmPut)
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
@@ -164,7 +167,7 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error {
+func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container, signer user.Signer) error {
 	var prm pool.PrmContainerSetEACL
 	prm.SetWaitParams(x.await)
 
@@ -172,7 +175,7 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionT
 		prm.WithinSession(*sessionToken)
 	}
 
-	err := x.pool.SetEACL(ctx, table, prm)
+	err := x.pool.SetEACL(ctx, table, signer, prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
 	}
@@ -191,7 +194,7 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 }
 
 // DeleteContainer implements neofs.NeoFS interface method.
-func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container) error {
+func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container, signer user.Signer) error {
 	var prm pool.PrmContainerDelete
 	prm.SetWaitParams(x.await)
 
@@ -199,7 +202,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 		prm.SetSessionToken(*token)
 	}
 
-	err := x.pool.DeleteContainer(ctx, id, prm)
+	err := x.pool.DeleteContainer(ctx, id, signer, prm)
 	if err != nil {
 		return fmt.Errorf("delete container via connection pool: %w", err)
 	}
@@ -263,7 +266,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	if prm.BearerToken != nil {
 		prmPut.UseBearer(*prm.BearerToken)
 	} else if prm.PrivateKey != nil {
-		prmPut.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
+		prmPut.UseSigner(user.NewAutoIDSignerRFC6979(*prm.PrivateKey))
 	}
 
 	idObj, err := x.pool.PutObject(ctx, prmPut)
@@ -302,7 +305,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	if prm.BearerToken != nil {
 		prmGet.UseBearer(*prm.BearerToken)
 	} else if prm.PrivateKey != nil {
-		prmGet.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
+		prmGet.UseSigner(user.NewAutoIDSignerRFC6979(*prm.PrivateKey))
 	}
 
 	if prm.WithHeader {
@@ -335,7 +338,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		if prm.BearerToken != nil {
 			prmHead.UseBearer(*prm.BearerToken)
 		} else if prm.PrivateKey != nil {
-			prmHead.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
+			prmHead.UseSigner(user.NewAutoIDSignerRFC6979(*prm.PrivateKey))
 		}
 
 		hdr, err := x.pool.HeadObject(ctx, prm.Container, prm.Object, prmHead)
@@ -370,7 +373,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	if prm.BearerToken != nil {
 		prmRange.UseBearer(*prm.BearerToken)
 	} else if prm.PrivateKey != nil {
-		prmRange.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
+		prmRange.UseSigner(user.NewAutoIDSignerRFC6979(*prm.PrivateKey))
 	}
 
 	res, err := x.pool.ObjectRange(ctx, prm.Container, prm.Object, prm.PayloadRange[0], prm.PayloadRange[1], prmRange)
@@ -393,8 +396,9 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 
 	if prm.BearerToken != nil {
 		prmDelete.UseBearer(*prm.BearerToken)
-	} else if prm.PrivateKey != nil {
-		prmDelete.UseSigner(neofsecdsa.SignerRFC6979(*prm.PrivateKey))
+	}
+	if prm.PrivateKey != nil {
+		prmDelete.UseSigner(user.NewAutoIDSignerRFC6979(*prm.PrivateKey))
 	}
 
 	err := x.pool.DeleteObject(ctx, prm.Container, prm.Object, prmDelete)
@@ -439,7 +443,7 @@ func NewResolverNeoFS(p *pool.Pool) *ResolverNeoFS {
 
 // SystemDNS implements resolver.NeoFS interface method.
 func (x *ResolverNeoFS) SystemDNS(ctx context.Context) (string, error) {
-	networkInfo, err := x.pool.NetworkInfo(ctx)
+	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
 	if err != nil {
 		return "", fmt.Errorf("read network info via client: %w", err)
 	}
@@ -458,8 +462,8 @@ type AuthmateNeoFS struct {
 }
 
 // NewAuthmateNeoFS creates new AuthmateNeoFS using provided pool.Pool.
-func NewAuthmateNeoFS(p *pool.Pool) *AuthmateNeoFS {
-	return &AuthmateNeoFS{neoFS: NewNeoFS(p)}
+func NewAuthmateNeoFS(p *pool.Pool, signer user.Signer) *AuthmateNeoFS {
+	return &AuthmateNeoFS{neoFS: NewNeoFS(p, signer)}
 }
 
 // ContainerExists implements authmate.NeoFS interface method.
@@ -521,15 +525,15 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 
 // PoolStatistic is a mediator which implements authmate.NeoFS through pool.Pool.
 type PoolStatistic struct {
-	pool *pool.Pool
+	poolStat *stat.PoolStat
 }
 
 // NewPoolStatistic creates new PoolStatistic using provided pool.Pool.
-func NewPoolStatistic(p *pool.Pool) *PoolStatistic {
-	return &PoolStatistic{pool: p}
+func NewPoolStatistic(poolStat *stat.PoolStat) *PoolStatistic {
+	return &PoolStatistic{poolStat: poolStat}
 }
 
 // Statistic implements interface method.
-func (x *PoolStatistic) Statistic() pool.Statistic {
-	return x.pool.Statistic()
+func (x *PoolStatistic) Statistic() stat.Statistic {
+	return x.poolStat.Statistic()
 }

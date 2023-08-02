@@ -18,7 +18,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -80,8 +79,8 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 
 	testResolver := &contResolver{layer: tp}
 
-	var owner user.ID
-	require.NoError(t, user.IDFromSigner(&owner, neofsecdsa.SignerRFC6979(key.PrivateKey)))
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
+	owner := signer.UserID()
 
 	layerCfg := &layer.Config{
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),

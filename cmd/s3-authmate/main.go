@@ -24,8 +24,8 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -687,8 +687,10 @@ func obtainSecret() *cli.Command {
 func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate.NeoFS, error) {
 	log.Debug("prepare connection pool")
 
+	signer := user.NewAutoIDSignerRFC6979(*cfg.Key)
+
 	var prm pool.InitParameters
-	prm.SetSigner(neofsecdsa.SignerRFC6979(*cfg.Key))
+	prm.SetSigner(signer)
 	prm.SetNodeDialTimeout(cfg.DialTimeout)
 	prm.SetHealthcheckTimeout(cfg.HealthcheckTimeout)
 	prm.SetNodeStreamTimeout(cfg.StreamTimeout)
@@ -704,5 +706,5 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	return neofs.NewAuthmateNeoFS(p), nil
+	return neofs.NewAuthmateNeoFS(p, signer), nil
 }

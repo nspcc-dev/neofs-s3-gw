@@ -18,7 +18,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -44,6 +43,7 @@ type (
 		neoFS       NeoFS
 		log         *zap.Logger
 		gateKey     *keys.PrivateKey
+		gateSigner  user.Signer
 		resolver    resolver.Resolver
 		ncontroller EventListener
 		cache       *Cache
@@ -263,6 +263,7 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 		neoFS:       neoFS,
 		log:         log,
 		gateKey:     config.GateKey,
+		gateSigner:  user.NewAutoIDSignerRFC6979(config.GateKey.PrivateKey),
 		resolver:    config.Resolver,
 		cache:       NewCache(config.Caches),
 		treeService: config.TreeService,
@@ -304,26 +305,24 @@ func TimeNow(ctx context.Context) time.Time {
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) user.ID {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		return bearer.ResolveIssuer(*bd.Gate.BearerToken)
+		return bd.Gate.BearerToken.ResolveIssuer()
 	}
 
 	var ownerID user.ID
-	if err := user.IDFromKey(&ownerID, n.gateKey.PublicKey().Bytes()); err != nil {
-		panic(fmt.Errorf("id from key: %w", err))
-	}
+	ownerID.SetScriptHash(n.gateKey.PublicKey().GetScriptHash())
 
 	return ownerID
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {
+	prm.PrivateKey = &n.gateKey.PrivateKey
+
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		if bktOwner.Equals(bearer.ResolveIssuer(*bd.Gate.BearerToken)) {
+		if bktOwner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
 			prm.BearerToken = bd.Gate.BearerToken
 			return
 		}
 	}
-
-	prm.PrivateKey = &n.gateKey.PrivateKey
 }
 
 // GetBucketInfo returns bucket info by name.
@@ -670,5 +669,5 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	}
 
 	n.cache.DeleteBucket(p.BktInfo.Name)
-	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken)
+	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken, n.gateSigner)
 }

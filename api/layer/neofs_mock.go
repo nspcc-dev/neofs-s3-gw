@@ -13,7 +13,6 @@ import (
 	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -106,7 +105,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	return id, nil
 }
 
-func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.Container) error {
+func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.Container, _ user.Signer) error {
 	delete(t.containers, cnrID.EncodeToString())
 
 	return nil
@@ -258,7 +257,7 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 	return result
 }
 
-func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container) error {
+func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container, _ user.Signer) error {
 	cnrID, ok := table.CID()
 	if !ok {
 		return errors.New("invalid cid")
@@ -284,7 +283,7 @@ func (t *TestNeoFS) ContainerEACL(_ context.Context, cnrID cid.ID) (*eacl.Table,
 
 func getOwner(ctx context.Context) user.ID {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		return bearer.ResolveIssuer(*bd.Gate.BearerToken)
+		return bd.Gate.BearerToken.ResolveIssuer()
 	}
 
 	return user.ID{}

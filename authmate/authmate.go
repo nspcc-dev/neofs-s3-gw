@@ -229,10 +229,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	box.ContainerPolicy = policies
 
-	var idOwner user.ID
-	if err = user.IDFromSigner(&idOwner, neofsecdsa.SignerRFC6979(options.NeoFSKey.PrivateKey)); err != nil {
-		return fmt.Errorf("id from signer: %w", err)
-	}
+	signer := user.NewAutoIDSignerRFC6979(options.NeoFSKey.PrivateKey)
+	idOwner := signer.UserID()
 
 	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
 		zap.String("friendly_name", options.Container.FriendlyName),
@@ -346,10 +344,10 @@ func restrictedRecords() (records []*eacl.Record) {
 }
 
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*bearer.Token, error) {
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
+
 	var ownerID user.ID
-	if err := user.IDFromKey(&ownerID, gateKey.Bytes()); err != nil {
-		return nil, fmt.Errorf("id from key: %w", err)
-	}
+	ownerID.SetScriptHash(gateKey.GetScriptHash())
 
 	var bearerToken bearer.Token
 	bearerToken.SetEACLTable(*table)
@@ -358,7 +356,7 @@ func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetime
 	bearerToken.SetIat(lifetime.Iat)
 	bearerToken.SetNbf(lifetime.Iat)
 
-	err := bearerToken.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey))
+	err := bearerToken.Sign(signer)
 	if err != nil {
 		return nil, fmt.Errorf("sign bearer token: %w", err)
 	}
@@ -390,7 +388,7 @@ func buildSessionToken(key *keys.PrivateKey, lifetime lifetimeOptions, ctx sessi
 	tok.SetNbf(lifetime.Iat)
 	tok.SetExp(lifetime.Exp)
 
-	return tok, tok.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey))
+	return tok, tok.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
 }
 
 func buildSessionTokens(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []sessionTokenContext, gatesKeys []*keys.PublicKey) ([][]*session.Container, error) {

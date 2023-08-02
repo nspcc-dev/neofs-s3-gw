@@ -25,9 +25,10 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/stat"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -35,14 +36,15 @@ import (
 type (
 	// App is the main application structure.
 	App struct {
-		ctr  auth.Center
-		log  *zap.Logger
-		cfg  *viper.Viper
-		pool *pool.Pool
-		key  *keys.PrivateKey
-		nc   *notifications.Controller
-		obj  layer.Client
-		api  api.Handler
+		ctr      auth.Center
+		log      *zap.Logger
+		cfg      *viper.Viper
+		pool     *pool.Pool
+		poolStat *stat.PoolStat
+		gateKey  *keys.PrivateKey
+		nc       *notifications.Controller
+		obj      layer.Client
+		api      api.Handler
 
 		servers []Server
 
@@ -86,17 +88,20 @@ type (
 )
 
 func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
-	conns, key := getPool(ctx, log.logger, v)
+	conns, key, poolStat := getPool(ctx, log.logger, v)
+
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
 	// prepare auth center
-	ctr := auth.New(neofs.NewAuthmateNeoFS(conns), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
+	ctr := auth.New(neofs.NewAuthmateNeoFS(conns, signer), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
 
 	app := &App{
-		ctr:  ctr,
-		log:  log.logger,
-		cfg:  v,
-		pool: conns,
-		key:  key,
+		ctr:      ctr,
+		log:      log.logger,
+		cfg:      v,
+		pool:     conns,
+		poolStat: poolStat,
+		gateKey:  key,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -120,7 +125,7 @@ func (a *App) initLayer(ctx context.Context) {
 	a.initResolver(ctx)
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
-	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.key)
+	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.gateKey)
 	if err != nil {
 		a.log.Fatal("failed to create tree service", zap.Error(err))
 	}
@@ -128,13 +133,15 @@ func (a *App) initLayer(ctx context.Context) {
 
 	layerCfg := &layer.Config{
 		Caches:      getCacheOptions(a.cfg, a.log),
-		GateKey:     a.key,
+		GateKey:     a.gateKey,
 		Resolver:    a.resolverContainer,
 		TreeService: treeService,
 	}
 
+	signer := user.NewAutoIDSignerRFC6979(a.gateKey.PrivateKey)
+
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool), layerCfg)
+	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer), layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
@@ -176,7 +183,7 @@ func (a *App) initAPI(ctx context.Context) {
 }
 
 func (a *App) initMetrics() {
-	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.pool))
+	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.poolStat))
 	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
@@ -208,8 +215,11 @@ func newMaxClients(cfg *viper.Viper) api.MaxClients {
 	return api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline)
 }
 
-func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey) {
+func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey, *stat.PoolStat) {
+	poolStat := stat.NewPoolStatistic()
+
 	var prm pool.InitParameters
+	prm.SetStatisticCallback(poolStat.OperationCallback)
 
 	password := wallet.GetPassword(cfg, cfgWalletPassphrase)
 	key, err := wallet.GetKeyFromPath(cfg.GetString(cfgWalletPath), cfg.GetString(cfgWalletAddress), password)
@@ -217,7 +227,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
-	prm.SetSigner(neofsecdsa.SignerRFC6979(key.PrivateKey))
+	prm.SetSigner(user.NewAutoIDSignerRFC6979(key.PrivateKey))
 	logger.Info("using credentials", zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
 
 	for _, peer := range fetchPeers(logger, cfg) {
@@ -264,7 +274,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("failed to dial connection pool", zap.Error(err))
 	}
 
-	return p, key
+	return p, key, poolStat
 }
 
 func newPlacementPolicy(defaultPolicy string, regionPolicyFilepath string) (*placementPolicy, error) {
