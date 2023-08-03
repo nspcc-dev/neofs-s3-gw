@@ -443,6 +443,12 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			h.logAndSendError(w, "could not translate acl of completed multipart upload to ast", reqInfo, err, additional...)
 			return
 		}
+
+		if sessionTokenSetEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+			h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
+			return
+		}
+
 		if _, err = h.updateBucketACL(r, astObject, bktInfo, sessionTokenSetEACL); err != nil {
 			h.logAndSendError(w, "could not update bucket acl while completing multipart upload", reqInfo, err, additional...)
 			return
