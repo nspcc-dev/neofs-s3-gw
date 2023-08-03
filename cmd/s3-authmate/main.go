@@ -706,5 +706,7 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	return neofs.NewAuthmateNeoFS(p, signer), nil
+	neoFS := neofs.NewNeoFS(p, signer)
+
+	return neofs.NewAuthmateNeoFS(neoFS), nil
 }

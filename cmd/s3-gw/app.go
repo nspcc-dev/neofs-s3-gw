@@ -91,9 +91,10 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	conns, key, poolStat := getPool(ctx, log.logger, v)
 
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
+	neoFS := neofs.NewNeoFS(conns, signer)
 
 	// prepare auth center
-	ctr := auth.New(neofs.NewAuthmateNeoFS(conns, signer), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
+	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
 
 	app := &App{
 		ctr:      ctr,

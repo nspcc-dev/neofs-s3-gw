@@ -456,12 +456,12 @@ func (x *ResolverNeoFS) SystemDNS(ctx context.Context) (string, error) {
 
 // AuthmateNeoFS is a mediator which implements authmate.NeoFS through pool.Pool.
 type AuthmateNeoFS struct {
-	neoFS *NeoFS
+	neoFS layer.NeoFS
 }
 
 // NewAuthmateNeoFS creates new AuthmateNeoFS using provided pool.Pool.
-func NewAuthmateNeoFS(p *pool.Pool, signer user.Signer) *AuthmateNeoFS {
-	return &AuthmateNeoFS{neoFS: NewNeoFS(p, signer)}
+func NewAuthmateNeoFS(neoFS layer.NeoFS) *AuthmateNeoFS {
+	return &AuthmateNeoFS{neoFS: neoFS}
 }
 
 // ContainerExists implements authmate.NeoFS interface method.
