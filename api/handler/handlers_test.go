@@ -17,7 +17,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -27,6 +26,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+type contResolver struct {
+	layer *layer.TestNeoFS
+}
+
+func (r *contResolver) Resolve(_ context.Context, name string) (cid.ID, error) {
+	return r.layer.ContainerID(name)
+}
 
 type handlerContext struct {
 	owner   user.ID
@@ -71,10 +78,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	l := zap.NewExample()
 	tp := layer.NewTestNeoFS()
 
-	testResolver := &resolver.Resolver{Name: "test_resolver"}
-	testResolver.SetResolveFunc(func(_ context.Context, name string) (cid.ID, error) {
-		return tp.ContainerID(name)
-	})
+	testResolver := &contResolver{layer: tp}
 
 	var owner user.ID
 	require.NoError(t, user.IDFromSigner(&owner, neofsecdsa.SignerRFC6979(key.PrivateKey)))

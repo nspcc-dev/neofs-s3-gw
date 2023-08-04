@@ -46,11 +46,11 @@ type (
 
 		servers []Server
 
-		metrics        *appMetrics
-		bucketResolver *resolver.BucketResolver
-		services       []*Service
-		settings       *appSettings
-		maxClients     api.MaxClients
+		metrics           *appMetrics
+		resolverContainer *resolver.Container
+		services          []*Service
+		settings          *appSettings
+		maxClients        api.MaxClients
 
 		webDone chan struct{}
 		wrkDone chan struct{}
@@ -117,7 +117,7 @@ func (a *App) init(ctx context.Context) {
 }
 
 func (a *App) initLayer(ctx context.Context) {
-	a.initResolver()
+	a.initResolver(ctx)
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
 	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.key)
@@ -137,7 +137,7 @@ func (a *App) initLayer(ctx context.Context) {
 		AnonKey: layer.AnonymousKey{
 			Key: randomKey,
 		},
-		Resolver:    a.bucketResolver,
+		Resolver:    a.resolverContainer,
 		TreeService: treeService,
 	}
 
@@ -189,31 +189,17 @@ func (a *App) initMetrics() {
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
 
-func (a *App) initResolver() {
-	var err error
-	a.bucketResolver, err = resolver.NewBucketResolver(a.getResolverConfig())
+func (a *App) initResolver(ctx context.Context) {
+	endpoint := a.cfg.GetString(cfgRPCEndpoint)
+
+	a.log.Info("rpc endpoint", zap.String("address", endpoint))
+
+	res, err := resolver.NewContainer(ctx, endpoint)
 	if err != nil {
-		a.log.Fatal("failed to create resolver", zap.Error(err))
-	}
-}
-
-func (a *App) getResolverConfig() ([]string, *resolver.Config) {
-	resolveCfg := &resolver.Config{
-		NeoFS:      neofs.NewResolverNeoFS(a.pool),
-		RPCAddress: a.cfg.GetString(cfgRPCEndpoint),
+		a.log.Fatal("resolver", zap.Error(err))
 	}
 
-	order := a.cfg.GetStringSlice(cfgResolveOrder)
-	if resolveCfg.RPCAddress == "" {
-		order = remove(order, resolver.NNSResolver)
-		a.log.Warn(fmt.Sprintf("resolver '%s' won't be used since '%s' isn't provided", resolver.NNSResolver, cfgRPCEndpoint))
-	}
-
-	if len(order) == 0 {
-		a.log.Info("container resolver will be disabled because of resolvers 'resolver_order' is empty")
-	}
-
-	return order, resolveCfg
+	a.resolverContainer = res
 }
 
 func newMaxClients(cfg *viper.Viper) api.MaxClients {
@@ -387,15 +373,6 @@ func (m *appMetrics) Shutdown() {
 	m.mu.Unlock()
 }
 
-func remove(list []string, element string) []string {
-	for i, item := range list {
-		if item == element {
-			return append(list[:i], list[i+1:]...)
-		}
-	}
-	return list
-}
-
 // Wait waits for an application to finish.
 //
 // Pre-logs a message about the launch of the application mentioning its
@@ -452,7 +429,7 @@ LOOP:
 		case <-ctx.Done():
 			break LOOP
 		case <-sigs:
-			a.configReload()
+			a.configReload(ctx)
 		}
 	}
 
@@ -471,7 +448,7 @@ func shutdownContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), defaultShutdownTimeout)
 }
 
-func (a *App) configReload() {
+func (a *App) configReload(ctx context.Context) {
 	a.log.Info("SIGHUP config reload started")
 
 	if !a.cfg.IsSet(cmdConfig) {
@@ -483,8 +460,8 @@ func (a *App) configReload() {
 		return
 	}
 
-	if err := a.bucketResolver.UpdateResolvers(a.getResolverConfig()); err != nil {
-		a.log.Warn("failed to reload resolvers", zap.Error(err))
+	if err := a.resolverContainer.UpdateResolvers(ctx, a.cfg.GetString(cfgRPCEndpoint)); err != nil {
+		a.log.Warn("failed to update resolvers", zap.Error(err))
 	}
 
 	if err := a.updateServers(); err != nil {

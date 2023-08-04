@@ -9,14 +9,14 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.13.1-0.20220308171302-2f2f6968e98d
-	github.com/nspcc-dev/neo-go v0.100.1
+	github.com/nspcc-dev/neo-go v0.101.0
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.9.0.20230606101007-79edfa63bbc9
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.4.0
@@ -52,8 +52,7 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20220111165707-25110be27d22 // indirect
 	github.com/nspcc-dev/hrw v1.0.9 // indirect
-	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20221202075445-cb5c18dc73eb // indirect
-	github.com/nspcc-dev/neofs-contract v0.16.0 // indirect
+	github.com/nspcc-dev/neofs-contract v0.17.1-0.20230804121740-84ff5d244f69
 	github.com/nspcc-dev/neofs-crypto v0.4.0
 	github.com/nspcc-dev/rfc6979 v0.2.0 // indirect
 	github.com/nspcc-dev/tzhash v1.7.0 // indirect
