@@ -74,6 +74,10 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
+	anonKey, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
 	l := zap.NewExample()
 	tp := layer.NewTestNeoFS()
 
@@ -85,6 +89,7 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	layerCfg := &layer.Config{
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
 		GateKey:     key,
+		Anonymous:   anonSigner.UserID(),
 		Resolver:    testResolver,
 		TreeService: layer.NewTreeService(),
 	}

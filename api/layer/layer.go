@@ -40,10 +40,13 @@ type (
 	MsgHandlerFunc func(context.Context, *nats.Msg) error
 
 	layer struct {
-		neoFS       NeoFS
-		log         *zap.Logger
-		gateKey     *keys.PrivateKey
-		gateSigner  user.Signer
+		neoFS      NeoFS
+		log        *zap.Logger
+		gateKey    *keys.PrivateKey
+		gateSigner user.Signer
+		// used in case of user wants to do something like anonymous.
+		// Typical using is a flag --no-sign-request in aws-cli.
+		anonymous   user.ID
 		resolver    resolver.Resolver
 		ncontroller EventListener
 		cache       *Cache
@@ -54,6 +57,7 @@ type (
 		ChainAddress string
 		Caches       *CachesConfig
 		GateKey      *keys.PrivateKey
+		Anonymous    user.ID
 		Resolver     resolver.Resolver
 		TreeService  TreeService
 	}
@@ -264,6 +268,7 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 		log:         log,
 		gateKey:     config.GateKey,
 		gateSigner:  user.NewAutoIDSignerRFC6979(config.GateKey.PrivateKey),
+		anonymous:   config.Anonymous,
 		resolver:    config.Resolver,
 		cache:       NewCache(config.Caches),
 		treeService: config.TreeService,
@@ -308,10 +313,7 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 		return bd.Gate.BearerToken.ResolveIssuer()
 	}
 
-	var ownerID user.ID
-	ownerID.SetScriptHash(n.gateKey.PublicKey().GetScriptHash())
-
-	return ownerID
+	return n.anonymous
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {

@@ -137,6 +137,10 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
+	anonKey, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
 	bearerToken := bearertest.Token(t)
@@ -166,6 +170,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	layerCfg := &Config{
 		Caches:      config,
 		GateKey:     key,
+		Anonymous:   anonSigner.UserID(),
 		TreeService: NewTreeService(),
 	}
 

@@ -132,9 +132,18 @@ func (a *App) initLayer(ctx context.Context) {
 	}
 	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
 
+	// prepare random key for anonymous requests
+	anonKey, err := keys.NewPrivateKey()
+	if err != nil {
+		a.log.Fatal("couldn't generate random key", zap.Error(err))
+	}
+
+	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
 	layerCfg := &layer.Config{
 		Caches:      getCacheOptions(a.cfg, a.log),
 		GateKey:     a.gateKey,
+		Anonymous:   anonSigner.UserID(),
 		Resolver:    a.resolverContainer,
 		TreeService: treeService,
 	}

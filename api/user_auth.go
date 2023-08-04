@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -19,6 +20,10 @@ var BoxData = KeyWrapper("__context_box_key")
 // ClientTime is an ID used to store client time.Time in a context.
 var ClientTime = KeyWrapper("__context_client_time")
 
+// AnonymousRequest is a boolean flag to show explicitly that request was made without authorization.
+// Typical usage with `--no-sign-request`.
+var AnonymousRequest = KeyWrapper("__context_anonymous_request")
+
 // AttachUserAuth adds user authentication via center to router using log for logging.
 func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 	router.Use(func(h http.Handler) http.Handler {
@@ -26,9 +31,10 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 			var ctx context.Context
 			box, err := center.Authenticate(r)
 			if err != nil {
-				if err == auth.ErrNoAuthorizationHeader {
+				if errors.Is(err, auth.ErrNoAuthorizationHeader) {
 					log.Debug("couldn't receive access box for gate key, random key will be used")
-					ctx = r.Context()
+					// put clear indicator, that we should exec request as an anonymous user.
+					ctx = context.WithValue(r.Context(), AnonymousRequest, true)
 				} else {
 					log.Error("failed to pass authentication", zap.Error(err))
 					if _, ok := err.(s3errors.Error); !ok {
@@ -47,4 +53,13 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
+}
+
+// IsAnonymousRequest helps to check the request was made as an anonymous user.
+func IsAnonymousRequest(ctx context.Context) bool {
+	if bd, ok := ctx.Value(AnonymousRequest).(bool); ok {
+		return bd
+	}
+
+	return false
 }
