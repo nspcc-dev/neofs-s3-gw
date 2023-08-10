@@ -42,7 +42,6 @@ type (
 	layer struct {
 		neoFS      NeoFS
 		log        *zap.Logger
-		gateKey    *keys.PrivateKey
 		gateSigner user.Signer
 		// used in case of user wants to do something like anonymous.
 		// Typical using is a flag --no-sign-request in aws-cli.
@@ -266,7 +265,6 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 	return &layer{
 		neoFS:       neoFS,
 		log:         log,
-		gateKey:     config.GateKey,
 		gateSigner:  user.NewAutoIDSignerRFC6979(config.GateKey.PrivateKey),
 		anonymous:   config.Anonymous,
 		resolver:    config.Resolver,
