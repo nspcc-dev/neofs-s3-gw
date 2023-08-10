@@ -105,7 +105,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	return id, nil
 }
 
-func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.Container, _ user.Signer) error {
+func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.Container) error {
 	delete(t.containers, cnrID.EncodeToString())
 
 	return nil
@@ -257,7 +257,7 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 	return result
 }
 
-func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container, _ user.Signer) error {
+func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container) error {
 	cnrID, ok := table.CID()
 	if !ok {
 		return errors.New("invalid cid")

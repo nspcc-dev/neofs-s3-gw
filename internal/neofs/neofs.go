@@ -159,14 +159,14 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container, signer user.Signer) error {
+func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error {
 	var prm client.PrmContainerSetEACL
 	if sessionToken != nil {
 		prm.WithinSession(*sessionToken)
 	}
 
 	eaclWaiter := waiter.NewContainerSetEACLWaiter(x.pool, waiter.DefaultPollInterval)
-	err := eaclWaiter.ContainerSetEACL(ctx, table, signer, prm)
+	err := eaclWaiter.ContainerSetEACL(ctx, table, x.gateSigner, prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
 	}
@@ -186,14 +186,14 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 }
 
 // DeleteContainer implements neofs.NeoFS interface method.
-func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container, signer user.Signer) error {
+func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container) error {
 	var prm client.PrmContainerDelete
 	if token != nil {
 		prm.WithinSession(*token)
 	}
 
 	deleteWaiter := waiter.NewContainerDeleteWaiter(x.pool, waiter.DefaultPollInterval)
-	err := deleteWaiter.ContainerDelete(ctx, id, signer, prm)
+	err := deleteWaiter.ContainerDelete(ctx, id, x.gateSigner, prm)
 	if err != nil {
 		return fmt.Errorf("delete container via connection pool: %w", err)
 	}

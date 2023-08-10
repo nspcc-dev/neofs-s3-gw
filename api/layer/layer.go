@@ -40,9 +40,8 @@ type (
 	MsgHandlerFunc func(context.Context, *nats.Msg) error
 
 	layer struct {
-		neoFS      NeoFS
-		log        *zap.Logger
-		gateSigner user.Signer
+		neoFS NeoFS
+		log   *zap.Logger
 		// used in case of user wants to do something like anonymous.
 		// Typical using is a flag --no-sign-request in aws-cli.
 		anonymous   user.ID
@@ -265,7 +264,6 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 	return &layer{
 		neoFS:       neoFS,
 		log:         log,
-		gateSigner:  user.NewAutoIDSignerRFC6979(config.GateKey.PrivateKey),
 		anonymous:   config.Anonymous,
 		resolver:    config.Resolver,
 		cache:       NewCache(config.Caches),
@@ -666,5 +664,5 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	}
 
 	n.cache.DeleteBucket(p.BktInfo.Name)
-	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken, n.gateSigner)
+	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken)
 }

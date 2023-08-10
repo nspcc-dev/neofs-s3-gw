@@ -155,7 +155,7 @@ type NeoFS interface {
 	// extended ACL is modified within session if session token is not nil.
 	//
 	// It returns any error encountered which prevented the eACL from being saved.
-	SetContainerEACL(context.Context, eacl.Table, *session.Container, user.Signer) error
+	SetContainerEACL(context.Context, eacl.Table, *session.Container) error
 
 	// ContainerEACL reads the container eACL from NeoFS by the container ID.
 	//
@@ -168,7 +168,7 @@ type NeoFS interface {
 	// Successful return does not guarantee actual removal.
 	//
 	// It returns any error encountered which prevented the removal request from being sent.
-	DeleteContainer(context.Context, cid.ID, *session.Container, user.Signer) error
+	DeleteContainer(context.Context, cid.ID, *session.Container) error
 
 	// ReadObject reads a part of the object from the NeoFS container by identifier.
 	// Exact part is returned according to the parameters:
