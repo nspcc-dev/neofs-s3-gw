@@ -91,7 +91,16 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	conns, key, poolStat := getPool(ctx, log.logger, v)
 
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
-	neoFS := neofs.NewNeoFS(conns, signer)
+
+	// authmate doesn't require anonKey for work, but let's create random one.
+	anonKey, err := keys.NewPrivateKey()
+	if err != nil {
+		log.logger.Fatal("newApp: couldn't generate random key", zap.Error(err))
+	}
+	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+	log.logger.Info("anonymous signer", zap.String("userID", anonSigner.UserID().String()))
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner)
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
@@ -111,18 +120,18 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		settings:   newAppSettings(log, v),
 	}
 
-	app.init(ctx)
+	app.init(ctx, anonSigner)
 
 	return app
 }
 
-func (a *App) init(ctx context.Context) {
-	a.initAPI(ctx)
+func (a *App) init(ctx context.Context, anonSigner user.Signer) {
+	a.initAPI(ctx, anonSigner)
 	a.initMetrics()
 	a.initServers(ctx)
 }
 
-func (a *App) initLayer(ctx context.Context) {
+func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
 	a.initResolver(ctx)
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
@@ -131,14 +140,6 @@ func (a *App) initLayer(ctx context.Context) {
 		a.log.Fatal("failed to create tree service", zap.Error(err))
 	}
 	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
-
-	// prepare random key for anonymous requests
-	anonKey, err := keys.NewPrivateKey()
-	if err != nil {
-		a.log.Fatal("couldn't generate random key", zap.Error(err))
-	}
-
-	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
 
 	layerCfg := &layer.Config{
 		Caches:      getCacheOptions(a.cfg, a.log),
@@ -151,7 +152,7 @@ func (a *App) initLayer(ctx context.Context) {
 	signer := user.NewAutoIDSignerRFC6979(a.gateKey.PrivateKey)
 
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer), layerCfg)
+	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner), layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
@@ -187,8 +188,8 @@ func getDefaultPolicyValue(v *viper.Viper) string {
 	return defaultPolicyStr
 }
 
-func (a *App) initAPI(ctx context.Context) {
-	a.initLayer(ctx)
+func (a *App) initAPI(ctx context.Context, anonSigner user.Signer) {
+	a.initLayer(ctx, anonSigner)
 	a.initHandler()
 }
 

@@ -314,7 +314,14 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				RebalanceInterval:  poolRebalanceIntervalFlag,
 			}
 
-			neoFS, err := createNeoFS(ctx, log, poolCfg)
+			// authmate doesn't require anonKey for work, but let's create random one.
+			anonKey, err := keys.NewPrivateKey()
+			if err != nil {
+				log.Fatal("issueSecret: couldn't generate random key", zap.Error(err))
+			}
+			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
@@ -648,7 +655,14 @@ func obtainSecret() *cli.Command {
 				RebalanceInterval:  poolRebalanceIntervalFlag,
 			}
 
-			neoFS, err := createNeoFS(ctx, log, poolCfg)
+			// authmate doesn't require anonKey for work, but let's create random one.
+			anonKey, err := keys.NewPrivateKey()
+			if err != nil {
+				log.Fatal("obtainSecret: couldn't generate random key", zap.Error(err))
+			}
+			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
@@ -684,7 +698,7 @@ func obtainSecret() *cli.Command {
 	return command
 }
 
-func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate.NeoFS, error) {
+func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigner user.Signer) (authmate.NeoFS, error) {
 	log.Debug("prepare connection pool")
 
 	signer := user.NewAutoIDSignerRFC6979(*cfg.Key)
@@ -706,7 +720,7 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	neoFS := neofs.NewNeoFS(p, signer)
+	neoFS := neofs.NewNeoFS(p, signer, anonSigner)
 
 	return neofs.NewAuthmateNeoFS(neoFS), nil
 }
