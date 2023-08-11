@@ -23,6 +23,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -720,7 +721,12 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigne
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	neoFS := neofs.NewNeoFS(p, signer, anonSigner)
+	ni, err := p.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		return nil, fmt.Errorf("networkInfo: %w", err)
+	}
+
+	neoFS := neofs.NewNeoFS(p, signer, anonSigner, int64(ni.MaxObjectSize()))
 
 	return neofs.NewAuthmateNeoFS(neoFS), nil
 }

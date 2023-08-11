@@ -34,17 +34,19 @@ import (
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool       *pool.Pool
-	gateSigner user.Signer
-	anonSigner user.Signer
+	pool          *pool.Pool
+	gateSigner    user.Signer
+	anonSigner    user.Signer
+	maxObjectSize int64
 }
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
-func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer) *NeoFS {
+func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, maxObjectSize int64) *NeoFS {
 	return &NeoFS{
-		pool:       p,
-		gateSigner: signer,
-		anonSigner: anonSigner,
+		pool:          p,
+		gateSigner:    signer,
+		anonSigner:    anonSigner,
+		maxObjectSize: maxObjectSize,
 	}
 }
 
@@ -214,11 +216,6 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 
 // CreateObject implements neofs.NeoFS interface method.
 func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oid.ID, error) {
-	ni, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		return oid.ID{}, fmt.Errorf("networkInfo: %w", err)
-	}
-
 	attrNum := len(prm.Attributes) + 1 // + creation time
 
 	if prm.Filepath != "" {
@@ -281,7 +278,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
-	chunk := make([]byte, ni.MaxObjectSize())
+	chunk := make([]byte, x.maxObjectSize)
 	_, err = io.CopyBuffer(writer, prm.Payload, chunk)
 	if err != nil {
 		return oid.ID{}, fmt.Errorf("read payload chunk: %w", err)

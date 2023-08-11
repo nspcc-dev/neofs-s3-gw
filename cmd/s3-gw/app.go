@@ -25,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/stat"
@@ -100,7 +101,12 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
 	log.logger.Info("anonymous signer", zap.String("userID", anonSigner.UserID().String()))
 
-	neoFS := neofs.NewNeoFS(conns, signer, anonSigner)
+	ni, err := conns.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		log.logger.Fatal("newApp: networkInfo", zap.Error(err))
+	}
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, int64(ni.MaxObjectSize()))
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
@@ -151,8 +157,13 @@ func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
 
 	signer := user.NewAutoIDSignerRFC6979(a.gateKey.PrivateKey)
 
+	ni, err := a.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		a.log.Fatal("initLayer: networkInfo", zap.Error(err))
+	}
+
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner), layerCfg)
+	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner, int64(ni.MaxObjectSize())), layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
