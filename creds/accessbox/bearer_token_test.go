@@ -9,6 +9,7 @@ import (
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,7 +91,7 @@ func TestSessionTokenInAccessBox(t *testing.T) {
 
 	tkn.SetID(uuid.New())
 	tkn.SetAuthKey((*neofsecdsa.PublicKey)(sec.PublicKey()))
-	require.NoError(t, tkn.Sign(neofsecdsa.SignerRFC6979(sec.PrivateKey)))
+	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
 	var newTkn bearer.Token
 	gate := NewGateData(cred.PublicKey(), &newTkn)

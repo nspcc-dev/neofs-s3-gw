@@ -15,9 +15,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -39,15 +39,13 @@ type (
 
 	MsgHandlerFunc func(context.Context, *nats.Msg) error
 
-	BucketResolver interface {
-		Resolve(ctx context.Context, name string) (cid.ID, error)
-	}
-
 	layer struct {
-		neoFS       NeoFS
-		log         *zap.Logger
-		anonKey     AnonymousKey
-		resolver    BucketResolver
+		neoFS NeoFS
+		log   *zap.Logger
+		// used in case of user wants to do something like anonymous.
+		// Typical using is a flag --no-sign-request in aws-cli.
+		anonymous   user.ID
+		resolver    resolver.Resolver
 		ncontroller EventListener
 		cache       *Cache
 		treeService TreeService
@@ -56,14 +54,10 @@ type (
 	Config struct {
 		ChainAddress string
 		Caches       *CachesConfig
-		AnonKey      AnonymousKey
-		Resolver     BucketResolver
+		GateKey      *keys.PrivateKey
+		Anonymous    user.ID
+		Resolver     resolver.Resolver
 		TreeService  TreeService
-	}
-
-	// AnonymousKey contains data for anonymous requests.
-	AnonymousKey struct {
-		Key *keys.PrivateKey
 	}
 
 	// GetObjectParams stores object get request parameters.
@@ -185,7 +179,6 @@ type (
 	// Client provides S3 API client interface.
 	Client interface {
 		Initialize(ctx context.Context, c EventListener) error
-		EphemeralKey() *keys.PublicKey
 
 		GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
 		PutBucketSettings(ctx context.Context, p *PutSettingsParams) error
@@ -271,15 +264,11 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 	return &layer{
 		neoFS:       neoFS,
 		log:         log,
-		anonKey:     config.AnonKey,
+		anonymous:   config.Anonymous,
 		resolver:    config.Resolver,
 		cache:       NewCache(config.Caches),
 		treeService: config.TreeService,
 	}
-}
-
-func (n *layer) EphemeralKey() *keys.PublicKey {
-	return n.anonKey.Key.PublicKey()
 }
 
 func (n *layer) Initialize(ctx context.Context, c EventListener) error {
@@ -317,26 +306,18 @@ func TimeNow(ctx context.Context) time.Time {
 // Owner returns owner id from BearerToken (context) or from client owner.
 func (n *layer) Owner(ctx context.Context) user.ID {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		return bearer.ResolveIssuer(*bd.Gate.BearerToken)
+		return bd.Gate.BearerToken.ResolveIssuer()
 	}
 
-	var ownerID user.ID
-	if err := user.IDFromKey(&ownerID, n.EphemeralKey().Bytes()); err != nil {
-		panic(fmt.Errorf("id from key: %w", err))
-	}
-
-	return ownerID
+	return n.anonymous
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		if bktOwner.Equals(bearer.ResolveIssuer(*bd.Gate.BearerToken)) {
+		if bktOwner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
 			prm.BearerToken = bd.Gate.BearerToken
-			return
 		}
 	}
-
-	prm.PrivateKey = &n.anonKey.Key.PrivateKey
 }
 
 // GetBucketInfo returns bucket info by name.

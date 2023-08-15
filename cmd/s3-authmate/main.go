@@ -23,9 +23,10 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -314,7 +315,14 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				RebalanceInterval:  poolRebalanceIntervalFlag,
 			}
 
-			neoFS, err := createNeoFS(ctx, log, poolCfg)
+			// authmate doesn't require anonKey for work, but let's create random one.
+			anonKey, err := keys.NewPrivateKey()
+			if err != nil {
+				log.Fatal("issueSecret: couldn't generate random key", zap.Error(err))
+			}
+			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
@@ -648,7 +656,14 @@ func obtainSecret() *cli.Command {
 				RebalanceInterval:  poolRebalanceIntervalFlag,
 			}
 
-			neoFS, err := createNeoFS(ctx, log, poolCfg)
+			// authmate doesn't require anonKey for work, but let's create random one.
+			anonKey, err := keys.NewPrivateKey()
+			if err != nil {
+				log.Fatal("obtainSecret: couldn't generate random key", zap.Error(err))
+			}
+			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
@@ -684,11 +699,13 @@ func obtainSecret() *cli.Command {
 	return command
 }
 
-func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate.NeoFS, error) {
+func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigner user.Signer) (authmate.NeoFS, error) {
 	log.Debug("prepare connection pool")
 
+	signer := user.NewAutoIDSignerRFC6979(*cfg.Key)
+
 	var prm pool.InitParameters
-	prm.SetSigner(neofsecdsa.SignerRFC6979(*cfg.Key))
+	prm.SetSigner(signer)
 	prm.SetNodeDialTimeout(cfg.DialTimeout)
 	prm.SetHealthcheckTimeout(cfg.HealthcheckTimeout)
 	prm.SetNodeStreamTimeout(cfg.StreamTimeout)
@@ -704,5 +721,12 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig) (authmate
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	return neofs.NewAuthmateNeoFS(p), nil
+	ni, err := p.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		return nil, fmt.Errorf("networkInfo: %w", err)
+	}
+
+	neoFS := neofs.NewNeoFS(p, signer, anonSigner, int64(ni.MaxObjectSize()))
+
+	return neofs.NewAuthmateNeoFS(neoFS), nil
 }

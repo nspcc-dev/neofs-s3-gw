@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/grpc"
@@ -1262,7 +1261,7 @@ func handleError(msg string, err error) error {
 func getBearer(ctx context.Context, bktInfo *data.BucketInfo) []byte {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
 		if bd.Gate.BearerToken != nil {
-			if bktInfo.Owner.Equals(bearer.ResolveIssuer(*bd.Gate.BearerToken)) {
+			if bktInfo.Owner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
 				return bd.Gate.BearerToken.Marshal()
 			}
 		}

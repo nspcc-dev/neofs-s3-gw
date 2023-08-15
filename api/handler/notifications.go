@@ -13,7 +13,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 )
 
 type (
@@ -163,7 +162,7 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 
 	box, err := layer.GetBoxData(ctx)
 	if err == nil && box.Gate.BearerToken != nil {
-		p.User = bearer.ResolveIssuer(*box.Gate.BearerToken).EncodeToString()
+		p.User = box.Gate.BearerToken.ResolveIssuer().EncodeToString()
 	}
 
 	p.Time = layer.TimeNow(ctx)

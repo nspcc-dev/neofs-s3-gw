@@ -25,9 +25,11 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/stat"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -35,22 +37,23 @@ import (
 type (
 	// App is the main application structure.
 	App struct {
-		ctr  auth.Center
-		log  *zap.Logger
-		cfg  *viper.Viper
-		pool *pool.Pool
-		key  *keys.PrivateKey
-		nc   *notifications.Controller
-		obj  layer.Client
-		api  api.Handler
+		ctr      auth.Center
+		log      *zap.Logger
+		cfg      *viper.Viper
+		pool     *pool.Pool
+		poolStat *stat.PoolStat
+		gateKey  *keys.PrivateKey
+		nc       *notifications.Controller
+		obj      layer.Client
+		api      api.Handler
 
 		servers []Server
 
-		metrics        *appMetrics
-		bucketResolver *resolver.BucketResolver
-		services       []*Service
-		settings       *appSettings
-		maxClients     api.MaxClients
+		metrics           *appMetrics
+		resolverContainer *resolver.Container
+		services          []*Service
+		settings          *appSettings
+		maxClients        api.MaxClients
 
 		webDone chan struct{}
 		wrkDone chan struct{}
@@ -86,17 +89,35 @@ type (
 )
 
 func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
-	conns, key := getPool(ctx, log.logger, v)
+	conns, key, poolStat := getPool(ctx, log.logger, v)
+
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
+
+	// authmate doesn't require anonKey for work, but let's create random one.
+	anonKey, err := keys.NewPrivateKey()
+	if err != nil {
+		log.logger.Fatal("newApp: couldn't generate random key", zap.Error(err))
+	}
+	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+	log.logger.Info("anonymous signer", zap.String("userID", anonSigner.UserID().String()))
+
+	ni, err := conns.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		log.logger.Fatal("newApp: networkInfo", zap.Error(err))
+	}
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, int64(ni.MaxObjectSize()))
 
 	// prepare auth center
-	ctr := auth.New(neofs.NewAuthmateNeoFS(conns), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
+	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
 
 	app := &App{
-		ctr:  ctr,
-		log:  log.logger,
-		cfg:  v,
-		pool: conns,
-		key:  key,
+		ctr:      ctr,
+		log:      log.logger,
+		cfg:      v,
+		pool:     conns,
+		poolStat: poolStat,
+		gateKey:  key,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -105,44 +126,44 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		settings:   newAppSettings(log, v),
 	}
 
-	app.init(ctx)
+	app.init(ctx, anonSigner)
 
 	return app
 }
 
-func (a *App) init(ctx context.Context) {
-	a.initAPI(ctx)
+func (a *App) init(ctx context.Context, anonSigner user.Signer) {
+	a.initAPI(ctx, anonSigner)
 	a.initMetrics()
 	a.initServers(ctx)
 }
 
-func (a *App) initLayer(ctx context.Context) {
-	a.initResolver()
+func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
+	a.initResolver(ctx)
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
-	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.key)
+	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.gateKey)
 	if err != nil {
 		a.log.Fatal("failed to create tree service", zap.Error(err))
 	}
 	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
 
-	// prepare random key for anonymous requests
-	randomKey, err := keys.NewPrivateKey()
-	if err != nil {
-		a.log.Fatal("couldn't generate random key", zap.Error(err))
-	}
-
 	layerCfg := &layer.Config{
-		Caches: getCacheOptions(a.cfg, a.log),
-		AnonKey: layer.AnonymousKey{
-			Key: randomKey,
-		},
-		Resolver:    a.bucketResolver,
+		Caches:      getCacheOptions(a.cfg, a.log),
+		GateKey:     a.gateKey,
+		Anonymous:   anonSigner.UserID(),
+		Resolver:    a.resolverContainer,
 		TreeService: treeService,
 	}
 
+	signer := user.NewAutoIDSignerRFC6979(a.gateKey.PrivateKey)
+
+	ni, err := a.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		a.log.Fatal("initLayer: networkInfo", zap.Error(err))
+	}
+
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool), layerCfg)
+	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner, int64(ni.MaxObjectSize())), layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
@@ -178,42 +199,28 @@ func getDefaultPolicyValue(v *viper.Viper) string {
 	return defaultPolicyStr
 }
 
-func (a *App) initAPI(ctx context.Context) {
-	a.initLayer(ctx)
+func (a *App) initAPI(ctx context.Context, anonSigner user.Signer) {
+	a.initLayer(ctx, anonSigner)
 	a.initHandler()
 }
 
 func (a *App) initMetrics() {
-	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.pool))
+	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.poolStat))
 	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
 
-func (a *App) initResolver() {
-	var err error
-	a.bucketResolver, err = resolver.NewBucketResolver(a.getResolverConfig())
+func (a *App) initResolver(ctx context.Context) {
+	endpoint := a.cfg.GetString(cfgRPCEndpoint)
+
+	a.log.Info("rpc endpoint", zap.String("address", endpoint))
+
+	res, err := resolver.NewContainer(ctx, endpoint)
 	if err != nil {
-		a.log.Fatal("failed to create resolver", zap.Error(err))
-	}
-}
-
-func (a *App) getResolverConfig() ([]string, *resolver.Config) {
-	resolveCfg := &resolver.Config{
-		NeoFS:      neofs.NewResolverNeoFS(a.pool),
-		RPCAddress: a.cfg.GetString(cfgRPCEndpoint),
+		a.log.Fatal("resolver", zap.Error(err))
 	}
 
-	order := a.cfg.GetStringSlice(cfgResolveOrder)
-	if resolveCfg.RPCAddress == "" {
-		order = remove(order, resolver.NNSResolver)
-		a.log.Warn(fmt.Sprintf("resolver '%s' won't be used since '%s' isn't provided", resolver.NNSResolver, cfgRPCEndpoint))
-	}
-
-	if len(order) == 0 {
-		a.log.Info("container resolver will be disabled because of resolvers 'resolver_order' is empty")
-	}
-
-	return order, resolveCfg
+	a.resolverContainer = res
 }
 
 func newMaxClients(cfg *viper.Viper) api.MaxClients {
@@ -230,8 +237,11 @@ func newMaxClients(cfg *viper.Viper) api.MaxClients {
 	return api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline)
 }
 
-func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey) {
+func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey, *stat.PoolStat) {
+	poolStat := stat.NewPoolStatistic()
+
 	var prm pool.InitParameters
+	prm.SetStatisticCallback(poolStat.OperationCallback)
 
 	password := wallet.GetPassword(cfg, cfgWalletPassphrase)
 	key, err := wallet.GetKeyFromPath(cfg.GetString(cfgWalletPath), cfg.GetString(cfgWalletAddress), password)
@@ -239,7 +249,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
-	prm.SetSigner(neofsecdsa.SignerRFC6979(key.PrivateKey))
+	prm.SetSigner(user.NewAutoIDSignerRFC6979(key.PrivateKey))
 	logger.Info("using credentials", zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
 
 	for _, peer := range fetchPeers(logger, cfg) {
@@ -286,7 +296,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("failed to dial connection pool", zap.Error(err))
 	}
 
-	return p, key
+	return p, key, poolStat
 }
 
 func newPlacementPolicy(defaultPolicy string, regionPolicyFilepath string) (*placementPolicy, error) {
@@ -387,15 +397,6 @@ func (m *appMetrics) Shutdown() {
 	m.mu.Unlock()
 }
 
-func remove(list []string, element string) []string {
-	for i, item := range list {
-		if item == element {
-			return append(list[:i], list[i+1:]...)
-		}
-	}
-	return list
-}
-
 // Wait waits for an application to finish.
 //
 // Pre-logs a message about the launch of the application mentioning its
@@ -452,7 +453,7 @@ LOOP:
 		case <-ctx.Done():
 			break LOOP
 		case <-sigs:
-			a.configReload()
+			a.configReload(ctx)
 		}
 	}
 
@@ -471,7 +472,7 @@ func shutdownContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), defaultShutdownTimeout)
 }
 
-func (a *App) configReload() {
+func (a *App) configReload(ctx context.Context) {
 	a.log.Info("SIGHUP config reload started")
 
 	if !a.cfg.IsSet(cmdConfig) {
@@ -483,8 +484,8 @@ func (a *App) configReload() {
 		return
 	}
 
-	if err := a.bucketResolver.UpdateResolvers(a.getResolverConfig()); err != nil {
-		a.log.Warn("failed to reload resolvers", zap.Error(err))
+	if err := a.resolverContainer.UpdateResolvers(ctx, a.cfg.GetString(cfgRPCEndpoint)); err != nil {
+		a.log.Warn("failed to update resolvers", zap.Error(err))
 	}
 
 	if err := a.updateServers(); err != nil {
