@@ -248,6 +248,9 @@ jobs:
           ./bootstrap
         working-directory: s3-tests
 
+      - name: tmate session before test run
+        uses: mxschmitt/action-tmate@v3
+
       - name: Run Sanity tests for pull requests
         timeout-minutes: 60
         if: github.event_name == 'pull_request'
