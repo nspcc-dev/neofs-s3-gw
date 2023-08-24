@@ -2,7 +2,6 @@ package layer
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"io"
 	"time"
@@ -47,9 +46,6 @@ type PrmContainerCreate struct {
 type PrmAuth struct {
 	// Bearer token to be used for the operation. Overlaps PrivateKey. Optional.
 	BearerToken *bearer.Token
-
-	// Private key used for the operation if BearerToken is missing (in this case non-nil).
-	PrivateKey *ecdsa.PrivateKey
 }
 
 // PrmObjectRead groups parameters of NeoFS.ReadObject operation.

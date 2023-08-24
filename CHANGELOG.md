@@ -4,6 +4,15 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Added
+- NoOpResolver as backward compatibility for case when rpc_endpoint/S3_GW_RPC_ENDPOINT param is empty in config.
+
+### Changed
+- Options `rpc_endpoint` in yaml config or `S3_GW_RPC_ENDPOINT` in env config is mandatory.
+
+### Removed
+- Options `resolve_order` in yaml config and `S3_GW_RESOLVE_ORDER` in env.
+
 ## [0.27.1] - 2023-06-15
 
 ### Fixed

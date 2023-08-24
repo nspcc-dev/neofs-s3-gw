@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 
-	"github.com/nspcc-dev/neofs-sdk-go/pool"
+	"github.com/nspcc-dev/neofs-sdk-go/stat"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
@@ -33,7 +33,7 @@ const (
 )
 
 type StatisticScraper interface {
-	Statistic() pool.Statistic
+	Statistic() stat.Statistic
 }
 
 type GateMetrics struct {
@@ -195,25 +195,24 @@ func (m *poolMetricsCollector) register() {
 }
 
 func (m *poolMetricsCollector) updateStatistic() {
-	stat := m.poolStatScraper.Statistic()
+	st := m.poolStatScraper.Statistic()
 
 	m.overallNodeErrors.Reset()
 	m.overallNodeRequests.Reset()
 	m.currentErrors.Reset()
 	m.requestDuration.Reset()
 
-	for _, node := range stat.Nodes() {
+	for _, node := range st.Nodes() {
 		m.overallNodeErrors.WithLabelValues(node.Address()).Set(float64(node.OverallErrors()))
 		m.overallNodeRequests.WithLabelValues(node.Address()).Set(float64(node.Requests()))
 
-		m.currentErrors.WithLabelValues(node.Address()).Set(float64(node.CurrentErrors()))
 		m.updateRequestsDuration(node)
 	}
 
-	m.overallErrors.Set(float64(stat.OverallErrors()))
+	m.overallErrors.Set(float64(st.OverallErrors()))
 }
 
-func (m *poolMetricsCollector) updateRequestsDuration(node pool.NodeStatistic) {
+func (m *poolMetricsCollector) updateRequestsDuration(node stat.NodeStatistic) {
 	m.requestDuration.WithLabelValues(node.Address(), methodGetBalance).Set(float64(node.AverageGetBalance().Milliseconds()))
 	m.requestDuration.WithLabelValues(node.Address(), methodPutContainer).Set(float64(node.AveragePutContainer().Milliseconds()))
 	m.requestDuration.WithLabelValues(node.Address(), methodGetContainer).Set(float64(node.AverageGetContainer().Milliseconds()))

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/pflag"
@@ -105,9 +104,6 @@ const ( // Settings.
 
 	// NeoGo.
 	cfgRPCEndpoint = "rpc_endpoint"
-
-	// Resolving.
-	cfgResolveOrder = "resolve_order"
 
 	// Application.
 	cfgApplicationBuildTime = "app.build_time"
@@ -230,7 +226,6 @@ func newSettings() *viper.Viper {
 	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
 
 	flags.StringP(cfgRPCEndpoint, "r", "", "set RPC endpoint")
-	resolveMethods := flags.StringSlice(cfgResolveOrder, []string{resolver.DNSResolver}, "set bucket name resolve order")
 
 	domains := flags.StringSliceP(cfgListenDomains, "d", nil, "set domains to be listened")
 
@@ -257,10 +252,6 @@ func newSettings() *viper.Viper {
 
 	if v.IsSet(cfgServer+".0."+cfgTLSKeyFile) && v.IsSet(cfgServer+".0."+cfgTLSCertFile) {
 		v.Set(cfgServer+".0."+cfgTLSEnabled, true)
-	}
-
-	if resolveMethods != nil {
-		v.SetDefault(cfgResolveOrder, *resolveMethods)
 	}
 
 	if peers != nil && len(*peers) > 0 {

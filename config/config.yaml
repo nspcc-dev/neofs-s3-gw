@@ -50,8 +50,6 @@ tree:
 
 # RPC endpoint and order of resolving of bucket names
 rpc_endpoint: http://morph-chain.neofs.devenv:30333
-resolve_order:
-  - nns
 
 # Metrics
 pprof:
