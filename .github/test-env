@@ -61,3 +61,11 @@ NEOFS_CONTRACTS_URL=https://github.com/nspcc-dev/neofs-contract/releases/downloa
 
 # NeoFS adm binary
 NEOFS_ADM_URL=https://github.com/nspcc-dev/neofs-node/releases/download/v${NODE_VERSION}/neofs-adm-${NODE_PLATFORM}.tar.gz
+
+
+# Control service addresses used for healthchecks
+NEOFS_IR_CONTROL_GRPC_ENDPOINT=127.0.0.1:16512
+NEOFS_STORAGE_CONTROL_GRPC_ENDPOINT_1=s01.${LOCAL_DOMAIN}:8081
+NEOFS_STORAGE_CONTROL_GRPC_ENDPOINT_2=s02.${LOCAL_DOMAIN}:8081
+NEOFS_STORAGE_CONTROL_GRPC_ENDPOINT_3=s03.${LOCAL_DOMAIN}:8081
+NEOFS_STORAGE_CONTROL_GRPC_ENDPOINT_4=s04.${LOCAL_DOMAIN}:8081

@@ -142,6 +142,11 @@ jobs:
           sudo chmod a+w vendor/hosts
         working-directory: neofs-dev-env
 
+      - name: Copy neofs-s3-gw binaries to vendor directory
+        run: |
+          cp bin/* ${GITHUB_WORKSPACE}/neofs-dev-env/vendor/
+        working-directory: neofs-s3-gw
+
       - name: Prepare Dev-Env to run tests
         id: prepare_test_env
         timeout-minutes: 30
@@ -154,11 +159,6 @@ jobs:
         run: |
           make update.container_fee val=0 && make update.container_alias_fee val=0
         working-directory: neofs-dev-env
-
-      - name: Copy neofs-s3-gw binaries to vendor directory
-        run: |
-          cp bin/* ${GITHUB_WORKSPACE}/neofs-dev-env/vendor/
-        working-directory: neofs-s3-gw
 
 ################################################################
 
@@ -241,9 +241,6 @@ jobs:
         run: |
           cat ${S3_TESTS_CONFIG}
         working-directory: s3-tests
-
-      - name: tmate session before test run
-        uses: mxschmitt/action-tmate@v3
 
       - name: Setup test env
         run: |
