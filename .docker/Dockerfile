@@ -1,4 +1,4 @@
-FROM golang:1.20 as builder
+FROM golang:1.20-alpine as builder
 
 ARG BUILD=now
 ARG REPO=github.com/nspcc-dev/neofs-s3-gw
@@ -6,6 +6,8 @@ ARG VERSION=dev
 
 WORKDIR /src
 COPY . /src
+
+RUN apk add --no-cache jq make bash curl
 
 RUN make
 
