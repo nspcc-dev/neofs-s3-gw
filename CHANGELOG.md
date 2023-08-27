@@ -4,14 +4,26 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.28.0] - 2023-08-25
+
+### Fixed
+- Authmate panic in case of some missing parameters (#794)
+- Missing reconnects in case of RPC connection failure (#796)
+- Failure to complete multipart upload of ACL-enabled object (#807)
+
 ### Added
-- NoOpResolver as backward compatibility for case when rpc_endpoint/S3_GW_RPC_ENDPOINT param is empty in config.
+- NoOpResolver as backward compatibility for case when rpc_endpoint/S3_GW_RPC_ENDPOINT param is empty in config, it will be removed in 0.29.0 (#807)
 
 ### Changed
-- Options `rpc_endpoint` in yaml config or `S3_GW_RPC_ENDPOINT` in env config is mandatory.
+- Improved documentation (#795)
+- Renamed API errors package (#803)
+- Docker image is more lightweight now (#804)
+- Option `rpc_endpoint` in yaml config or `S3_GW_RPC_ENDPOINT` in env config is mandatory (#807).
+- SDK dependency updated to RC10 (#807)
+- Improved data buffering (#807)
 
 ### Removed
-- Options `resolve_order` in yaml config and `S3_GW_RESOLVE_ORDER` in env.
+- Options `resolve_order` in yaml config and `S3_GW_RESOLVE_ORDER` in env (#807).
 
 ## [0.27.1] - 2023-06-15
 
@@ -450,4 +462,5 @@ releases.
 [0.26.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.0...v0.26.1
 [0.27.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.1...v0.27.0
 [0.27.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...v0.27.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.1...master
+[0.28.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.1...v0.28.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.0...master
