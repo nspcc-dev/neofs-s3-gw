@@ -518,7 +518,7 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 		Container: prm.Container,
 		Filepath:  prm.Filepath,
 		Attributes: [][2]string{
-			{"__NEOFS__EXPIRATION_EPOCH", strconv.FormatUint(prm.ExpirationEpoch, 10)}},
+			{object.AttributeExpirationEpoch, strconv.FormatUint(prm.ExpirationEpoch, 10)}},
 		Payload: bytes.NewReader(prm.Payload),
 	})
 }
