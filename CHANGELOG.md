@@ -4,6 +4,9 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Updated
+- `neofs-sdk-go` to `v1.0.0-rc.11`
+
 ## [0.28.0] - 2023-08-25
 
 ### Fixed

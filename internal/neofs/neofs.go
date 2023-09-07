@@ -347,7 +347,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			prmHead.WithBearerToken(*prm.BearerToken)
 		}
 
-		hdrRes, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
+		hdr, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -356,13 +356,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			return nil, fmt.Errorf("read object header via connection pool: %w", err)
 		}
 
-		var hdr object.Object
-		if !hdrRes.ReadHeader(&hdr) {
-			return nil, errors.New("header is empty")
-		}
-
 		return &layer.ObjectPart{
-			Head: &hdr,
+			Head: hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
 		_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
