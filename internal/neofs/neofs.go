@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
@@ -257,9 +256,9 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetPayloadSize(prm.PayloadSize)
 
 	if len(prm.Locks) > 0 {
-		lock := new(object.Lock)
+		var lock object.Lock
 		lock.WriteMembers(prm.Locks)
-		objectv2.WriteLock(obj.ToV2(), (objectv2.Lock)(*lock))
+		obj.WriteLock(lock)
 	}
 
 	var prmObjPutInit client.PrmObjectPutInit
