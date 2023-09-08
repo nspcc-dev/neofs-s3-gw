@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
@@ -257,9 +256,9 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetPayloadSize(prm.PayloadSize)
 
 	if len(prm.Locks) > 0 {
-		lock := new(object.Lock)
+		var lock object.Lock
 		lock.WriteMembers(prm.Locks)
-		objectv2.WriteLock(obj.ToV2(), (objectv2.Lock)(*lock))
+		obj.WriteLock(lock)
 	}
 
 	var prmObjPutInit client.PrmObjectPutInit
@@ -347,7 +346,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			prmHead.WithBearerToken(*prm.BearerToken)
 		}
 
-		hdrRes, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
+		hdr, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -356,13 +355,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			return nil, fmt.Errorf("read object header via connection pool: %w", err)
 		}
 
-		var hdr object.Object
-		if !hdrRes.ReadHeader(&hdr) {
-			return nil, errors.New("header is empty")
-		}
-
 		return &layer.ObjectPart{
-			Head: &hdr,
+			Head: hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
 		_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
@@ -524,7 +518,7 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 		Container: prm.Container,
 		Filepath:  prm.Filepath,
 		Attributes: [][2]string{
-			{"__NEOFS__EXPIRATION_EPOCH", strconv.FormatUint(prm.ExpirationEpoch, 10)}},
+			{object.AttributeExpirationEpoch, strconv.FormatUint(prm.ExpirationEpoch, 10)}},
 		Payload: bytes.NewReader(prm.Payload),
 	})
 }

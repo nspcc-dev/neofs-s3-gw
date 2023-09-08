@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,10 +44,10 @@ func TestObjectLockAttributes(t *testing.T) {
 
 	expEpoch := false
 	for _, attr := range lockObj.Attributes() {
-		if attr.Key() == AttributeExpirationEpoch {
+		if attr.Key() == object.AttributeExpirationEpoch {
 			expEpoch = true
 		}
 	}
 
-	require.Truef(t, expEpoch, "system header __NEOFS__EXPIRATION_EPOCH presence")
+	require.Truef(t, expEpoch, "system header %s presence", object.AttributeExpirationEpoch)
 }

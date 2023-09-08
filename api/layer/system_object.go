@@ -11,12 +11,12 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 const (
-	AttributeComplianceMode  = ".s3-compliance-mode"
-	AttributeExpirationEpoch = "__NEOFS__EXPIRATION_EPOCH"
+	AttributeComplianceMode = ".s3-compliance-mode"
 )
 
 type PutLockInfoParams struct {
@@ -246,7 +246,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 
 	if expEpoch != 0 {
 		result = append(result, [2]string{
-			AttributeExpirationEpoch, strconv.FormatUint(expEpoch, 10),
+			object.AttributeExpirationEpoch, strconv.FormatUint(expEpoch, 10),
 		})
 	}
 

@@ -10,7 +10,6 @@ import (
 	"io"
 	"time"
 
-	objectv2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
@@ -197,9 +196,9 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	t.currentEpoch++
 
 	if len(prm.Locks) > 0 {
-		lock := new(object.Lock)
+		var lock object.Lock
 		lock.WriteMembers(prm.Locks)
-		objectv2.WriteLock(obj.ToV2(), (objectv2.Lock)(*lock))
+		obj.WriteLock(lock)
 	}
 
 	if prm.Payload != nil {
