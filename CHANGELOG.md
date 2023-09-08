@@ -4,6 +4,8 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.28.1] - 2023-09-08
+
 ### Updated
 - `neofs-sdk-go` to `v1.0.0-rc.11`
 
@@ -466,4 +468,5 @@ releases.
 [0.27.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.26.1...v0.27.0
 [0.27.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...v0.27.1
 [0.28.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.1...v0.28.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.0...master
+[0.28.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.0...v0.28.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.1...master
