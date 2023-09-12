@@ -259,6 +259,13 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		var lock object.Lock
 		lock.WriteMembers(prm.Locks)
 		obj.WriteLock(lock)
+
+		// we can't have locks and payload at the same time.
+		if len(obj.Payload()) > 0 && prm.Payload != nil {
+			return oid.ID{}, errors.New("lock object with payload")
+		}
+
+		prm.Payload = bytes.NewReader(obj.Payload())
 	}
 
 	var prmObjPutInit client.PrmObjectPutInit
