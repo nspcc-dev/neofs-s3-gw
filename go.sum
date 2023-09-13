@@ -304,8 +304,8 @@ github.com/nspcc-dev/neofs-contract v0.17.1-0.20230804121740-84ff5d244f69 h1:Vw7
 github.com/nspcc-dev/neofs-contract v0.17.1-0.20230804121740-84ff5d244f69/go.mod h1:SRedxMO37yDLu+5pvlbGKo3ZTMMUgVFkk8N2YVMC91g=
 github.com/nspcc-dev/neofs-crypto v0.4.0 h1:5LlrUAM5O0k1+sH/sktBtrgfWtq1pgpDs09fZo+KYi4=
 github.com/nspcc-dev/neofs-crypto v0.4.0/go.mod h1:6XJ8kbXgOfevbI2WMruOtI+qUJXNwSGM/E9eClXxPHs=
-github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11 h1:QOc8ZRN5DXlAeRPh5QG9u8rMLgoeRNiZF5/vL7QupWg=
-github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11/go.mod h1:W+ImTNRnSNMH8w43H1knCcIqwu7dLHePXtlJNZ7EFIs=
+github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20230912200451-c0eefd5bd81c h1:qdjwsVPibYl889rEjp4IbmeRzf3foogDZR9jefqmDGA=
+github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20230912200451-c0eefd5bd81c/go.mod h1:W+ImTNRnSNMH8w43H1knCcIqwu7dLHePXtlJNZ7EFIs=
 github.com/nspcc-dev/rfc6979 v0.2.0 h1:3e1WNxrN60/6N0DW7+UYisLeZJyfqZTNOjeV/toYvOE=
 github.com/nspcc-dev/rfc6979 v0.2.0/go.mod h1:exhIh1PdpDC5vQmyEsGvc4YDM/lyQp/452QxGq/UEso=
 github.com/nspcc-dev/tzhash v1.7.0 h1:/+aL33NC7y5OIGnY2kYgjZt8mg7LVGFMdj/KAJLndnk=
