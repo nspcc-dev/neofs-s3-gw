@@ -4,6 +4,12 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.28.2] - 2023-09-13
+
+### Fixed
+- Panic when creating some objects (#821)
+- SDK updated to fix node health management issues and count statistics more appropriately (#823)
+
 ## [0.28.1] - 2023-09-08
 
 ### Updated
@@ -469,4 +475,5 @@ releases.
 [0.27.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.0...v0.27.1
 [0.28.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.1...v0.28.0
 [0.28.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.0...v0.28.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.1...master
+[0.28.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.1...v0.28.2
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.2...master
