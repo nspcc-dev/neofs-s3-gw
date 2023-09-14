@@ -475,7 +475,6 @@ func TestOrder(t *testing.T) {
 			},
 		},
 	}
-	bucketServiceRec := &ServiceRecord{Resource: expectedAst.Resources[0].Name(), GroupRecordsLength: 2}
 	bucketUsersGetRec := eacl.NewRecord()
 	bucketUsersGetRec.SetOperation(eacl.OperationGet)
 	bucketUsersGetRec.SetAction(eacl.ActionAllow)
@@ -484,7 +483,6 @@ func TestOrder(t *testing.T) {
 	bucketOtherGetRec.SetOperation(eacl.OperationGet)
 	bucketOtherGetRec.SetAction(eacl.ActionDeny)
 	bucketOtherGetRec.SetTargets(*targetOther)
-	objectServiceRec := &ServiceRecord{Resource: expectedAst.Resources[1].Name(), GroupRecordsLength: 2}
 	objectUsersPutRec := eacl.NewRecord()
 	objectUsersPutRec.SetOperation(eacl.OperationPut)
 	objectUsersPutRec.SetAction(eacl.ActionAllow)
@@ -497,10 +495,8 @@ func TestOrder(t *testing.T) {
 	objectOtherPutRec.SetTargets(*targetOther)
 
 	expectedEacl := eacl.NewTable()
-	expectedEacl.AddRecord(objectServiceRec.ToEACLRecord())
 	expectedEacl.AddRecord(objectOtherPutRec)
 	expectedEacl.AddRecord(objectUsersPutRec)
-	expectedEacl.AddRecord(bucketServiceRec.ToEACLRecord())
 	expectedEacl.AddRecord(bucketOtherGetRec)
 	expectedEacl.AddRecord(bucketUsersGetRec)
 
@@ -544,7 +540,7 @@ func TestOrder(t *testing.T) {
 		mergedEacl, err := astToTable(mergedAst)
 		require.NoError(t, err)
 
-		require.Equal(t, *childRecord, mergedEacl.Records()[1])
+		require.Equal(t, *childRecord, mergedEacl.Records()[0])
 	})
 }
 
@@ -650,23 +646,19 @@ func TestAstToTable(t *testing.T) {
 	}
 
 	expectedTable := eacl.NewTable()
-	serviceRec1 := &ServiceRecord{Resource: ast.Resources[0].Name(), GroupRecordsLength: 1}
 	record1 := eacl.NewRecord()
 	record1.SetAction(eacl.ActionAllow)
 	record1.SetOperation(eacl.OperationPut)
 	// Unknown role is used, because it is ignored when keys are set
 	eacl.AddFormedTarget(record1, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
 
-	serviceRec2 := &ServiceRecord{Resource: ast.Resources[1].Name(), GroupRecordsLength: 1}
 	record2 := eacl.NewRecord()
 	record2.SetAction(eacl.ActionDeny)
 	record2.SetOperation(eacl.OperationGet)
 	eacl.AddFormedTarget(record2, eacl.RoleOthers)
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
 
-	expectedTable.AddRecord(serviceRec2.ToEACLRecord())
 	expectedTable.AddRecord(record2)
-	expectedTable.AddRecord(serviceRec1.ToEACLRecord())
 	expectedTable.AddRecord(record1)
 
 	actualTable, err := astToTable(ast)
@@ -894,8 +886,6 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 	}
 
 	expectedTable := eacl.NewTable()
-	serviceRec := &ServiceRecord{Resource: resInfo.Name(), GroupRecordsLength: len(readOps) * 2}
-	expectedTable.AddRecord(serviceRec.ToEACLRecord())
 
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
