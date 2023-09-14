@@ -154,16 +154,6 @@ type ServiceRecord struct {
 	GroupRecordsLength int
 }
 
-func (s ServiceRecord) ToEACLRecord() *eacl.Record {
-	serviceRecord := eacl.NewRecord()
-	serviceRecord.SetAction(eacl.ActionAllow)
-	serviceRecord.SetOperation(eacl.OperationGet)
-	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordResourceKey, s.Resource)
-	serviceRecord.AddFilter(eacl.HeaderFromService, eacl.MatchUnknown, serviceRecordGroupLengthKey, strconv.Itoa(s.GroupRecordsLength))
-	eacl.AddFormedTarget(serviceRecord, eacl.RoleSystem)
-	return serviceRecord
-}
-
 func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
@@ -866,12 +856,6 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 		if err != nil {
 			return nil, fmt.Errorf("form records: %w", err)
 		}
-
-		serviceRecord := ServiceRecord{
-			Resource:           ast.Resources[i].Name(),
-			GroupRecordsLength: len(records),
-		}
-		table.AddRecord(serviceRecord.ToEACLRecord())
 
 		for _, rec := range records {
 			table.AddRecord(rec)
