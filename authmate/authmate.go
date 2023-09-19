@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -312,35 +313,25 @@ func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSe
 	return enc.Encode(or)
 }
 
-func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
-	table := eacl.NewTable()
-	if len(eaclTable) != 0 {
-		return table, table.UnmarshalJSON(eaclTable)
+func buildEACLTable(eaclJSON []byte) (*eacl.Table, error) {
+	if len(eaclJSON) != 0 {
+		var table eacl.Table
+		return &table, table.UnmarshalJSON(eaclJSON)
 	}
 
-	record := eacl.NewRecord()
-	record.SetOperation(eacl.OperationGet)
-	record.SetAction(eacl.ActionAllow)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	table.AddRecord(record)
-
-	for _, rec := range restrictedRecords() {
-		table.AddRecord(rec)
+	records := []eacl.Record{
+		eacl.NewRecord(eacl.ActionAllow, acl.OpObjectGet, eacl.NewTargetWithRole(eacl.RoleOthers)),
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectGet, eacl.NewTargetWithRole(eacl.RoleOthers)), // why deny allowed GET?
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectHead, eacl.NewTargetWithRole(eacl.RoleOthers)),
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectPut, eacl.NewTargetWithRole(eacl.RoleOthers)),
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectDelete, eacl.NewTargetWithRole(eacl.RoleOthers)),
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectSearch, eacl.NewTargetWithRole(eacl.RoleOthers)),
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectHash, eacl.NewTargetWithRole(eacl.RoleOthers)),
 	}
 
-	return table, nil
-}
+	table := eacl.New(records)
 
-func restrictedRecords() (records []*eacl.Record) {
-	for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-		record := eacl.NewRecord()
-		record.SetOperation(op)
-		record.SetAction(eacl.ActionDeny)
-		eacl.AddFormedTarget(record, eacl.RoleOthers)
-		records = append(records, record)
-	}
-
-	return
+	return &table, nil
 }
 
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*bearer.Token, error) {

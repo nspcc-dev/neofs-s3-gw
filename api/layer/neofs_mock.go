@@ -257,7 +257,7 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 }
 
 func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container) error {
-	cnrID, ok := table.CID()
+	cnrID, ok := table.Container()
 	if !ok {
 		return errors.New("invalid cid")
 	}

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
 	"encoding/json"
@@ -20,6 +19,9 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
+	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -28,17 +30,17 @@ import (
 )
 
 var (
-	writeOps = []eacl.Operation{eacl.OperationPut, eacl.OperationDelete}
-	readOps  = []eacl.Operation{eacl.OperationGet, eacl.OperationHead,
-		eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
-	fullOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
-		eacl.OperationDelete, eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
+	writeOps = []acl.Op{acl.OpObjectPut, acl.OpObjectDelete}
+	readOps  = []acl.Op{acl.OpObjectGet, acl.OpObjectHead,
+		acl.OpObjectSearch, acl.OpObjectRange, acl.OpObjectHash}
+	fullOps = []acl.Op{acl.OpObjectGet, acl.OpObjectHead, acl.OpObjectPut,
+		acl.OpObjectDelete, acl.OpObjectSearch, acl.OpObjectRange, acl.OpObjectHash}
 )
 
-var actionToOpMap = map[string][]eacl.Operation{
-	s3DeleteObject: {eacl.OperationDelete},
+var actionToOpMap = map[string][]acl.Op{
+	s3DeleteObject: {acl.OpObjectDelete},
 	s3GetObject:    readOps,
-	s3PutObject:    {eacl.OperationPut},
+	s3PutObject:    {acl.OpObjectPut},
 	s3ListBucket:   readOps,
 }
 
@@ -136,7 +138,7 @@ func (r *resourceInfo) IsBucket() bool {
 
 type astOperation struct {
 	Users  []string
-	Op     eacl.Operation
+	Op     acl.Op
 	Action eacl.Action
 }
 
@@ -647,9 +649,7 @@ func formReverseOrderResources(resourceMap map[string]orderedAstResource) []*ast
 }
 
 func addOperationsAndUpdateMap(orderedRes orderedAstResource, record eacl.Record, resMap map[string]orderedAstResource) {
-	for _, target := range record.Targets() {
-		orderedRes.Resource.Operations = addToList(orderedRes.Resource.Operations, record, target)
-	}
+	orderedRes.Resource.Operations = addToList(orderedRes.Resource.Operations, record)
 	resMap[orderedRes.Resource.Name()] = orderedRes
 }
 
@@ -668,10 +668,10 @@ func resInfoFromFilters(bucketName string, filters []eacl.Filter) resourceInfo {
 	resInfo := resourceInfo{Bucket: bucketName}
 	for _, filter := range filters {
 		if filter.Matcher() == eacl.MatchStringEqual {
-			if filter.Key() == object.AttributeFilePath {
-				resInfo.Object = filter.Value()
-			} else if filter.Key() == v2acl.FilterObjectID {
-				resInfo.Version = filter.Value()
+			if key := filter.HeaderKey(); key == object.AttributeFilePath {
+				resInfo.Object = filter.HeaderValue()
+			} else if key == v2acl.FilterObjectID {
+				resInfo.Version = filter.HeaderValue()
 			}
 		}
 	}
@@ -801,7 +801,7 @@ func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
 	return res
 }
 
-func removeAstOp(resource *astResource, group bool, op eacl.Operation, action eacl.Action) {
+func removeAstOp(resource *astResource, group bool, op acl.Op, action eacl.Action) {
 	for i, astOp := range resource.Operations {
 		if astOp.IsGroupGrantee() == group && astOp.Op == op && astOp.Action == action {
 			resource.Operations = append(resource.Operations[:i], resource.Operations[i+1:]...)
@@ -849,7 +849,7 @@ func getParentResource(parent *ast, resource *astResource) *astResource {
 }
 
 func astToTable(ast *ast) (*eacl.Table, error) {
-	table := eacl.NewTable()
+	var resRecords []eacl.Record
 
 	for i := len(ast.Resources) - 1; i >= 0; i-- {
 		records, err := formRecords(ast.Resources[i])
@@ -857,108 +857,101 @@ func astToTable(ast *ast) (*eacl.Table, error) {
 			return nil, fmt.Errorf("form records: %w", err)
 		}
 
-		for _, rec := range records {
-			table.AddRecord(rec)
-		}
+		resRecords = append(resRecords, records...)
 	}
 
-	return table, nil
+	table := eacl.New(resRecords)
+
+	return &table, nil
 }
 
 func tryServiceRecord(record eacl.Record) *ServiceRecord {
-	if record.Action() != eacl.ActionAllow || record.Operation() != eacl.OperationGet ||
-		len(record.Targets()) != 1 || len(record.Filters()) != 2 {
+	filters := record.Filters()
+	if record.Action() != eacl.ActionAllow || !record.IsForOp(acl.OpObjectGet) ||
+		len(filters) != 2 {
 		return nil
 	}
 
-	target := record.Targets()[0]
-	if target.Role() != eacl.RoleSystem {
+	resourceFilter := filters[0]
+	recordsFilter := filters[1]
+	if resourceFilter.HeaderType() != eacl.HeaderFromService || recordsFilter.HeaderType() != eacl.HeaderFromService ||
+		resourceFilter.HeaderKey() != serviceRecordResourceKey || recordsFilter.HeaderKey() != serviceRecordGroupLengthKey {
 		return nil
 	}
 
-	resourceFilter := record.Filters()[0]
-	recordsFilter := record.Filters()[1]
-	if resourceFilter.From() != eacl.HeaderFromService || recordsFilter.From() != eacl.HeaderFromService ||
-		resourceFilter.Matcher() != eacl.MatchUnknown || recordsFilter.Matcher() != eacl.MatchUnknown ||
-		resourceFilter.Key() != serviceRecordResourceKey || recordsFilter.Key() != serviceRecordGroupLengthKey {
-		return nil
-	}
-
-	groupLength, err := strconv.Atoi(recordsFilter.Value())
+	groupLength, err := strconv.Atoi(recordsFilter.HeaderValue())
 	if err != nil {
 		return nil
 	}
 
 	return &ServiceRecord{
-		Resource:           resourceFilter.Value(),
+		Resource:           resourceFilter.HeaderValue(),
 		GroupRecordsLength: groupLength,
 	}
 }
 
-func formRecords(resource *astResource) ([]*eacl.Record, error) {
-	var res []*eacl.Record
+func formRecords(resource *astResource) ([]eacl.Record, error) {
+	var res []eacl.Record
 
 	for i := len(resource.Operations) - 1; i >= 0; i-- {
 		astOp := resource.Operations[i]
-		record := eacl.NewRecord()
-		record.SetOperation(astOp.Op)
-		record.SetAction(astOp.Action)
+		var target eacl.Target
 		if astOp.IsGroupGrantee() {
-			eacl.AddFormedTarget(record, eacl.RoleOthers)
+			target = eacl.NewTargetWithRole(eacl.RoleOthers)
 		} else {
-			targetKeys := make([]ecdsa.PublicKey, 0, len(astOp.Users))
+			targetKeys := make([]neofscrypto.PublicKey, 0, len(astOp.Users))
 			for _, user := range astOp.Users {
 				pk, err := keys.NewPublicKeyFromString(user)
 				if err != nil {
 					return nil, fmt.Errorf("public key from string: %w", err)
 				}
-				targetKeys = append(targetKeys, (ecdsa.PublicKey)(*pk))
+				targetKeys = append(targetKeys, (*neofsecdsa.PublicKey)(pk))
 			}
-			// Unknown role is used, because it is ignored when keys are set
-			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
+			target = eacl.NewTargetWithKeys(targetKeys)
 		}
+		var filters []eacl.Filter
 		if len(resource.Object) != 0 {
 			if len(resource.Version) != 0 {
 				var id oid.ID
 				if err := id.DecodeString(resource.Version); err != nil {
 					return nil, fmt.Errorf("parse object version (oid): %w", err)
 				}
-				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
+				filters = append(filters, eacl.NewFilterObjectID(eacl.MatchStringEqual, id))
 			} else {
-				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
+				filters = append(filters, eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, resource.Object))
 			}
 		}
-		res = append(res, record)
+		res = append(res, eacl.NewRecord(astOp.Action, astOp.Op, target, filters...))
 	}
 
 	return res, nil
 }
 
-func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) []*astOperation {
+func addToList(operations []*astOperation, rec eacl.Record) []*astOperation {
 	var (
 		found       *astOperation
-		groupTarget = target.Role() == eacl.RoleOthers
+		groupTarget = rec.IsForRole(eacl.RoleOthers)
 	)
 
 	for _, astOp := range operations {
-		if astOp.Op == rec.Operation() && astOp.IsGroupGrantee() == groupTarget {
+		if rec.IsForOp(astOp.Op) && astOp.IsGroupGrantee() == groupTarget {
 			found = astOp
 		}
 	}
 
 	if found != nil {
 		if !groupTarget {
-			for _, key := range target.BinaryKeys() {
+			for _, key := range rec.TargetBinaryKeys() {
 				found.Users = append(found.Users, hex.EncodeToString(key))
 			}
 		}
 	} else {
 		astOperation := &astOperation{
-			Op:     rec.Operation(),
+			Op:     rec.Op(),
 			Action: rec.Action(),
 		}
 		if !groupTarget {
-			for _, key := range target.BinaryKeys() {
+			for _, key := range rec.TargetBinaryKeys() {
 				astOperation.Users = append(astOperation.Users, hex.EncodeToString(key))
 			}
 		}
@@ -1046,7 +1039,7 @@ func astToPolicy(ast *ast) *bucketPolicy {
 }
 
 func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eaclAction eacl.Action, resourceName string) {
-	userOpsMap := make(map[string][]eacl.Operation)
+	userOpsMap := make(map[string][]acl.Op)
 
 	for _, op := range list {
 		if !op.IsGroupGrantee() {
@@ -1100,7 +1093,7 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 	return allowed, denied
 }
 
-func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee bool, action eacl.Action) []*astOperation {
+func addTo(list []*astOperation, userID string, op acl.Op, groupGrantee bool, action eacl.Action) []*astOperation {
 	var found *astOperation
 	for _, astop := range list {
 		if astop.Op == op && astop.IsGroupGrantee() == groupGrantee {
@@ -1283,7 +1276,7 @@ func effectToAction(effect string) eacl.Action {
 	case "Deny":
 		return eacl.ActionDeny
 	}
-	return eacl.ActionUnknown
+	return 0
 }
 
 func actionToEffect(action eacl.Action) string {
@@ -1297,7 +1290,7 @@ func actionToEffect(action eacl.Action) string {
 	}
 }
 
-func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
+func permissionToOperations(permission amazonS3Permission) []acl.Op {
 	switch permission {
 	case awsPermFullControl:
 		return fullOps
@@ -1309,10 +1302,6 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 	return nil
 }
 
-func isWriteOperation(op eacl.Operation) bool {
-	return op == eacl.OperationDelete || op == eacl.OperationPut
-}
-
 func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
 	res := &AccessControlPolicy{
 		Owner: Owner{
@@ -1321,7 +1310,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 		},
 	}
 
-	m := make(map[string][]eacl.Operation)
+	m := make(map[string][]acl.Op)
 
 	astList := tableToAst(bucketACL.EACL, bucketName)
 
@@ -1350,8 +1339,8 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 	for key, val := range m {
 		permission := awsPermFullControl
 		read := true
-		for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-			if !contains(val, op) && !isWriteOperation(op) {
+		for _, op := range readOps {
+			if !contains(val, op) {
 				read = false
 			}
 		}
@@ -1385,7 +1374,7 @@ func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL)
 	return h.encodeObjectACL(bucketACL, bucketName, "")
 }
 
-func contains(list []eacl.Operation, op eacl.Operation) bool {
+func contains(list []acl.Op, op acl.Op) bool {
 	for _, operation := range list {
 		if operation == op {
 			return true
@@ -1396,12 +1385,13 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 
 func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	var found bool
-	table := eacl.NewTable()
 
 	ownerKey, err := keys.NewPublicKeyFromString(acp.Owner.ID)
 	if err != nil {
 		return nil, fmt.Errorf("public key from string: %w", err)
 	}
+
+	var records []eacl.Record
 
 	for _, grant := range acp.AccessControlList {
 		if !isValidGrant(grant) {
@@ -1411,7 +1401,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 			found = true
 		}
 
-		var recordFromOp func(eacl.Operation) *eacl.Record
+		var recordFromOp func(acl.Op) eacl.Record
 
 		switch grant.Grantee.Type {
 		default:
@@ -1422,27 +1412,29 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 				return nil, fmt.Errorf("grantee ID to public key (%s): %w", grant.Grantee.ID, err)
 			}
 
-			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecord(op, key) }
+			recordFromOp = func(op acl.Op) eacl.Record { return getAllowRecord(op, key) }
 		case granteeGroup:
-			recordFromOp = func(op eacl.Operation) *eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
+			recordFromOp = func(op acl.Op) eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
 		}
 
 		for _, op := range permissionToOperations(grant.Permission) {
-			table.AddRecord(recordFromOp(op))
+			records = append(records, recordFromOp(op))
 		}
 	}
 
 	if !found {
 		for _, op := range fullOps {
-			table.AddRecord(getAllowRecord(op, ownerKey))
+			records = append(records, getAllowRecord(op, ownerKey))
 		}
 	}
 
 	for _, op := range fullOps {
-		table.AddRecord(getOthersRecord(op, eacl.ActionDeny))
+		records = append(records, getOthersRecord(op, eacl.ActionDeny))
 	}
 
-	return table, nil
+	table := eacl.New(records)
+
+	return &table, nil
 }
 
 func isValidGrant(grant *Grant) bool {
@@ -1450,19 +1442,10 @@ func isValidGrant(grant *Grant) bool {
 		(grant.Grantee.Type == granteeCanonicalUser || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI == allUsersGroup))
 }
 
-func getAllowRecord(op eacl.Operation, pk *keys.PublicKey) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(eacl.ActionAllow)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record, eacl.RoleUnknown, (ecdsa.PublicKey)(*pk))
-	return record
+func getAllowRecord(op acl.Op, pk *keys.PublicKey) eacl.Record {
+	return eacl.NewRecord(eacl.ActionAllow, op, eacl.NewTargetWithKey((*neofsecdsa.PublicKey)(pk)))
 }
 
-func getOthersRecord(op eacl.Operation, action eacl.Action) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(action)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	return record
+func getOthersRecord(op acl.Op, action eacl.Action) eacl.Record {
+	return eacl.NewRecord(action, op, eacl.NewTargetWithRole(eacl.RoleOthers))
 }
