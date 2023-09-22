@@ -1,6 +1,6 @@
 module github.com/nspcc-dev/neofs-s3-gw
 
-go 1.18
+go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.44.6
@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.13.1-0.20220308171302-2f2f6968e98d
-	github.com/nspcc-dev/neo-go v0.101.0
+	github.com/nspcc-dev/neo-go v0.102.0
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
 	github.com/nspcc-dev/neofs-contract v0.17.1-0.20230804121740-84ff5d244f69
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20230912200451-c0eefd5bd81c
