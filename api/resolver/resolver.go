@@ -54,17 +54,3 @@ func (r *NNSResolver) Resolve(_ context.Context, name string) (cid.ID, error) {
 func nnsContainerDomain(name string) string {
 	return fmt.Sprintf("%s.%s", name, defaultZone)
 }
-
-// NoOpResolver is a special resolver for situation when [NNSResolver] can't be created.
-type NoOpResolver struct {
-}
-
-// NewNoOpResolver is a constructor for the NoOpResolver.
-func NewNoOpResolver() *NoOpResolver {
-	return &NoOpResolver{}
-}
-
-// Resolve always returns [ErrNotFound].
-func (r *NoOpResolver) Resolve(_ context.Context, _ string) (cid.ID, error) {
-	return cid.ID{}, ErrNotFound
-}

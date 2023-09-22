@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -61,10 +62,10 @@ func NewContainer(ctx context.Context, endpoint string) (*Container, error) {
 
 // NewResolver returns resolver depending on corresponding endpoint.
 //
-// If endpoint is empty, [NoOpResolver] will be returned.
+// If endpoint is empty, error will be returned.
 func NewResolver(ctx context.Context, endpoint string) (Resolver, error) {
 	if endpoint == "" {
-		return NewNoOpResolver(), nil
+		return nil, errors.New("endpoint must be set")
 	}
 
 	cl, err := rpcClient(ctx, endpoint)
