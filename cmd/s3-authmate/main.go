@@ -79,6 +79,7 @@ var (
 	containerPolicies        string
 	awcCliCredFile           string
 	timeoutFlag              time.Duration
+	slicerEnabledFlag        bool
 
 	// pool timeouts flag.
 	poolDialTimeoutFlag        time.Duration
@@ -293,6 +294,11 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				Destination: &poolStreamTimeoutFlag,
 				Value:       poolStreamTimeout,
 			},
+			&cli.BoolFlag{
+				Name:        "internal-slicer",
+				Usage:       "Enable slicer for object uploading",
+				Destination: &slicerEnabledFlag,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			ctx, log := prepare()
@@ -322,7 +328,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 			}
 			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
 
-			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner)
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner, slicerEnabledFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
@@ -663,7 +669,7 @@ func obtainSecret() *cli.Command {
 			}
 			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
 
-			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner)
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner, slicerEnabledFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 2)
 			}
@@ -699,7 +705,7 @@ func obtainSecret() *cli.Command {
 	return command
 }
 
-func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigner user.Signer) (authmate.NeoFS, error) {
+func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigner user.Signer, isSlicerEnabled bool) (authmate.NeoFS, error) {
 	log.Debug("prepare connection pool")
 
 	signer := user.NewAutoIDSignerRFC6979(*cfg.Key)
@@ -727,10 +733,12 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigne
 	}
 
 	neofsCfg := neofs.Config{
-		MaxObjectSize: int64(ni.MaxObjectSize()),
+		MaxObjectSize:        int64(ni.MaxObjectSize()),
+		IsSlicerEnabled:      isSlicerEnabled,
+		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
-	neoFS := neofs.NewNeoFS(p, signer, anonSigner, neofsCfg)
+	neoFS := neofs.NewNeoFS(p, signer, anonSigner, neofsCfg, ni)
 
 	return neofs.NewAuthmateNeoFS(neoFS), nil
 }

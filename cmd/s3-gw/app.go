@@ -107,10 +107,25 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	}
 
 	neofsCfg := neofs.Config{
-		MaxObjectSize: int64(ni.MaxObjectSize()),
+		MaxObjectSize:        int64(ni.MaxObjectSize()),
+		IsSlicerEnabled:      v.GetBool(cfgSlicerEnabled),
+		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
-	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg)
+	// If slicer is disabled, we should use "static" getter, which doesn't make periodic requests to the NeoFS.
+	var epochGetter neofs.EpochGetter = ni
+
+	if neofsCfg.IsSlicerEnabled {
+		epochUpdateInterval := v.GetDuration(cfgEpochUpdateInterval)
+
+		if epochUpdateInterval == 0 {
+			epochUpdateInterval = time.Duration(int64(ni.EpochDuration())/2*ni.MsPerBlock()) * time.Millisecond
+		}
+
+		epochGetter = neofs.NewPeriodicGetter(ctx, ni.CurrentEpoch(), epochUpdateInterval, conns, log.logger)
+	}
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochGetter)
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))

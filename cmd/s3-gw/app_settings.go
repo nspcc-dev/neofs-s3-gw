@@ -121,11 +121,17 @@ const ( // Settings.
 	// Number of the object copies to consider PUT to NeoFS successful.
 	cfgSetCopiesNumber = "neofs.set_copies_number"
 
+	//  Timeout between retrieving actual epoch from NeoFS. Actual only if slicer.enabled = true.
+	cfgEpochUpdateInterval = "neofs.epoch_update_interval"
+
 	// List of allowed AccessKeyID prefixes.
 	cfgAllowedAccessKeyIDPrefixes = "allowed_access_key_id_prefixes"
 
 	// envPrefix is an environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
+
+	// Shows if slicer is enabled. If enabled slicer will be used for object put.
+	cfgSlicerEnabled = "internal_slicer"
 )
 
 var ignore = map[string]struct{}{
