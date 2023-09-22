@@ -29,23 +29,28 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 )
 
+// Config allows to configure some [NeoFS] parameters.
+type Config struct {
+	MaxObjectSize int64
+}
+
 // NeoFS represents virtual connection to the NeoFS network.
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool          *pool.Pool
-	gateSigner    user.Signer
-	anonSigner    user.Signer
-	maxObjectSize int64
+	pool       *pool.Pool
+	gateSigner user.Signer
+	anonSigner user.Signer
+	cfg        Config
 }
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
-func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, maxObjectSize int64) *NeoFS {
+func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, cfg Config) *NeoFS {
 	return &NeoFS{
-		pool:          p,
-		gateSigner:    signer,
-		anonSigner:    anonSigner,
-		maxObjectSize: maxObjectSize,
+		pool:       p,
+		gateSigner: signer,
+		anonSigner: anonSigner,
+		cfg:        cfg,
 	}
 }
 
@@ -284,7 +289,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
-	chunk := make([]byte, x.maxObjectSize)
+	chunk := make([]byte, x.cfg.MaxObjectSize)
 	_, err = io.CopyBuffer(writer, prm.Payload, chunk)
 	if err != nil {
 		return oid.ID{}, fmt.Errorf("read payload chunk: %w", err)

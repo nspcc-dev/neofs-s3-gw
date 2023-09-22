@@ -726,7 +726,11 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigne
 		return nil, fmt.Errorf("networkInfo: %w", err)
 	}
 
-	neoFS := neofs.NewNeoFS(p, signer, anonSigner, int64(ni.MaxObjectSize()))
+	neofsCfg := neofs.Config{
+		MaxObjectSize: int64(ni.MaxObjectSize()),
+	}
+
+	neoFS := neofs.NewNeoFS(p, signer, anonSigner, neofsCfg)
 
 	return neofs.NewAuthmateNeoFS(neoFS), nil
 }

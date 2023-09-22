@@ -106,7 +106,11 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		log.logger.Fatal("newApp: networkInfo", zap.Error(err))
 	}
 
-	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, int64(ni.MaxObjectSize()))
+	neofsCfg := neofs.Config{
+		MaxObjectSize: int64(ni.MaxObjectSize()),
+	}
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg)
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
@@ -162,8 +166,12 @@ func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
 		a.log.Fatal("initLayer: networkInfo", zap.Error(err))
 	}
 
+	neofsCfg := neofs.Config{
+		MaxObjectSize: int64(ni.MaxObjectSize()),
+	}
+
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner, int64(ni.MaxObjectSize())), layerCfg)
+	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner, neofsCfg), layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
