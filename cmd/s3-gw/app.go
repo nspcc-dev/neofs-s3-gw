@@ -130,18 +130,18 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		settings:   newAppSettings(log, v),
 	}
 
-	app.init(ctx, anonSigner)
+	app.init(ctx, anonSigner, neoFS)
 
 	return app
 }
 
-func (a *App) init(ctx context.Context, anonSigner user.Signer) {
-	a.initAPI(ctx, anonSigner)
+func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
+	a.initAPI(ctx, anonSigner, neoFS)
 	a.initMetrics()
 	a.initServers(ctx)
 }
 
-func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
+func (a *App) initLayer(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
 	a.initResolver(ctx)
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
@@ -159,19 +159,8 @@ func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
 		TreeService: treeService,
 	}
 
-	signer := user.NewAutoIDSignerRFC6979(a.gateKey.PrivateKey)
-
-	ni, err := a.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		a.log.Fatal("initLayer: networkInfo", zap.Error(err))
-	}
-
-	neofsCfg := neofs.Config{
-		MaxObjectSize: int64(ni.MaxObjectSize()),
-	}
-
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner, neofsCfg), layerCfg)
+	a.obj = layer.NewLayer(a.log, neoFS, layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
@@ -207,8 +196,8 @@ func getDefaultPolicyValue(v *viper.Viper) string {
 	return defaultPolicyStr
 }
 
-func (a *App) initAPI(ctx context.Context, anonSigner user.Signer) {
-	a.initLayer(ctx, anonSigner)
+func (a *App) initAPI(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
+	a.initLayer(ctx, anonSigner, neoFS)
 	a.initHandler()
 }
 
