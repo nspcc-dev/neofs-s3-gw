@@ -66,11 +66,10 @@ Using these flag you can configure only one address. To set multiple addresses u
 
 ### RPC endpoint and resolving of bucket names
 
-To set RPC endpoint specify a value of parameter `-r` or `--rpc_endpoint`. The parameter is **required if** another
-parameter's `--resolve_order` value contains `nns`.
+To set RPC endpoint specify a value of parameter `-r` or `--rpc_endpoint`. This endpoint must be set.
 
 ```shell
-$ neofs-s3-gw --rpc_endpoint http://morph-chain.neofs.devenv:30333/ --resolve_order nns,dns
+$ neofs-s3-gw --rpc_endpoint http://morph-chain.neofs.devenv:30333/
 ```
 
 ### Processing of requests
@@ -175,9 +174,6 @@ listen_domains:
    - s3dev2.neofs.devenv
 
 rpc_endpoint: http://morph-chain.neofs.devenv:30333
-resolve_order:
-  - nns
-  - dns
 
 connect_timeout: 10s
 stream_timeout: 10s
@@ -197,7 +193,6 @@ allowed_access_key_id_prefixes:
 |----------------------------------|------------|---------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `listen_domains`                 | `[]string` |               |                | Domains to be able to use virtual-hosted-style access to bucket.                                                                                                                                                  |
 | `rpc_endpoint`                   | `string`   | yes           |                | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
-| `resolve_order`                  | `[]string` | yes           | `[dns]`        | Order of bucket name resolvers to use. Available resolvers: `dns`, `nns`.                                                                                                                                         |                                                                                                                                                                           |
 | `connect_timeout`                | `duration` |               | `10s`          | Timeout to connect to a node.                                                                                                                                                                                     |
 | `stream_timeout`                 | `duration` |               | `10s`          | Timeout for individual operations in streaming RPC.                                                                                                                                                               |
 | `healthcheck_timeout`            | `duration` |               | `15s`          | Timeout to check node health during rebalance.                                                                                                                                                                    |
