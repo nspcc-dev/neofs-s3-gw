@@ -22,6 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/object/slicer"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/stat"
@@ -29,23 +30,32 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 )
 
+// Config allows to configure some [NeoFS] parameters.
+type Config struct {
+	MaxObjectSize        int64
+	IsSlicerEnabled      bool
+	IsHomomorphicEnabled bool
+}
+
 // NeoFS represents virtual connection to the NeoFS network.
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool          *pool.Pool
-	gateSigner    user.Signer
-	anonSigner    user.Signer
-	maxObjectSize int64
+	pool        *pool.Pool
+	gateSigner  user.Signer
+	anonSigner  user.Signer
+	cfg         Config
+	epochGetter EpochGetter
 }
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
-func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, maxObjectSize int64) *NeoFS {
+func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, cfg Config, epochGetter EpochGetter) *NeoFS {
 	return &NeoFS{
-		pool:          p,
-		gateSigner:    signer,
-		anonSigner:    anonSigner,
-		maxObjectSize: maxObjectSize,
+		pool:        p,
+		gateSigner:  signer,
+		anonSigner:  anonSigner,
+		cfg:         cfg,
+		epochGetter: epochGetter,
 	}
 }
 
@@ -268,6 +278,28 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		prm.Payload = bytes.NewReader(obj.Payload())
 	}
 
+	if x.cfg.IsSlicerEnabled {
+		opts := slicer.Options{}
+		opts.SetObjectPayloadLimit(uint64(x.cfg.MaxObjectSize))
+		opts.SetCopiesNumber(prm.CopiesNumber)
+		opts.SetCurrentNeoFSEpoch(x.epochGetter.CurrentEpoch())
+
+		if x.cfg.IsHomomorphicEnabled {
+			opts.CalculateHomomorphicChecksum()
+		}
+
+		if prm.BearerToken != nil {
+			opts.SetBearerToken(*prm.BearerToken)
+		}
+
+		objID, err := slicer.Put(ctx, x.pool, obj, x.signer(ctx), prm.Payload, opts)
+		if err != nil {
+			return oid.ID{}, fmt.Errorf("slicer put: %w", err)
+		}
+
+		return objID, nil
+	}
+
 	var prmObjPutInit client.PrmObjectPutInit
 	prmObjPutInit.SetCopiesNumber(prm.CopiesNumber)
 
@@ -284,7 +316,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
-	chunk := make([]byte, x.maxObjectSize)
+	chunk := make([]byte, x.cfg.MaxObjectSize)
 	_, err = io.CopyBuffer(writer, prm.Payload, chunk)
 	if err != nil {
 		return oid.ID{}, fmt.Errorf("read payload chunk: %w", err)

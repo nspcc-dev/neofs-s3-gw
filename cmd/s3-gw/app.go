@@ -106,7 +106,26 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		log.logger.Fatal("newApp: networkInfo", zap.Error(err))
 	}
 
-	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, int64(ni.MaxObjectSize()))
+	neofsCfg := neofs.Config{
+		MaxObjectSize:        int64(ni.MaxObjectSize()),
+		IsSlicerEnabled:      v.GetBool(cfgSlicerEnabled),
+		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
+	}
+
+	// If slicer is disabled, we should use "static" getter, which doesn't make periodic requests to the NeoFS.
+	var epochGetter neofs.EpochGetter = ni
+
+	if neofsCfg.IsSlicerEnabled {
+		epochUpdateInterval := v.GetDuration(cfgEpochUpdateInterval)
+
+		if epochUpdateInterval == 0 {
+			epochUpdateInterval = time.Duration(int64(ni.EpochDuration())/2*ni.MsPerBlock()) * time.Millisecond
+		}
+
+		epochGetter = neofs.NewPeriodicGetter(ctx, ni.CurrentEpoch(), epochUpdateInterval, conns, log.logger)
+	}
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochGetter)
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
@@ -126,18 +145,18 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		settings:   newAppSettings(log, v),
 	}
 
-	app.init(ctx, anonSigner)
+	app.init(ctx, anonSigner, neoFS)
 
 	return app
 }
 
-func (a *App) init(ctx context.Context, anonSigner user.Signer) {
-	a.initAPI(ctx, anonSigner)
+func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
+	a.initAPI(ctx, anonSigner, neoFS)
 	a.initMetrics()
 	a.initServers(ctx)
 }
 
-func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
+func (a *App) initLayer(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
 	a.initResolver(ctx)
 
 	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
@@ -155,15 +174,8 @@ func (a *App) initLayer(ctx context.Context, anonSigner user.Signer) {
 		TreeService: treeService,
 	}
 
-	signer := user.NewAutoIDSignerRFC6979(a.gateKey.PrivateKey)
-
-	ni, err := a.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		a.log.Fatal("initLayer: networkInfo", zap.Error(err))
-	}
-
 	// prepare object layer
-	a.obj = layer.NewLayer(a.log, neofs.NewNeoFS(a.pool, signer, anonSigner, int64(ni.MaxObjectSize())), layerCfg)
+	a.obj = layer.NewLayer(a.log, neoFS, layerCfg)
 
 	if a.cfg.GetBool(cfgEnableNATS) {
 		nopts := getNotificationsOptions(a.cfg, a.log)
@@ -199,8 +211,8 @@ func getDefaultPolicyValue(v *viper.Viper) string {
 	return defaultPolicyStr
 }
 
-func (a *App) initAPI(ctx context.Context, anonSigner user.Signer) {
-	a.initLayer(ctx, anonSigner)
+func (a *App) initAPI(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
+	a.initLayer(ctx, anonSigner, neoFS)
 	a.initHandler()
 }
 
