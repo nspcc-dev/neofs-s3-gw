@@ -4,6 +4,19 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.29.0] - 2023-09-28
+
+### Added
+- Experimental "internal-slicer" option to prepare objects on the gateway side (#831)
+
+### Changed
+- Go 1.19+ is required to build now, using 1.21 by default (#829)
+- NeoGo dependency updated to 0.102.0 (#829)
+
+### Removed
+- Setting System EACL rules (#825)
+- NoOp compatibility resolver, RPC endpoint configuration is mandatory now (#830)
+
 ## [0.28.2] - 2023-09-13
 
 ### Fixed
@@ -476,4 +489,5 @@ releases.
 [0.28.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.27.1...v0.28.0
 [0.28.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.0...v0.28.1
 [0.28.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.1...v0.28.2
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.2...master
+[0.29.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.2...v0.29.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.29.0...master
