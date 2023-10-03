@@ -235,19 +235,10 @@ jobs:
           ./bootstrap
         working-directory: s3-tests
 
-      - name: Run Sanity tests for pull requests
-        timeout-minutes: 60
-        if: github.event_name == 'pull_request'
+      - name: s3 tests
         run: |
           source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py --timeout 300 -a "sanity" 2>&1 | tee s3-tests.log
-        working-directory: s3-tests
-
-      - name: Run All tests
-        if: github.event_name != 'pull_request'
-        run: |
-          source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py --timeout 300 2>&1 | tee s3-tests.log
+          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws and not fails_on_dbstore' --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3_neofs.py 2>&1 | tee s3-tests.log
         working-directory: s3-tests
 
 
