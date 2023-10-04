@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -46,16 +47,24 @@ type NeoFS struct {
 	anonSigner  user.Signer
 	cfg         Config
 	epochGetter EpochGetter
+	buffers     *sync.Pool
 }
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
 func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, cfg Config, epochGetter EpochGetter) *NeoFS {
+	buffers := sync.Pool{}
+	buffers.New = func() any {
+		b := make([]byte, cfg.MaxObjectSize)
+		return &b
+	}
+
 	return &NeoFS{
 		pool:        p,
 		gateSigner:  signer,
 		anonSigner:  anonSigner,
 		cfg:         cfg,
 		epochGetter: epochGetter,
+		buffers:     &buffers,
 	}
 }
 
@@ -316,8 +325,12 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
 	}
 
-	chunk := make([]byte, x.cfg.MaxObjectSize)
-	_, err = io.CopyBuffer(writer, prm.Payload, chunk)
+	data := x.buffers.Get()
+	chunk := data.(*[]byte)
+
+	_, err = io.CopyBuffer(writer, prm.Payload, *chunk)
+	x.buffers.Put(chunk)
+
 	if err != nil {
 		return oid.ID{}, fmt.Errorf("read payload chunk: %w", err)
 	}
