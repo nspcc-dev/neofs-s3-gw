@@ -236,14 +236,14 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py --timeout 300 -a "sanity"
+          S3TEST_CONF=${S3_TESTS_CONFIG} pytest --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py --timeout 300 -a "sanity" 2>&1 | tee s3-tests.log
         working-directory: s3-tests
 
       - name: Run All tests
         if: github.event_name != 'pull_request'
         run: |
           source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py --timeout 300
+          S3TEST_CONF=${S3_TESTS_CONFIG} pytest --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py --timeout 300 2>&1 | tee s3-tests.log
         working-directory: s3-tests
 
 
@@ -329,3 +329,63 @@ jobs:
           state: 'success'
           sha: ${{github.event.pull_request.head.sha || github.sha}}
           target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/index.html
+
+      - name: Post only tests logs
+        id: post_s3_tests_logs
+        if: always()
+        env:
+          TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
+          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
+          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+        run: |
+          source ${GITHUB_WORKSPACE}/s3-tests/virtualenv/bin/activate
+          zip s3-tests.zip ${GITHUB_WORKSPACE}/s3-tests/s3-tests.log
+          NEOFS_CLI_PASSWORD=$TEST_RESULTS_PASSWORD neofs-cli --rpc-endpoint st1.$TEST_RESULTS_NEOFS_NETWORK_DOMAIN:8080 \
+          --wallet wallet.json object put --file s3-tests.zip --cid $TEST_RESULTS_CID --timeout 1200s \
+          --expire-at $EXP_EPOCH \
+          --attributes FilePath=$RUN_ID/data/s3-tests.zip,RunNumber=$RUN_ID,ContentType=application/zip
+        working-directory: neofs-testcases
+
+      - name: Post the link to the tests logs
+        timeout-minutes: 60
+        if: always() && ( steps.post_s3_tests_logs.outcome == 'success' )
+        env:
+          TEST_RESULTS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
+          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{secrets.GITHUB_TOKEN}}
+          context: 'S3 tests logs'
+          state: 'success'
+          sha: ${{github.event.pull_request.head.sha || github.sha}}
+          target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/s3-tests.zip
+
+
+      - name: Post only docker logs
+        id: post_dockers_logs
+        if: always() && ( steps.prepare_test_env.outcome != 'success' || steps.put_report.outcome != 'success' )
+        env:
+          TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
+          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
+          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+        run: |
+          source venv.local-pytest/bin/activate && python ./tools/src/zip_dev_env_logs.py
+          NEOFS_CLI_PASSWORD=$TEST_RESULTS_PASSWORD neofs-cli --rpc-endpoint st1.$TEST_RESULTS_NEOFS_NETWORK_DOMAIN:8080 \
+          --wallet wallet.json object put --file containers_logs.zip --cid $TEST_RESULTS_CID --timeout 1200s \
+          --expire-at $EXP_EPOCH \
+          --attributes FilePath=$RUN_ID/data/containers_logs.zip,RunNumber=$RUN_ID,ContentType=application/zip
+        working-directory: neofs-testcases
+
+      - name: Post the link to the docker logs
+        timeout-minutes: 60
+        if: always() && ( steps.post_dockers_logs.outcome == 'success' )
+        env:
+          TEST_RESULTS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
+          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{secrets.GITHUB_TOKEN}}
+          context: 'Docker logs'
+          state: 'success'
+          sha: ${{github.event.pull_request.head.sha || github.sha}}
+          target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/containers_logs.zip
