@@ -31,6 +31,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Get the current date
+        id: date
+        shell: bash
+        run: echo "::set-output name=timestamp::$(date +%s)"
 
       - name: Set RUN_ID
         env:
