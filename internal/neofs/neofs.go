@@ -293,6 +293,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		opts.SetCopiesNumber(prm.CopiesNumber)
 		opts.SetCurrentNeoFSEpoch(x.epochGetter.CurrentEpoch())
 
+		data := x.buffers.Get()
+		chunk := data.(*[]byte)
+		opts.SetPayloadBuffer(*chunk)
+
 		if x.cfg.IsHomomorphicEnabled {
 			opts.CalculateHomomorphicChecksum()
 		}
@@ -302,6 +306,8 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 
 		objID, err := slicer.Put(ctx, x.pool, obj, x.signer(ctx), prm.Payload, opts)
+		x.buffers.Put(chunk)
+
 		if err != nil {
 			return oid.ID{}, fmt.Errorf("slicer put: %w", err)
 		}
