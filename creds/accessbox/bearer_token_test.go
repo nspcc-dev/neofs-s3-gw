@@ -7,7 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
-	"github.com/nspcc-dev/neofs-sdk-go/eacl"
+	eacltest "github.com/nspcc-dev/neofs-sdk-go/eacl/test"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ func TestTokensEncryptDecrypt(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacltest.Table(t))
 	require.NoError(t, tkn.Sign(neofsecdsa.SignerRFC6979(sec.PrivateKey)))
 
 	data, err := encrypt(cred, cred.PublicKey(), tkn.Marshal())
@@ -57,7 +57,7 @@ func TestBearerTokenInAccessBox(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacltest.Table(t))
 	require.NoError(t, tkn.Sign(neofsecdsa.SignerRFC6979(sec.PrivateKey)))
 
 	gate := NewGateData(cred.PublicKey(), &tkn)
@@ -120,7 +120,7 @@ func TestAccessboxMultipleKeys(t *testing.T) {
 	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacltest.Table(t))
 	require.NoError(t, tkn.Sign(neofsecdsa.SignerRFC6979(sec.PrivateKey)))
 
 	count := 10
@@ -161,7 +161,7 @@ func TestUnknownKey(t *testing.T) {
 	wrongCred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacltest.Table(t))
 	require.NoError(t, tkn.Sign(neofsecdsa.SignerRFC6979(sec.PrivateKey)))
 
 	gate := NewGateData(cred.PublicKey(), &tkn)

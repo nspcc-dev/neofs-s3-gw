@@ -157,7 +157,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 }
 
 func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionToken *session.Container) error {
-	table.SetCID(idCnr)
+	table.LimitByContainer(idCnr)
 
 	return n.neoFS.SetContainerEACL(ctx, *table, sessionToken)
 }

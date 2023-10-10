@@ -3,12 +3,10 @@ package handler
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -18,7 +16,10 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
+	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
+	"github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -33,32 +34,22 @@ func TestTableToAst(t *testing.T) {
 	var id oid.ID
 	id.SetSHA256(sha256.Sum256(b))
 
-	key, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-	key2, err := keys.NewPrivateKey()
-	require.NoError(t, err)
+	key := test.RandomSigner(t).Public()
+	key2 := test.RandomSigner(t).Public()
 
-	table := new(eacl.Table)
-	record := eacl.NewRecord()
-	record.SetAction(eacl.ActionAllow)
-	record.SetOperation(eacl.OperationGet)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	table.AddRecord(record)
-	record2 := eacl.NewRecord()
-	record2.SetAction(eacl.ActionDeny)
-	record2.SetOperation(eacl.OperationPut)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record2, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()), *((*ecdsa.PublicKey)(key2.PublicKey())))
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
-	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
-	table.AddRecord(record2)
+	table := eacl.New([]eacl.Record{
+		eacl.NewRecord(eacl.ActionAllow, acl.OpObjectGet, eacl.NewTargetWithRole(eacl.RoleOthers)),
+		eacl.NewRecord(eacl.ActionDeny, acl.OpObjectPut, eacl.NewTargetWithKeys([]neofscrypto.PublicKey{key, key2}),
+			eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, "objectName"),
+			eacl.NewFilterObjectID(eacl.MatchStringEqual, id)),
+	})
 
 	expectedAst := &ast{
 		Resources: []*astResource{
 			{
 				resourceInfo: resourceInfo{Bucket: "bucketName"},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectGet,
 					Action: eacl.ActionAllow,
 				}}},
 			{
@@ -69,16 +60,16 @@ func TestTableToAst(t *testing.T) {
 				},
 				Operations: []*astOperation{{
 					Users: []string{
-						hex.EncodeToString(key.PublicKey().Bytes()),
-						hex.EncodeToString(key2.PublicKey().Bytes()),
+						hex.EncodeToString(neofscrypto.PublicKeyBytes(key)),
+						hex.EncodeToString(neofscrypto.PublicKeyBytes(key2)),
 					},
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionDeny,
 				}}},
 		},
 	}
 
-	actualAst := tableToAst(table, expectedAst.Resources[0].Bucket)
+	actualAst := tableToAst(&table, expectedAst.Resources[0].Bucket)
 
 	if actualAst.Resources[0].Name() == expectedAst.Resources[0].Name() {
 		require.Equal(t, expectedAst, actualAst)
@@ -119,7 +110,7 @@ func TestPolicyToAst(t *testing.T) {
 					Bucket: "bucketName",
 				},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionAllow,
 				}},
 			},
@@ -178,7 +169,7 @@ func TestMergeAstUnModified(t *testing.T) {
 				},
 				Operations: []*astOperation{{
 					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionDeny,
 				}},
 			},
@@ -192,7 +183,7 @@ func TestMergeAstUnModified(t *testing.T) {
 					Bucket: "bucket",
 				},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionAllow,
 				}},
 			},
@@ -214,11 +205,11 @@ func TestMergeAstModified(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionDeny,
 				}, {
 					Users:  []string{"user2"},
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectGet,
 					Action: eacl.ActionDeny,
 				}},
 			},
@@ -234,7 +225,7 @@ func TestMergeAstModified(t *testing.T) {
 				},
 				Operations: []*astOperation{{
 					Users:  []string{"user1"},
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectGet,
 					Action: eacl.ActionDeny,
 				}},
 			},
@@ -252,7 +243,7 @@ func TestMergeAstModified(t *testing.T) {
 					child.Resources[0].Operations[0],
 					{
 						Users:  []string{"user1", "user2"},
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionDeny,
 					},
 				},
@@ -279,29 +270,29 @@ func TestMergeAppended(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  users,
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionDeny,
 					},
 					{
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionDeny,
 					},
 					{
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionDeny,
 					},
 				},
@@ -319,29 +310,29 @@ func TestMergeAppended(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  users,
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionAllow,
 					},
 				},
@@ -358,29 +349,29 @@ func TestMergeAppended(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  users,
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionDeny,
 					},
 					{
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionDeny,
 					},
 					{
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionDeny,
 					},
 				},
@@ -393,29 +384,29 @@ func TestMergeAppended(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  users,
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
 						Users:  users,
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationDelete,
+						Op:     acl.OpObjectDelete,
 						Action: eacl.ActionAllow,
 					},
 				},
@@ -428,15 +419,13 @@ func TestMergeAppended(t *testing.T) {
 }
 
 func TestOrder(t *testing.T) {
-	key, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-	users := []string{hex.EncodeToString(key.PublicKey().Bytes())}
-	targetUser := eacl.NewTarget()
-	targetUser.SetBinaryKeys([][]byte{key.PublicKey().Bytes()})
-	targetOther := eacl.NewTarget()
-	targetOther.SetRole(eacl.RoleOthers)
+	key := test.RandomSigner(t).Public()
+	users := []string{hex.EncodeToString(neofscrypto.PublicKeyBytes(key))}
+	targetUser := eacl.NewTargetWithKey(key)
+	targetOther := eacl.NewTargetWithRole(eacl.RoleOthers)
 	bucketName := "bucket"
 	objectName := "objectName"
+	objectNameFilter := eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, objectName)
 
 	expectedAst := &ast{
 		Resources: []*astResource{
@@ -447,11 +436,11 @@ func TestOrder(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  users,
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionDeny,
 					},
 				},
@@ -464,58 +453,45 @@ func TestOrder(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  users,
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionDeny,
 					},
 				},
 			},
 		},
 	}
-	bucketUsersGetRec := eacl.NewRecord()
-	bucketUsersGetRec.SetOperation(eacl.OperationGet)
-	bucketUsersGetRec.SetAction(eacl.ActionAllow)
-	bucketUsersGetRec.SetTargets(*targetUser)
-	bucketOtherGetRec := eacl.NewRecord()
-	bucketOtherGetRec.SetOperation(eacl.OperationGet)
-	bucketOtherGetRec.SetAction(eacl.ActionDeny)
-	bucketOtherGetRec.SetTargets(*targetOther)
-	objectUsersPutRec := eacl.NewRecord()
-	objectUsersPutRec.SetOperation(eacl.OperationPut)
-	objectUsersPutRec.SetAction(eacl.ActionAllow)
-	objectUsersPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, objectName)
-	objectUsersPutRec.SetTargets(*targetUser)
-	objectOtherPutRec := eacl.NewRecord()
-	objectOtherPutRec.SetOperation(eacl.OperationPut)
-	objectOtherPutRec.SetAction(eacl.ActionDeny)
-	objectOtherPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, objectName)
-	objectOtherPutRec.SetTargets(*targetOther)
+	bucketUsersGetRec := eacl.NewRecord(eacl.ActionAllow, acl.OpObjectGet, targetUser)
+	bucketOtherGetRec := eacl.NewRecord(eacl.ActionDeny, acl.OpObjectGet, targetOther)
+	objectUsersPutRec := eacl.NewRecord(eacl.ActionAllow, acl.OpObjectPut, targetUser, objectNameFilter)
+	objectOtherPutRec := eacl.NewRecord(eacl.ActionDeny, acl.OpObjectPut, targetOther, objectNameFilter)
 
-	expectedEacl := eacl.NewTable()
-	expectedEacl.AddRecord(objectOtherPutRec)
-	expectedEacl.AddRecord(objectUsersPutRec)
-	expectedEacl.AddRecord(bucketOtherGetRec)
-	expectedEacl.AddRecord(bucketUsersGetRec)
+	expectedEacl := eacl.New([]eacl.Record{
+		objectOtherPutRec,
+		objectUsersPutRec,
+		bucketOtherGetRec,
+		bucketUsersGetRec,
+	})
 
 	t.Run("astToTable order and vice versa", func(t *testing.T) {
 		actualEacl, err := astToTable(expectedAst)
 		require.NoError(t, err)
-		require.Equal(t, expectedEacl, actualEacl)
+		require.Equal(t, expectedEacl, *actualEacl)
 
 		actualAst := tableToAst(actualEacl, bucketName)
 		require.Equal(t, expectedAst, actualAst)
 	})
 
 	t.Run("tableToAst order and vice versa", func(t *testing.T) {
-		actualAst := tableToAst(expectedEacl, bucketName)
+		actualAst := tableToAst(&expectedEacl, bucketName)
 		require.Equal(t, expectedAst, actualAst)
 
 		actualEacl, err := astToTable(actualAst)
 		require.NoError(t, err)
-		require.Equal(t, expectedEacl, actualEacl)
+		require.Equal(t, expectedEacl, *actualEacl)
 	})
 
 	t.Run("append a resource", func(t *testing.T) {
@@ -525,14 +501,11 @@ func TestOrder(t *testing.T) {
 				Bucket: bucketName,
 				Object: childName,
 			},
-			Operations: []*astOperation{{Op: eacl.OperationDelete, Action: eacl.ActionDeny}}}},
+			Operations: []*astOperation{{Op: acl.OpObjectDelete, Action: eacl.ActionDeny}}}},
 		}
 
-		childRecord := eacl.NewRecord()
-		childRecord.SetOperation(eacl.OperationDelete)
-		childRecord.SetAction(eacl.ActionDeny)
-		childRecord.SetTargets(*targetOther)
-		childRecord.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, childName)
+		childRecord := eacl.NewRecord(eacl.ActionDeny, acl.OpObjectDelete, targetOther,
+			eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, childName))
 
 		mergedAst, updated := mergeAst(expectedAst, child)
 		require.True(t, updated)
@@ -540,7 +513,7 @@ func TestOrder(t *testing.T) {
 		mergedEacl, err := astToTable(mergedAst)
 		require.NoError(t, err)
 
-		require.Equal(t, *childRecord, mergedEacl.Records()[0])
+		require.Equal(t, childRecord, mergedEacl.Records()[0])
 	})
 }
 
@@ -554,11 +527,11 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 				},
 				Operations: []*astOperation{{
 					Users:  []string{"user1"},
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionDeny,
 				}, {
 					Users:  []string{"user3"},
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectGet,
 					Action: eacl.ActionAllow,
 				}},
 			},
@@ -574,15 +547,15 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 				},
 				Operations: []*astOperation{{
 					Users:  []string{"user1"},
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionAllow,
 				}, {
 					Users:  []string{"user2"},
-					Op:     eacl.OperationPut,
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionDeny,
 				}, {
 					Users:  []string{"user3"},
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectGet,
 					Action: eacl.ActionDeny,
 				}},
 			},
@@ -599,11 +572,11 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 				Operations: []*astOperation{
 					{
 						Users:  []string{"user2", "user1"},
-						Op:     eacl.OperationPut,
+						Op:     acl.OpObjectPut,
 						Action: eacl.ActionDeny,
 					}, {
 						Users:  []string{"user3"},
-						Op:     eacl.OperationGet,
+						Op:     acl.OpObjectGet,
 						Action: eacl.ActionAllow,
 					},
 				},
@@ -617,8 +590,7 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 }
 
 func TestAstToTable(t *testing.T) {
-	key, err := keys.NewPrivateKey()
-	require.NoError(t, err)
+	key := test.RandomSigner(t).Public()
 
 	ast := &ast{
 		Resources: []*astResource{
@@ -627,8 +599,8 @@ func TestAstToTable(t *testing.T) {
 					Bucket: "bucketName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
-					Op:     eacl.OperationPut,
+					Users:  []string{hex.EncodeToString(neofscrypto.PublicKeyBytes(key))},
+					Op:     acl.OpObjectPut,
 					Action: eacl.ActionAllow,
 				}},
 			},
@@ -638,32 +610,26 @@ func TestAstToTable(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationGet,
+					Op:     acl.OpObjectGet,
 					Action: eacl.ActionDeny,
 				}},
 			},
 		},
 	}
 
-	expectedTable := eacl.NewTable()
-	record1 := eacl.NewRecord()
-	record1.SetAction(eacl.ActionAllow)
-	record1.SetOperation(eacl.OperationPut)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record1, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
+	record1 := eacl.NewRecord(eacl.ActionAllow, acl.OpObjectPut, eacl.NewTargetWithKey(key))
 
-	record2 := eacl.NewRecord()
-	record2.SetAction(eacl.ActionDeny)
-	record2.SetOperation(eacl.OperationGet)
-	eacl.AddFormedTarget(record2, eacl.RoleOthers)
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
+	record2 := eacl.NewRecord(eacl.ActionDeny, acl.OpObjectGet, eacl.NewTargetWithRole(eacl.RoleOthers),
+		eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, "objectName"))
 
-	expectedTable.AddRecord(record2)
-	expectedTable.AddRecord(record1)
+	expectedTable := eacl.New([]eacl.Record{
+		record2,
+		record1,
+	})
 
 	actualTable, err := astToTable(ast)
 	require.NoError(t, err)
-	require.Equal(t, expectedTable, actualTable)
+	require.Equal(t, expectedTable, *actualTable)
 }
 
 func TestRemoveUsers(t *testing.T) {
@@ -673,23 +639,23 @@ func TestRemoveUsers(t *testing.T) {
 		},
 		Operations: []*astOperation{{
 			Users:  []string{"user1", "user3", "user4"},
-			Op:     eacl.OperationPut,
+			Op:     acl.OpObjectPut,
 			Action: eacl.ActionAllow,
 		},
 			{
 				Users:  []string{"user5"},
-				Op:     eacl.OperationGet,
+				Op:     acl.OpObjectGet,
 				Action: eacl.ActionDeny,
 			},
 		},
 	}
 
 	op1 := &astOperation{
-		Op:     eacl.OperationPut,
+		Op:     acl.OpObjectPut,
 		Action: eacl.ActionAllow,
 	}
 	op2 := &astOperation{
-		Op:     eacl.OperationGet,
+		Op:     acl.OpObjectGet,
 		Action: eacl.ActionDeny,
 	}
 
@@ -840,9 +806,8 @@ func TestObjectAclToPolicy(t *testing.T) {
 }
 
 func TestObjectWithVersionAclToTable(t *testing.T) {
-	key, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-	id := hex.EncodeToString(key.PublicKey().Bytes())
+	signer := test.RandomSigner(t)
+	id := hex.EncodeToString(neofscrypto.PublicKeyBytes(signer.Public()))
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
@@ -862,7 +827,7 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 		Bucket: "bucketName",
 		Object: "object",
 	}
-	expectedTable := allowedTableForPrivateObject(t, key, resInfoObject)
+	expectedTable := allowedTableForPrivateObject(t, signer.Public(), resInfoObject)
 	actualTable := tableFromACL(t, acl, resInfoObject)
 	checkTables(t, expectedTable, actualTable)
 
@@ -871,12 +836,12 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 		Object:  "objectVersion",
 		Version: "Gfrct4Afhio8pCGCCKVNTf1kyexQjMBeaUfvDtQCkAvg",
 	}
-	expectedTable = allowedTableForPrivateObject(t, key, resInfoObjectVersion)
+	expectedTable = allowedTableForPrivateObject(t, signer.Public(), resInfoObjectVersion)
 	actualTable = tableFromACL(t, acl, resInfoObjectVersion)
 	checkTables(t, expectedTable, actualTable)
 }
 
-func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *resourceInfo) *eacl.Table {
+func allowedTableForPrivateObject(t *testing.T, key neofscrypto.PublicKey, resInfo *resourceInfo) eacl.Table {
 	var isVersion bool
 	var objID oid.ID
 	if resInfo.Version != "" {
@@ -885,68 +850,69 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		require.NoError(t, err)
 	}
 
-	expectedTable := eacl.NewTable()
+	var records []eacl.Record
 
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
-		record := getAllowRecord(op, key.PublicKey())
+		var filter eacl.Filter
 		if isVersion {
-			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+			filter = eacl.NewFilterObjectID(eacl.MatchStringEqual, objID)
 		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
+			filter = eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, resInfo.Object)
 		}
-		expectedTable.AddRecord(record)
+		records = append(records, eacl.NewRecord(eacl.ActionAllow, op, eacl.NewTargetWithKey(key), filter))
 	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
-		record := getOthersRecord(op, eacl.ActionDeny)
+		var filter eacl.Filter
 		if isVersion {
-			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+			filter = eacl.NewFilterObjectID(eacl.MatchStringEqual, objID)
 		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
+			filter = eacl.NewFilterObjectAttribute(object.AttributeFilePath, eacl.MatchStringEqual, resInfo.Object)
 		}
-		expectedTable.AddRecord(record)
+		records = append(records, eacl.NewRecord(eacl.ActionDeny, op, eacl.NewTargetWithRole(eacl.RoleOthers), filter))
 	}
 
-	return expectedTable
+	return eacl.New(records)
 }
 
-func tableFromACL(t *testing.T, acl *AccessControlPolicy, resInfo *resourceInfo) *eacl.Table {
+func tableFromACL(t *testing.T, acl *AccessControlPolicy, resInfo *resourceInfo) eacl.Table {
 	actualPolicy, err := aclToPolicy(acl, resInfo)
 	require.NoError(t, err)
 	actualAst, err := policyToAst(actualPolicy)
 	require.NoError(t, err)
 	actualTable, err := astToTable(actualAst)
 	require.NoError(t, err)
-	return actualTable
+	return *actualTable
 }
 
-func checkTables(t *testing.T, expectedTable, actualTable *eacl.Table) {
-	require.Equal(t, len(expectedTable.Records()), len(actualTable.Records()), "different number of records")
-	for i, record := range expectedTable.Records() {
-		actRecord := actualTable.Records()[i]
-
-		require.Equal(t, len(record.Targets()), len(actRecord.Targets()), "different number of targets")
-		for j, target := range record.Targets() {
-			actTarget := actRecord.Targets()[j]
-
-			expected := fmt.Sprintf("%s %v", target.Role().String(), target.BinaryKeys())
-			actual := fmt.Sprintf("%s %v", actTarget.Role().String(), actTarget.BinaryKeys())
-			require.Equalf(t, target, actTarget, "want: '%s'\ngot: '%s'", expected, actual)
-		}
-
-		require.Equal(t, len(record.Filters()), len(actRecord.Filters()), "different number of filters")
-		for j, filter := range record.Filters() {
-			actFilter := actRecord.Filters()[j]
-
-			expected := fmt.Sprintf("%s:%s %s %s", filter.From().String(), filter.Key(), filter.Matcher().String(), filter.Value())
-			actual := fmt.Sprintf("%s:%s %s %s", actFilter.From().String(), actFilter.Key(), actFilter.Matcher().String(), actFilter.Value())
-			require.Equalf(t, filter, actFilter, "want: '%s'\ngot: '%s'", expected, actual)
-		}
-
-		require.Equal(t, record.Action().String(), actRecord.Action().String())
-		require.Equal(t, record.Operation().String(), actRecord.Operation().String())
-	}
+func checkTables(t *testing.T, expectedTable, actualTable eacl.Table) {
+	require.Equal(t, expectedTable, actualTable)
+	// require.Equal(t, len(expectedTable.Records()), len(actualTable.Records()), "different number of records")
+	// for i, record := range expectedTable.Records() {
+	// 	actRecord := actualTable.Records()[i]
+	//
+	// 	require.Equal(t, len(record.Targets()), len(actRecord.Targets()), "different number of targets")
+	// 	for j, target := range record.Targets() {
+	// 		actTarget := actRecord.Targets()[j]
+	//
+	// 		expected := fmt.Sprintf("%s %v", target.Role().String(), target.BinaryKeys())
+	// 		actual := fmt.Sprintf("%s %v", actTarget.Role().String(), actTarget.BinaryKeys())
+	// 		require.Equalf(t, target, actTarget, "want: '%s'\ngot: '%s'", expected, actual)
+	// 	}
+	//
+	// 	require.Equal(t, len(record.Filters()), len(actRecord.Filters()), "different number of filters")
+	// 	for j, filter := range record.Filters() {
+	// 		actFilter := actRecord.Filters()[j]
+	//
+	// 		expected := fmt.Sprintf("%s:%s %s %s", filter.From().String(), filter.Key(), filter.Matcher().String(), filter.Value())
+	// 		actual := fmt.Sprintf("%s:%s %s %s", actFilter.From().String(), actFilter.Key(), actFilter.Matcher().String(), actFilter.Value())
+	// 		require.Equalf(t, filter, actFilter, "want: '%s'\ngot: '%s'", expected, actual)
+	// 	}
+	//
+	// 	require.Equal(t, record.Action().String(), actRecord.Action().String())
+	// 	require.Equal(t, record.Operation().String(), actRecord.Operation().String())
+	// }
 }
 
 func TestParseCannedACLHeaders(t *testing.T) {
@@ -1087,13 +1053,11 @@ func TestAddGranteeError(t *testing.T) {
 }
 
 func TestBucketAclToTable(t *testing.T) {
-	key, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-	key2, err := keys.NewPrivateKey()
-	require.NoError(t, err)
+	key := test.RandomSigner(t).Public()
+	key2 := test.RandomSigner(t).Public()
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
-	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
+	id := hex.EncodeToString(neofscrypto.PublicKeyBytes(key))
+	id2 := hex.EncodeToString(neofscrypto.PublicKeyBytes(key2))
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
@@ -1115,23 +1079,23 @@ func TestBucketAclToTable(t *testing.T) {
 		}},
 	}
 
-	expectedTable := new(eacl.Table)
+	var expectedRecords []eacl.Record
 	for _, op := range readOps {
-		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionAllow))
+		expectedRecords = append(expectedRecords, eacl.NewRecord(eacl.ActionAllow, op, eacl.NewTargetWithRole(eacl.RoleOthers)))
 	}
 	for _, op := range writeOps {
-		expectedTable.AddRecord(getAllowRecord(op, key2.PublicKey()))
+		expectedRecords = append(expectedRecords, eacl.NewRecord(eacl.ActionAllow, op, eacl.NewTargetWithKey(key2)))
 	}
 	for _, op := range fullOps {
-		expectedTable.AddRecord(getAllowRecord(op, key.PublicKey()))
+		expectedRecords = append(expectedRecords, eacl.NewRecord(eacl.ActionAllow, op, eacl.NewTargetWithKey(key)))
 	}
 	for _, op := range fullOps {
-		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))
+		expectedRecords = append(expectedRecords, eacl.NewRecord(eacl.ActionDeny, op, eacl.NewTargetWithRole(eacl.RoleOthers)))
 	}
 
 	actualTable, err := bucketACLToTable(acl)
 	require.NoError(t, err)
-	require.Equal(t, expectedTable.Records(), actualTable.Records())
+	require.Equal(t, expectedRecords, actualTable.Records())
 }
 
 func TestObjectAclToAst(t *testing.T) {
@@ -1372,10 +1336,9 @@ func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo
 		t.Fatalf("length of records is less than 7: '%d'", length)
 	}
 
-	for _, rec := range bktACL.EACL.Records()[length-7:] {
-		if rec.Action() != action || rec.Targets()[0].Role() != eacl.RoleOthers {
-			t.Fatalf("inavid last record: '%s', '%s', '%s',", rec.Action(), rec.Operation(), rec.Targets()[0].Role())
-		}
+	for i, rec := range bktACL.EACL.Records()[length-7:] {
+		require.Equalf(t, action, rec.Action(), "wrong action in record #%d", 7+i)
+		require.True(t, rec.IsForRole(eacl.RoleOthers), "non-OTHERS role in record #%d", 7+i)
 	}
 }
 
