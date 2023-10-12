@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	errorsStd "errors"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,12 +34,12 @@ func transformToS3Error(err error) error {
 		return err
 	}
 
-	if errorsStd.Is(err, layer.ErrAccessDenied) ||
-		errorsStd.Is(err, layer.ErrNodeAccessDenied) {
+	if errors.Is(err, layer.ErrAccessDenied) ||
+		errors.Is(err, layer.ErrNodeAccessDenied) {
 		return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 	}
 
-	if errorsStd.Is(err, layer.ErrMetaEmptyParameterValue) {
+	if errors.Is(err, layer.ErrMetaEmptyParameterValue) {
 		return s3errors.GetAPIError(s3errors.ErrUnsupportedMetadata)
 	}
 
