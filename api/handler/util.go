@@ -39,6 +39,10 @@ func transformToS3Error(err error) error {
 		return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 	}
 
+	if errorsStd.Is(err, layer.ErrMetaEmptyParameterValue) {
+		return s3errors.GetAPIError(s3errors.ErrUnsupportedMetadata)
+	}
+
 	return s3errors.GetAPIError(s3errors.ErrInternalError)
 }
 
