@@ -455,3 +455,16 @@ neofs:
 | Parameter           | Type     | Default value | Description                                                                                                                                                               |
 |---------------------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `set_copies_number` | `uint32` | `0`           | Number of the object copies to consider PUT to NeoFS successful. <br/>Default value `0` means that object will be processed according to the container's placement policy |
+
+# `s3` section
+
+Contains parameters to configure requests runtime.
+
+```yaml
+s3:
+  max_object_to_delete_per_request: 1000
+```
+
+| Parameter                          | Type  | Default value | Description                                                                                                                   |
+|------------------------------------|-------|---------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `max_object_to_delete_per_request` | `int` | `1000`        | Allows to set maximum object amount which can be deleted per request. If amount is higher, the `Bad request` will be returned |

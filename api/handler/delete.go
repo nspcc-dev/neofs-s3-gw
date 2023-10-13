@@ -176,6 +176,11 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if len(requested.Objects) > h.cfg.MaxDeletePerRequest {
+		h.logAndSendError(w, "too many objects to delete", reqInfo, layer.ErrTooManyObjectForDeletion)
+		return
+	}
+
 	removed := make(map[string]*layer.VersionedObject)
 	toRemove := make([]*layer.VersionedObject, 0, len(requested.Objects))
 	for _, obj := range requested.Objects {

@@ -25,10 +25,11 @@ type (
 
 	// Config contains data which handler needs to keep.
 	Config struct {
-		Policy             PlacementPolicy
-		DefaultMaxAge      int
-		NotificatorEnabled bool
-		CopiesNumber       uint32
+		Policy              PlacementPolicy
+		DefaultMaxAge       int
+		NotificatorEnabled  bool
+		CopiesNumber        uint32
+		MaxDeletePerRequest int
 	}
 
 	PlacementPolicy interface {

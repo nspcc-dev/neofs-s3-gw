@@ -43,6 +43,10 @@ func transformToS3Error(err error) error {
 		return s3errors.GetAPIError(s3errors.ErrUnsupportedMetadata)
 	}
 
+	if errors.Is(err, layer.ErrTooManyObjectForDeletion) {
+		return s3errors.GetAPIError(s3errors.ErrBadRequest)
+	}
+
 	return s3errors.GetAPIError(s3errors.ErrInternalError)
 }
 

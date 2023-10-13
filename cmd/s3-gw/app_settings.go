@@ -28,6 +28,8 @@ const (
 
 	defaultMaxClientsCount    = 100
 	defaultMaxClientsDeadline = time.Second * 30
+
+	defaultMaxObjectDeletePerRequest = 1000
 )
 
 const ( // Settings.
@@ -120,6 +122,9 @@ const ( // Settings.
 	// Configuration of parameters of requests to NeoFS.
 	// Number of the object copies to consider PUT to NeoFS successful.
 	cfgSetCopiesNumber = "neofs.set_copies_number"
+
+	// Maximum number of objects to be deleted per request limit by this value.
+	cfgMaxObjectToDeletePerRequest = "s3.max_object_to_delete_per_request"
 
 	//  Timeout between retrieving actual epoch from NeoFS. Actual only if slicer.enabled = true.
 	cfgEpochUpdateInterval = "neofs.epoch_update_interval"

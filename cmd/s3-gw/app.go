@@ -686,6 +686,11 @@ func (a *App) initHandler() {
 		cfg.CopiesNumber = val
 	}
 
+	cfg.MaxDeletePerRequest = a.cfg.GetInt(cfgMaxObjectToDeletePerRequest)
+	if cfg.MaxDeletePerRequest == 0 {
+		cfg.MaxDeletePerRequest = defaultMaxObjectDeletePerRequest
+	}
+
 	var err error
 	a.api, err = handler.New(a.log, a.obj, a.nc, cfg)
 	if err != nil {
