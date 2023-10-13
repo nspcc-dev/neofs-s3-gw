@@ -183,6 +183,8 @@ func ParseCompletedPartHeader(hdr string) (*Part, error) {
 }
 
 // PutObject stores object into NeoFS, took payload from io.Reader.
+//
+// Returns [ErrMetaEmptyParameterValue] error if any attribute parameter is empty.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error) {
 	owner := n.Owner(ctx)
 
@@ -240,6 +242,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	prm.Attributes = make([][2]string, 0, len(p.Header))
 
 	for k, v := range p.Header {
+		if v == "" {
+			return nil, ErrMetaEmptyParameterValue
+		}
+
 		prm.Attributes = append(prm.Attributes, [2]string{k, v})
 	}
 

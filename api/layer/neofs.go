@@ -127,6 +127,9 @@ type PrmObjectDelete struct {
 // ErrAccessDenied is returned from NeoFS in case of access violation.
 var ErrAccessDenied = errors.New("access denied")
 
+// ErrMetaEmptyParameterValue describes situation when meta parameter was passed but with empty value.
+var ErrMetaEmptyParameterValue = errors.New("meta empty parameter value")
+
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateContainer creates and saves parameterized container in NeoFS.

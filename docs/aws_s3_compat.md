@@ -255,3 +255,9 @@ See also `GetObject` and other method parameters.
 | 🔵 | DeleteBucketWebsite |          |
 | 🔵 | GetBucketWebsite    |          |
 | 🔵 | PutBucketWebsite    |          |
+
+
+## Metadata
+
+Each meta parameter value must be non-empty. If any parameter value is an empty,
+then "Your metadata headers are not supported." error will be returned on the object put operation.

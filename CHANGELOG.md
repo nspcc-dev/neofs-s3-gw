@@ -4,6 +4,9 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Added
+- Passing an empty meta parameter value raises "Your metadata headers are not supported." error.
+
 ## [0.29.0] - 2023-09-28
 
 ### Added
