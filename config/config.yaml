@@ -147,3 +147,9 @@ allowed_access_key_id_prefixes:
 
 # Allows to use slicer for Object uploading.
 internal_slicer: false
+
+# S3
+
+s3:
+  # Maximum number of objects to be deleted per request limit by this value.
+  max_object_to_delete_per_request: 1000

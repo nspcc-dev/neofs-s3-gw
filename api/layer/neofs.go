@@ -130,6 +130,9 @@ var ErrAccessDenied = errors.New("access denied")
 // ErrMetaEmptyParameterValue describes situation when meta parameter was passed but with empty value.
 var ErrMetaEmptyParameterValue = errors.New("meta empty parameter value")
 
+// ErrTooManyObjectForDeletion is returned if user is trying to delete to many objects per request.
+var ErrTooManyObjectForDeletion = errors.New("to many objects for deletion")
+
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateContainer creates and saves parameterized container in NeoFS.
