@@ -29,6 +29,7 @@ Reference:
 | 🟢 | GetObjectAttributes    |                                         |
 
 * DeleteObjects limited by max amount of objects which can be deleted per request. See `max_object_to_delete_per_request` parameter.
+* For calculating object ETag, we use SHA256 hash instead of MD5. 
 
 ## ACL
 
