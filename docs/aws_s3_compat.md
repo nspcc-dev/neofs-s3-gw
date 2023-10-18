@@ -30,6 +30,7 @@ Reference:
 
 * DeleteObjects limited by max amount of objects which can be deleted per request. See `max_object_to_delete_per_request` parameter.
 * For calculating object ETag, we use SHA256 hash instead of MD5. 
+* PutObject into a container with public-write permissions as an anonymous user (for instance, with CLI option --no-sign-request) is impossible, if try to set custom ACL for the object. It happens because container ACL rules may be changed only by container owner.
 
 ## ACL
 

@@ -12,7 +12,7 @@ require (
 	github.com/nspcc-dev/neo-go v0.102.0
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
 	github.com/nspcc-dev/neofs-contract v0.17.1-0.20230804121740-84ff5d244f69
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20231011074223-dd4e3e09a100
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20231017122024-106835035bd6
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
@@ -29,7 +29,7 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20221202181307-76fa05c21b12 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.6 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20220111165707-25110be27d22 // indirect
 	golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b // indirect
