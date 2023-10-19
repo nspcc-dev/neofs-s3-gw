@@ -16,14 +16,18 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
+	"github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestTableToAst(t *testing.T) {
@@ -1423,4 +1427,84 @@ func putBucketACL(t *testing.T, tc *handlerContext, bktName string, box *accessb
 	r = r.WithContext(ctx)
 	tc.Handler().PutBucketACLHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
+}
+
+func generateRecord(action eacl.Action, op eacl.Operation, targets []eacl.Target) *eacl.Record {
+	var r eacl.Record
+	r.SetAction(action)
+	r.SetOperation(op)
+	r.SetTargets(targets...)
+
+	return &r
+}
+
+func TestEACLEncode(t *testing.T) {
+	s := test.RandomSignerRFC6979(t)
+
+	acl := layer.BucketACL{
+		Info: &data.BucketInfo{},
+		EACL: &eacl.Table{},
+	}
+	acl.Info.Owner = s.UserID()
+
+	var containerID cid.ID
+	acl.EACL.SetCID(containerID)
+
+	var userTarget eacl.Target
+	userTarget.SetBinaryKeys([][]byte{{1, 2, 3}})
+
+	var othersTarget eacl.Target
+	othersTarget.SetRole(eacl.RoleOthers)
+
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{userTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{userTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationPut, []eacl.Target{userTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationDelete, []eacl.Target{userTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{userTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{userTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{userTarget}))
+
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
+
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationGet, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationHead, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationPut, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationDelete, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationSearch, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationRange, []eacl.Target{othersTarget}))
+	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
+
+	logger, err := zap.NewProduction()
+	require.NoError(t, err)
+
+	acp := encodeObjectACL(logger, &acl, "bucket-name", "")
+	require.NotNil(t, acp)
+
+	require.Len(t, acp.AccessControlList, 2)
+
+	required := []*Grant{
+		{
+			Grantee: &Grantee{
+				Type: granteeGroup,
+				URI:  allUsersGroup,
+			},
+			Permission: awsPermRead,
+		},
+		{
+			Grantee: &Grantee{
+				ID:          "010203",
+				Type:        granteeCanonicalUser,
+				DisplayName: s.UserID().String(),
+			},
+			Permission: awsPermFullControl,
+		},
+	}
+
+	for _, g := range required {
+		require.Contains(t, acp.AccessControlList, g)
+	}
 }

@@ -311,7 +311,7 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.VersionID())); err != nil {
+	if err = api.EncodeToResponse(w, encodeObjectACL(h.log, bucketACL, reqInfo.BucketName, objInfo.VersionID())); err != nil {
 		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
@@ -1320,7 +1320,7 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 	return nil
 }
 
-func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
 	res := &AccessControlPolicy{
 		Owner: Owner{
 			ID:          bucketACL.Info.Owner.String(),
@@ -1361,7 +1361,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 		for _, op := range val {
 			// valid operation.
 			if op < eacl.OperationGet || op > eacl.OperationRangeHash {
-				h.log.Warn("invalid eACL op", zap.Int("op", int(op)), zap.String("CID", bucketACL.Info.CID.String()))
+				log.Warn("invalid eACL op", zap.Int("op", int(op)), zap.String("CID", bucketACL.Info.CID.String()))
 				continue
 			}
 
@@ -1389,7 +1389,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 		} else if isWrite {
 			permission = awsPermWrite
 		} else {
-			h.log.Warn("invalid permissions", zap.String("subject", key))
+			log.Warn("invalid permissions", zap.String("subject", key))
 			continue
 		}
 
@@ -1414,7 +1414,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 }
 
 func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicy {
-	return h.encodeObjectACL(bucketACL, bucketName, "")
+	return encodeObjectACL(h.log, bucketACL, bucketName, "")
 }
 
 func contains(list []eacl.Operation, op eacl.Operation) bool {
