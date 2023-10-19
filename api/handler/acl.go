@@ -28,9 +28,20 @@ import (
 )
 
 var (
-	writeOps = []eacl.Operation{eacl.OperationPut, eacl.OperationDelete}
-	readOps  = []eacl.Operation{eacl.OperationGet, eacl.OperationHead,
+	writeOps    = []eacl.Operation{eacl.OperationPut, eacl.OperationDelete}
+	writeOpsMap = map[eacl.Operation]struct{}{
+		eacl.OperationPut:    {},
+		eacl.OperationDelete: {},
+	}
+	readOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead,
 		eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
+	readOpsMap = map[eacl.Operation]struct{}{
+		eacl.OperationGet:       {},
+		eacl.OperationHead:      {},
+		eacl.OperationSearch:    {},
+		eacl.OperationRange:     {},
+		eacl.OperationRangeHash: {},
+	}
 	fullOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
 		eacl.OperationDelete, eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
 )
@@ -300,7 +311,7 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, h.encodeObjectACL(bucketACL, reqInfo.BucketName, objInfo.VersionID())); err != nil {
+	if err = api.EncodeToResponse(w, encodeObjectACL(h.log, bucketACL, reqInfo.BucketName, objInfo.VersionID())); err != nil {
 		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
@@ -1309,11 +1320,7 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 	return nil
 }
 
-func isWriteOperation(op eacl.Operation) bool {
-	return op == eacl.OperationDelete || op == eacl.OperationPut
-}
-
-func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
 	res := &AccessControlPolicy{
 		Owner: Owner{
 			ID:          bucketACL.Info.Owner.String(),
@@ -1348,18 +1355,42 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 	}
 
 	for key, val := range m {
-		permission := awsPermFullControl
-		read := true
-		for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-			if !contains(val, op) && !isWriteOperation(op) {
-				read = false
+		var readOpAmount int
+		var writeOpAmount int
+
+		for _, op := range val {
+			// valid operation.
+			if op < eacl.OperationGet || op > eacl.OperationRangeHash {
+				log.Warn("invalid eACL op", zap.Int("op", int(op)), zap.String("CID", bucketACL.Info.CID.String()))
+				continue
+			}
+
+			_, ok := readOpsMap[op]
+			if ok {
+				readOpAmount++
+			}
+
+			_, ok = writeOpsMap[op]
+			if ok {
+				writeOpAmount++
 			}
 		}
 
-		if read {
+		// all required set of operations was presented.
+		isRead := readOpAmount == len(readOpsMap)
+		isWrite := writeOpAmount == len(writeOpsMap)
+
+		var permission amazonS3Permission
+
+		if isRead && isWrite {
 			permission = awsPermFullControl
+		} else if isRead {
+			permission = awsPermRead
+		} else if isWrite {
+			permission = awsPermWrite
 		} else {
-			h.log.Warn("some acl not fully mapped")
+			log.Warn("invalid permissions", zap.String("subject", key))
+			continue
 		}
 
 		var grantee *Grantee
@@ -1369,6 +1400,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 		} else {
 			grantee = NewGrantee(granteeCanonicalUser)
 			grantee.ID = key
+			grantee.DisplayName = bucketACL.Info.Owner.String()
 		}
 
 		grant := &Grant{
@@ -1382,7 +1414,7 @@ func (h *handler) encodeObjectACL(bucketACL *layer.BucketACL, bucketName, object
 }
 
 func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicy {
-	return h.encodeObjectACL(bucketACL, bucketName, "")
+	return encodeObjectACL(h.log, bucketACL, bucketName, "")
 }
 
 func contains(list []eacl.Operation, op eacl.Operation) bool {

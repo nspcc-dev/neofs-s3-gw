@@ -117,20 +117,29 @@ type granteeXMLBody struct {
 // Here we use workaround proposed in corresponding Go issue
 // https://github.com/golang/go/issues/9519#issuecomment-252196382.
 func (x Grantee) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
+	var body granteeXMLBody
+	if x.DisplayName != "" {
+		body.DisplayName = &x.DisplayName
+	}
+	if x.EmailAddress != "" {
+		body.EmailAddress = &x.EmailAddress
+	}
+	if x.ID != "" {
+		body.ID = &x.ID
+	}
+	if x.URI != "" {
+		body.URI = &x.URI
+	}
+
 	return e.Encode(struct {
 		XMLName xml.Name `xml:"Grantee"`
 		granteeXMLBody
 		XMLNS string      `xml:"xmlns:xsi,attr"`
 		Type  granteeType `xml:"xsi:type,attr"`
 	}{
-		granteeXMLBody: granteeXMLBody{
-			DisplayName:  &x.DisplayName,
-			EmailAddress: &x.EmailAddress,
-			ID:           &x.ID,
-			URI:          &x.URI,
-		},
-		XMLNS: "http://www.w3.org/2001/XMLSchema-instance",
-		Type:  x.Type,
+		granteeXMLBody: body,
+		XMLNS:          "http://www.w3.org/2001/XMLSchema-instance",
+		Type:           x.Type,
 	})
 }
 
