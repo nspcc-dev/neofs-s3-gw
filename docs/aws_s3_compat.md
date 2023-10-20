@@ -51,7 +51,8 @@ Principal must be `"AWS": "*"` (to refer all users) or `"CanonicalUser": "0313b1
 }
 ```
 * AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
-* Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html)
+* Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html).
+`Authenticated Users group` is not supported. It is a part of `All Users Group` and can't be separated from it.
 
 |    | Method       | Comments        |
 |----|--------------|-----------------|
