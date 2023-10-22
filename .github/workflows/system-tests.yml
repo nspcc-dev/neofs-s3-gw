@@ -40,8 +40,8 @@ jobs:
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-testcases
-          ref: master
+          repository: vvarg229/neofs-testcases
+          ref: debug-aws
           path: neofs-testcases
 
       - name: Checkout neofs-s3-gw repository
