@@ -818,7 +818,7 @@ func TestObjectAclToPolicy(t *testing.T) {
 				Principal: principal{
 					CanonicalUser: id,
 				},
-				Action:   []string{"s3:GetObject", "s3:GetObjectVersion"},
+				Action:   []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject},
 				Resource: []string{arnAwsPrefix + resInfo.Name()},
 			},
 			{
@@ -826,13 +826,13 @@ func TestObjectAclToPolicy(t *testing.T) {
 				Principal: principal{
 					CanonicalUser: id2,
 				},
-				Action:   []string{"s3:GetObject", "s3:GetObjectVersion"},
+				Action:   []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject},
 				Resource: []string{arnAwsPrefix + resInfo.Name()},
 			},
 			{
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
-				Action:    []string{"s3:GetObject", "s3:GetObjectVersion"},
+				Action:    []string{s3GetObject, s3GetObjectVersion},
 				Resource:  []string{arnAwsPrefix + resInfo.Name()},
 			},
 		},
@@ -891,9 +891,30 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 
 	expectedTable := eacl.NewTable()
 
+	for i := len(writeOps) - 1; i >= 0; i-- {
+		op := writeOps[i]
+		record := getAllowRecord(op, key.PublicKey())
+		if isVersion {
+			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+		} else {
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
+		}
+		expectedTable.AddRecord(record)
+	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
 		record := getAllowRecord(op, key.PublicKey())
+		if isVersion {
+			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+		} else {
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
+		}
+		expectedTable.AddRecord(record)
+	}
+
+	for i := len(writeOps) - 1; i >= 0; i-- {
+		op := writeOps[i]
+		record := getOthersRecord(op, eacl.ActionDeny)
 		if isVersion {
 			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
 		} else {
@@ -1185,6 +1206,16 @@ func TestObjectAclToAst(t *testing.T) {
 		astOp := &astOperation{Users: []string{
 			hex.EncodeToString(key.PublicKey().Bytes()),
 			hex.EncodeToString(key2.PublicKey().Bytes()),
+		},
+			Op:     op,
+			Action: eacl.ActionAllow,
+		}
+		operations = append(operations, astOp)
+	}
+
+	for _, op := range writeOps {
+		astOp := &astOperation{Users: []string{
+			hex.EncodeToString(key.PublicKey().Bytes()),
 		},
 			Op:     op,
 			Action: eacl.ActionAllow,

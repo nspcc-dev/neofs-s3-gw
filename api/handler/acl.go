@@ -1155,10 +1155,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 
 	resource := &astResource{resourceInfo: *resInfo}
 
-	ops := readOps
-	if resInfo.IsBucket() {
-		ops = append(ops, writeOps...)
-	}
+	ops := append(readOps, writeOps...)
 
 	// Expect to have at least 1 full control grant for owner which is set in
 	// parseACLHeaders(). If there is no other grants, then user sets private
@@ -1292,7 +1289,7 @@ func getActions(permission amazonS3Permission, isBucket bool) []string {
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads, s3PutObject, s3DeleteObject}
 		} else {
-			res = []string{s3GetObject, s3GetObjectVersion}
+			res = []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject}
 		}
 	}
 
