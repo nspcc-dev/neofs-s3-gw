@@ -3,7 +3,7 @@ module github.com/nspcc-dev/neofs-s3-gw
 go 1.19
 
 require (
-	github.com/aws/aws-sdk-go v1.44.6
+	github.com/aws/aws-sdk-go v1.46.1
 	github.com/bluele/gcache v0.0.2
 	github.com/google/uuid v1.3.1
 	github.com/gorilla/mux v1.8.0
