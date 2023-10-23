@@ -960,7 +960,19 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 	if found != nil {
 		if !groupTarget {
 			for _, key := range target.BinaryKeys() {
-				found.Users = append(found.Users, hex.EncodeToString(key))
+				pubKey := hex.EncodeToString(key)
+				var exist bool
+
+				for _, userPubKey := range found.Users {
+					if userPubKey == pubKey {
+						exist = true
+						break
+					}
+				}
+
+				if !exist {
+					found.Users = append(found.Users, pubKey)
+				}
 			}
 		}
 	} else {
