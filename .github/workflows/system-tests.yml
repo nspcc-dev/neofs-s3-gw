@@ -47,8 +47,6 @@ jobs:
       - name: Checkout neofs-s3-gw repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-s3-gw
-          ref: master
           path: neofs-s3-gw
 
       - name: Checkout neofs-dev-env repository
