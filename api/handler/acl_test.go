@@ -881,55 +881,53 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 }
 
 func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *resourceInfo) *eacl.Table {
-	var isVersion bool
 	var objID oid.ID
+	var zeroObjectID oid.ID
+
 	if resInfo.Version != "" {
-		isVersion = true
 		err := objID.DecodeString(resInfo.Version)
 		require.NoError(t, err)
 	}
 
 	expectedTable := eacl.NewTable()
 
+	applyFilters := func(r *eacl.Record) {
+		if resInfo.Object != "" {
+			r.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
+		}
+		if !objID.Equals(zeroObjectID) {
+			r.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+		}
+	}
+
+	// Order of these loops is important for test.
 	for i := len(writeOps) - 1; i >= 0; i-- {
 		op := writeOps[i]
 		record := getAllowRecord(op, key.PublicKey())
-		if isVersion {
-			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
-		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
-		}
+
+		applyFilters(record)
 		expectedTable.AddRecord(record)
 	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
 		record := getAllowRecord(op, key.PublicKey())
-		if isVersion {
-			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
-		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
-		}
+
+		applyFilters(record)
 		expectedTable.AddRecord(record)
 	}
 
 	for i := len(writeOps) - 1; i >= 0; i-- {
 		op := writeOps[i]
 		record := getOthersRecord(op, eacl.ActionDeny)
-		if isVersion {
-			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
-		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
-		}
+
+		applyFilters(record)
 		expectedTable.AddRecord(record)
 	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
 		record := getOthersRecord(op, eacl.ActionDeny)
-		if isVersion {
-			record.AddObjectIDFilter(eacl.MatchStringEqual, objID)
-		} else {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
-		}
+
+		applyFilters(record)
 		expectedTable.AddRecord(record)
 	}
 

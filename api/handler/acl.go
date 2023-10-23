@@ -929,15 +929,15 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
 		}
 		if len(resource.Object) != 0 {
-			if len(resource.Version) != 0 {
-				var id oid.ID
-				if err := id.DecodeString(resource.Version); err != nil {
-					return nil, fmt.Errorf("parse object version (oid): %w", err)
-				}
-				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
-			} else {
-				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
+		}
+
+		if len(resource.Version) != 0 {
+			var id oid.ID
+			if err := id.DecodeString(resource.Version); err != nil {
+				return nil, fmt.Errorf("parse object version (oid): %w", err)
 			}
+			record.AddObjectIDFilter(eacl.MatchStringEqual, id)
 		}
 		res = append(res, record)
 	}
