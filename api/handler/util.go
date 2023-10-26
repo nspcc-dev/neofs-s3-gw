@@ -30,8 +30,9 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 }
 
 func transformToS3Error(err error) error {
-	if _, ok := err.(s3errors.Error); ok {
-		return err
+	var s3Err s3errors.Error
+	if errors.As(err, &s3Err) {
+		return s3Err
 	}
 
 	if errors.Is(err, layer.ErrAccessDenied) ||
