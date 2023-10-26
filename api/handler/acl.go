@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	stderrors "errors"
 	"fmt"
 	"net/http"
@@ -52,6 +53,10 @@ var actionToOpMap = map[string][]eacl.Operation{
 	s3PutObject:    {eacl.OperationPut},
 	s3ListBucket:   readOps,
 }
+
+var (
+	errInvalidPublicKey = errors.New("invalid public key")
+)
 
 const (
 	arnAwsPrefix     = "arn:aws:s3:::"
@@ -921,7 +926,7 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 			for _, user := range astOp.Users {
 				pk, err := keys.NewPublicKeyFromString(user)
 				if err != nil {
-					return nil, fmt.Errorf("public key from string: %w", err)
+					return nil, errInvalidPublicKey
 				}
 				targetKeys = append(targetKeys, (ecdsa.PublicKey)(*pk))
 			}
