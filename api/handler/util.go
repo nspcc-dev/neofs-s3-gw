@@ -30,8 +30,9 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 }
 
 func transformToS3Error(err error) error {
-	if _, ok := err.(s3errors.Error); ok {
-		return err
+	var s3Err s3errors.Error
+	if errors.As(err, &s3Err) {
+		return s3Err
 	}
 
 	if errors.Is(err, layer.ErrAccessDenied) ||
@@ -41,6 +42,10 @@ func transformToS3Error(err error) error {
 
 	if errors.Is(err, layer.ErrMetaEmptyParameterValue) {
 		return s3errors.GetAPIError(s3errors.ErrUnsupportedMetadata)
+	}
+
+	if errors.Is(err, errInvalidPublicKey) {
+		return s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 	}
 
 	if errors.Is(err, layer.ErrTooManyObjectForDeletion) {
