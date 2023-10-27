@@ -42,6 +42,8 @@ const (
 	// a month.
 	defaultLifetime          = 30 * 24 * time.Hour
 	defaultPresignedLifetime = 12 * time.Hour
+	// 7 days, according to https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html.
+	maxPresignedLifetime = 7 * 24 * time.Hour
 )
 
 type PoolConfig struct {
@@ -483,6 +485,10 @@ It will be ceil rounded to the nearest amount of epoch.`,
 			})
 			if err != nil {
 				return fmt.Errorf("couldn't get credentials: %w", err)
+			}
+
+			if lifetimeFlag > maxPresignedLifetime {
+				return fmt.Errorf("lifetime flag upper limit is %s", maxPresignedLifetime)
 			}
 
 			signer := v4.NewSigner(sess.Config.Credentials)
