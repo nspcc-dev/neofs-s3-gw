@@ -144,7 +144,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	if queryValues.Get(AmzAlgorithm) == "AWS4-HMAC-SHA256" {
 		creds := strings.Split(queryValues.Get(AmzCredential), "/")
 		if len(creds) != 5 || creds[4] != "aws4_request" {
-			return nil, fmt.Errorf("bad X-Amz-Credential")
+			return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
 		}
 		authHdr = &authHeader{
 			AccessKeyID:  creds[0],
@@ -236,9 +236,9 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, ErrNoAuthorizationHeader
 	}
 
-	submatches := c.postReg.GetSubmatches(MultipartFormValue(r, "x-amz-credential"))
+	submatches := c.postReg.GetSubmatches(MultipartFormValue(r, strings.ToLower(AmzCredential)))
 	if len(submatches) != 4 {
-		return nil, s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed)
+		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
 	}
 
 	signatureDateTime, err := time.Parse("20060102T150405Z", MultipartFormValue(r, "x-amz-date"))

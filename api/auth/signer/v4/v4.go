@@ -78,6 +78,8 @@ const (
 	authHeaderSignatureElem = "Signature="
 	signatureQueryKey       = "X-Amz-Signature"
 
+	amzCredential = "X-Amz-Credential"
+
 	authHeaderPrefix = "AWS4-HMAC-SHA256"
 	timeFormat       = "20060102T150405Z"
 	shortTimeFormat  = "20060102"
@@ -597,7 +599,7 @@ func (ctx *signingCtx) buildCredentialString() {
 	ctx.credentialString = buildSigningScope(ctx.Region, ctx.ServiceName, ctx.Time)
 
 	if ctx.isPresign {
-		ctx.Query.Set("X-Amz-Credential", ctx.credValues.AccessKeyID+"/"+ctx.credentialString)
+		ctx.Query.Set(amzCredential, ctx.credValues.AccessKeyID+"/"+ctx.credentialString)
 	}
 }
 
@@ -747,7 +749,7 @@ func (ctx *signingCtx) removePresign() {
 	ctx.Query.Del("X-Amz-Security-Token")
 	ctx.Query.Del("X-Amz-Date")
 	ctx.Query.Del("X-Amz-Expires")
-	ctx.Query.Del("X-Amz-Credential")
+	ctx.Query.Del(amzCredential)
 	ctx.Query.Del("X-Amz-SignedHeaders")
 }
 
