@@ -82,6 +82,7 @@ type (
 		AbortMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		ListPartsHandler(w http.ResponseWriter, r *http.Request)
 		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
+		GetObjectTorrentHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME types used in API responses.
@@ -279,6 +280,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectattributes", h.GetObjectAttributesHandler))).Queries("attributes", "").
 			Name("GetObjectAttributes")
+		// GetObjectTorrentHandler
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+			m.Handle(metrics.APIStats("getobjecttorrent", h.GetObjectTorrentHandler))).Queries("torrent", "").
+			Name("GetObjectTorrent")
 		// GetObject
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobject", h.GetObjectHandler))).
