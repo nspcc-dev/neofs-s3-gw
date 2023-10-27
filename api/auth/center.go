@@ -236,7 +236,7 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, ErrNoAuthorizationHeader
 	}
 
-	submatches := c.postReg.GetSubmatches(MultipartFormValue(r, "x-amz-credential"))
+	submatches := c.postReg.GetSubmatches(MultipartFormValue(r, strings.ToLower(AmzCredential)))
 	if len(submatches) != 4 {
 		return nil, s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed)
 	}
