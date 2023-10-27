@@ -18,3 +18,7 @@ func (h *handler) DeleteBucketLifecycleHandler(w http.ResponseWriter, r *http.Re
 func (h *handler) DeleteBucketEncryptionHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotSupported))
 }
+
+func (h *handler) GetObjectTorrentHandler(w http.ResponseWriter, r *http.Request) {
+	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotSupported))
+}
