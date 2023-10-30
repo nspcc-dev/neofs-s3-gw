@@ -84,6 +84,7 @@ type (
 		ListPartsHandler(w http.ResponseWriter, r *http.Request)
 		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
 		GetObjectTorrentHandler(http.ResponseWriter, *http.Request)
+		PutPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME types used in API responses.
@@ -413,6 +414,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketpolicystatus", h.GetBucketPolicyStatusHandler))).Queries("policyStatus", "").
 			Name("GetBucketPolicyStatus")
+		// PutPublicAccessBlock
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putpublicaccessblockhandler", h.PutPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
+			Name("PutPublicAccessBlock")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv1", h.ListObjectsV1Handler))).
