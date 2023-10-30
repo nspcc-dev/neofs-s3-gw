@@ -69,6 +69,7 @@ type (
 		PostObject(http.ResponseWriter, *http.Request)
 		DeleteMultipleObjectsHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketPolicyHandler(http.ResponseWriter, *http.Request)
+		GetBucketPolicyStatusHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketLifecycleHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketEncryptionHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketHandler(http.ResponseWriter, *http.Request)
@@ -408,6 +409,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listbucketversions", h.ListBucketObjectVersionsHandler))).Queries("versions", "").
 			Name("ListBucketVersions")
+		// GetBucketPolicyStatus
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getbucketpolicystatus", h.GetBucketPolicyStatusHandler))).Queries("policyStatus", "").
+			Name("GetBucketPolicyStatus")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv1", h.ListObjectsV1Handler))).
