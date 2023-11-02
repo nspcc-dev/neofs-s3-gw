@@ -84,10 +84,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 			}
 			lockInfo.SetLegalHold(legalHoldOID)
 		} else if !newLock.LegalHold.Enabled && lockInfo.IsLegalHoldSet() {
-			if err = n.objectDelete(ctx, p.ObjVersion.BktInfo, lockInfo.LegalHold()); err != nil {
-				return fmt.Errorf("couldn't delete lock object '%s' to remove legal hold: %w", lockInfo.LegalHold().EncodeToString(), err)
-			}
-			lockInfo.ResetLegalHold()
+			return s3errors.GetAPIError(s3errors.ErrNotSupported)
 		}
 	}
 

@@ -436,10 +436,7 @@ func TestObjectLegalHold(t *testing.T) {
 	putObjectLegalHold(hc, bktName, objName, legalHoldOn)
 
 	putObjectLegalHold(hc, bktName, objName, legalHoldOff)
-	getObjectLegalHold(hc, bktName, objName, legalHoldOff)
-
-	// to make sure put hold is an idempotent operation
-	putObjectLegalHold(hc, bktName, objName, legalHoldOff)
+	getObjectLegalHold(hc, bktName, objName, legalHoldOn)
 }
 
 func getObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
@@ -451,7 +448,11 @@ func getObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
 func putObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
 	w, r := prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: status})
 	hc.Handler().PutObjectLegalHoldHandler(w, r)
-	assertStatus(hc.t, w, http.StatusOK)
+	if status == legalHoldOn {
+		assertStatus(hc.t, w, http.StatusOK)
+	} else {
+		assertStatus(hc.t, w, http.StatusNotImplemented)
+	}
 }
 
 func assertLegalHold(t *testing.T, w *httptest.ResponseRecorder, status string) {
