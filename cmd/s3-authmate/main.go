@@ -20,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
@@ -42,8 +43,6 @@ const (
 	// a month.
 	defaultLifetime          = 30 * 24 * time.Hour
 	defaultPresignedLifetime = 12 * time.Hour
-	// 7 days, according to https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html.
-	maxPresignedLifetime = 7 * 24 * time.Hour
 )
 
 type PoolConfig struct {
@@ -487,8 +486,8 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				return fmt.Errorf("couldn't get credentials: %w", err)
 			}
 
-			if lifetimeFlag > maxPresignedLifetime {
-				return fmt.Errorf("lifetime flag upper limit is %s", maxPresignedLifetime)
+			if lifetimeFlag > limits.MaxPreSignedLifetime {
+				return fmt.Errorf("lifetime flag upper limit is %s", limits.MaxPreSignedLifetime)
 			}
 
 			signer := v4.NewSigner(sess.Config.Credentials)

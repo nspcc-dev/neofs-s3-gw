@@ -21,6 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
@@ -159,6 +160,11 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		if err != nil {
 			return nil, fmt.Errorf("couldn't parse X-Amz-Expires: %w", err)
 		}
+
+		if authHdr.Expiration > limits.MaxPreSignedLifetime {
+			return nil, s3errors.GetAPIError(s3errors.ErrMaximumExpires)
+		}
+
 		signatureDateTimeStr = queryValues.Get(AmzDate)
 	} else {
 		authHeaderField := r.Header[AuthorizationHdr]
