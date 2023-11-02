@@ -104,7 +104,7 @@ func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *ca
 func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 	submatches := c.reg.GetSubmatches(header)
 	if len(submatches) != authHeaderPartsNum {
-		return nil, s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed)
+		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
 	}
 
 	accessKey := strings.Split(submatches["access_key_id"], "0")
