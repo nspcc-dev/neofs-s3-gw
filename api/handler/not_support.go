@@ -30,3 +30,7 @@ func (h *handler) GetBucketPolicyStatusHandler(w http.ResponseWriter, r *http.Re
 func (h *handler) PutPublicAccessBlockHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotSupported))
 }
+
+func (h *handler) GetPublicAccessBlockHandler(w http.ResponseWriter, r *http.Request) {
+	h.logAndSendError(w, "not supported", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotSupported))
+}
