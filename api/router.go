@@ -417,7 +417,7 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 			Name("GetBucketPolicyStatus")
 		// PutPublicAccessBlock
 		bucket.Methods(http.MethodPut).HandlerFunc(
-			m.Handle(metrics.APIStats("putpublicaccessblockhandler", h.PutPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
+			m.Handle(metrics.APIStats("putpublicaccessblock", h.PutPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
 			Name("PutPublicAccessBlock")
 		// GetPublicAccessBlock
 		bucket.Methods(http.MethodGet).HandlerFunc(
