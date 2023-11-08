@@ -934,15 +934,15 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
 		}
 		if len(resource.Object) != 0 {
-			if len(resource.Version) != 0 {
-				var id oid.ID
-				if err := id.DecodeString(resource.Version); err != nil {
-					return nil, fmt.Errorf("parse object version (oid): %w", err)
-				}
-				record.AddObjectIDFilter(eacl.MatchStringEqual, id)
-			} else {
-				record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
+			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
+		}
+
+		if len(resource.Version) != 0 {
+			var id oid.ID
+			if err := id.DecodeString(resource.Version); err != nil {
+				return nil, fmt.Errorf("parse object version (oid): %w", err)
 			}
+			record.AddObjectIDFilter(eacl.MatchStringEqual, id)
 		}
 		res = append(res, record)
 	}
@@ -965,7 +965,19 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 	if found != nil {
 		if !groupTarget {
 			for _, key := range target.BinaryKeys() {
-				found.Users = append(found.Users, hex.EncodeToString(key))
+				pubKey := hex.EncodeToString(key)
+				var exist bool
+
+				for _, userPubKey := range found.Users {
+					if userPubKey == pubKey {
+						exist = true
+						break
+					}
+				}
+
+				if !exist {
+					found.Users = append(found.Users, pubKey)
+				}
 			}
 		}
 	} else {
@@ -1148,10 +1160,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 
 	resource := &astResource{resourceInfo: *resInfo}
 
-	ops := readOps
-	if resInfo.IsBucket() {
-		ops = append(ops, writeOps...)
-	}
+	ops := append(readOps, writeOps...)
 
 	// Expect to have at least 1 full control grant for owner which is set in
 	// parseACLHeaders(). If there is no other grants, then user sets private
@@ -1285,7 +1294,7 @@ func getActions(permission amazonS3Permission, isBucket bool) []string {
 		if isBucket {
 			res = []string{s3ListBucket, s3ListBucketVersions, s3ListBucketMultipartUploads, s3PutObject, s3DeleteObject}
 		} else {
-			res = []string{s3GetObject, s3GetObjectVersion}
+			res = []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject}
 		}
 	}
 
