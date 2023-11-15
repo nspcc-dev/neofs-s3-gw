@@ -63,7 +63,7 @@ Principal must be `"AWS": "*"` (to refer all users) or `"CanonicalUser": "0313b1
 
 For now there are some limitations:
 * Retention period can't be shortened, only extended.
-* You can't delete locks or object with unexpired lock.
+* You can't delete locks or object with unexpired lock. This means PutObjectLegalHold with OFF status raise Unsupported error.
 
 |     | Method                     | Comments                  |
 |-----|----------------------------|---------------------------|

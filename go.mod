@@ -3,7 +3,7 @@ module github.com/nspcc-dev/neofs-s3-gw
 go 1.19
 
 require (
-	github.com/aws/aws-sdk-go v1.44.6
+	github.com/aws/aws-sdk-go v1.46.1
 	github.com/bluele/gcache v0.0.2
 	github.com/google/uuid v1.3.1
 	github.com/gorilla/mux v1.8.0
@@ -21,7 +21,7 @@ require (
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.14.0
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.31.0
 )
 
@@ -54,7 +54,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.23 // indirect
-	github.com/nats-io/nkeys v0.4.4 // indirect
+	github.com/nats-io/nkeys v0.4.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/hrw v1.0.9 // indirect
 	github.com/nspcc-dev/neofs-crypto v0.4.0

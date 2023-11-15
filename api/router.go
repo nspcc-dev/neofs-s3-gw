@@ -69,6 +69,7 @@ type (
 		PostObject(http.ResponseWriter, *http.Request)
 		DeleteMultipleObjectsHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketPolicyHandler(http.ResponseWriter, *http.Request)
+		GetBucketPolicyStatusHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketLifecycleHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketEncryptionHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketHandler(http.ResponseWriter, *http.Request)
@@ -82,6 +83,9 @@ type (
 		AbortMultipartUploadHandler(http.ResponseWriter, *http.Request)
 		ListPartsHandler(w http.ResponseWriter, r *http.Request)
 		ListMultipartUploadsHandler(http.ResponseWriter, *http.Request)
+		GetObjectTorrentHandler(http.ResponseWriter, *http.Request)
+		PutPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
+		GetPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME types used in API responses.
@@ -279,6 +283,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectattributes", h.GetObjectAttributesHandler))).Queries("attributes", "").
 			Name("GetObjectAttributes")
+		// GetObjectTorrentHandler
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+			m.Handle(metrics.APIStats("getobjecttorrent", h.GetObjectTorrentHandler))).Queries("torrent", "").
+			Name("GetObjectTorrent")
 		// GetObject
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobject", h.GetObjectHandler))).
@@ -403,6 +411,18 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listbucketversions", h.ListBucketObjectVersionsHandler))).Queries("versions", "").
 			Name("ListBucketVersions")
+		// GetBucketPolicyStatus
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getbucketpolicystatus", h.GetBucketPolicyStatusHandler))).Queries("policyStatus", "").
+			Name("GetBucketPolicyStatus")
+		// PutPublicAccessBlock
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putpublicaccessblock", h.PutPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
+			Name("PutPublicAccessBlock")
+		// GetPublicAccessBlock
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getpublicaccessblock", h.GetPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
+			Name("GetPublicAccessBlock")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv1", h.ListObjectsV1Handler))).

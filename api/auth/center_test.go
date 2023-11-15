@@ -35,7 +35,7 @@ func TestAuthHeaderParse(t *testing.T) {
 		},
 		{
 			header:   strings.ReplaceAll(defaultHeader, "Signature=2811ccb9e242f41426738fb1f", ""),
-			err:      s3errors.GetAPIError(s3errors.ErrAuthorizationHeaderMalformed),
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
 			expected: nil,
 		},
 		{
