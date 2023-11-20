@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -23,6 +24,11 @@ const (
 	complianceMode = "COMPLIANCE"
 	legalHoldOn    = "ON"
 	legalHoldOff   = "OFF"
+)
+
+var (
+	errEmptyDaysErrors    = errors.New("you must specify Days or Years")
+	errNonEmptyDaysErrors = errors.New("you cannot specify Days and Years at the same time")
 )
 
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -291,11 +297,11 @@ func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 	}
 
 	if retention.Days <= 0 && retention.Years <= 0 {
-		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, fmt.Errorf("you must specify Days or Years"))
+		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, errEmptyDaysErrors)
 	}
 
 	if retention.Days != 0 && retention.Years != 0 {
-		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, fmt.Errorf("you cannot specify Days and Years at the same time"))
+		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, errNonEmptyDaysErrors)
 	}
 
 	return nil

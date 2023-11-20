@@ -289,6 +289,24 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 			configuration: &data.ObjectLockConfiguration{ObjectLockEnabled: "dummy"},
 		},
 		{
+			name:          "invalid retention mode",
+			bucket:        bktLockEnabled,
+			expectedError: s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, fmt.Errorf("invalid Mode value: %s", "dummy")),
+			configuration: &data.ObjectLockConfiguration{Rule: &data.ObjectLockRule{DefaultRetention: &data.DefaultRetention{Mode: "dummy"}}},
+		},
+		{
+			name:          "empty retention days and years",
+			bucket:        bktLockEnabled,
+			expectedError: s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, errEmptyDaysErrors),
+			configuration: &data.ObjectLockConfiguration{Rule: &data.ObjectLockRule{DefaultRetention: &data.DefaultRetention{Mode: complianceMode}}},
+		},
+		{
+			name:          "non empty retention days and years",
+			bucket:        bktLockEnabled,
+			expectedError: s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, errNonEmptyDaysErrors),
+			configuration: &data.ObjectLockConfiguration{Rule: &data.ObjectLockRule{DefaultRetention: &data.DefaultRetention{Mode: complianceMode, Days: 1, Years: 1}}},
+		},
+		{
 			name:          "basic",
 			bucket:        bktLockEnabled,
 			noError:       true,
