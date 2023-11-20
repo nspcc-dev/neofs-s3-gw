@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -23,6 +24,11 @@ const (
 	complianceMode = "COMPLIANCE"
 	legalHoldOn    = "ON"
 	legalHoldOff   = "OFF"
+)
+
+var (
+	errEmptyDaysErrors    = errors.New("you must specify Days or Years")
+	errNonEmptyDaysErrors = errors.New("you cannot specify Days and Years at the same time")
 )
 
 func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -278,7 +284,7 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 
 func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 	if conf.ObjectLockEnabled != "" && conf.ObjectLockEnabled != enabledValue {
-		return fmt.Errorf("invalid ObjectLockEnabled value: %s", conf.ObjectLockEnabled)
+		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, fmt.Errorf("invalid ObjectLockEnabled value: %s", conf.ObjectLockEnabled))
 	}
 
 	if conf.Rule == nil || conf.Rule.DefaultRetention == nil {
@@ -287,15 +293,15 @@ func checkLockConfiguration(conf *data.ObjectLockConfiguration) error {
 
 	retention := conf.Rule.DefaultRetention
 	if retention.Mode != governanceMode && retention.Mode != complianceMode {
-		return fmt.Errorf("invalid Mode value: %s", retention.Mode)
+		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, fmt.Errorf("invalid Mode value: %s", retention.Mode))
 	}
 
-	if retention.Days == 0 && retention.Years == 0 {
-		return fmt.Errorf("you must specify Days or Years")
+	if retention.Days <= 0 && retention.Years <= 0 {
+		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, errEmptyDaysErrors)
 	}
 
 	if retention.Days != 0 && retention.Years != 0 {
-		return fmt.Errorf("you cannot specify Days and Years at the same time")
+		return s3errors.GetAPIErrorWithError(s3errors.ErrMalformedXML, errNonEmptyDaysErrors)
 	}
 
 	return nil
