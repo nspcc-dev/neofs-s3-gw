@@ -77,6 +77,7 @@ const (
 	AmzDate          = "X-Amz-Date"
 	AuthorizationHdr = "Authorization"
 	ContentTypeHdr   = "Content-Type"
+	timeFormatISO8601 = "20060102T150405Z"
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -182,7 +183,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		needClientTime = true
 	}
 
-	signatureDateTime, err := time.Parse("20060102T150405Z", signatureDateTimeStr)
+	signatureDateTime, err := time.Parse(timeFormatISO8601, signatureDateTimeStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
