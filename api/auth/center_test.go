@@ -3,7 +3,10 @@ package auth
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"io"
+	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -343,4 +346,101 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 
 		require.ErrorIs(t, err, v4.ErrLineTooLong)
 	})
+}
+
+func TestAwsEncodedWithRequest(t *testing.T) {
+	t.Skipf("Only for manual launch")
+
+	ts := time.Now()
+
+	host := "http://localhost:19080"
+	bucketName := "heh1701422026"
+	fileName := strconv.FormatInt(time.Now().Unix(), 16)
+	totalPayloadLength := 66560
+	chunkSize := 65536
+
+	payload := make([]byte, totalPayloadLength)
+	for i := 0; i < totalPayloadLength; i++ {
+		payload[i] = 'a'
+	}
+
+	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/%s/%s.txt", host, bucketName, fileName), nil)
+	require.NoError(t, err)
+
+	tsISO8601 := ts.Format(timeFormatISO8601)
+
+	req.Header.Set("x-amz-date", tsISO8601)
+	req.Header.Set("x-amz-content-sha256", "STREAMING-AWS4-HMAC-SHA256-PAYLOAD")
+	req.Header.Set("content-encoding", "aws-chunked")
+	req.Header.Set("x-amz-decoded-content-length", strconv.Itoa(totalPayloadLength))
+
+	awsCreds := credentials.NewStaticCredentials(
+		"6cpBf2jzHdD2MJHsjwLuVYYDAPJcfsJ5oufJWnHhrSBQ0FPjWXxmLmvKDAyhr1SEwnfKLJq3twKzuWG7f24qfyWcD", // access_key_id
+		"79488f248493cb5175ea079a12a3e08015021d9c710a064017e1da6a2b0ae111",                          // secret_access_key
+		"")
+
+	signer := v4.NewSigner(awsCreds)
+
+	signer.DisableURIPathEscaping = true
+	_, err = signer.Sign(req, nil, "s3", "us-east-1", ts)
+	require.NoError(t, err)
+
+	reg := NewRegexpMatcher(authorizationFieldRegexp)
+	signature := reg.GetSubmatches(req.Header.Get(AuthorizationHdr))["v4_signature"]
+
+	seedSignature, err := hex.DecodeString(signature)
+	require.NoError(t, err)
+
+	buff := bytes.NewBuffer(nil)
+	chunks := chunkSlice(payload, chunkSize)
+	streamSigner := v4.NewChunkSigner("us-east-1", "s3", seedSignature, ts, awsCreds)
+
+	for i, chunkPayload := range chunks {
+		chunkSignature, err := streamSigner.GetSignature(chunkPayload)
+		require.NoError(t, err)
+
+		var body []byte
+		if i > 0 {
+			body = []byte{'\r', '\n'}
+		}
+
+		body = append(body, []byte(strconv.FormatInt(int64(len(chunkPayload)), 16)+";chunk-signature=")...)
+		body = append(body, []byte(hex.EncodeToString(chunkSignature))...)
+		body = append(body, '\n')
+		body = append(body, chunkPayload...)
+
+		_, err = buff.Write(body)
+		require.NoError(t, err)
+	}
+
+	// the last chunk always has no data and zero length.
+	signChunk, err := streamSigner.GetSignature(nil)
+	require.NoError(t, err)
+
+	chunk3Body := append([]byte("\r\n0;chunk-signature="), []byte(hex.EncodeToString(signChunk))...)
+	chunk3Body = append(chunk3Body, '\n')
+	_, err = buff.Write(chunk3Body)
+	require.NoError(t, err)
+
+	req.Body = io.NopCloser(buff)
+	req.Header.Set("content-length", strconv.Itoa(buff.Len()))
+
+	_, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+}
+
+func chunkSlice(payload []byte, chunkSize int) [][]byte {
+	var result [][]byte
+
+	for i := 0; i < len(payload); i += chunkSize {
+		end := i + chunkSize
+
+		if end > len(payload) {
+			end = len(payload)
+		}
+
+		result = append(result, payload[i:end])
+	}
+
+	return result
 }
