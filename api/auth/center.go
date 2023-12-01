@@ -69,14 +69,18 @@ const (
 	authHeaderPartsNum = 6
 	maxFormSizeMemory  = 50 * 1048576 // 50 MB
 
-	AmzAlgorithm     = "X-Amz-Algorithm"
-	AmzCredential    = "X-Amz-Credential"
-	AmzSignature     = "X-Amz-Signature"
-	AmzSignedHeaders = "X-Amz-SignedHeaders"
-	AmzExpires       = "X-Amz-Expires"
-	AmzDate          = "X-Amz-Date"
-	AuthorizationHdr = "Authorization"
-	ContentTypeHdr   = "Content-Type"
+	AmzAlgorithm              = "X-Amz-Algorithm"
+	AmzCredential             = "X-Amz-Credential"
+	AmzSignature              = "X-Amz-Signature"
+	AmzSignedHeaders          = "X-Amz-SignedHeaders"
+	AmzExpires                = "X-Amz-Expires"
+	AmzDate                   = "X-Amz-Date"
+	AuthorizationHdr          = "Authorization"
+	ContentTypeHdr            = "Content-Type"
+	ContentEncodingHdr        = "Content-Encoding"
+	ContentEncodingAwsChunked = "aws-chunked"
+
+	timeFormatISO8601 = "20060102T150405Z"
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -182,7 +186,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		needClientTime = true
 	}
 
-	signatureDateTime, err := time.Parse("20060102T150405Z", signatureDateTimeStr)
+	signatureDateTime, err := time.Parse(timeFormatISO8601, signatureDateTimeStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
@@ -204,6 +208,17 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	clonedRequest := cloneRequest(r, authHdr)
 	if err = c.checkSign(authHdr, box, clonedRequest, signatureDateTime); err != nil {
 		return nil, err
+	}
+
+	if hdr := r.Header.Get(ContentEncodingHdr); hdr == ContentEncodingAwsChunked {
+		sig, err := hex.DecodeString(authHdr.SignatureV4)
+		if err != nil {
+			return nil, fmt.Errorf("DecodeString: %w", err)
+		}
+
+		awsCreds := credentials.NewStaticCredentials(authHdr.AccessKeyID, box.Gate.AccessKey, "")
+		streamSigner := v4.NewChunkSigner(authHdr.Region, authHdr.Service, sig, signatureDateTime, awsCreds)
+		r.Body = v4.NewChunkedReader(r.Body, streamSigner)
 	}
 
 	result := &Box{AccessBox: box}
