@@ -11,7 +11,7 @@ require (
 	github.com/nats-io/nats.go v1.28.0
 	github.com/nspcc-dev/neo-go v0.104.0
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
-	github.com/nspcc-dev/neofs-contract v0.17.1-0.20230804121740-84ff5d244f69
+	github.com/nspcc-dev/neofs-contract v0.19.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20231017122024-106835035bd6
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
@@ -21,7 +21,7 @@ require (
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.14.0
-	google.golang.org/grpc v1.57.1
+	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
 )
 
@@ -35,7 +35,7 @@ require (
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20231123160306-3374ff1e7a3c // indirect
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230803162519-f966b187b2e5 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
 
 require (
