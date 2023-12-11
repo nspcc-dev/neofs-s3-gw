@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
@@ -74,6 +75,17 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 			)
 		}
 	}
+
+	pubKey := cnr.Attribute(AttributeOwnerPublicKey)
+	if pubKey == "" {
+		return nil, errors.New("pub key is empty")
+	}
+
+	pk, err := keys.NewPublicKeyFromString(pubKey)
+	if err != nil {
+		return nil, fmt.Errorf("NewPublicKeyFromString: %w", err)
+	}
+	info.OwnerPublicKey = *pk
 
 	n.cache.PutBucket(info)
 

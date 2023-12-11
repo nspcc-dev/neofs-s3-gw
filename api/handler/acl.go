@@ -1335,10 +1335,20 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 }
 
 func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+	ownerGrantee := NewGrantee(granteeCanonicalUser)
+	ownerGrantee.ID = bucketACL.Info.PubKeyHex()
+	ownerGrantee.DisplayName = bucketACL.Info.Owner.String()
+
 	res := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          bucketACL.Info.Owner.String(),
+			ID:          bucketACL.Info.PubKeyHex(),
 			DisplayName: bucketACL.Info.Owner.String(),
+		},
+		AccessControlList: []*Grant{
+			{
+				Grantee:    ownerGrantee,
+				Permission: awsPermFullControl,
+			},
 		},
 	}
 
@@ -1369,6 +1379,11 @@ func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, ob
 	}
 
 	for key, val := range m {
+		if key == ownerGrantee.ID {
+			// owner already processed.
+			continue
+		}
+
 		var readOpAmount int
 		var writeOpAmount int
 
