@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
@@ -22,6 +23,9 @@ import (
 type PrmContainerCreate struct {
 	// NeoFS identifier of the container creator.
 	Creator user.ID
+
+	// Public key of the container creator.
+	CreatorPubKey keys.PublicKey
 
 	// Container placement policy.
 	Policy netmap.PlacementPolicy

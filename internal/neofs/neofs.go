@@ -3,6 +3,7 @@ package neofs
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -156,6 +157,8 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	for i := range prm.AdditionalAttributes {
 		cnr.SetAttribute(prm.AdditionalAttributes[i][0], prm.AdditionalAttributes[i][1])
 	}
+
+	cnr.SetAttribute(layer.AttributeOwnerPublicKey, hex.EncodeToString(prm.CreatorPubKey.Bytes()))
 
 	err := client.SyncContainerWithNetwork(ctx, &cnr, x.pool)
 	if err != nil {
@@ -546,10 +549,11 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 	basicACL.AllowOp(acl.OpObjectGet, acl.RoleOthers)
 
 	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
-		Creator:  prm.Owner,
-		Policy:   prm.Policy,
-		Name:     prm.FriendlyName,
-		BasicACL: basicACL,
+		Creator:       prm.Owner,
+		Policy:        prm.Policy,
+		Name:          prm.FriendlyName,
+		BasicACL:      basicACL,
+		CreatorPubKey: prm.CreatorPubKey,
 	})
 }
 

@@ -28,6 +28,9 @@ type (
 const (
 	attributeLocationConstraint = ".s3-location-constraint"
 	AttributeLockEnabled        = "LockEnabled"
+
+	// AttributeOwnerPublicKey is used to store container owner public key.
+	AttributeOwnerPublicKey = "owner-public-key"
 )
 
 func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketInfo, error) {
@@ -113,12 +116,19 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	if p.LocationConstraint == "" {
 		p.LocationConstraint = api.DefaultLocationConstraint // s3tests_boto3.functional.test_s3:test_bucket_get_location
 	}
+
+	pubKey, err := n.OwnerPublicKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("OwnerPublicKey: %w", err)
+	}
+
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
 		Owner:              ownerID,
 		Created:            TimeNow(ctx),
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
+		OwnerPublicKey:     *pubKey,
 	}
 
 	var attributes [][2]string
@@ -140,6 +150,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		SessionToken:         p.SessionContainerCreation,
 		CreationTime:         bktInfo.Created,
 		AdditionalAttributes: attributes,
+		CreatorPubKey:        *pubKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create container: %w", err)
