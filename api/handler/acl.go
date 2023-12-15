@@ -1335,10 +1335,20 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 }
 
 func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+	ownerGrantee := NewGrantee(granteeCanonicalUser)
+	ownerGrantee.ID = bucketACL.Info.PubKeyHex()
+	ownerGrantee.DisplayName = bucketACL.Info.Owner.String()
+
 	res := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          bucketACL.Info.Owner.String(),
+			ID:          bucketACL.Info.PubKeyHex(),
 			DisplayName: bucketACL.Info.Owner.String(),
+		},
+		AccessControlList: []*Grant{
+			{
+				Grantee:    ownerGrantee,
+				Permission: awsPermFullControl,
+			},
 		},
 	}
 
@@ -1369,6 +1379,11 @@ func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, ob
 	}
 
 	for key, val := range m {
+		if key == ownerGrantee.ID {
+			// owner already processed.
+			continue
+		}
+
 		var readOpAmount int
 		var writeOpAmount int
 
@@ -1394,37 +1409,35 @@ func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, ob
 		isRead := readOpAmount == len(readOpsMap)
 		isWrite := writeOpAmount == len(writeOpsMap)
 
-		var permission amazonS3Permission
-
-		if isRead && isWrite {
-			permission = awsPermFullControl
-		} else if isRead {
-			permission = awsPermRead
-		} else if isWrite {
-			permission = awsPermWrite
-		} else {
-			log.Warn("invalid permissions", zap.String("subject", key))
-			continue
+		if isRead {
+			grant := generateGrant(key, bucketACL, awsPermRead)
+			res.AccessControlList = append(res.AccessControlList, grant)
 		}
 
-		var grantee *Grantee
-		if key == allUsersGroup {
-			grantee = NewGrantee(granteeGroup)
-			grantee.URI = allUsersGroup
-		} else {
-			grantee = NewGrantee(granteeCanonicalUser)
-			grantee.ID = key
-			grantee.DisplayName = bucketACL.Info.Owner.String()
+		if isWrite {
+			grant := generateGrant(key, bucketACL, awsPermWrite)
+			res.AccessControlList = append(res.AccessControlList, grant)
 		}
-
-		grant := &Grant{
-			Grantee:    grantee,
-			Permission: permission,
-		}
-		res.AccessControlList = append(res.AccessControlList, grant)
 	}
 
 	return res
+}
+
+func generateGrant(key string, bucketACL *layer.BucketACL, permission amazonS3Permission) *Grant {
+	var grantee *Grantee
+	if key == allUsersGroup {
+		grantee = NewGrantee(granteeGroup)
+		grantee.URI = allUsersGroup
+	} else {
+		grantee = NewGrantee(granteeCanonicalUser)
+		grantee.ID = key
+		grantee.DisplayName = bucketACL.Info.Owner.String()
+	}
+
+	return &Grant{
+		Grantee:    grantee,
+		Permission: permission,
+	}
 }
 
 func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicy {

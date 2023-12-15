@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -1470,8 +1471,16 @@ func generateRecord(action eacl.Action, op eacl.Operation, targets []eacl.Target
 func TestEACLEncode(t *testing.T) {
 	s := test.RandomSignerRFC6979(t)
 
+	b := make([]byte, s.Public().MaxEncodedSize())
+	s.Public().Encode(b)
+
+	pubKey, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
+	require.NoError(t, err)
+
 	acl := layer.BucketACL{
-		Info: &data.BucketInfo{},
+		Info: &data.BucketInfo{
+			OwnerPublicKey: *pubKey,
+		},
 		EACL: &eacl.Table{},
 	}
 	acl.Info.Owner = s.UserID()
@@ -1480,7 +1489,7 @@ func TestEACLEncode(t *testing.T) {
 	acl.EACL.SetCID(containerID)
 
 	var userTarget eacl.Target
-	userTarget.SetBinaryKeys([][]byte{{1, 2, 3}})
+	userTarget.SetBinaryKeys([][]byte{b})
 
 	var othersTarget eacl.Target
 	othersTarget.SetRole(eacl.RoleOthers)
@@ -1525,7 +1534,7 @@ func TestEACLEncode(t *testing.T) {
 		},
 		{
 			Grantee: &Grantee{
-				ID:          "010203",
+				ID:          hex.EncodeToString(b),
 				Type:        granteeCanonicalUser,
 				DisplayName: s.UserID().String(),
 			},

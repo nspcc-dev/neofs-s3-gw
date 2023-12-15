@@ -454,6 +454,11 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if acl := auth.MultipartFormValue(r, "acl"); acl != "" {
+		if api.IsAnonymousRequest(r.Context()) {
+			h.logAndSendError(w, "anonymous can't override ACL rules", reqInfo, s3errors.GetAPIError(s3errors.ErrNotImplemented))
+			return
+		}
+
 		r.Header.Set(api.AmzACL, acl)
 		r.Header.Set(api.AmzGrantFullControl, "")
 		r.Header.Set(api.AmzGrantWrite, "")

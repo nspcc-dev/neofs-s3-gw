@@ -3,6 +3,7 @@ package layer
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -250,6 +251,10 @@ const (
 	AttributeNeofsCopiesNumber = "neofs-copies-number" // such formate to match X-Amz-Meta-Neofs-Copies-Number header
 )
 
+var (
+	errPubKeyNotExists = errors.New("pub key not exists")
+)
+
 func (t *VersionedObject) String() string {
 	return t.Name + ":" + t.VersionID
 }
@@ -310,6 +315,22 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	}
 
 	return n.anonymous
+}
+
+// OwnerPublicKey returns owner public key from BearerToken (context).
+func (n *layer) OwnerPublicKey(ctx context.Context) (*keys.PublicKey, error) {
+	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
+		if len(bd.Gate.BearerToken.SigningKeyBytes()) > 0 {
+			var pk keys.PublicKey
+			if err := pk.DecodeBytes(bd.Gate.BearerToken.SigningKeyBytes()); err != nil {
+				return nil, fmt.Errorf("pub key decode: %w", err)
+			}
+
+			return &pk, nil
+		}
+	}
+
+	return nil, errPubKeyNotExists
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {
