@@ -25,6 +25,7 @@ permissions: write-all
 
 env:
   S3_TESTS_CONFIG: s3tests.conf
+  ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-results
 
 jobs:
   build-and-test:
@@ -66,14 +67,6 @@ jobs:
           repository: nspcc-dev/neofs-s3-dev-env
           ref: master
           path: neofs-s3-dev-env
-
-      - name: Download latest stable neofs-cli for uploading reports to NeoFS
-        uses: dsaltares/fetch-gh-release-asset@1.1.1
-        with:
-          repo: 'nspcc-dev/neofs-node'
-          version: 'tags/v0.37.0'
-          file: 'neofs-cli-amd64'
-          target: 'neofs-node-stable/neofs-cli'
 
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
@@ -238,149 +231,76 @@ jobs:
       - name: s3 tests
         run: |
           source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws and not fails_on_dbstore' --alluredir=${GITHUB_WORKSPACE}/allure-results -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3_neofs.py 2>&1 | tee s3-tests.log
+          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws and not fails_on_dbstore' --alluredir=${{ env.ALLURE_RESULTS_DIR }} -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3.py
         working-directory: s3-tests
 
-
-################################################################
-      - name: Generate Allure report
-        timeout-minutes: 60
-        uses: simple-elf/allure-report-action@v1.6
-        if: always()
-        id: allure-report
-        with:
-          keep_reports: 100000
-          allure_results: allure-results
-          allure_report: allure-report
-          allure_history: allure-history
-
-      - name: Enable stable neofs-cli
-        if: always()
-        run: |
-          echo "$(pwd)" >> $GITHUB_PATH
-        working-directory: neofs-node-stable
-
-      - name: Create wallet
-        if: always()
-        env:
-          TEST_RESULTS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
-        run: |
-          echo "$TEST_RESULTS_WALLET" | base64 -d > wallet.json
-        working-directory: neofs-testcases
-
-      - name: Define expiration
-        if: always()
-        env:
-          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
-          MASTER_EXPIRATION_PERIOD: ${{ vars.MASTER_EXPIRATION_PERIOD }}
-          PR_EXPIRATION_PERIOD: ${{ vars.PR_EXPIRATION_PERIOD }}
-          MANUAL_RUN_EXPIRATION_PERIOD: ${{ vars.MANUAL_RUN_EXPIRATION_PERIOD }}
-          OTHER_EXPIRATION_PERIOD: ${{ vars.OTHER_EXPIRATION_PERIOD }}
-        run: |
-          CURRENT_EPOCH=$(neofs-cli netmap epoch --rpc-endpoint st1.$TEST_RESULTS_NEOFS_NETWORK_DOMAIN:8080)
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            EXP_EPOCH=$((MASTER_EXPIRATION_PERIOD + CURRENT_EPOCH))
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            EXP_EPOCH=$((PR_EXPIRATION_PERIOD + CURRENT_EPOCH))
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            EXP_EPOCH=0 # For test reports from releases - no expiration period
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            EXP_EPOCH=$((MANUAL_RUN_EXPIRATION_PERIOD + CURRENT_EPOCH))
-          else
-            EXP_EPOCH=$((OTHER_EXPIRATION_PERIOD + CURRENT_EPOCH))
-          fi
-          echo "EXP_EPOCH=$EXP_EPOCH" >> $GITHUB_ENV
-        working-directory: neofs-testcases
-
-      - name: Put allure report to NeoFS
+################################################################      
+      
+      - name: Publish to NeoFS
         id: put_report
         if: always() && steps.prepare_test_env.outcome == 'success'
-        env:
-          TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
-          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
-          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
-        run: |
-          sudo chmod -R a+rw ${GITHUB_WORKSPACE}/allure-report
-          source ${GITHUB_WORKSPACE}/s3-tests/virtualenv/bin/activate
-          python ./tools/src/process-allure-reports.py \
-            --expire-at $EXP_EPOCH \
-            --neofs_domain $TEST_RESULTS_NEOFS_NETWORK_DOMAIN \
-            --run_id $RUN_ID --cid $TEST_RESULTS_CID \
-            --allure_report ${GITHUB_WORKSPACE}/allure-report \
-            --wallet wallet.json
-        working-directory: neofs-testcases
+        uses: nspcc-dev/gh-push-allure-report-to-neofs@master
+        with:
+          NEOFS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
+          NEOFS_WALLET_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
+          NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
+          NEOFS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
+          STORE_OBJECTS_CID: ${{ vars.TEST_RESULTS_CID }}
+          PR_LIFETIME: ${{ vars.PR_EXPIRATION_PERIOD }}
+          MASTER_LIFETIME: ${{ vars.MASTER_EXPIRATION_PERIOD }}
+          MANUAL_RUN_LIFETIME: ${{ vars.MANUAL_RUN_EXPIRATION_PERIOD }}
+          OTHER_LIFETIME: ${{ vars.OTHER_EXPIRATION_PERIOD }}
+          ALLURE_RESULTS_DIR: ${{ env.ALLURE_RESULTS_DIR }}
+          ALLURE_GENERATED_DIR: 'neofs-test-allure-generated-report'
 
-      - name: Post the link to the report
+      - name: Post link to s3 tests report
         id: post_report_link
         timeout-minutes: 60
         if: always() && steps.put_report.outcome == 'success'
         env:
-          TEST_RESULTS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
-          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+          REPORT_NEOFS_URL: ${{ steps.put_report.outputs.REPORT_NEOFS_URL }}index.html
         uses: Sibz/github-status-action@v1
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
-          context: 'Test report'
+          context: 'S3 tests report'
           state: 'success'
           sha: ${{github.event.pull_request.head.sha || github.sha}}
-          target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/index.html
+          target_url: ${{ env.REPORT_NEOFS_URL }}
 
-      - name: Post only tests logs
-        id: post_s3_tests_logs
-        if: always()
-        env:
-          TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
-          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
-          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+
+      - name: Set docker logs directory
+        run: echo "DOCKER_LOGS=${{ github.workspace }}/${{ vars.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/docker-logs" >> $GITHUB_ENV
+
+      - name: Gather docker logs
+        id: gather_dockers_logs
+        if: always() && ( steps.prepare_test_env.outcome != 'success' || steps.put_report.outcome != 'success' )
         run: |
-          source ${GITHUB_WORKSPACE}/s3-tests/virtualenv/bin/activate
-          zip s3-tests.zip ${GITHUB_WORKSPACE}/s3-tests/s3-tests.log
-          NEOFS_CLI_PASSWORD=$TEST_RESULTS_PASSWORD neofs-cli --rpc-endpoint st1.$TEST_RESULTS_NEOFS_NETWORK_DOMAIN:8080 \
-          --wallet wallet.json object put --file s3-tests.zip --cid $TEST_RESULTS_CID --timeout 1200s \
-          --expire-at $EXP_EPOCH \
-          --attributes FilePath=$RUN_ID/data/s3-tests.zip,RunNumber=$RUN_ID,ContentType=application/zip
+          source venv.local-pytest/bin/activate 
+          mkdir -p ${{ env.DOCKER_LOGS }} && cd ${{ env.DOCKER_LOGS }}
+          python ${{ github.workspace }}/neofs-testcases/tools/src/zip_dev_env_logs.py
         working-directory: neofs-testcases
-
-      - name: Post the link to the tests logs
-        timeout-minutes: 60
-        if: always() && ( steps.post_s3_tests_logs.outcome == 'success' )
-        env:
-          TEST_RESULTS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
-          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
-        uses: Sibz/github-status-action@v1
-        with:
-          authToken: ${{secrets.GITHUB_TOKEN}}
-          context: 'S3 tests logs'
-          state: 'success'
-          sha: ${{github.event.pull_request.head.sha || github.sha}}
-          target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/s3-tests.zip
-
 
       - name: Post only docker logs
+        uses: nspcc-dev/gh-push-to-neofs@master
         id: post_dockers_logs
-        if: always() && ( steps.prepare_test_env.outcome != 'success' || steps.put_report.outcome != 'success' )
-        env:
-          TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
-          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
-          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
-        run: |
-          source venv.local-pytest/bin/activate && python ./tools/src/zip_dev_env_logs.py
-          NEOFS_CLI_PASSWORD=$TEST_RESULTS_PASSWORD neofs-cli --rpc-endpoint st1.$TEST_RESULTS_NEOFS_NETWORK_DOMAIN:8080 \
-          --wallet wallet.json object put --file containers_logs.zip --cid $TEST_RESULTS_CID --timeout 1200s \
-          --expire-at $EXP_EPOCH \
-          --attributes FilePath=$RUN_ID/data/containers_logs.zip,RunNumber=$RUN_ID,ContentType=application/zip
-        working-directory: neofs-testcases
+        if: steps.gather_dockers_logs.outcome == 'success'
+        with:
+          NEOFS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
+          NEOFS_WALLET_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
+          NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
+          NEOFS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
+          STORE_OBJECTS_CID: ${{ vars.TEST_RESULTS_CID }}
+          LIFETIME: ${{ vars.OTHER_EXPIRATION_PERIOD }}
+          PATH_TO_FILES_DIR: ${{ env.DOCKER_LOGS }}
+          URL_PREFIX: ${{ env.RUN_ID }}/data
 
-      - name: Post the link to the docker logs
+      - name: Post link to docker logs
         timeout-minutes: 60
-        if: always() && ( steps.post_dockers_logs.outcome == 'success' )
-        env:
-          TEST_RESULTS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
-          TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
+        if: steps.post_dockers_logs.outcome == 'success'
         uses: Sibz/github-status-action@v1
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
           context: 'Docker logs'
           state: 'success'
           sha: ${{github.event.pull_request.head.sha || github.sha}}
-          target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/containers_logs.zip
+          target_url: https://${{ vars.TEST_RESULTS_HTTP_GATE }}/${{ vars.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/docker-logs/containers_logs.zip
