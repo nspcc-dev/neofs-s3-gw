@@ -2,7 +2,7 @@
 
 # Common variables
 REPO ?= $(shell go list -m)
-VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
+VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 | sed 's/^v//' 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 GO_VERSION ?= 1.21
 LINT_VERSION ?= 1.49.0
 BINDIR = bin
@@ -14,7 +14,6 @@ BINS = $(addprefix $(BINDIR)/, $(CMDS))
 # Variables for docker
 REPO_BASENAME = $(shell basename `go list -m`)
 HUB_IMAGE ?= "nspccdev/$(REPO_BASENAME)"
-HUB_TAG ?= "$(shell echo ${VERSION} | sed 's/^v//')"
 
 .PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format image image-push dirty-image lint docker/lint version clean protoc
 
@@ -86,12 +85,12 @@ image:
 		--build-arg VERSION=$(VERSION) \
 		--rm \
 		-f .docker/Dockerfile \
-		-t $(HUB_IMAGE):$(HUB_TAG) .
+		-t $(HUB_IMAGE):$(VERSION) .
 
 # Push Docker image to the hub
 image-push:
 	@echo "⇒ Publish image"
-	@docker push $(HUB_IMAGE):$(HUB_TAG)
+	@docker push $(HUB_IMAGE):$(VERSION)
 
 # Build dirty Docker image
 dirty-image:
@@ -101,7 +100,7 @@ dirty-image:
 		--build-arg VERSION=$(VERSION) \
 		--rm \
 		-f .docker/Dockerfile.dirty \
-		-t $(HUB_IMAGE)-dirty:$(HUB_TAG) .
+		-t $(HUB_IMAGE)-dirty:$(VERSION) .
 
 # Run linters
 lint:
