@@ -288,6 +288,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		opts.SetObjectPayloadLimit(uint64(x.cfg.MaxObjectSize))
 		opts.SetCopiesNumber(prm.CopiesNumber)
 		opts.SetCurrentNeoFSEpoch(x.epochGetter.CurrentEpoch())
+		opts.SetPayloadSize(prm.PayloadSize)
 
 		data := x.buffers.Get()
 		chunk := data.(*[]byte)
