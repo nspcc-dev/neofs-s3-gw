@@ -244,30 +244,23 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	}
 
 	attrs := make([]object.Attribute, 0, attrNum)
-	var a *object.Attribute
-
-	a = object.NewAttribute()
-	a.SetKey(object.AttributeTimestamp)
 
 	creationTime := prm.CreationTime
 	if creationTime.IsZero() {
 		creationTime = time.Now()
 	}
-	a.SetValue(strconv.FormatInt(creationTime.Unix(), 10))
+	var a *object.Attribute
+	a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10))
 
 	attrs = append(attrs, *a)
 
 	for i := range prm.Attributes {
-		a = object.NewAttribute()
-		a.SetKey(prm.Attributes[i][0])
-		a.SetValue(prm.Attributes[i][1])
+		a = object.NewAttribute(prm.Attributes[i][0], prm.Attributes[i][1])
 		attrs = append(attrs, *a)
 	}
 
 	if prm.Filepath != "" {
-		a = object.NewAttribute()
-		a.SetKey(object.AttributeFilePath)
-		a.SetValue(prm.Filepath)
+		a = object.NewAttribute(object.AttributeFilePath, prm.Filepath)
 		attrs = append(attrs, *a)
 	}
 

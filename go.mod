@@ -10,9 +10,9 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.28.0
 	github.com/nspcc-dev/neo-go v0.104.0
-	github.com/nspcc-dev/neofs-api-go/v2 v2.14.0
+	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240125143754-70b1ffbd8141
 	github.com/nspcc-dev/neofs-contract v0.19.1
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20231017122024-106835035bd6
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240130135633-cb11d035a4ed
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
@@ -31,9 +31,10 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
-	github.com/kr/pretty v0.3.0 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20231123160306-3374ff1e7a3c // indirect
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
+	github.com/nspcc-dev/hrw/v2 v2.0.0-20231115095647-bf62f4ad0a43 // indirect
+	github.com/twmb/murmur3 v1.1.8 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/sync v0.3.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
@@ -56,7 +57,6 @@ require (
 	github.com/nats-io/nats-server/v2 v2.9.23 // indirect
 	github.com/nats-io/nkeys v0.4.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/nspcc-dev/hrw v1.0.9 // indirect
 	github.com/nspcc-dev/neofs-crypto v0.4.0
 	github.com/nspcc-dev/rfc6979 v0.2.0 // indirect
 	github.com/nspcc-dev/tzhash v1.7.1 // indirect
@@ -67,7 +67,6 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
-	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
