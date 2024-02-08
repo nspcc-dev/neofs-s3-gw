@@ -35,6 +35,10 @@ func (h *handler) GetBucketLoggingHandler(w http.ResponseWriter, r *http.Request
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
 }
 
+func (h *handler) PutBucketLoggingHandler(w http.ResponseWriter, r *http.Request) {
+	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
+}
+
 func (h *handler) GetBucketReplicationHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
 }

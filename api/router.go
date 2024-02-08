@@ -45,6 +45,7 @@ type (
 		GetBucketAccelerateHandler(http.ResponseWriter, *http.Request)
 		GetBucketRequestPaymentHandler(http.ResponseWriter, *http.Request)
 		GetBucketLoggingHandler(http.ResponseWriter, *http.Request)
+		PutBucketLoggingHandler(http.ResponseWriter, *http.Request)
 		GetBucketReplicationHandler(http.ResponseWriter, *http.Request)
 		GetBucketTaggingHandler(http.ResponseWriter, *http.Request)
 		DeleteBucketWebsiteHandler(http.ResponseWriter, *http.Request)
@@ -363,6 +364,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketlogging", h.GetBucketLoggingHandler))).Queries("logging", "").
 			Name("GetBucketLogging")
+		// PutBucketLoggingHandler -- this is a dummy call.
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putbucketlogging", h.PutBucketLoggingHandler))).Queries("logging", "").
+			Name("PutBucketLogging")
 		// GetBucketLifecycleHandler -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getbucketlifecycle", h.GetBucketLifecycleHandler))).Queries("lifecycle", "").
