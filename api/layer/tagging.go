@@ -116,8 +116,16 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 	}
 
 	tags, err := n.treeService.GetBucketTagging(ctx, bktInfo)
-	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+	if err != nil {
+		if errorsStd.Is(err, ErrNodeNotFound) {
+			return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
+		}
+
 		return nil, err
+	}
+
+	if len(tags) == 0 {
+		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
 	}
 
 	n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
