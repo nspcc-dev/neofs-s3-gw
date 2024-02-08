@@ -519,7 +519,7 @@ func addGrantees(list []*Grant, headers http.Header, hdr string) ([]*Grant, erro
 
 	for _, grantee := range grantees {
 		if grantee.Type == granteeAmazonCustomerByEmail || (grantee.Type == granteeGroup && grantee.URI != allUsersGroup) {
-			return nil, stderrors.New("unsupported grantee type")
+			return nil, s3errors.GetAPIError(s3errors.ErrNotSupported)
 		}
 
 		list = append(list, &Grant{
@@ -1186,7 +1186,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 
 	for _, grant := range acl.AccessControlList {
 		if grant.Grantee.Type == granteeAmazonCustomerByEmail || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI != allUsersGroup) {
-			return nil, stderrors.New("unsupported grantee type")
+			return nil, s3errors.GetAPIError(s3errors.ErrNotSupported)
 		}
 
 		var groupGrantee bool
@@ -1225,7 +1225,7 @@ func aclToPolicy(acl *AccessControlPolicy, resInfo *resourceInfo) (*bucketPolicy
 
 	for _, grant := range acl.AccessControlList {
 		if grant.Grantee.Type == granteeAmazonCustomerByEmail || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI != allUsersGroup) {
-			return nil, stderrors.New("unsupported grantee type")
+			return nil, s3errors.GetAPIError(s3errors.ErrNotSupported)
 		}
 
 		user := grant.Grantee.ID
