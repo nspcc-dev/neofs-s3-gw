@@ -70,6 +70,7 @@ const (
 	isDeleteMarkerKV = "IsDeleteMarker"
 	ownerKV          = "Owner"
 	createdKV        = "Created"
+	serverCreatedKV  = "SrvCreated"
 
 	settingsFileName      = "bucket-settings"
 	notifConfFileName     = "bucket-notifications"
@@ -259,6 +260,12 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 				return nil, fmt.Errorf("invalid created timestamp: %w", err)
 			}
 			partInfo.Created = time.UnixMilli(utcMilli)
+		case serverCreatedKV:
+			var utcMilli int64
+			if utcMilli, err = strconv.ParseInt(value, 10, 64); err != nil {
+				return nil, fmt.Errorf("invalid server created timestamp: %w", err)
+			}
+			partInfo.ServerCreated = time.UnixMilli(utcMilli)
 		}
 	}
 
@@ -903,11 +910,12 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 	}
 
 	meta := map[string]string{
-		partNumberKV: strconv.Itoa(info.Number),
-		oidKV:        info.OID.EncodeToString(),
-		sizeKV:       strconv.FormatInt(info.Size, 10),
-		createdKV:    strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
-		etagKV:       info.ETag,
+		partNumberKV:    strconv.Itoa(info.Number),
+		oidKV:           info.OID.EncodeToString(),
+		sizeKV:          strconv.FormatInt(info.Size, 10),
+		createdKV:       strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
+		serverCreatedKV: strconv.FormatInt(time.Now().UTC().UnixMilli(), 10),
+		etagKV:          info.ETag,
 	}
 
 	var foundPartID uint64

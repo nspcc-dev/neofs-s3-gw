@@ -85,7 +85,10 @@ type PartInfo struct {
 	OID      oid.ID
 	Size     int64
 	ETag     string
-	Created  time.Time
+	// Creation time from the client.
+	Created time.Time
+	// Server creation time.
+	ServerCreated time.Time
 }
 
 // ToHeaderString form short part representation to use in S3-Completed-Parts header.

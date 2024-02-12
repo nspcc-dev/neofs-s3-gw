@@ -19,6 +19,7 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -615,6 +616,23 @@ func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(parts, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
 
 	res := make(map[int]*data.PartInfo, len(parts))
 	partsNumbers := make([]int, len(parts))
