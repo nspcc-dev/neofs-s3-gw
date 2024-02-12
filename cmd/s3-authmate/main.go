@@ -301,7 +301,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				Destination: &slicerEnabledFlag,
 			},
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ *cli.Context) error {
 			ctx, log := prepare()
 
 			password := wallet.GetPassword(viper.GetViper(), envWalletPassphrase)
@@ -465,7 +465,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				Destination: &secretAccessKeyFlag,
 			},
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ *cli.Context) error {
 			var cfg aws.Config
 			if regionFlag != "" {
 				cfg.Region = &regionFlag
@@ -646,7 +646,7 @@ func obtainSecret() *cli.Command {
 				Value:       poolStreamTimeout,
 			},
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ *cli.Context) error {
 			ctx, log := prepare()
 
 			password := wallet.GetPassword(viper.GetViper(), envWalletPassphrase)
