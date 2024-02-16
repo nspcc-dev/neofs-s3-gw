@@ -75,6 +75,7 @@ type MultipartInfo struct {
 	Created      time.Time
 	Meta         map[string]string
 	CopiesNumber uint32
+	SplitID      string
 }
 
 // PartInfo is upload information about part.

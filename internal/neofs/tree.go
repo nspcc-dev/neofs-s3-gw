@@ -55,6 +55,7 @@ const (
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "IsTag"
 	uploadIDKV          = "UploadId"
+	splitIDKV           = "SplitId"
 	partNumberKV        = "Number"
 	sizeKV              = "Size"
 	etagKV              = "ETag"
@@ -221,6 +222,8 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 			}
 		case ownerKV:
 			_ = multipartInfo.Owner.DecodeString(string(kv.GetValue()))
+		case splitIDKV:
+			multipartInfo.SplitID = string(kv.GetValue())
 		default:
 			multipartInfo.Meta[kv.GetKey()] = string(kv.GetValue())
 		}
@@ -1191,6 +1194,7 @@ func metaFromMultipart(info *data.MultipartInfo, fileName string) map[string]str
 	info.Meta[uploadIDKV] = info.UploadID
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
+	info.Meta[splitIDKV] = info.SplitID
 
 	return info.Meta
 }
