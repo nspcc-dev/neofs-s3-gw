@@ -8,6 +8,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"golang.org/x/exp/slices"
 )
 
 type TreeServiceMock struct {
@@ -360,6 +361,36 @@ LOOP:
 	}
 
 	return result, nil
+}
+
+func (t *TreeServiceMock) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+	parts, err := t.GetParts(ctx, bktInfo, multipartNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get parts: %w", err)
+	}
+
+	if len(parts) == 0 {
+		return nil, ErrPartListIsEmpty
+	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(parts, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
+
+	return parts[len(parts)-1], nil
 }
 
 func (t *TreeServiceMock) DeleteMultipartUpload(_ context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error {

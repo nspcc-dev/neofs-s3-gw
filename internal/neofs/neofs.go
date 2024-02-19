@@ -3,9 +3,11 @@ package neofs
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"math"
 	"strconv"
@@ -16,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
@@ -30,6 +33,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/stat"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/waiter"
+	"github.com/nspcc-dev/tzhash/tz"
 )
 
 // Config allows to configure some [NeoFS] parameters.
@@ -270,6 +274,32 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetAttributes(attrs...)
 	obj.SetPayloadSize(prm.PayloadSize)
 
+	if prm.Multipart != nil && prm.Multipart.SplitID != "" {
+		var split object.SplitID
+		if err := split.Parse(prm.Multipart.SplitID); err != nil {
+			return oid.ID{}, fmt.Errorf("parse split ID: %w", err)
+		}
+		obj.SetSplitID(&split)
+
+		if prm.Multipart.SplitPreviousID != nil {
+			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
+		}
+
+		if len(prm.Multipart.Children) > 0 {
+			obj.SetChildren(prm.Multipart.Children...)
+		}
+
+		if prm.Multipart.HeaderObject != nil {
+			id, isSet := prm.Multipart.HeaderObject.ID()
+			if !isSet {
+				return oid.ID{}, errors.New("HeaderObject id is not set")
+			}
+
+			obj.SetParentID(id)
+			obj.SetParent(prm.Multipart.HeaderObject)
+		}
+	}
+
 	if len(prm.Locks) > 0 {
 		var lock object.Lock
 		lock.WriteMembers(prm.Locks)
@@ -343,6 +373,34 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	}
 
 	return writer.GetResult().StoredObjectID(), nil
+}
+
+// FinalizeObjectWithPayloadChecksums implements neofs.NeoFS interface method.
+func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
+	header.SetCreationEpoch(x.epochGetter.CurrentEpoch())
+
+	var cs checksum.Checksum
+
+	var csBytes [sha256.Size]byte
+	copy(csBytes[:], metaChecksum.Sum(nil))
+
+	cs.SetSHA256(csBytes)
+	header.SetPayloadChecksum(cs)
+
+	if homomorphicChecksum != nil {
+		var csHomoBytes [tz.Size]byte
+		copy(csHomoBytes[:], homomorphicChecksum.Sum(nil))
+
+		cs.SetTillichZemor(csHomoBytes)
+		header.SetPayloadHomomorphicHash(cs)
+	}
+
+	header.SetPayloadSize(payloadLength)
+	if err := header.SetIDWithSignature(x.signer(ctx)); err != nil {
+		return nil, fmt.Errorf("setIDWithSignature: %w", err)
+	}
+
+	return &header, nil
 }
 
 // wraps io.ReadCloser and transforms Read errors related to access violation
@@ -466,6 +524,16 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 	}
 
 	return nil
+}
+
+// MaxObjectSize returns configured payload size limit for object slicing when enabled.
+func (x *NeoFS) MaxObjectSize() int64 {
+	return x.cfg.MaxObjectSize
+}
+
+// IsHomomorphicHashingEnabled shows if homomorphic hashing is enabled in config.
+func (x *NeoFS) IsHomomorphicHashingEnabled() bool {
+	return x.cfg.IsHomomorphicEnabled
 }
 
 func isErrAccessDenied(err error) (string, bool) {

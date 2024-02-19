@@ -13,6 +13,7 @@ require (
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240125143754-70b1ffbd8141
 	github.com/nspcc-dev/neofs-contract v0.19.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240130135633-cb11d035a4ed
+	github.com/nspcc-dev/tzhash v1.8.0
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
@@ -35,7 +36,6 @@ require (
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20240112074137-296698a162ae // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.0-20231115095647-bf62f4ad0a43 // indirect
-	github.com/nspcc-dev/tzhash v1.8.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"time"
 
@@ -220,6 +221,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	return objID, nil
 }
 
+func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, _ hash.Hash, _ hash.Hash, _ uint64) (*object.Object, error) {
+	return &header, nil
+}
+
 func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error {
 	var addr oid.Address
 	addr.SetContainer(prm.Container)
@@ -239,6 +244,15 @@ func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error
 
 func (t *TestNeoFS) TimeToEpoch(_ context.Context, now, futureTime time.Time) (uint64, uint64, error) {
 	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Sub(now).Seconds()), nil
+}
+
+func (t *TestNeoFS) MaxObjectSize() int64 {
+	// 64 MB
+	return 67108864
+}
+
+func (t *TestNeoFS) IsHomomorphicHashingEnabled() bool {
+	return false
 }
 
 func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {

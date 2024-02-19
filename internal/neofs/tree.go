@@ -17,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -59,6 +60,9 @@ const (
 	partNumberKV        = "Number"
 	sizeKV              = "Size"
 	etagKV              = "ETag"
+	multipartHashKV     = "MultipartHashes"
+	homoHashKV          = "HomoHash"
+	elementsKV          = "Elements"
 
 	// keys for lock.
 	isLockKV       = "IsLock"
@@ -269,6 +273,21 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 				return nil, fmt.Errorf("invalid server created timestamp: %w", err)
 			}
 			partInfo.ServerCreated = time.UnixMilli(utcMilli)
+		case multipartHashKV:
+			partInfo.MultipartHash = []byte(value)
+		case homoHashKV:
+			partInfo.HomoHash = []byte(value)
+		case elementsKV:
+			elements := strings.Split(value, ",")
+			partInfo.Elements = make([]oid.ID, len(elements))
+			for i, e := range elements {
+				var id oid.ID
+				if err = id.DecodeString(e); err != nil {
+					return nil, fmt.Errorf("invalid oid: %w", err)
+				}
+
+				partInfo.Elements[i] = id
+			}
 		}
 	}
 
@@ -912,6 +931,11 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 		return oid.ID{}, err
 	}
 
+	elements := make([]string, len(info.Elements))
+	for i, e := range info.Elements {
+		elements[i] = e.String()
+	}
+
 	meta := map[string]string{
 		partNumberKV:    strconv.Itoa(info.Number),
 		oidKV:           info.OID.EncodeToString(),
@@ -919,6 +943,9 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 		createdKV:       strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 		serverCreatedKV: strconv.FormatInt(time.Now().UTC().UnixMilli(), 10),
 		etagKV:          info.ETag,
+		multipartHashKV: string(info.MultipartHash),
+		homoHashKV:      string(info.HomoHash),
+		elementsKV:      strings.Join(elements, ","),
 	}
 
 	var foundPartID uint64
@@ -966,6 +993,36 @@ func (c *TreeClient) GetParts(ctx context.Context, bktInfo *data.BucketInfo, mul
 	}
 
 	return result, nil
+}
+
+func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+	parts, err := c.GetParts(ctx, bktInfo, multipartNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get parts: %w", err)
+	}
+
+	if len(parts) == 0 {
+		return nil, layer.ErrPartListIsEmpty
+	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(parts, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
+
+	return parts[len(parts)-1], nil
 }
 
 func (c *TreeClient) DeleteMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error {

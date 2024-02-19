@@ -1,10 +1,14 @@
 package layer
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"sort"
 	"strconv"
@@ -19,14 +23,13 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"github.com/nspcc-dev/tzhash/tz"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
 
 const (
-	UploadIDAttributeName         = "S3-Upload-Id"
-	UploadPartNumberAttributeName = "S3-Upload-Part-Number"
-	UploadCompletedParts          = "S3-Completed-Parts"
+	UploadCompletedParts = "S3-Completed-Parts"
 
 	metaPrefix = "meta-"
 	aclPrefix  = "acl-"
@@ -203,34 +206,121 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
 	}
 
-	bktInfo := p.Info.Bkt
-	prm := PrmObjectCreate{
-		Container:    bktInfo.CID,
-		Creator:      bktInfo.Owner,
-		Attributes:   make([][2]string, 2),
-		Payload:      p.Reader,
-		CreationTime: TimeNow(ctx),
-		CopiesNumber: multipartInfo.CopiesNumber,
-	}
+	var (
+		bktInfo       = p.Info.Bkt
+		payloadReader = p.Reader
+		decSize       = p.Size
+		attributes    [][2]string
+	)
 
-	decSize := p.Size
 	if p.Info.Encryption.Enabled() {
 		r, encSize, err := encryptionReader(p.Reader, uint64(p.Size), p.Info.Encryption.Key())
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ecnrypted reader: %w", err)
 		}
-		prm.Attributes = append(prm.Attributes, [2]string{AttributeDecryptedSize, strconv.FormatInt(p.Size, 10)})
-		prm.Payload = r
+		attributes = append(attributes, [2]string{AttributeDecryptedSize, strconv.FormatInt(p.Size, 10)})
+		payloadReader = r
 		p.Size = int64(encSize)
 	}
 
-	prm.Attributes[0][0], prm.Attributes[0][1] = UploadIDAttributeName, p.Info.UploadID
-	prm.Attributes[1][0], prm.Attributes[1][1] = UploadPartNumberAttributeName, strconv.Itoa(p.PartNumber)
+	var (
+		splitPreviousID      oid.ID
+		isSetSplitPreviousID bool
+		multipartHash        = sha256.New()
+		tzHash               hash.Hash
+	)
 
-	id, hash, err := n.objectPutAndHash(ctx, prm, bktInfo)
-	if err != nil {
-		return nil, err
+	if n.neoFS.IsHomomorphicHashingEnabled() {
+		tzHash = tz.New()
 	}
+
+	lastPart, err := n.treeService.GetLastPart(ctx, bktInfo, multipartInfo.ID)
+	if err != nil {
+		// if ErrPartListIsEmpty, there is the first part of multipart.
+		if !errors.Is(err, ErrPartListIsEmpty) {
+			return nil, fmt.Errorf("getLastPart: %w", err)
+		}
+	} else {
+		// try to restore hash state from the last part.
+		// the required interface is guaranteed according to the docs, so just cast without checks.
+		binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
+		if err = binaryUnmarshaler.UnmarshalBinary(lastPart.MultipartHash); err != nil {
+			return nil, fmt.Errorf("unmarshal previous part hash: %w", err)
+		}
+
+		if tzHash != nil {
+			binaryUnmarshaler = tzHash.(encoding.BinaryUnmarshaler)
+			if err = binaryUnmarshaler.UnmarshalBinary(lastPart.HomoHash); err != nil {
+				return nil, fmt.Errorf("unmarshal previous part homo hash: %w", err)
+			}
+		}
+
+		isSetSplitPreviousID = true
+		splitPreviousID = lastPart.OID
+	}
+
+	var (
+		id           oid.ID
+		elements     []oid.ID
+		creationTime = TimeNow(ctx)
+		// User may upload part large maxObjectSize in NeoFS. From users point of view it is a single object.
+		// We have to calculate the hash from this object separately.
+		currentPartHash = sha256.New()
+	)
+
+	objHashes := []hash.Hash{multipartHash, currentPartHash}
+	if tzHash != nil {
+		objHashes = append(objHashes, tzHash)
+	}
+
+	prm := PrmObjectCreate{
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		Attributes:   attributes,
+		CreationTime: creationTime,
+		CopiesNumber: multipartInfo.CopiesNumber,
+		Multipart: &Multipart{
+			SplitID:         multipartInfo.SplitID,
+			MultipartHashes: objHashes,
+		},
+	}
+
+	chunk := n.buffers.Get().(*[]byte)
+
+	// slice part manually. Simultaneously considering the part is a single object for user.
+	for {
+		if isSetSplitPreviousID {
+			prm.Multipart.SplitPreviousID = &splitPreviousID
+		}
+
+		nBts, readErr := io.ReadAtLeast(payloadReader, *chunk, len(*chunk))
+		if nBts > 0 {
+			prm.Payload = bytes.NewReader((*chunk)[:nBts])
+			prm.PayloadSize = uint64(nBts)
+
+			id, _, err = n.objectPutAndHash(ctx, prm, bktInfo)
+			if err != nil {
+				return nil, err
+			}
+
+			isSetSplitPreviousID = true
+			splitPreviousID = id
+			elements = append(elements, id)
+		}
+
+		if readErr == nil {
+			continue
+		}
+
+		// If an EOF happens after reading fewer than min bytes, ReadAtLeast returns ErrUnexpectedEOF.
+		// We have the whole payload.
+		if !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+			return nil, fmt.Errorf("read payload chunk: %w", err)
+		}
+
+		break
+	}
+	n.buffers.Put(chunk)
 
 	reqInfo := api.GetReqInfo(ctx)
 	n.log.Debug("upload part",
@@ -245,8 +335,26 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Number:   p.PartNumber,
 		OID:      id,
 		Size:     decSize,
-		ETag:     hex.EncodeToString(hash),
+		ETag:     hex.EncodeToString(currentPartHash.Sum(nil)),
 		Created:  prm.CreationTime,
+		Elements: elements,
+	}
+
+	// encoding hash.Hash state to save it in tree service.
+	// the required interface is guaranteed according to the docs, so just cast without checks.
+	binaryMarshaler := multipartHash.(encoding.BinaryMarshaler)
+	partInfo.MultipartHash, err = binaryMarshaler.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("marshalBinary: %w", err)
+	}
+
+	if tzHash != nil {
+		binaryMarshaler = tzHash.(encoding.BinaryMarshaler)
+		partInfo.HomoHash, err = binaryMarshaler.MarshalBinary()
+
+		if err != nil {
+			return nil, fmt.Errorf("marshalBinary: %w", err)
+		}
 	}
 
 	oldPartID, err := n.treeService.AddPart(ctx, bktInfo, multipartInfo.ID, partInfo)
@@ -380,8 +488,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	var multipartObjetSize int64
 	var encMultipartObjectSize uint64
-	parts := make([]*data.PartInfo, 0, len(p.Parts))
-
+	var lastPartID int
+	var children []oid.ID
 	var completedPartsHeader strings.Builder
 	for i, part := range p.Parts {
 		partInfo := partsInfo[part.PartNumber]
@@ -392,7 +500,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		if i != len(p.Parts)-1 && partInfo.Size < uploadMinSize {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrEntityTooSmall)
 		}
-		parts = append(parts, partInfo)
 		multipartObjetSize += partInfo.Size // even if encryption is enabled size is actual (decrypted)
 
 		if encInfo.Enabled {
@@ -409,6 +516,44 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 		if _, err = completedPartsHeader.WriteString(partInfoStr); err != nil {
 			return nil, nil, err
+		}
+
+		if part.PartNumber > lastPartID {
+			lastPartID = part.PartNumber
+		}
+
+		children = append(children, partInfo.Elements...)
+	}
+
+	multipartHash := sha256.New()
+	var homoHash hash.Hash
+	var splitPreviousID oid.ID
+
+	if lastPartID > 0 {
+		lastPart := partsInfo[lastPartID]
+
+		if lastPart != nil {
+			if len(lastPart.MultipartHash) > 0 {
+				splitPreviousID = lastPart.OID
+
+				if len(lastPart.MultipartHash) > 0 {
+					binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
+					if err = binaryUnmarshaler.UnmarshalBinary(lastPart.MultipartHash); err != nil {
+						return nil, nil, fmt.Errorf("unmarshal last part hash: %w", err)
+					}
+				}
+			}
+
+			if n.neoFS.IsHomomorphicHashingEnabled() && len(lastPart.HomoHash) > 0 {
+				homoHash = tz.New()
+
+				if len(lastPart.MultipartHash) > 0 {
+					binaryUnmarshaler := homoHash.(encoding.BinaryUnmarshaler)
+					if err = binaryUnmarshaler.UnmarshalBinary(lastPart.HomoHash); err != nil {
+						return nil, nil, fmt.Errorf("unmarshal last part homo hash: %w", err)
+					}
+				}
+			}
 		}
 	}
 
@@ -437,44 +582,107 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		multipartObjetSize = int64(encMultipartObjectSize)
 	}
 
-	r := &multiObjectReader{
-		ctx:   ctx,
-		layer: n,
-		parts: parts,
-	}
-
-	r.prm.bktInfo = p.Info.Bkt
-
-	extObjInfo, err := n.PutObject(ctx, &PutObjectParams{
+	// This is our "big object". It doesn't have any payload.
+	prmHeaderObject := &PutObjectParams{
 		BktInfo:      p.Info.Bkt,
 		Object:       p.Info.Key,
-		Reader:       r,
+		Reader:       bytes.NewBuffer(nil),
 		Header:       initMetadata,
 		Size:         multipartObjetSize,
 		Encryption:   p.Info.Encryption,
 		CopiesNumber: multipartInfo.CopiesNumber,
-	})
+	}
+
+	header, err := n.prepareMultipartHeadObject(ctx, prmHeaderObject, multipartHash, homoHash, uint64(multipartObjetSize))
 	if err != nil {
-		n.log.Error("could not put a completed object (multipart upload)",
-			zap.String("uploadID", p.Info.UploadID),
-			zap.String("uploadKey", p.Info.Key),
-			zap.Error(err))
-
-		return nil, nil, s3errors.GetAPIError(s3errors.ErrInternalError)
+		return nil, nil, err
 	}
 
-	var addr oid.Address
-	addr.SetContainer(p.Info.Bkt.CID)
-	for _, partInfo := range partsInfo {
-		if err = n.objectDelete(ctx, p.Info.Bkt, partInfo.OID); err != nil {
-			n.log.Warn("could not delete upload part",
-				zap.Stringer("object id", &partInfo.OID),
-				zap.Stringer("bucket id", p.Info.Bkt.CID),
-				zap.Error(err))
-		}
-		addr.SetObject(partInfo.OID)
-		n.cache.DeleteObject(addr)
+	// last part
+	prm := PrmObjectCreate{
+		Container:    p.Info.Bkt.CID,
+		Creator:      p.Info.Bkt.Owner,
+		Filepath:     p.Info.Key,
+		CreationTime: TimeNow(ctx),
+		CopiesNumber: multipartInfo.CopiesNumber,
+		Multipart: &Multipart{
+			SplitID:         multipartInfo.SplitID,
+			SplitPreviousID: &splitPreviousID,
+			HeaderObject:    header,
+		},
+		Payload: bytes.NewBuffer(nil),
 	}
+
+	lastPartObjID, _, err := n.objectPutAndHash(ctx, prm, p.Info.Bkt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	children = append(children, lastPartObjID)
+
+	// linking object
+	prm = PrmObjectCreate{
+		Container:    p.Info.Bkt.CID,
+		Creator:      p.Info.Bkt.Owner,
+		CreationTime: TimeNow(ctx),
+		CopiesNumber: multipartInfo.CopiesNumber,
+		Multipart: &Multipart{
+			SplitID:      multipartInfo.SplitID,
+			HeaderObject: header,
+			Children:     children,
+		},
+		Payload: bytes.NewBuffer(nil),
+	}
+
+	_, _, err = n.objectPutAndHash(ctx, prm, p.Info.Bkt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bktSettings, err := n.GetBucketSettings(ctx, p.Info.Bkt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
+	}
+
+	headerObjectID, _ := header.ID()
+
+	// the "big object" is not presented in system, but we have to put correct info about it and its version.
+
+	newVersion := &data.NodeVersion{
+		BaseNodeVersion: data.BaseNodeVersion{
+			FilePath: p.Info.Key,
+			Size:     multipartObjetSize,
+			OID:      headerObjectID,
+			ETag:     hex.EncodeToString(multipartHash.Sum(nil)),
+		},
+		IsUnversioned: !bktSettings.VersioningEnabled(),
+	}
+
+	if newVersion.ID, err = n.treeService.AddVersion(ctx, p.Info.Bkt, newVersion); err != nil {
+		return nil, nil, fmt.Errorf("couldn't add multipart new verion to tree service: %w", err)
+	}
+
+	n.cache.CleanListCacheEntriesContainingObject(p.Info.Key, p.Info.Bkt.CID)
+
+	objInfo := &data.ObjectInfo{
+		ID:          headerObjectID,
+		CID:         p.Info.Bkt.CID,
+		Owner:       p.Info.Bkt.Owner,
+		Bucket:      p.Info.Bkt.Name,
+		Name:        p.Info.Key,
+		Size:        multipartObjetSize,
+		Created:     prm.CreationTime,
+		Headers:     initMetadata,
+		ContentType: initMetadata[api.ContentType],
+		HashSum:     newVersion.ETag,
+	}
+
+	extObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: newVersion,
+	}
+
+	n.cache.PutObjectWithName(p.Info.Bkt.Owner, extObjInfo)
 
 	return uploadData, extObjInfo, n.treeService.DeleteMultipartUpload(ctx, p.Info.Bkt, multipartInfo.ID)
 }

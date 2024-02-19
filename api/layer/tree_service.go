@@ -74,6 +74,11 @@ type TreeService interface {
 	// If object id to remove is not found returns ErrNoNodeToRemove error.
 	AddPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error)
 	GetParts(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) ([]*data.PartInfo, error)
+	// GetLastPart returns the latest uploaded part.
+	//
+	// Return errors:
+	//   - [ErrPartListIsEmpty] if there is no parts in the upload id.
+	GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error)
 
 	// Compound methods for optimizations
 
@@ -90,4 +95,7 @@ var (
 
 	// ErrNoNodeToRemove is returned from Tree service in case of the lack of node with OID to remove.
 	ErrNoNodeToRemove = errors.New("no node to remove")
+
+	// ErrPartListIsEmpty is returned if no parts available for the upload.
+	ErrPartListIsEmpty = errors.New("part list is empty")
 )
