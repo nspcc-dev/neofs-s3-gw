@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	stderrors "errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -1464,7 +1463,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 
 	for _, grant := range acp.AccessControlList {
 		if !isValidGrant(grant) {
-			return nil, stderrors.New("unsupported grantee")
+			return nil, errors.New("unsupported grantee")
 		}
 		if grant.Grantee.ID == acp.Owner.ID {
 			found = true

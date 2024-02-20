@@ -3,7 +3,7 @@ package layer
 import (
 	"context"
 	"encoding/hex"
-	stderrors "errors"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -176,7 +176,7 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, error) {
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
 	if err != nil {
-		if stderrors.Is(err, ErrNodeNotFound) {
+		if errors.Is(err, ErrNodeNotFound) {
 			return "", s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 		return "", err
@@ -248,7 +248,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	oldPartID, err := n.treeService.AddPart(ctx, bktInfo, multipartInfo.ID, partInfo)
-	oldPartIDNotFound := stderrors.Is(err, ErrNoNodeToRemove)
+	oldPartIDNotFound := errors.Is(err, ErrNoNodeToRemove)
 	if err != nil && !oldPartIDNotFound {
 		return nil, err
 	}
@@ -278,7 +278,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error) {
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
 	if err != nil {
-		if stderrors.Is(err, ErrNodeNotFound) {
+		if errors.Is(err, ErrNodeNotFound) {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 		return nil, err
@@ -336,7 +336,7 @@ type multiObjectReader struct {
 func (x *multiObjectReader) Read(p []byte) (n int, err error) {
 	if x.curReader != nil {
 		n, err = x.curReader.Read(p)
-		if !stderrors.Is(err, io.EOF) {
+		if !errors.Is(err, io.EOF) {
 			return n, err
 		}
 	}
@@ -606,7 +606,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 func (n *layer) getUploadParts(ctx context.Context, p *UploadInfoParams) (*data.MultipartInfo, map[int]*data.PartInfo, error) {
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Bkt, p.Key, p.UploadID)
 	if err != nil {
-		if stderrors.Is(err, ErrNodeNotFound) {
+		if errors.Is(err, ErrNodeNotFound) {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 		return nil, nil, err
