@@ -51,9 +51,6 @@ jobs:
       - name: Get tree-service client
         run: make sync-tree
 
-      - name: Update Go modules
-        run: make dep
-
       - name: Test and write coverage profile
         run: make cover
 
@@ -89,9 +86,6 @@ jobs:
 
       - name: Get tree-service client
         run: make sync-tree
-
-      - name: Update Go modules
-        run: make dep
 
       - name: Run tests
         run: make test

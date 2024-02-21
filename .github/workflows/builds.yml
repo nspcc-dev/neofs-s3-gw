@@ -31,9 +31,6 @@ jobs:
       - name: Get tree-service client
         run: make sync-tree
 
-      - name: Update Go modules
-        run: make dep
-
       - name: Build CLI
         run: make
 
@@ -55,9 +52,6 @@ jobs:
 
       - name: Get tree-service client
         run: make sync-tree
-
-      - name: Update Go modules
-        run: make dep
 
       - name: Build Docker image
         run: make image
