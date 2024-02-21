@@ -7,6 +7,7 @@ on:
       - 'support/*'
     types: [ opened, synchronize ]
     paths-ignore:
+      - 'config/**'
       - '**/*.md'
 
 jobs:
