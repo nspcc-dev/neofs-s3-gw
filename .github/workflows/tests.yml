@@ -76,13 +76,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
+          cache: true
           go-version: '${{ matrix.go_versions }}'
-
-      - name: Restore Go modules from cache
-        uses: actions/cache@v3
-        with:
-          path: /home/runner/go/pkg/mod
-          key: deps-${{ hashFiles('go.sum') }}
 
       - name: Get tree-service client
         run: make sync-tree
