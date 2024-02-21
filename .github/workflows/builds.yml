@@ -19,6 +19,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check version
+        run: if [[ $(make version) == *"dirty"* ]]; then exit 1; fi
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -33,9 +36,6 @@ jobs:
 
       - name: Build CLI
         run: make
-
-      - name: Check version
-        run: if [[ $(make version) == *"dirty"* ]]; then exit 1; fi
 
   build_image:
     needs: build_cli
