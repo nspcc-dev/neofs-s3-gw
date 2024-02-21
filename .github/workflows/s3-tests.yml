@@ -43,33 +43,33 @@ jobs:
         run: echo "RUN_ID=${{ github.run_number }}-$TIMESTAMP" >> $GITHUB_ENV
 
       - name: Checkout neofs-s3-gw repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: neofs-s3-gw
 
       - name: Checkout s3-tests repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: nspcc-dev/s3-tests
           ref: master
           path: s3-tests
 
       - name: Checkout neofs-dev-env repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: nspcc-dev/neofs-dev-env
           ref: 'af001f8052a203eab408af2bf3a41c7e5af2ac11'
           path: neofs-dev-env
 
       - name: Checkout neofs-s3-dev-env repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: nspcc-dev/neofs-s3-dev-env
           ref: master
           path: neofs-s3-dev-env
 
       - name: Checkout neofs-testcases repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: nspcc-dev/neofs-testcases
           ref: 'master'
@@ -77,14 +77,14 @@ jobs:
 
 ################################################################
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           cache: true
           go-version: '1.21'
       - run: go version
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.8'
       - run: python --version
