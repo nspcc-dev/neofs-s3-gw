@@ -2,7 +2,7 @@
 package neofs
 
 import (
-	crypto "github.com/nspcc-dev/neofs-crypto"
+	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -10,7 +10,8 @@ func (c *TreeClient) signData(buf []byte, f func(key, sign []byte)) error {
 	// crypto package should not be used outside of API libraries (see neofs-node#491).
 	// For now tree service does not include into SDK Client nor SDK Pool, so there is no choice.
 	// When SDK library adopts Tree service client, this should be dropped.
-	sign, err := crypto.Sign(&c.key.PrivateKey, buf)
+	var pk = neofsecdsa.Signer(c.key.PrivateKey)
+	sign, err := pk.Sign(buf)
 	if err != nil {
 		return err
 	}
