@@ -430,45 +430,6 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 	return n.uploadPart(ctx, multipartInfo, params)
 }
 
-// implements io.Reader of payloads of the object list stored in the NeoFS network.
-type multiObjectReader struct {
-	ctx context.Context
-
-	layer *layer
-
-	prm getParams
-
-	curReader io.Reader
-
-	parts []*data.PartInfo
-}
-
-func (x *multiObjectReader) Read(p []byte) (n int, err error) {
-	if x.curReader != nil {
-		n, err = x.curReader.Read(p)
-		if !errors.Is(err, io.EOF) {
-			return n, err
-		}
-	}
-
-	if len(x.parts) == 0 {
-		return n, io.EOF
-	}
-
-	x.prm.oid = x.parts[0].OID
-
-	x.curReader, err = x.layer.initObjectPayloadReader(x.ctx, x.prm)
-	if err != nil {
-		return n, fmt.Errorf("init payload reader for the next part: %w", err)
-	}
-
-	x.parts = x.parts[1:]
-
-	next, err := x.Read(p[n:])
-
-	return n + next, err
-}
-
 func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ExtendedObjectInfo, error) {
 	for i := 1; i < len(p.Parts); i++ {
 		if p.Parts[i].PartNumber <= p.Parts[i-1].PartNumber {
