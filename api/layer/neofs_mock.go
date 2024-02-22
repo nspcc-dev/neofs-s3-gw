@@ -17,11 +17,13 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"github.com/nspcc-dev/tzhash/tz"
 )
 
 type TestNeoFS struct {
@@ -31,13 +33,15 @@ type TestNeoFS struct {
 	containers   map[string]*container.Container
 	eaclTables   map[string]*eacl.Table
 	currentEpoch uint64
+	signer       neofscrypto.Signer
 }
 
-func NewTestNeoFS() *TestNeoFS {
+func NewTestNeoFS(signer neofscrypto.Signer) *TestNeoFS {
 	return &TestNeoFS{
 		objects:    make(map[string]*object.Object),
 		containers: make(map[string]*container.Container),
 		eaclTables: make(map[string]*eacl.Table),
+		signer:     signer,
 	}
 }
 
@@ -144,26 +148,97 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 
 	sAddr := addr.EncodeToString()
 
-	if obj, ok := t.objects[sAddr]; ok {
-		owner := getOwner(ctx)
-		if !obj.OwnerID().Equals(owner) {
-			return nil, ErrAccessDenied
+	obj, ok := t.objects[sAddr]
+	if !ok {
+		// trying to find linking object.
+		for _, o := range t.objects {
+			parentID, isSet := o.ParentID()
+			if !isSet {
+				continue
+			}
+
+			if !parentID.Equals(prm.Object) {
+				continue
+			}
+
+			if len(o.Children()) == 0 {
+				continue
+			}
+
+			// linking object is found.
+			objPart, err := t.constructMupltipartObject(ctx, prm.Container, o)
+			if err != nil {
+				return nil, err
+			}
+
+			obj = objPart.Head
+
+			pl, err := io.ReadAll(objPart.Payload)
+			if err != nil {
+				return nil, err
+			}
+
+			obj.SetPayload(pl)
+			ok = true
+			break
 		}
-
-		payload := obj.Payload()
-
-		if prm.PayloadRange[0]+prm.PayloadRange[1] > 0 {
-			off := prm.PayloadRange[0]
-			payload = payload[off : off+prm.PayloadRange[1]]
-		}
-
-		return &ObjectPart{
-			Head:    obj,
-			Payload: io.NopCloser(bytes.NewReader(payload)),
-		}, nil
 	}
 
-	return nil, fmt.Errorf("object not found %s", addr)
+	if !ok {
+		return nil, fmt.Errorf("object not found %s", addr)
+	}
+
+	owner := getOwner(ctx)
+	if !obj.OwnerID().Equals(owner) {
+		return nil, ErrAccessDenied
+	}
+
+	payload := obj.Payload()
+
+	if prm.PayloadRange[0]+prm.PayloadRange[1] > 0 {
+		off := prm.PayloadRange[0]
+		payload = payload[off : off+prm.PayloadRange[1]]
+	}
+
+	return &ObjectPart{
+		Head:    obj,
+		Payload: io.NopCloser(bytes.NewReader(payload)),
+	}, nil
+}
+
+func (t *TestNeoFS) constructMupltipartObject(ctx context.Context, containerID cid.ID, linkingObject *object.Object) (*ObjectPart, error) {
+	if _, isSet := linkingObject.ParentID(); !isSet {
+		return nil, fmt.Errorf("linking object is invalid")
+	}
+
+	var (
+		addr           oid.Address
+		headObject     = linkingObject.Parent()
+		payloadReaders = make([]io.Reader, 0, len(linkingObject.Children()))
+		childList      = linkingObject.Children()
+	)
+
+	addr.SetContainer(containerID)
+
+	for _, c := range childList {
+		addr.SetObject(c)
+
+		objPart, err := t.ReadObject(ctx, PrmObjectRead{
+			Container: containerID,
+			Object:    c,
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("child read: %w", err)
+		}
+
+		payloadReaders = append(payloadReaders, objPart.Payload)
+	}
+
+	return &ObjectPart{
+		Head:    headObject,
+		Payload: io.NopCloser(io.MultiReader(payloadReaders...)),
+	}, nil
 }
 
 func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID, error) {
@@ -195,6 +270,32 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	obj.SetOwnerID(&prm.Creator)
 	t.currentEpoch++
 
+	if prm.Multipart != nil && prm.Multipart.SplitID != "" {
+		var split object.SplitID
+		if err := split.Parse(prm.Multipart.SplitID); err != nil {
+			return oid.ID{}, fmt.Errorf("split parse: %w", err)
+		}
+		obj.SetSplitID(&split)
+
+		if prm.Multipart.SplitPreviousID != nil {
+			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
+		}
+
+		if len(prm.Multipart.Children) > 0 {
+			obj.SetChildren(prm.Multipart.Children...)
+		}
+
+		if prm.Multipart.HeaderObject != nil {
+			id, isSet := prm.Multipart.HeaderObject.ID()
+			if !isSet {
+				return oid.ID{}, errors.New("HeaderObject id is not set")
+			}
+
+			obj.SetParentID(id)
+			obj.SetParent(prm.Multipart.HeaderObject)
+		}
+	}
+
 	if len(prm.Locks) > 0 {
 		var lock object.Lock
 		lock.WriteMembers(prm.Locks)
@@ -221,7 +322,29 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	return objID, nil
 }
 
-func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, _ hash.Hash, _ hash.Hash, _ uint64) (*object.Object, error) {
+func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
+	header.SetCreationEpoch(t.currentEpoch)
+
+	var cs checksum.Checksum
+
+	var csBytes [sha256.Size]byte
+	copy(csBytes[:], metaChecksum.Sum(nil))
+
+	cs.SetSHA256(csBytes)
+	header.SetPayloadChecksum(cs)
+
+	if homomorphicChecksum != nil {
+		var csHomoBytes [tz.Size]byte
+		copy(csHomoBytes[:], homomorphicChecksum.Sum(nil))
+
+		cs.SetTillichZemor(csHomoBytes)
+		header.SetPayloadHomomorphicHash(cs)
+	}
+
+	header.SetPayloadSize(payloadLength)
+	if err := header.SetIDWithSignature(t.signer); err != nil {
+		return nil, fmt.Errorf("setIDWithSignature: %w", err)
+	}
 	return &header, nil
 }
 
