@@ -3,9 +3,9 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/xml"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"

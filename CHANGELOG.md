@@ -7,6 +7,9 @@ This document outlines major changes between releases.
 ### Added
 - Passing an empty meta parameter value raises "Your metadata headers are not supported." error.
 
+### Changed
+- Go 1.20+ is required to build now, using 1.22 by default (#928)
+
 ## [0.29.0] - 2023-09-28
 
 ### Added
