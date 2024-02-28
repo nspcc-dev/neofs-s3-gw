@@ -35,6 +35,7 @@ require (
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20240112074137-296698a162ae // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.0-20231115095647-bf62f4ad0a43 // indirect
+	github.com/nspcc-dev/tzhash v1.8.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
@@ -65,7 +66,6 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/neofs-crypto v0.4.0 // indirect
 	github.com/nspcc-dev/rfc6979 v0.2.0 // indirect
-	github.com/nspcc-dev/tzhash v1.7.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
