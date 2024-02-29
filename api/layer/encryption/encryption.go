@@ -70,8 +70,7 @@ func NewParams(key []byte) (*Params, error) {
 		return nil, fmt.Errorf("invalid key size: %d", len(key))
 	}
 	var p Params
-	p.customerKey = make([]byte, aes256KeySize)
-	copy(p.customerKey, key)
+	p.customerKey = bytes.Clone(key)
 	return &p, nil
 }
 
