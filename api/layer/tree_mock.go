@@ -393,6 +393,60 @@ func (t *TreeServiceMock) GetLastPart(ctx context.Context, bktInfo *data.BucketI
 	return parts[len(parts)-1], nil
 }
 
+func (t *TreeServiceMock) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error) {
+	parts, err := t.GetParts(ctx, bktInfo, multipartNodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	mp := make(map[int]*data.PartInfo)
+	for _, partInfo := range parts {
+		if partInfo.Number <= partID {
+			continue
+		}
+
+		mapped, ok := mp[partInfo.Number]
+		if !ok {
+			mp[partInfo.Number] = partInfo
+			continue
+		}
+
+		if mapped.ServerCreated.After(partInfo.ServerCreated) {
+			continue
+		}
+
+		mp[partInfo.Number] = partInfo
+	}
+
+	if len(mp) == 0 {
+		return nil, ErrPartListIsEmpty
+	}
+
+	result := make([]*data.PartInfo, 0, len(mp))
+	for _, p := range mp {
+		result = append(result, p)
+	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(result, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
+
+	return result, nil
+}
+
 func (t *TreeServiceMock) DeleteMultipartUpload(_ context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error {
 	cnrMultipartsMap := t.multiparts[bktInfo.CID.EncodeToString()]
 

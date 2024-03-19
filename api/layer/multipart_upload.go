@@ -196,6 +196,10 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 		return "", err
 	}
 
+	if err = n.reUploadFollowingParts(ctx, *p, p.PartNumber, p.Info.Bkt, multipartInfo); err != nil {
+		return "", fmt.Errorf("reuploading parts: %w", err)
+	}
+
 	return objInfo.HashSum, nil
 }
 
@@ -385,6 +389,49 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	return objInfo, nil
 }
 
+func (n *layer) reUploadFollowingParts(ctx context.Context, uploadParams UploadPartParams, partID int, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
+	parts, err := n.treeService.GetPartsAfter(ctx, bktInfo, multipartInfo.ID, partID)
+	if err != nil {
+		// nothing to re-upload.
+		if errors.Is(err, ErrPartListIsEmpty) {
+			return nil
+		}
+
+		return fmt.Errorf("get parts after: %w", err)
+	}
+
+	for _, part := range parts {
+		uploadParams.PartNumber = part.Number
+
+		if err = n.reUploadPart(ctx, uploadParams, part.OID, bktInfo, multipartInfo); err != nil {
+			return fmt.Errorf("reupload number=%d: %w", part.Number, err)
+		}
+	}
+
+	return nil
+}
+
+func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams, id oid.ID, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
+	obj, err := n.objectGet(ctx, bktInfo, id)
+	if err != nil {
+		return fmt.Errorf("get id=%s: %w", id.String(), err)
+	}
+
+	uploadParams.Size = int64(obj.PayloadSize())
+	uploadParams.Reader = bytes.NewReader(obj.Payload())
+
+	if _, err = n.uploadPart(ctx, multipartInfo, &uploadParams); err != nil {
+		return fmt.Errorf("upload id=%s: %w", id.String(), err)
+	}
+
+	// remove old object, we just re-uploaded a new one.
+	if err = n.objectDelete(ctx, bktInfo, id); err != nil {
+		return fmt.Errorf("delete old id=%s: %w", id.String(), err)
+	}
+
+	return nil
+}
+
 func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error) {
 	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
 	if err != nil {
@@ -427,7 +474,16 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 		Reader:     pr,
 	}
 
-	return n.uploadPart(ctx, multipartInfo, params)
+	objInfo, err := n.uploadPart(ctx, multipartInfo, params)
+	if err != nil {
+		return nil, fmt.Errorf("upload part: %w", err)
+	}
+
+	if err = n.reUploadFollowingParts(ctx, *params, p.PartNumber, p.Info.Bkt, multipartInfo); err != nil {
+		return nil, fmt.Errorf("reuploading parts: %w", err)
+	}
+
+	return objInfo, nil
 }
 
 func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ExtendedObjectInfo, error) {

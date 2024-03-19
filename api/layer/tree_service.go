@@ -79,6 +79,7 @@ type TreeService interface {
 	// Return errors:
 	//   - [ErrPartListIsEmpty] if there is no parts in the upload id.
 	GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error)
+	GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error)
 
 	// Compound methods for optimizations
 

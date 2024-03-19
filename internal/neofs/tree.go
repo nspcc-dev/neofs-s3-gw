@@ -1025,6 +1025,75 @@ func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, 
 	return parts[len(parts)-1], nil
 }
 
+// GetPartsAfter returns parts uploaded after partID. These parts are sorted and filtered by creation time.
+// It means, if any upload had a re-uploaded data (few part versions), the list contains only the latest version of the upload.
+func (c *TreeClient) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error) {
+	parts, err := c.getSubTree(ctx, bktInfo, systemTree, multipartNodeID, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(parts) == 0 {
+		return nil, layer.ErrPartListIsEmpty
+	}
+
+	mp := make(map[int]*data.PartInfo)
+	for _, part := range parts {
+		if part.GetNodeId() == multipartNodeID {
+			continue
+		}
+
+		partInfo, err := newPartInfo(part)
+		if err != nil {
+			continue
+		}
+
+		if partInfo.Number <= partID {
+			continue
+		}
+
+		mapped, ok := mp[partInfo.Number]
+		if !ok {
+			mp[partInfo.Number] = partInfo
+			continue
+		}
+
+		if mapped.ServerCreated.After(partInfo.ServerCreated) {
+			continue
+		}
+
+		mp[partInfo.Number] = partInfo
+	}
+
+	if len(mp) == 0 {
+		return nil, layer.ErrPartListIsEmpty
+	}
+
+	result := make([]*data.PartInfo, 0, len(mp))
+	for _, p := range mp {
+		result = append(result, p)
+	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(result, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
+
+	return result, nil
+}
+
 func (c *TreeClient) DeleteMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error {
 	return c.removeNode(ctx, bktInfo, systemTree, multipartNodeID)
 }
