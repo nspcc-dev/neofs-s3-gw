@@ -11,7 +11,7 @@ import (
 type (
 	sessionTokenModel struct {
 		Verb        string `json:"verb"`
-		ContainerID string `json:"ContainerID"`
+		ContainerID string `json:"containerID"`
 	}
 
 	sessionTokenContext struct {
