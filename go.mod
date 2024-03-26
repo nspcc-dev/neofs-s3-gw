@@ -10,7 +10,6 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.31.0
 	github.com/nspcc-dev/neo-go v0.105.1
-	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240228163253-cb87bbd5e4eb
 	github.com/nspcc-dev/neofs-contract v0.19.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240326074255-eca65c850297
 	github.com/nspcc-dev/tzhash v1.8.0
@@ -36,6 +35,7 @@ require (
 	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20240112074137-296698a162ae // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.1 // indirect
+	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240228163253-cb87bbd5e4eb // indirect
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
