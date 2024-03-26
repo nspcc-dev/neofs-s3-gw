@@ -121,7 +121,7 @@ func createContainer(ctx context.Context, signer user.Signer, p *pool.Pool) (cid
 
 	var pp netmap.PlacementPolicy
 	pp.SetContainerBackupFactor(1)
-	pp.AddReplicas(rd)
+	pp.SetReplicas([]netmap.ReplicaDescriptor{rd})
 
 	cnr.SetPlacementPolicy(pp)
 	cnr.SetBasicACL(acl.PublicRW)

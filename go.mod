@@ -12,7 +12,7 @@ require (
 	github.com/nspcc-dev/neo-go v0.105.1
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240305074711-35bc78d84dc4
 	github.com/nspcc-dev/neofs-contract v0.19.1
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240326133951-7f940dcb37d8
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240412074628-830a0ff84256
 	github.com/nspcc-dev/tzhash v1.8.0
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
