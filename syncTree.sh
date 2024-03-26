@@ -6,7 +6,7 @@ REVISION="feaa9eace7098c343598bf08fb50746a1e8d2deb"
 
 echo "tree service revision ${REVISION}"
 
-FILES=$(curl -s https://github.com/nspcc-dev/neofs-node/tree/${REVISION}/pkg/services/tree | jq | sed -n "s,.*\"pkg/services/tree/\(.*\.pb\.go\)\".*,\1,p")
+FILES=$(curl -s -H "Accept: application/json" https://github.com/nspcc-dev/neofs-node/tree/${REVISION}/pkg/services/tree | jq | sed -n "s,.*\"pkg/services/tree/\(.*\.pb\.go\)\".*,\1,p")
 
 for file in $FILES; do
   if [[ $file == *"neofs"* ]]; then
