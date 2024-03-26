@@ -17,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -55,9 +56,13 @@ const (
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "IsTag"
 	uploadIDKV          = "UploadId"
+	splitIDKV           = "SplitId"
 	partNumberKV        = "Number"
 	sizeKV              = "Size"
 	etagKV              = "ETag"
+	multipartHashKV     = "MultipartHashes"
+	homoHashKV          = "HomoHash"
+	elementsKV          = "Elements"
 
 	// keys for lock.
 	isLockKV       = "IsLock"
@@ -221,6 +226,8 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 			}
 		case ownerKV:
 			_ = multipartInfo.Owner.DecodeString(string(kv.GetValue()))
+		case splitIDKV:
+			multipartInfo.SplitID = string(kv.GetValue())
 		default:
 			multipartInfo.Meta[kv.GetKey()] = string(kv.GetValue())
 		}
@@ -266,6 +273,21 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 				return nil, fmt.Errorf("invalid server created timestamp: %w", err)
 			}
 			partInfo.ServerCreated = time.UnixMilli(utcMilli)
+		case multipartHashKV:
+			partInfo.MultipartHash = []byte(value)
+		case homoHashKV:
+			partInfo.HomoHash = []byte(value)
+		case elementsKV:
+			elements := strings.Split(value, ",")
+			partInfo.Elements = make([]oid.ID, len(elements))
+			for i, e := range elements {
+				var id oid.ID
+				if err = id.DecodeString(e); err != nil {
+					return nil, fmt.Errorf("invalid oid: %w", err)
+				}
+
+				partInfo.Elements[i] = id
+			}
 		}
 	}
 
@@ -909,6 +931,11 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 		return oid.ID{}, err
 	}
 
+	elements := make([]string, len(info.Elements))
+	for i, e := range info.Elements {
+		elements[i] = e.String()
+	}
+
 	meta := map[string]string{
 		partNumberKV:    strconv.Itoa(info.Number),
 		oidKV:           info.OID.EncodeToString(),
@@ -916,6 +943,9 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 		createdKV:       strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 		serverCreatedKV: strconv.FormatInt(time.Now().UTC().UnixMilli(), 10),
 		etagKV:          info.ETag,
+		multipartHashKV: string(info.MultipartHash),
+		homoHashKV:      string(info.HomoHash),
+		elementsKV:      strings.Join(elements, ","),
 	}
 
 	var foundPartID uint64
@@ -961,6 +991,105 @@ func (c *TreeClient) GetParts(ctx context.Context, bktInfo *data.BucketInfo, mul
 		}
 		result = append(result, partInfo)
 	}
+
+	return result, nil
+}
+
+func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+	parts, err := c.GetParts(ctx, bktInfo, multipartNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get parts: %w", err)
+	}
+
+	if len(parts) == 0 {
+		return nil, layer.ErrPartListIsEmpty
+	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(parts, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
+
+	return parts[len(parts)-1], nil
+}
+
+// GetPartsAfter returns parts uploaded after partID. These parts are sorted and filtered by creation time.
+// It means, if any upload had a re-uploaded data (few part versions), the list contains only the latest version of the upload.
+func (c *TreeClient) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error) {
+	parts, err := c.getSubTree(ctx, bktInfo, systemTree, multipartNodeID, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(parts) == 0 {
+		return nil, layer.ErrPartListIsEmpty
+	}
+
+	mp := make(map[int]*data.PartInfo)
+	for _, part := range parts {
+		if part.GetNodeId() == multipartNodeID {
+			continue
+		}
+
+		partInfo, err := newPartInfo(part)
+		if err != nil {
+			continue
+		}
+
+		if partInfo.Number <= partID {
+			continue
+		}
+
+		mapped, ok := mp[partInfo.Number]
+		if !ok {
+			mp[partInfo.Number] = partInfo
+			continue
+		}
+
+		if mapped.ServerCreated.After(partInfo.ServerCreated) {
+			continue
+		}
+
+		mp[partInfo.Number] = partInfo
+	}
+
+	if len(mp) == 0 {
+		return nil, layer.ErrPartListIsEmpty
+	}
+
+	result := make([]*data.PartInfo, 0, len(mp))
+	for _, p := range mp {
+		result = append(result, p)
+	}
+
+	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
+	slices.SortFunc(result, func(a, b *data.PartInfo) int {
+		if a.Number < b.Number {
+			return -1
+		}
+
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+
+		return 1
+	})
 
 	return result, nil
 }
@@ -1191,6 +1320,7 @@ func metaFromMultipart(info *data.MultipartInfo, fileName string) map[string]str
 	info.Meta[uploadIDKV] = info.UploadID
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
+	info.Meta[splitIDKV] = info.SplitID
 
 	return info.Meta
 }

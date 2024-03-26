@@ -3,6 +3,7 @@ package layer
 import (
 	"context"
 	"errors"
+	"hash"
 	"io"
 	"time"
 
@@ -114,6 +115,23 @@ type PrmObjectCreate struct {
 
 	// Number of object copies that is enough to consider put successful.
 	CopiesNumber uint32
+
+	Multipart *Multipart
+}
+
+// Multipart contains info for local object slicing inside s3-gate during multipart upload operation.
+type Multipart struct {
+	// MultipartHashes contains hashes for the multipart object payload calculation (optional).
+	MultipartHashes []hash.Hash
+	// SplitID contains splitID for multipart object (optional).
+	SplitID string
+	// SplitPreviousID contains [oid.ID] of previous object in chain (optional).
+	SplitPreviousID *oid.ID
+	// Children contains all objects in multipart chain, for linking object (optional).
+	Children []oid.ID
+	// HeaderObject is a virtual representation of complete multipart object (optional). It is used to set Parent in
+	// linking object.
+	HeaderObject *object.Object
 }
 
 // PrmObjectDelete groups parameters of NeoFS.DeleteObject operation.
@@ -208,6 +226,9 @@ type NeoFS interface {
 	// prevented the container from being created.
 	CreateObject(context.Context, PrmObjectCreate) (oid.ID, error)
 
+	// FinalizeObjectWithPayloadChecksums fills and signs header object for complete multipart object.
+	FinalizeObjectWithPayloadChecksums(context.Context, object.Object, hash.Hash, hash.Hash, uint64) (*object.Object, error)
+
 	// DeleteObject marks the object to be removed from the NeoFS container by identifier.
 	// Successful return does not guarantee actual removal.
 	//
@@ -223,4 +244,10 @@ type NeoFS interface {
 	//
 	// It returns any error encountered which prevented computing epochs.
 	TimeToEpoch(ctx context.Context, now time.Time, future time.Time) (uint64, uint64, error)
+
+	// MaxObjectSize returns configured payload size limit for object slicing when enabled.
+	MaxObjectSize() int64
+
+	// IsHomomorphicHashingEnabled shows if homomorphic hashing is enabled in config.
+	IsHomomorphicHashingEnabled() bool
 }

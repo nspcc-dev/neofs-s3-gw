@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -50,6 +51,7 @@ type (
 		ncontroller EventListener
 		cache       *Cache
 		treeService TreeService
+		buffers     *sync.Pool
 	}
 
 	Config struct {
@@ -266,6 +268,12 @@ func (f MsgHandlerFunc) HandleMessage(ctx context.Context, msg *nats.Msg) error 
 // NewLayer creates an instance of a layer. It checks credentials
 // and establishes gRPC connection with the node.
 func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
+	buffers := sync.Pool{}
+	buffers.New = func() any {
+		b := make([]byte, neoFS.MaxObjectSize())
+		return &b
+	}
+
 	return &layer{
 		neoFS:       neoFS,
 		log:         log,
@@ -273,6 +281,7 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 		resolver:    config.Resolver,
 		cache:       NewCache(config.Caches),
 		treeService: config.TreeService,
+		buffers:     &buffers,
 	}
 }
 

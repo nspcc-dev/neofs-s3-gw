@@ -152,7 +152,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 			GateKey:     key.PublicKey(),
 		},
 	})
-	tp := NewTestNeoFS()
+	tp := NewTestNeoFS(signer)
 
 	bktName := "testbucket1"
 	bktID, err := tp.CreateContainer(ctx, PrmContainerCreate{

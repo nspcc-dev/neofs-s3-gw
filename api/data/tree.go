@@ -75,6 +75,7 @@ type MultipartInfo struct {
 	Created      time.Time
 	Meta         map[string]string
 	CopiesNumber uint32
+	SplitID      string
 }
 
 // PartInfo is upload information about part.
@@ -89,6 +90,13 @@ type PartInfo struct {
 	Created time.Time
 	// Server creation time.
 	ServerCreated time.Time
+
+	// MultipartHash contains internal state of the [hash.Hash] to calculate whole object payload hash.
+	MultipartHash []byte
+	// HomoHash contains internal state of the [hash.Hash] to calculate whole object homomorphic payload hash.
+	HomoHash []byte
+	// Elements contain [oid.ID] object list for the current part.
+	Elements []oid.ID
 }
 
 // ToHeaderString form short part representation to use in S3-Completed-Parts header.

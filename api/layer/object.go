@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"mime"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/sio"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -23,6 +25,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"github.com/panjf2000/ants/v2"
 	"go.uber.org/zap"
 )
@@ -309,6 +312,62 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	return extendedObjInfo, nil
 }
 
+func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectParams, payloadHash hash.Hash, homoHash hash.Hash, payloadLength uint64) (*object.Object, error) {
+	var (
+		err   error
+		owner = n.Owner(ctx)
+	)
+
+	if p.Encryption.Enabled() {
+		p.Header[AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
+			return nil, fmt.Errorf("add encryption header: %w", err)
+		}
+
+		var encSize uint64
+		if _, encSize, err = encryptionReader(p.Reader, uint64(p.Size), p.Encryption.Key()); err != nil {
+			return nil, fmt.Errorf("create encrypter: %w", err)
+		}
+		p.Size = int64(encSize)
+	}
+
+	var headerObject object.Object
+	headerObject.SetContainerID(p.BktInfo.CID)
+	headerObject.SetType(object.TypeRegular)
+	headerObject.SetOwnerID(&owner)
+
+	currentVersion := version.Current()
+	headerObject.SetVersion(&currentVersion)
+
+	attributes := make([]object.Attribute, 0, len(p.Header))
+	for k, v := range p.Header {
+		if v == "" {
+			return nil, ErrMetaEmptyParameterValue
+		}
+
+		attributes = append(attributes, *object.NewAttribute(k, v))
+	}
+
+	creationTime := TimeNow(ctx)
+	if creationTime.IsZero() {
+		creationTime = time.Now()
+	}
+	attributes = append(attributes, *object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
+
+	if p.Object != "" {
+		attributes = append(attributes, *object.NewAttribute(object.AttributeFilePath, p.Object))
+	}
+
+	headerObject.SetAttributes(attributes...)
+
+	multipartHeader, err := n.neoFS.FinalizeObjectWithPayloadChecksums(ctx, headerObject, payloadHash, homoHash, payloadLength)
+	if err != nil {
+		return nil, fmt.Errorf("FinalizeObjectWithPayloadChecksums: %w", err)
+	}
+
+	return multipartHeader, nil
+}
+
 func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ExtendedObjectInfo, error) {
 	owner := n.Owner(ctx)
 	if extObjInfo := n.cache.GetLastObject(owner, bkt.Name, objectName); extObjInfo != nil {
@@ -416,6 +475,11 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 	hash := sha256.New()
 	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
 		hash.Write(buf)
+		if prm.Multipart != nil {
+			for _, h := range prm.Multipart.MultipartHashes {
+				h.Write(buf)
+			}
+		}
 	})
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {

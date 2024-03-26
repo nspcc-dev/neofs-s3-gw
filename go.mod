@@ -13,6 +13,7 @@ require (
 	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240125143754-70b1ffbd8141
 	github.com/nspcc-dev/neofs-contract v0.19.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240130135633-cb11d035a4ed
+	github.com/nspcc-dev/tzhash v1.8.0
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/spf13/pflag v1.0.5
@@ -65,7 +66,6 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/neofs-crypto v0.4.0 // indirect
 	github.com/nspcc-dev/rfc6979 v0.2.0 // indirect
-	github.com/nspcc-dev/tzhash v1.7.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect

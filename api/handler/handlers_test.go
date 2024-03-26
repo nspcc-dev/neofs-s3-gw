@@ -78,13 +78,13 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	require.NoError(t, err)
 	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
 
-	l := zap.NewExample()
-	tp := layer.NewTestNeoFS()
-
-	testResolver := &contResolver{layer: tp}
-
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 	owner := signer.UserID()
+
+	l := zap.NewExample()
+	tp := layer.NewTestNeoFS(signer)
+
+	testResolver := &contResolver{layer: tp}
 
 	layerCfg := &layer.Config{
 		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
