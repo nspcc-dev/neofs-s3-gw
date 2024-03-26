@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	apisession "github.com/nspcc-dev/neofs-api-go/v2/session"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 )
@@ -12,13 +11,20 @@ import (
 type (
 	sessionTokenModel struct {
 		Verb        string `json:"verb"`
-		ContainerID string `json:"ContainerID"`
+		ContainerID string `json:"containerID"`
 	}
 
 	sessionTokenContext struct {
 		verb        session.ContainerVerb
 		containerID cid.ID
 	}
+)
+
+// JSON strings for supported container session verbs.
+const (
+	containerSessionVerbPut     = "PUT"
+	containerSessionVerbDelete  = "DELETE"
+	containerSessionVerbSetEACL = "SETEACL"
 )
 
 func (c *sessionTokenContext) UnmarshalJSON(data []byte) (err error) {
@@ -29,11 +35,11 @@ func (c *sessionTokenContext) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	switch m.Verb {
-	case apisession.ContainerVerbPut.String():
+	case containerSessionVerbPut:
 		c.verb = session.VerbContainerPut
-	case apisession.ContainerVerbSetEACL.String():
+	case containerSessionVerbSetEACL:
 		c.verb = session.VerbContainerSetEACL
-	case apisession.ContainerVerbDelete.String():
+	case containerSessionVerbDelete:
 		c.verb = session.VerbContainerDelete
 	default:
 		return fmt.Errorf("unknown container token verb %s", m.Verb)
