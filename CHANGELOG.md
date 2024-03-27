@@ -4,11 +4,57 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.30.0] - 2024-03-27
+
 ### Added
-- Passing an empty meta parameter value raises "Your metadata headers are not supported." error.
+- Preallocate buffers to object uploads (#835)
+- Support for aws-chunked (#914)
+- Store CORS to the object (#890)
 
 ### Changed
-- Go 1.20+ is required to build now, using 1.22 by default (#928)
+- Go 1.20+ is required to build now, using 1.22 by default (#928, #933)
+- Limit objects amount for DeleteObjects (#849)
+- Actualize CODEOWNERS (#942)
+- Passing an empty meta parameter value raises "Your metadata headers are not supported." error (#848)
+- Sdk optimizations (#839)
+- Store bucket owner pub key in container attributes. It helps to process ACL correctly (#915)
+
+### Updated
+- Documentation about ETag (#856)
+- Use SDK with pool base multi sessions (#855)
+- Documentation about Authenticated Users group (#871)
+- SDK to use slicing optimization (#923)
+- Don't use neofs-crypto directly in neofs/tree (#932)
+- build(deps): bump golang.org/x/net from 0.14.0 to 0.17.0 (#851)
+- build(deps): bump github.com/nats-io/nats-server/v2 from 2.7.4 to 2.9.23 (#867)
+- build(deps): bump google.golang.org/grpc from 1.57.0 to 1.57.1 (#880)
+- build(deps): bump github.com/nats-io/nkeys from 0.4.4 to 0.4.6 (#894)
+- build(deps): bump golang.org/x/crypto from 0.14.0 to 0.17.0 (#917)
+- build(deps): bump google.golang.org/protobuf from 1.31.0 to 1.33.0 (#935)
+
+### Removed
+- 'v' from app version (#922)
+- re-slicing for multipart (#931)
+
+### Fixed
+- Makefile: Fix sync-tree (#941)
+- Correct filePath attribute filter using, storing only uniq pubKey in ACL target rule (#876)
+- Public read acl results in full control permission (#866)
+- Restrict presigned URL lifetime (#883)
+- Return unsupported error on GetObjectTorrent (#884)
+- Return unsupported error on GetBucketPolicyStatus (#886)
+- Return unsupported error on PutPublicAccessBlock (#887)
+- Return the correct error, if x-amz-credential is not provided (#892)
+- Not accurate error message for invalid authenticated requests (#882)
+- Return error if no tags in bucket (#924)
+- Return correct error on invalid grantee type (#926)
+- Sort parts by number and server creation time, for correct detection part if it was re-uploaded (#929)
+- Return correct error on lock configuration check (#888)
+- Return unimplemented error on GetPublicAccessBlock (#896)
+- Return unimplemented error in PutBucketLogging (#925)
+- Return not supported error for PutObjectLegalHold command if OFF state (#889)
+- Check x-amz-expires header on maximum border (#893)
+- Handle bad user id more gracefully (#879)
 
 ## [0.29.0] - 2023-09-28
 
@@ -496,4 +542,5 @@ releases.
 [0.28.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.0...v0.28.1
 [0.28.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.1...v0.28.2
 [0.29.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.2...v0.29.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.29.0...master
+[0.30.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.29.0...v0.30.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.0...master
