@@ -10,8 +10,8 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
 
@@ -96,7 +96,7 @@ func newTestAccessBox(t *testing.T, key *keys.PrivateKey) *accessbox.Box {
 
 	var btoken bearer.Token
 	btoken.SetEACLTable(*eacl.NewTable())
-	err = btoken.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey))
+	err = btoken.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
 	require.NoError(t, err)
 
 	return &accessbox.Box{
