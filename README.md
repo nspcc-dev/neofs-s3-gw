@@ -4,27 +4,14 @@ NeoFS S3 gateway provides API compatible with Amazon S3 cloud storage service.
 
 ## Installation
 
-```go get -u github.com/nspcc-dev/neofs-s3-gw```
+Binaries are provided for [all releases](https://github.com/nspcc-dev/neofs-s3-gw/releases),
+you can also use a [Docker image](https://hub.docker.com/r/nspccdev/neofs-s3-gw)
+(`:latest` points to the latest stable release).
 
-Or you can call `make` to build it from the cloned repository (the binary will
-end up in `bin/neofs-s3-gw` with authmate helper in `bin/neofs-s3-authmate`).
-To build binaries in clean docker environment, call `make docker/all`.
+### Build
 
-Other notable make targets:
-
-```
-dep          Check and ensure dependencies
-image        Build clean docker image
-dirty-image  Build dirty docker image with host-built binaries
-format       Run all code formatters
-lint         Run linters
-version      Show current version
-```
-
-Or you can also use a [Docker
-image](https://hub.docker.com/r/nspccdev/neofs-s3-gw) provided for released
-(and occasionally unreleased) versions of gateway (`:latest` points to the
-latest stable release).
+Gateway can be built with a simple `make`. Currently it requires `curl` and `jq`
+to be installed.
 
 ## Execution
 
