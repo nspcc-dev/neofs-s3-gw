@@ -41,6 +41,9 @@ $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
   neofs-s3-gw
 ```
 
+Notice that currently S3 gateway can't be used for public networks like mainnet
+or testnet because of experimental tree service extension that is required for it.
+
 ## Domains
 
 By default, s3-gw enable only `path-style access`. 
