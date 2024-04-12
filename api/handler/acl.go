@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	v2acl "github.com/nspcc-dev/neofs-api-go/v2/acl"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -685,7 +684,7 @@ func resInfoFromFilters(bucketName string, filters []eacl.Filter) resourceInfo {
 		if filter.Matcher() == eacl.MatchStringEqual {
 			if filter.Key() == object.AttributeFilePath {
 				resInfo.Object = filter.Value()
-			} else if filter.Key() == v2acl.FilterObjectID {
+			} else if filter.Key() == eacl.FilterObjectID {
 				resInfo.Version = filter.Value()
 			}
 		}
