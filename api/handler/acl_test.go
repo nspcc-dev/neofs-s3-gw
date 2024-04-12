@@ -21,12 +21,12 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -1418,7 +1418,7 @@ func createAccessBox(t *testing.T) (*accessbox.Box, *keys.PrivateKey) {
 	require.NoError(t, err)
 
 	var bearerToken bearer.Token
-	err = bearerToken.Sign(neofsecdsa.SignerRFC6979(key.PrivateKey))
+	err = bearerToken.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
 	require.NoError(t, err)
 
 	tok := new(session.Container)
