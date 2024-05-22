@@ -28,7 +28,7 @@ env:
   ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-results
 
 jobs:
-  build-and-test:
+  s3-tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,38 +42,60 @@ jobs:
           TIMESTAMP: ${{ steps.date.outputs.timestamp }}
         run: echo "RUN_ID=${{ github.run_number }}-$TIMESTAMP" >> $GITHUB_ENV
 
-      - name: Checkout neofs-s3-gw repository
-        uses: actions/checkout@v4
-        with:
-          path: neofs-s3-gw
-
       - name: Checkout s3-tests repository
         uses: actions/checkout@v4
         with:
           repository: nspcc-dev/s3-tests
-          ref: master
+          ref: 'master'
           path: s3-tests
 
-      - name: Checkout neofs-dev-env repository
-        uses: actions/checkout@v4
+      - name: Download latest stable neofs-cli
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
-          repository: nspcc-dev/neofs-dev-env
-          ref: 'af001f8052a203eab408af2bf3a41c7e5af2ac11'
-          path: neofs-dev-env
+          repo: 'nspcc-dev/neofs-node'
+          version: 'tags/v0.41.1'
+          file: 'neofs-cli-linux-amd64'
+          target: 's3-tests/neofs-cli'
 
-      - name: Checkout neofs-s3-dev-env repository
-        uses: actions/checkout@v4
+      - name: Download latest stable neofs-adm
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
-          repository: nspcc-dev/neofs-s3-dev-env
-          ref: master
-          path: neofs-s3-dev-env
+          repo: 'nspcc-dev/neofs-node'
+          version: 'tags/v0.41.1'
+          file: 'neofs-adm-linux-amd64'
+          target: 's3-tests/neofs-adm'
 
-      - name: Checkout neofs-testcases repository
-        uses: actions/checkout@v4
+      - name: Download latest stable neofs-ir
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
-          repository: nspcc-dev/neofs-testcases
-          ref: 'master'
-          path: neofs-testcases
+          repo: 'nspcc-dev/neofs-node'
+          version: 'tags/v0.41.1'
+          file: 'neofs-ir-linux-amd64'
+          target: 's3-tests/neofs-ir'
+
+      - name: Download latest stable neofs-lens
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
+        with:
+          repo: 'nspcc-dev/neofs-node'
+          version: 'tags/v0.41.1'
+          file: 'neofs-lens-linux-amd64'
+          target: 's3-tests/neofs-lens'
+
+      - name: Download latest stable neofs-node
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
+        with:
+          repo: 'nspcc-dev/neofs-node'
+          version: 'tags/v0.41.1'
+          file: 'neofs-node-linux-amd64'
+          target: 's3-tests/neofs-node'
+
+      - name: Download latest stable neo-go
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
+        with:
+          repo: 'nspcc-dev/neo-go'
+          version: 'tags/v0.105.1'
+          file: 'neo-go-linux-amd64'
+          target: 's3-tests/neo-go'
 
 ################################################################
       - name: Set up Go
@@ -86,86 +108,46 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.12'
       - run: python --version
 
-################################################################
-      - name: Get TAG for docker images
-        run: |
-          echo "CURRENT_TAG=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
-        working-directory: neofs-s3-gw
+      - name: Checkout neofs-s3-gw repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.neofs-s3-gw_ref }}
+          path: neofs-s3-gw
 
-################################################################
-
-      - name: Build neofs-s3-gw docker image
-        run: |
-          make
-        working-directory: neofs-s3-gw
-
-      - name: Build neofs-s3-gw binaries
-        run: |
-          make image
-        working-directory: neofs-s3-gw
-
-
-#################################################################
-
-      - name: Add NeoFS S3-gw TAGs to s3-gw-test env config
-        run: |
-          sed -i -e 's/S3_GW_VERSION=_TAG_/S3_GW_VERSION=${{ env.CURRENT_TAG }}/' .github/test-env
-        working-directory: neofs-s3-gw
-
-      - name: Copy test-env file to .env for neofs-dev-env
-        run: |
-          cp .github/test-env ${GITHUB_WORKSPACE}/neofs-dev-env/.env
-        working-directory: neofs-s3-gw
-
-################################################################
-
-      - name: Prepare hosts
+      - name: Build neofs-s3-gw
         timeout-minutes: 5
         run: |
-          make get
-          sudo ./bin/update_hosts.sh
-          sudo chmod a+w vendor/hosts
-        working-directory: neofs-dev-env
-
-      - name: Prepare Dev-Env to run tests
-        id: prepare_test_env
-        timeout-minutes: 30
-        run: |
-          make prepare-test-env
-          echo "$(pwd)/vendor" >> $GITHUB_PATH
-        working-directory: neofs-dev-env
-
-      - name: Set zero fee
-        run: |
-          make update.container_fee val=0 && make update.container_alias_fee val=0
-        working-directory: neofs-dev-env
-
-      - name: Copy neofs-s3-gw binaries to vendor directory
-        run: |
-          cp bin/* ${GITHUB_WORKSPACE}/neofs-dev-env/vendor/
+          make all
+          echo "$(pwd)/bin" >> $GITHUB_PATH
         working-directory: neofs-s3-gw
 
-################################################################
+      - name: Copy built binaries
+        timeout-minutes: 30
+        run: |
+          cp ../neofs-s3-gw/bin/neofs-s3-gw .
+          cp ../neofs-s3-gw/bin/neofs-s3-authmate .
+        working-directory: s3-tests
+
+      - name: Chmod binaries
+        run: |
+          sudo chmod a+x neofs-cli
+          sudo chmod a+x neofs-adm
+          sudo chmod a+x neofs-ir
+          sudo chmod a+x neofs-lens
+          sudo chmod a+x neofs-node
+          sudo chmod a+x neo-go
+          sudo chmod a+x neofs-s3-authmate
+          sudo chmod a+x neofs-s3-gw
+          echo "$(pwd)" >> $GITHUB_PATH
+        working-directory: s3-tests
 
       - name: Log environment
         run: |
           echo "Check free space"
           df -h
-          echo "=========================================="
-
-          echo "Check /etc/hosts"
-          cat /etc/hosts
-          echo "=========================================="
-
-          echo "Check docker images"
-          docker images
-          echo "=========================================="
-
-          echo "Check docker ps"
-          docker ps
           echo "=========================================="
 
           echo "Check neo-go version"
@@ -185,53 +167,43 @@ jobs:
           neofs-adm --version
           echo "=========================================="
 
+          echo "Check neofs-ir version"
+          neofs-ir --version
+          echo "=========================================="
+
+          echo "Check neofs-lens version"
+          neofs-lens --version
+          echo "=========================================="
+
           echo "Check neofs-cli version"
           neofs-cli --version
           echo "=========================================="
-
-          echo "Check vendor dir"
-          ls -lah "${GITHUB_WORKSPACE}/neofs-dev-env/vendor"
-          echo "=========================================="
-
-        working-directory: neofs-dev-env
-
-################################################################
-
-      - name: Copy test-env file to .env for neofs-s3-dev-env
-        run: |
-          cp .env ${GITHUB_WORKSPACE}/neofs-s3-dev-env/.env
-        working-directory: neofs-dev-env
-
-      - name: Copy neofs-s3-authmate for neofs-s3-dev-env
-        run: |
-          cp ${GITHUB_WORKSPACE}/neofs-dev-env/vendor/neofs-s3-authmate bin/s3-authmate
-        working-directory: neofs-s3-dev-env
-
-      - name: Prepare test S3-gw test env
-        run: |
-          make prepare.s3-gw
-        working-directory: neofs-s3-dev-env
-
-      - name: Copy s3tests config to s3-tests directory
-        run: |
-          cp services/s3-gw/s3tests.conf ${GITHUB_WORKSPACE}/s3-tests/${S3_TESTS_CONFIG}
-        working-directory: neofs-s3-dev-env
-
-      - name: Test config
-        run: |
-          cat ${S3_TESTS_CONFIG}
         working-directory: s3-tests
 
       - name: Setup test env
+        id: prepare_test_env
         run: |
-          python3.8 -m venv virtualenv
-          ./bootstrap
+          git submodule init
+          git submodule update
+          python3.12 -m venv virtualenv
+          source virtualenv/bin/activate
+          pip3 install --upgrade pip
+          pip3 install -r requirements.txt
+          echo "export PYTHONPATH=$PYTHONPATH:$(realpath .):$(realpath .)/neofs-testcases/pytest_tests/lib:$(realpath .)/neofs-testcases/neofs-testlib" >> virtualenv/bin/activate 
+        working-directory: s3-tests
+
+      - name: Fix OpenSSL ripemd160
+        run: |
+          sudo python ./neofs-testcases/tools/src/openssl_config_fix.py
         working-directory: s3-tests
 
       - name: s3 tests
+        env:
+          NEOFS_MORPH_DISABLE_CACHE: 'true'
+          WALLET_PASS: 'password'
         run: |
           source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws and not fails_on_dbstore' --alluredir=${{ env.ALLURE_RESULTS_DIR }} -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3.py
+          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws and not fails_on_dbstore' --alluredir=${{ env.ALLURE_RESULTS_DIR }} -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3_neofs.py
         working-directory: s3-tests
 
 ################################################################      
@@ -266,41 +238,3 @@ jobs:
           state: 'success'
           sha: ${{github.event.pull_request.head.sha || github.sha}}
           target_url: ${{ env.REPORT_NEOFS_URL }}
-
-
-      - name: Set docker logs directory
-        run: echo "DOCKER_LOGS=${{ github.workspace }}/${{ vars.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/docker-logs" >> $GITHUB_ENV
-
-      - name: Gather docker logs
-        id: gather_dockers_logs
-        if: always() && ( steps.prepare_test_env.outcome != 'success' || steps.put_report.outcome != 'success' )
-        run: |
-          source venv.local-pytest/bin/activate 
-          mkdir -p ${{ env.DOCKER_LOGS }} && cd ${{ env.DOCKER_LOGS }}
-          python ${{ github.workspace }}/neofs-testcases/tools/src/zip_dev_env_logs.py
-        working-directory: neofs-testcases
-
-      - name: Post only docker logs
-        uses: nspcc-dev/gh-push-to-neofs@master
-        id: post_dockers_logs
-        if: steps.gather_dockers_logs.outcome == 'success'
-        with:
-          NEOFS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
-          NEOFS_WALLET_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
-          NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
-          NEOFS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
-          STORE_OBJECTS_CID: ${{ vars.TEST_RESULTS_CID }}
-          LIFETIME: ${{ vars.OTHER_EXPIRATION_PERIOD }}
-          PATH_TO_FILES_DIR: ${{ env.DOCKER_LOGS }}
-          URL_PREFIX: ${{ env.RUN_ID }}/data
-
-      - name: Post link to docker logs
-        timeout-minutes: 60
-        if: steps.post_dockers_logs.outcome == 'success'
-        uses: Sibz/github-status-action@v1
-        with:
-          authToken: ${{secrets.GITHUB_TOKEN}}
-          context: 'Docker logs'
-          state: 'success'
-          sha: ${{github.event.pull_request.head.sha || github.sha}}
-          target_url: https://${{ vars.TEST_RESULTS_HTTP_GATE }}/${{ vars.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/data/docker-logs/containers_logs.zip
