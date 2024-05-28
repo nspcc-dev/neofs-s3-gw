@@ -274,19 +274,13 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetAttributes(attrs...)
 	obj.SetPayloadSize(prm.PayloadSize)
 
-	if prm.Multipart != nil && prm.Multipart.SplitID != "" {
-		var split object.SplitID
-		if err := split.Parse(prm.Multipart.SplitID); err != nil {
-			return oid.ID{}, fmt.Errorf("parse split ID: %w", err)
-		}
-		obj.SetSplitID(&split)
-
+	if prm.Multipart != nil {
 		if prm.Multipart.SplitPreviousID != nil {
 			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
 		}
 
-		if len(prm.Multipart.Children) > 0 {
-			obj.SetChildren(prm.Multipart.Children...)
+		if prm.Multipart.SplitFirstID != nil {
+			obj.SetFirstID(*prm.Multipart.SplitFirstID)
 		}
 
 		if prm.Multipart.HeaderObject != nil {
@@ -297,6 +291,15 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 			obj.SetParentID(id)
 			obj.SetParent(prm.Multipart.HeaderObject)
+		}
+
+		if prm.Multipart.Link != nil {
+			obj.WriteLink(*prm.Multipart.Link)
+			prm.Payload = bytes.NewReader(obj.Payload())
+			obj.SetPayloadSize(uint64(len(obj.Payload())))
+
+			// Link object should never have a previous one.
+			obj.ResetPreviousID()
 		}
 	}
 

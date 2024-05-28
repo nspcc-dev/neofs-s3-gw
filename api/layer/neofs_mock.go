@@ -270,19 +270,13 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	obj.SetOwnerID(&prm.Creator)
 	t.currentEpoch++
 
-	if prm.Multipart != nil && prm.Multipart.SplitID != "" {
-		var split object.SplitID
-		if err := split.Parse(prm.Multipart.SplitID); err != nil {
-			return oid.ID{}, fmt.Errorf("split parse: %w", err)
-		}
-		obj.SetSplitID(&split)
-
+	if prm.Multipart != nil {
 		if prm.Multipart.SplitPreviousID != nil {
 			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
 		}
 
-		if len(prm.Multipart.Children) > 0 {
-			obj.SetChildren(prm.Multipart.Children...)
+		if prm.Multipart.SplitFirstID != nil {
+			obj.SetFirstID(*prm.Multipart.SplitFirstID)
 		}
 
 		if prm.Multipart.HeaderObject != nil {
@@ -293,6 +287,12 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 			obj.SetParentID(id)
 			obj.SetParent(prm.Multipart.HeaderObject)
+		}
+
+		if prm.Multipart.Link != nil {
+			obj.WriteLink(*prm.Multipart.Link)
+			prm.Payload = bytes.NewReader(obj.Payload())
+			obj.SetPayloadSize(uint64(len(obj.Payload())))
 		}
 	}
 

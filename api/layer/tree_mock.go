@@ -363,7 +363,7 @@ LOOP:
 	return result, nil
 }
 
-func (t *TreeServiceMock) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+func (t *TreeServiceMock) GetPartByNumber(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, number int) (*data.PartInfo, error) {
 	parts, err := t.GetParts(ctx, bktInfo, multipartNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("get parts: %w", err)
@@ -390,7 +390,18 @@ func (t *TreeServiceMock) GetLastPart(ctx context.Context, bktInfo *data.BucketI
 		return 1
 	})
 
-	return parts[len(parts)-1], nil
+	var pi *data.PartInfo
+	for _, part := range parts {
+		if part.Number != number {
+			continue
+		}
+
+		if pi == nil || pi.ServerCreated.Before(part.ServerCreated) {
+			pi = part
+		}
+	}
+
+	return pi, nil
 }
 
 func (t *TreeServiceMock) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error) {

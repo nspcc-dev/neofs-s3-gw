@@ -52,11 +52,11 @@ const (
 	versioningKV        = "Versioning"
 	lockConfigurationKV = "LockConfiguration"
 	oidKV               = "OID"
+	firstSplitOidKV     = "FirstSplitOID"
 	fileNameKV          = "FileName"
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "IsTag"
 	uploadIDKV          = "UploadId"
-	splitIDKV           = "SplitId"
 	partNumberKV        = "Number"
 	sizeKV              = "Size"
 	etagKV              = "ETag"
@@ -226,8 +226,6 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 			}
 		case ownerKV:
 			_ = multipartInfo.Owner.DecodeString(string(kv.GetValue()))
-		case splitIDKV:
-			multipartInfo.SplitID = string(kv.GetValue())
 		default:
 			multipartInfo.Meta[kv.GetKey()] = string(kv.GetValue())
 		}
@@ -255,6 +253,10 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 			if err = partInfo.OID.DecodeString(value); err != nil {
 				return nil, fmt.Errorf("invalid oid: %w", err)
 			}
+		case firstSplitOidKV:
+			if err = partInfo.FirstSplitOID.DecodeString(value); err != nil {
+				return nil, fmt.Errorf("invalid FirstSplitOID: %w", err)
+			}
 		case etagKV:
 			partInfo.ETag = value
 		case sizeKV:
@@ -279,14 +281,14 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 			partInfo.HomoHash = []byte(value)
 		case elementsKV:
 			elements := strings.Split(value, ",")
-			partInfo.Elements = make([]oid.ID, len(elements))
+			partInfo.Elements = make([]data.LinkObjectPayload, len(elements))
 			for i, e := range elements {
-				var id oid.ID
-				if err = id.DecodeString(e); err != nil {
-					return nil, fmt.Errorf("invalid oid: %w", err)
+				var element data.LinkObjectPayload
+				if err = element.Unmarshal(e); err != nil {
+					return nil, fmt.Errorf("invalid element: %w", err)
 				}
 
-				partInfo.Elements[i] = id
+				partInfo.Elements[i] = element
 			}
 		}
 	}
@@ -933,12 +935,13 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 
 	elements := make([]string, len(info.Elements))
 	for i, e := range info.Elements {
-		elements[i] = e.String()
+		elements[i] = e.Marshal()
 	}
 
 	meta := map[string]string{
 		partNumberKV:    strconv.Itoa(info.Number),
 		oidKV:           info.OID.EncodeToString(),
+		firstSplitOidKV: info.FirstSplitOID.EncodeToString(),
 		sizeKV:          strconv.FormatInt(info.Size, 10),
 		createdKV:       strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 		serverCreatedKV: strconv.FormatInt(time.Now().UTC().UnixMilli(), 10),
@@ -995,13 +998,13 @@ func (c *TreeClient) GetParts(ctx context.Context, bktInfo *data.BucketInfo, mul
 	return result, nil
 }
 
-func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+func (c *TreeClient) GetPartByNumber(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, number int) (*data.PartInfo, error) {
 	parts, err := c.GetParts(ctx, bktInfo, multipartNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("get parts: %w", err)
 	}
 
-	if len(parts) == 0 {
+	if len(parts) == 0 || number == 0 {
 		return nil, layer.ErrPartListIsEmpty
 	}
 
@@ -1022,7 +1025,18 @@ func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, 
 		return 1
 	})
 
-	return parts[len(parts)-1], nil
+	var pi *data.PartInfo
+	for _, part := range parts {
+		if part.Number != number {
+			continue
+		}
+
+		if pi == nil || pi.ServerCreated.Before(part.ServerCreated) {
+			pi = part
+		}
+	}
+
+	return pi, nil
 }
 
 // GetPartsAfter returns parts uploaded after partID. These parts are sorted and filtered by creation time.
@@ -1320,7 +1334,6 @@ func metaFromMultipart(info *data.MultipartInfo, fileName string) map[string]str
 	info.Meta[uploadIDKV] = info.UploadID
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
-	info.Meta[splitIDKV] = info.SplitID
 
 	return info.Meta
 }

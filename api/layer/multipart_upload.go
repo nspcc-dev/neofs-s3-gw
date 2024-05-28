@@ -152,7 +152,6 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		Created:      TimeNow(ctx),
 		Meta:         make(map[string]string, metaSize),
 		CopiesNumber: p.CopiesNumber,
-		SplitID:      object.NewSplitID().String(),
 	}
 
 	for key, val := range p.Header {
@@ -229,6 +228,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	var (
 		splitPreviousID      oid.ID
+		splitFirstID         oid.ID
 		isSetSplitPreviousID bool
 		multipartHash        = sha256.New()
 		tzHash               hash.Hash
@@ -238,7 +238,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		tzHash = tz.New()
 	}
 
-	lastPart, err := n.treeService.GetLastPart(ctx, bktInfo, multipartInfo.ID)
+	lastPart, err := n.treeService.GetPartByNumber(ctx, bktInfo, multipartInfo.ID, p.PartNumber-1)
 	if err != nil {
 		// if ErrPartListIsEmpty, there is the first part of multipart.
 		if !errors.Is(err, ErrPartListIsEmpty) {
@@ -261,11 +261,12 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 		isSetSplitPreviousID = true
 		splitPreviousID = lastPart.OID
+		splitFirstID = lastPart.FirstSplitOID
 	}
 
 	var (
 		id           oid.ID
-		elements     []oid.ID
+		elements     []data.LinkObjectPayload
 		creationTime = TimeNow(ctx)
 		// User may upload part large maxObjectSize in NeoFS. From users point of view it is a single object.
 		// We have to calculate the hash from this object separately.
@@ -284,20 +285,29 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		CreationTime: creationTime,
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
-			SplitID:         multipartInfo.SplitID,
 			MultipartHashes: objHashes,
 		},
 	}
 
-	chunk := n.buffers.Get().(*[]byte)
+	if lastPart != nil {
+		splitFirstID = lastPart.FirstSplitOID
+	}
 
+	chunk := n.buffers.Get().(*[]byte)
+	var totalBytes int
 	// slice part manually. Simultaneously considering the part is a single object for user.
 	for {
 		if isSetSplitPreviousID {
 			prm.Multipart.SplitPreviousID = &splitPreviousID
 		}
 
+		if !splitFirstID.Equals(oid.ID{}) {
+			prm.Multipart.SplitFirstID = &splitFirstID
+		}
+
 		nBts, readErr := io.ReadAtLeast(payloadReader, *chunk, len(*chunk))
+		totalBytes += nBts
+
 		if nBts > 0 {
 			prm.Payload = bytes.NewReader((*chunk)[:nBts])
 			prm.PayloadSize = uint64(nBts)
@@ -307,9 +317,13 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 				return nil, err
 			}
 
+			if splitFirstID.Equals(oid.ID{}) {
+				splitFirstID = id
+			}
+
 			isSetSplitPreviousID = true
 			splitPreviousID = id
-			elements = append(elements, id)
+			elements = append(elements, data.LinkObjectPayload{OID: id, Size: uint32(nBts)})
 		}
 
 		if readErr == nil {
@@ -342,6 +356,10 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		ETag:     hex.EncodeToString(currentPartHash.Sum(nil)),
 		Created:  prm.CreationTime,
 		Elements: elements,
+	}
+
+	if !splitFirstID.Equals(oid.ID{}) {
+		partInfo.FirstSplitOID = splitFirstID
 	}
 
 	// encoding hash.Hash state to save it in tree service.
@@ -506,8 +524,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	var multipartObjetSize int64
 	var encMultipartObjectSize uint64
 	var lastPartID int
-	var children []oid.ID
 	var completedPartsHeader strings.Builder
+	// +1 is the last part, it will be created later in the code.
+	var measuredObjects = make([]object.MeasuredObject, 0, len(p.Parts)+1)
 	for i, part := range p.Parts {
 		partInfo := partsInfo[part.PartNumber]
 		if partInfo == nil || part.ETag != partInfo.ETag {
@@ -539,12 +558,19 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			lastPartID = part.PartNumber
 		}
 
-		children = append(children, partInfo.Elements...)
+		for _, element := range partInfo.Elements {
+			// Collecting payload for the link object.
+			var mObj object.MeasuredObject
+			mObj.SetObjectID(element.OID)
+			mObj.SetObjectSize(element.Size)
+			measuredObjects = append(measuredObjects, mObj)
+		}
 	}
 
 	multipartHash := sha256.New()
 	var homoHash hash.Hash
 	var splitPreviousID oid.ID
+	var splitFirstID oid.ID
 
 	if lastPartID > 0 {
 		lastPart := partsInfo[lastPartID]
@@ -552,6 +578,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		if lastPart != nil {
 			if len(lastPart.MultipartHash) > 0 {
 				splitPreviousID = lastPart.OID
+				splitFirstID = lastPart.FirstSplitOID
 
 				if len(lastPart.MultipartHash) > 0 {
 					binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
@@ -623,7 +650,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
-			SplitID:         multipartInfo.SplitID,
+			SplitFirstID:    &splitFirstID,
 			SplitPreviousID: &splitPreviousID,
 			HeaderObject:    header,
 		},
@@ -635,7 +662,13 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return nil, nil, err
 	}
 
-	children = append(children, lastPartObjID)
+	var mObj object.MeasuredObject
+	// last part has the zero length.
+	mObj.SetObjectID(lastPartObjID)
+	measuredObjects = append(measuredObjects, mObj)
+
+	var linkObj = object.Link{}
+	linkObj.SetObjects(measuredObjects)
 
 	// linking object
 	prm = PrmObjectCreate{
@@ -644,11 +677,10 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
-			SplitID:      multipartInfo.SplitID,
 			HeaderObject: header,
-			Children:     children,
+			SplitFirstID: &splitFirstID,
+			Link:         &linkObj,
 		},
-		Payload: bytes.NewBuffer(nil),
 	}
 
 	_, _, err = n.objectPutAndHash(ctx, prm, p.Info.Bkt)

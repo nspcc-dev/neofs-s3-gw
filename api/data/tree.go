@@ -1,7 +1,9 @@
 package data
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -75,7 +77,38 @@ type MultipartInfo struct {
 	Created      time.Time
 	Meta         map[string]string
 	CopiesNumber uint32
-	SplitID      string
+}
+
+// LinkObjectPayload contains part info of the complex object.
+// This data will be used for linking object construction.
+type LinkObjectPayload struct {
+	OID  oid.ID
+	Size uint32
+}
+
+// Marshal converts LinkObjectPayload to string.
+func (e *LinkObjectPayload) Marshal() string {
+	return fmt.Sprintf("%s:%d", e.OID.String(), e.Size)
+}
+
+// Unmarshal converts string to LinkObjectPayload.
+func (e *LinkObjectPayload) Unmarshal(value string) error {
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid format: %s", value)
+	}
+
+	if err := e.OID.DecodeString(parts[0]); err != nil {
+		return fmt.Errorf("invalid id: %w", err)
+	}
+
+	size, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return fmt.Errorf("invalid size: %w", err)
+	}
+
+	e.Size = uint32(size)
+	return nil
 }
 
 // PartInfo is upload information about part.
@@ -95,8 +128,10 @@ type PartInfo struct {
 	MultipartHash []byte
 	// HomoHash contains internal state of the [hash.Hash] to calculate whole object homomorphic payload hash.
 	HomoHash []byte
-	// Elements contain [oid.ID] object list for the current part.
-	Elements []oid.ID
+	// Elements contain [oid.ID] and size for each element for the current part.
+	Elements []LinkObjectPayload
+	// FirstSplitOID contains first object part in the split chain.
+	FirstSplitOID oid.ID
 }
 
 // ToHeaderString form short part representation to use in S3-Completed-Parts header.
