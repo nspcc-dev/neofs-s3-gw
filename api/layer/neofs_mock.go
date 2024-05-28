@@ -293,6 +293,39 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 			obj.WriteLink(*prm.Multipart.Link)
 			prm.Payload = bytes.NewReader(obj.Payload())
 			obj.SetPayloadSize(uint64(len(obj.Payload())))
+
+			var (
+				addr    oid.Address
+				payload []byte
+			)
+
+			for _, e := range prm.Multipart.Link.Objects() {
+				addr = newAddress(prm.Container, e.ObjectID())
+				if partialObject, ok := t.objects[addr.EncodeToString()]; ok {
+					payload = append(payload, partialObject.Payload()...)
+				}
+			}
+
+			pid, isSet := prm.Multipart.HeaderObject.ID()
+			if !isSet {
+				return oid.ID{}, errors.New("HeaderObject id is not set")
+			}
+
+			realHeaderObj := object.New()
+			realHeaderObj.SetContainerID(prm.Container)
+			realHeaderObj.SetID(pid)
+			realHeaderObj.SetPayloadSize(uint64(len(payload)))
+			realHeaderObj.SetAttributes(attrs...)
+			realHeaderObj.SetCreationEpoch(t.currentEpoch)
+			realHeaderObj.SetOwnerID(&prm.Creator)
+			realHeaderObj.SetPayload(payload)
+
+			var h checksum.Checksum
+			checksum.Calculate(&h, checksum.SHA256, payload)
+			realHeaderObj.SetPayloadChecksum(h)
+
+			addr = newAddress(prm.Container, pid)
+			t.objects[addr.EncodeToString()] = realHeaderObj
 		}
 	}
 
