@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/minio/sio"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
@@ -118,6 +119,7 @@ type (
 	ListPartsInfo struct {
 		Parts                []*Part
 		Owner                user.ID
+		OwnerPubKey          keys.PublicKey
 		NextPartNumberMarker int
 		IsTruncated          bool
 	}
@@ -130,11 +132,12 @@ type (
 		NextUploadIDMarker string
 	}
 	UploadInfo struct {
-		IsDir    bool
-		Key      string
-		UploadID string
-		Owner    user.ID
-		Created  time.Time
+		IsDir       bool
+		Key         string
+		UploadID    string
+		Owner       user.ID
+		OwnerPubKey keys.PublicKey
+		Created     time.Time
 	}
 )
 
@@ -145,10 +148,16 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		metaSize += len(p.Data.TagSet)
 	}
 
+	ownerPubKey, err := n.OwnerPublicKey(ctx)
+	if err != nil {
+		return fmt.Errorf("owner pub key: %w", err)
+	}
+
 	info := &data.MultipartInfo{
 		Key:          p.Info.Key,
 		UploadID:     p.Info.UploadID,
 		Owner:        n.Owner(ctx),
+		OwnerPubKey:  *ownerPubKey,
 		Created:      TimeNow(ctx),
 		Meta:         make(map[string]string, metaSize),
 		CopiesNumber: p.CopiesNumber,
@@ -397,11 +406,12 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		ID:  id,
 		CID: bktInfo.CID,
 
-		Owner:   bktInfo.Owner,
-		Bucket:  bktInfo.Name,
-		Size:    partInfo.Size,
-		Created: partInfo.Created,
-		HashSum: partInfo.ETag,
+		Owner:          bktInfo.Owner,
+		OwnerPublicKey: bktInfo.OwnerPublicKey,
+		Bucket:         bktInfo.Name,
+		Size:           partInfo.Size,
+		Created:        partInfo.Created,
+		HashSum:        partInfo.ETag,
 	}
 
 	return objInfo, nil
@@ -714,16 +724,17 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	n.cache.CleanListCacheEntriesContainingObject(p.Info.Key, p.Info.Bkt.CID)
 
 	objInfo := &data.ObjectInfo{
-		ID:          headerObjectID,
-		CID:         p.Info.Bkt.CID,
-		Owner:       p.Info.Bkt.Owner,
-		Bucket:      p.Info.Bkt.Name,
-		Name:        p.Info.Key,
-		Size:        multipartObjetSize,
-		Created:     prm.CreationTime,
-		Headers:     initMetadata,
-		ContentType: initMetadata[api.ContentType],
-		HashSum:     newVersion.ETag,
+		ID:             headerObjectID,
+		CID:            p.Info.Bkt.CID,
+		Owner:          p.Info.Bkt.Owner,
+		OwnerPublicKey: p.Info.Bkt.OwnerPublicKey,
+		Bucket:         p.Info.Bkt.Name,
+		Name:           p.Info.Key,
+		Size:           multipartObjetSize,
+		Created:        prm.CreationTime,
+		Headers:        initMetadata,
+		ContentType:    initMetadata[api.ContentType],
+		HashSum:        newVersion.ETag,
 	}
 
 	extObjInfo := &data.ExtendedObjectInfo{
@@ -826,6 +837,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	}
 
 	res.Owner = multipartInfo.Owner
+	res.OwnerPubKey = multipartInfo.OwnerPubKey
 
 	parts := make([]*Part, 0, len(partsInfo))
 
@@ -963,10 +975,11 @@ func uploadInfoFromMultipartInfo(uploadInfo *data.MultipartInfo, prefix, delimit
 	}
 
 	return &UploadInfo{
-		IsDir:    isDir,
-		Key:      key,
-		UploadID: uploadInfo.UploadID,
-		Owner:    uploadInfo.Owner,
-		Created:  uploadInfo.Created,
+		IsDir:       isDir,
+		Key:         key,
+		UploadID:    uploadInfo.UploadID,
+		Owner:       uploadInfo.Owner,
+		OwnerPubKey: uploadInfo.OwnerPubKey,
+		Created:     uploadInfo.Created,
 	}
 }

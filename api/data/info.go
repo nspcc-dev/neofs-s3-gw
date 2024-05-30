@@ -40,14 +40,15 @@ type (
 		IsDir          bool
 		IsDeleteMarker bool
 
-		Bucket      string
-		Name        string
-		Size        int64
-		ContentType string
-		Created     time.Time
-		HashSum     string
-		Owner       user.ID
-		Headers     map[string]string
+		Bucket         string
+		Name           string
+		Size           int64
+		ContentType    string
+		Created        time.Time
+		HashSum        string
+		Owner          user.ID
+		OwnerPublicKey keys.PublicKey
+		Headers        map[string]string
 	}
 
 	// NotificationInfo store info to send s3 notification.

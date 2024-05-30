@@ -2,6 +2,7 @@ package neofs
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -74,6 +75,7 @@ const (
 	// keys for delete marker nodes.
 	isDeleteMarkerKV = "IsDeleteMarker"
 	ownerKV          = "Owner"
+	ownerPubKeyKV    = "OwnerPubKey"
 	createdKV        = "Created"
 	serverCreatedKV  = "SrvCreated"
 
@@ -226,6 +228,13 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 			}
 		case ownerKV:
 			_ = multipartInfo.Owner.DecodeString(string(kv.GetValue()))
+		case ownerPubKeyKV:
+			pk, err := keys.NewPublicKeyFromString(string(kv.GetValue()))
+			if err != nil {
+				return nil, fmt.Errorf("decode pub key: %w", err)
+			}
+
+			multipartInfo.OwnerPubKey = *pk
 		default:
 			multipartInfo.Meta[kv.GetKey()] = string(kv.GetValue())
 		}
@@ -1332,6 +1341,7 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 func metaFromMultipart(info *data.MultipartInfo, fileName string) map[string]string {
 	info.Meta[fileNameKV] = fileName
 	info.Meta[uploadIDKV] = info.UploadID
+	info.Meta[ownerPubKeyKV] = hex.EncodeToString(info.OwnerPubKey.Bytes())
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
 

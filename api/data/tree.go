@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -74,6 +75,7 @@ type MultipartInfo struct {
 	Key          string
 	UploadID     string
 	Owner        user.ID
+	OwnerPubKey  keys.PublicKey
 	Created      time.Time
 	Meta         map[string]string
 	CopiesNumber uint32

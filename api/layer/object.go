@@ -292,14 +292,15 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		ID:  id,
 		CID: p.BktInfo.CID,
 
-		Owner:       owner,
-		Bucket:      p.BktInfo.Name,
-		Name:        p.Object,
-		Size:        p.Size,
-		Created:     prm.CreationTime,
-		Headers:     p.Header,
-		ContentType: p.Header[api.ContentType],
-		HashSum:     newVersion.ETag,
+		Owner:          owner,
+		OwnerPublicKey: p.BktInfo.OwnerPublicKey,
+		Bucket:         p.BktInfo.Name,
+		Name:           p.Object,
+		Size:           p.Size,
+		Created:        prm.CreationTime,
+		Headers:        p.Header,
+		ContentType:    p.Header[api.ContentType],
+		HashSum:        newVersion.ETag,
 	}
 
 	extendedObjInfo := &data.ExtendedObjectInfo{

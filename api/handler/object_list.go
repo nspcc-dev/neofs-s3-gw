@@ -277,7 +277,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 			Key:          ver.ObjectInfo.Name,
 			LastModified: ver.ObjectInfo.Created.UTC().Format(time.RFC3339),
 			Owner: Owner{
-				ID:          ver.ObjectInfo.Owner.String(),
+				ID:          ver.ObjectInfo.OwnerPublicKey.StringCompressed(),
 				DisplayName: ver.ObjectInfo.Owner.String(),
 			},
 			Size:      ver.ObjectInfo.Size,
