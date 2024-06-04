@@ -36,8 +36,37 @@ Reference:
 
 For now there are some limitations:
 * [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) supports only one `Principal` per `Statement`. 
-Principal must be `"AWS": "*"` (to refer all users) or `"CanonicalUser": "0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf"` (hex encoded public key of desired user).
-* Resource in bucket policy is an array. Each item MUST contain bucket name, CAN contain object name (wildcards are not supported):
+Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser": "0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf"` (hex encoded public key of desired user).
+```json
+{
+  "Statement": [
+    {
+      "Principal": "*"
+    }
+  ]
+}
+```
+```json
+{
+  "Statement": [
+    {
+      "Principal": {
+        "AWS": "*"
+      }
+    }
+  ]
+}
+```
+* Resource in bucket policy is a string value or array of strings. Each item MUST contain bucket name, CAN contain object name (wildcards are not supported):
+```json
+{
+  "Statement": [
+    {
+      "Resource": "arn:aws:s3:::bucket"
+    }
+  ]
+}
+```
 ```json
 {
   "Statement": [
@@ -46,6 +75,26 @@ Principal must be `"AWS": "*"` (to refer all users) or `"CanonicalUser": "0313b1
         "arn:aws:s3:::bucket",
         "arn:aws:s3:::bucket/some/object"
       ]
+    }
+  ]
+}
+
+```
+* Action is a string value or array of strings:
+```json
+{
+  "Statement": [
+    {
+      "Action": "s3:PutObject"
+    }
+  ]
+}
+```
+```json
+{
+  "Statement": [
+    {
+      "Action": ["s3:PutObject", "s3:PutObjectAcl"]
     }
   ]
 }
