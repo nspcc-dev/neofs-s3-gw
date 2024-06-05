@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -56,6 +57,8 @@ var (
 	errInvalidPublicKey = errors.New("invalid public key")
 )
 
+var rawWildcardJSON = []byte(`"*"`)
+
 const (
 	arnAwsPrefix     = "arn:aws:s3:::"
 	allUsersWildcard = "*"
@@ -102,16 +105,39 @@ type bucketPolicy struct {
 }
 
 type statement struct {
-	Sid       string    `json:"Sid"`
-	Effect    string    `json:"Effect"`
-	Principal principal `json:"Principal"`
-	Action    []string  `json:"Action"`
-	Resource  []string  `json:"Resource"`
+	Sid       string        `json:"Sid"`
+	Effect    string        `json:"Effect"`
+	Principal principal     `json:"Principal"`
+	Action    stringOrSlice `json:"Action"`
+	Resource  stringOrSlice `json:"Resource"`
 }
 
 type principal struct {
 	AWS           string `json:"AWS,omitempty"`
 	CanonicalUser string `json:"CanonicalUser,omitempty"`
+}
+
+// principalModel is a copy of principal to avoid infinity recursion in principal.UnmarshalJSON.
+type principalModel struct {
+	AWS           string `json:"AWS,omitempty"`
+	CanonicalUser string `json:"CanonicalUser,omitempty"`
+}
+
+func (s *principal) UnmarshalJSON(bts []byte) error {
+	if len(bts) == 3 && bytes.Equal(bts, rawWildcardJSON) {
+		s.AWS = allUsersWildcard
+		return nil
+	}
+
+	var pm principalModel
+	if err := json.Unmarshal(bts, &pm); err != nil {
+		return err
+	}
+
+	s.AWS = pm.AWS
+	s.CanonicalUser = pm.CanonicalUser
+
+	return nil
 }
 
 type orderedAstResource struct {
@@ -1009,8 +1035,7 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 		if state.Principal.AWS == allUsersWildcard {
 			groupGrantee = true
 		}
-
-		for _, resource := range state.Resource {
+		for _, resource := range state.Resource.values {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
 			r, ok := rr[trimmedResource]
 			if !ok {
@@ -1022,7 +1047,7 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 					resourceInfo: resourceInfoFromName(trimmedResource, bktPolicy.Bucket),
 				}
 			}
-			for _, action := range state.Action {
+			for _, action := range state.Action.values {
 				for _, op := range actionToOpMap[action] {
 					toAction := effectToAction(state.Effect)
 					r.Operations = addTo(r.Operations, state.Principal.CanonicalUser, op, groupGrantee, toAction)
@@ -1103,8 +1128,8 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 			state := statement{
 				Effect:    actionToEffect(eaclAction),
 				Principal: principal{CanonicalUser: user},
-				Action:    actions,
-				Resource:  []string{arnAwsPrefix + resourceName},
+				Action:    stringOrSlice{values: actions},
+				Resource:  stringOrSlice{values: []string{arnAwsPrefix + resourceName}},
 			}
 			if user == allUsersGroup {
 				state.Principal = principal{AWS: allUsersWildcard}
@@ -1247,8 +1272,8 @@ func getAllowStatement(resInfo *resourceInfo, id string, permission amazonS3Perm
 		Principal: principal{
 			CanonicalUser: id,
 		},
-		Action:   getActions(permission, resInfo.IsBucket()),
-		Resource: []string{arnAwsPrefix + resInfo.Name()},
+		Action:   stringOrSlice{values: getActions(permission, resInfo.IsBucket())},
+		Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 	}
 
 	if id == allUsersWildcard {
@@ -1264,8 +1289,8 @@ func getDenyStatement(resInfo *resourceInfo, id string, permission amazonS3Permi
 		Principal: principal{
 			CanonicalUser: id,
 		},
-		Action:   getActions(permission, resInfo.IsBucket()),
-		Resource: []string{arnAwsPrefix + resInfo.Name()},
+		Action:   stringOrSlice{values: getActions(permission, resInfo.IsBucket())},
+		Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 	}
 
 	if id == allUsersWildcard {

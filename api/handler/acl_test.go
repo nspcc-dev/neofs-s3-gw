@@ -103,16 +103,16 @@ func TestPolicyToAst(t *testing.T) {
 			{
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
-				Action:    []string{"s3:PutObject"},
-				Resource:  []string{"arn:aws:s3:::bucketName"},
+				Action:    stringOrSlice{values: []string{"s3:PutObject"}},
+				Resource:  stringOrSlice{values: []string{"arn:aws:s3:::bucketName"}},
 			},
 			{
 				Effect: "Deny",
 				Principal: principal{
 					CanonicalUser: hex.EncodeToString(key.PublicKey().Bytes()),
 				},
-				Action:   []string{"s3:GetObject"},
-				Resource: []string{"arn:aws:s3:::bucketName/object"},
+				Action:   stringOrSlice{values: []string{"s3:GetObject"}},
+				Resource: stringOrSlice{values: []string{"arn:aws:s3:::bucketName/object"}},
 			}},
 	}
 	policy.Bucket = "bucketName"
@@ -746,22 +746,22 @@ func TestBucketAclToPolicy(t *testing.T) {
 				Principal: principal{
 					CanonicalUser: id,
 				},
-				Action:   []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:PutObject", "s3:DeleteObject"},
-				Resource: []string{arnAwsPrefix + resInfo.Name()},
+				Action:   stringOrSlice{values: []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:PutObject", "s3:DeleteObject"}},
+				Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 			},
 			{
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
-				Action:    []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads"},
-				Resource:  []string{arnAwsPrefix + resInfo.Name()},
+				Action:    stringOrSlice{values: []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads"}},
+				Resource:  stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 			},
 			{
 				Effect: "Allow",
 				Principal: principal{
 					CanonicalUser: id2,
 				},
-				Action:   []string{"s3:PutObject", "s3:DeleteObject"},
-				Resource: []string{arnAwsPrefix + resInfo.Name()},
+				Action:   stringOrSlice{values: []string{"s3:PutObject", "s3:DeleteObject"}},
+				Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 			},
 		},
 	}
@@ -819,22 +819,22 @@ func TestObjectAclToPolicy(t *testing.T) {
 				Principal: principal{
 					CanonicalUser: id,
 				},
-				Action:   []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject},
-				Resource: []string{arnAwsPrefix + resInfo.Name()},
+				Action:   stringOrSlice{values: []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject}},
+				Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 			},
 			{
 				Effect: "Allow",
 				Principal: principal{
 					CanonicalUser: id2,
 				},
-				Action:   []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject},
-				Resource: []string{arnAwsPrefix + resInfo.Name()},
+				Action:   stringOrSlice{values: []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject}},
+				Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 			},
 			{
 				Effect:    "Allow",
 				Principal: principal{AWS: allUsersWildcard},
-				Action:    []string{s3GetObject, s3GetObjectVersion},
-				Resource:  []string{arnAwsPrefix + resInfo.Name()},
+				Action:    stringOrSlice{values: []string{s3GetObject, s3GetObjectVersion}},
+				Resource:  stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 			},
 		},
 	}
@@ -1343,11 +1343,11 @@ func TestBucketPolicy(t *testing.T) {
 	for _, st := range bktPolicy.Statement {
 		if st.Effect == "Allow" {
 			require.Equal(t, hex.EncodeToString(key.PublicKey().Bytes()), st.Principal.CanonicalUser)
-			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource)
+			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource.values)
 		} else {
 			require.Equal(t, allUsersWildcard, st.Principal.AWS)
 			require.Equal(t, "Deny", st.Effect)
-			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource)
+			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource.values)
 		}
 	}
 
@@ -1355,21 +1355,21 @@ func TestBucketPolicy(t *testing.T) {
 		Statement: []statement{{
 			Effect:    "Allow",
 			Principal: principal{AWS: allUsersWildcard},
-			Action:    []string{s3GetObject},
-			Resource:  []string{arnAwsPrefix + "dummy"},
+			Action:    stringOrSlice{values: []string{s3GetObject}},
+			Resource:  stringOrSlice{values: []string{arnAwsPrefix + "dummy"}},
 		}},
 	}
 
 	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusInternalServerError)
 
-	newPolicy.Statement[0].Resource[0] = arnAwsPrefix + bktName
+	newPolicy.Statement[0].Resource.values[0] = arnAwsPrefix + bktName
 	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusOK)
 
 	bktPolicy = getBucketPolicy(hc, bktName)
 	for _, st := range bktPolicy.Statement {
 		if st.Effect == "Allow" && st.Principal.AWS == allUsersWildcard {
-			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource)
-			require.ElementsMatch(t, []string{s3GetObject, s3ListBucket}, st.Action)
+			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource.values)
+			require.ElementsMatch(t, []string{s3GetObject, s3ListBucket}, st.Action.values)
 		}
 	}
 }
@@ -1545,4 +1545,37 @@ func TestEACLEncode(t *testing.T) {
 	for _, g := range required {
 		require.Contains(t, acp.AccessControlList, g)
 	}
+}
+
+func TestPrincipal(t *testing.T) {
+	type testCase struct {
+		Principal principal `json:"p"`
+	}
+
+	t.Run("wildcard", func(t *testing.T) {
+		payload := []byte(`{"p":"*"}`)
+
+		var testObj testCase
+		require.NoError(t, json.Unmarshal(payload, &testObj))
+		require.Equal(t, allUsersWildcard, testObj.Principal.AWS)
+
+		bts, err := json.Marshal(testObj)
+		require.NoError(t, err)
+
+		// we should be able to unmarshal string and structs, but marshals always a struct.
+		payload = []byte(`{"p":{"AWS":"*"}}`)
+		require.Equal(t, payload, bts)
+	})
+
+	t.Run("wildcard in struct", func(t *testing.T) {
+		payload := []byte(`{"p":{"AWS":"*"}}`)
+
+		var testObj testCase
+		require.NoError(t, json.Unmarshal(payload, &testObj))
+		require.Equal(t, allUsersWildcard, testObj.Principal.AWS)
+
+		bts, err := json.Marshal(testObj)
+		require.NoError(t, err)
+		require.Equal(t, payload, bts)
+	})
 }
