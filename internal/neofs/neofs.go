@@ -358,7 +358,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		if ok {
 			return oid.ID{}, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 		}
-		return oid.ID{}, fmt.Errorf("save object via connection pool: %w", err)
+		return oid.ID{}, fmt.Errorf("put init: %w", err)
 	}
 
 	data := x.buffers.Get()
@@ -368,7 +368,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	x.buffers.Put(chunk)
 
 	if err != nil {
-		return oid.ID{}, fmt.Errorf("read payload chunk: %w", err)
+		return oid.ID{}, fmt.Errorf("copy payload with buffer: %w", err)
 	}
 
 	if err = writer.Close(); err != nil {
