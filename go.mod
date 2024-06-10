@@ -9,9 +9,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.31.0
-	github.com/nspcc-dev/neo-go v0.106.0
+	github.com/nspcc-dev/neo-go v0.106.1
 	github.com/nspcc-dev/neofs-contract v0.19.1
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.11.0.20240412074628-830a0ff84256
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12
 	github.com/nspcc-dev/tzhash v1.8.0
 	github.com/panjf2000/ants/v2 v2.5.0
 	github.com/prometheus/client_golang v1.19.0
