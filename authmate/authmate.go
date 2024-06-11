@@ -336,7 +336,7 @@ func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
 }
 
 func restrictedRecords() (records []*eacl.Record) {
-	for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
+	for op := eacl.OperationHead; op <= eacl.OperationRangeHash; op++ {
 		record := eacl.NewRecord()
 		record.SetOperation(op)
 		record.SetAction(eacl.ActionDeny)
