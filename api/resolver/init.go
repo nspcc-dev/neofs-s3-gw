@@ -17,21 +17,21 @@ const (
 	nnsContract = int32(1)
 )
 
-// Container is a wrapper for the [Resolver]. It allows to update resolvers in runtime, without service restarting.
+// Container is a wrapper for the [NNSResolver]. It allows to update resolvers in runtime, without service restarting.
 //
-// The Container should be used like regular [Resolver].
+// The Container should be used like regular [NNSResolver].
 type Container struct {
 	mu       sync.RWMutex
-	resolver Resolver
+	resolver *NNSResolver
 }
 
-// Resolve looks up the container id by its name via NNS contract.
+// ResolveCID looks up the container id by its name via NNS contract.
 // The method calls inline resolver.
-func (r *Container) Resolve(ctx context.Context, name string) (cid.ID, error) {
+func (r *Container) ResolveCID(ctx context.Context, name string) (cid.ID, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	return r.resolver.Resolve(ctx, name)
+	return r.resolver.ResolveCID(ctx, name)
 }
 
 // UpdateResolvers allows to update resolver in runtime. Resolvers will be created from scratch.
@@ -63,7 +63,7 @@ func NewContainer(ctx context.Context, endpoint string) (*Container, error) {
 // NewResolver returns resolver depending on corresponding endpoint.
 //
 // If endpoint is empty, error will be returned.
-func NewResolver(ctx context.Context, endpoint string) (Resolver, error) {
+func NewResolver(ctx context.Context, endpoint string) (*NNSResolver, error) {
 	if endpoint == "" {
 		return nil, errors.New("endpoint must be set")
 	}

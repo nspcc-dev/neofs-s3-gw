@@ -17,7 +17,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
-	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -47,7 +46,7 @@ type (
 		// used in case of user wants to do something like anonymous.
 		// Typical using is a flag --no-sign-request in aws-cli.
 		anonymous   user.ID
-		resolver    resolver.Resolver
+		resolver    Resolver
 		ncontroller EventListener
 		cache       *Cache
 		treeService TreeService
@@ -59,7 +58,7 @@ type (
 		Caches       *CachesConfig
 		GateKey      *keys.PrivateKey
 		Anonymous    user.ID
-		Resolver     resolver.Resolver
+		Resolver     Resolver
 		TreeService  TreeService
 	}
 
@@ -85,6 +84,11 @@ type (
 		ObjectName            string
 		VersionID             string
 		NoErrorOnDeleteMarker bool
+	}
+
+	// Resolver allows to map container ID by container name.
+	Resolver interface {
+		ResolveCID(ctx context.Context, containerName string) (cid.ID, error)
 	}
 
 	// RangeParams stores range header request parameters.
@@ -673,7 +677,7 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
 	var cnrID cid.ID
 	if err := cnrID.DecodeString(name); err != nil {
-		if cnrID, err = n.resolver.Resolve(ctx, name); err != nil {
+		if cnrID, err = n.resolver.ResolveCID(ctx, name); err != nil {
 			return cid.ID{}, err
 		}
 
