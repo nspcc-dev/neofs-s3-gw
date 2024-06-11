@@ -8,13 +8,8 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
-	"github.com/nspcc-dev/neo-go/pkg/util"
-	rpcNNS "github.com/nspcc-dev/neofs-contract/rpc/nns"
+	"github.com/nspcc-dev/neofs-contract/rpc/nns"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-)
-
-const (
-	nnsContract = int32(1)
 )
 
 // Container is a wrapper for the [NNSResolver]. It allows to update resolvers in runtime, without service restarting.
@@ -73,23 +68,13 @@ func NewResolver(ctx context.Context, endpoint string) (*NNSResolver, error) {
 		return nil, fmt.Errorf("rpcclient: %w", err)
 	}
 
-	nnsHash, err := systemContractHash(cl, nnsContract)
-	if err != nil {
-		return nil, fmt.Errorf("nns contract: %w", err)
-	}
-
 	inv := invoker.New(cl, nil)
-	nnsReader := rpcNNS.NewReader(inv, nnsHash)
-	return NewNNSResolver(nnsReader), nil
-}
-
-func systemContractHash(cl *rpcclient.Client, id int32) (util.Uint160, error) {
-	c, err := cl.GetContractStateByID(id)
+	nnsReader, err := nns.NewInferredReader(cl, inv)
 	if err != nil {
-		return util.Uint160{}, fmt.Errorf("GetContractStateByID [%d]: %w", id, err)
+		return nil, fmt.Errorf("nns reader instantiation: %w", err)
 	}
 
-	return c.Hash, nil
+	return NewNNSResolver(nnsReader), nil
 }
 
 func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) {
