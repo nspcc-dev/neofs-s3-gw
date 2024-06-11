@@ -225,7 +225,6 @@ If bearer rules are not set, a token will be auto-generated with a value:
     "records": [
        {"operation": "GET", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
 
-       {"operation": "GET", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
        {"operation": "HEAD", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
        {"operation": "PUT", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
        {"operation": "DELETE", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
