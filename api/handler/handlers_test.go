@@ -30,7 +30,7 @@ type contResolver struct {
 	layer *layer.TestNeoFS
 }
 
-func (r *contResolver) Resolve(_ context.Context, name string) (cid.ID, error) {
+func (r *contResolver) ResolveCID(_ context.Context, name string) (cid.ID, error) {
 	return r.layer.ContainerID(name)
 }
 

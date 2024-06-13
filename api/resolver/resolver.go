@@ -16,11 +16,6 @@ var (
 	ErrNotFound = errors.New("not found")
 )
 
-// Resolver allows to map container ID by container name.
-type Resolver interface {
-	Resolve(ctx context.Context, containerName string) (cid.ID, error)
-}
-
 // NNSResolver allows to resolve container id by its name.
 type NNSResolver struct {
 	reader *rpcNNS.ContractReader
@@ -31,8 +26,8 @@ func NewNNSResolver(reader *rpcNNS.ContractReader) *NNSResolver {
 	return &NNSResolver{reader: reader}
 }
 
-// Resolve looks up the container id by its name via NNS contract.
-func (r *NNSResolver) Resolve(_ context.Context, name string) (cid.ID, error) {
+// ResolveCID looks up the container id by its name via NNS contract.
+func (r *NNSResolver) ResolveCID(_ context.Context, name string) (cid.ID, error) {
 	var result cid.ID
 
 	items, err := r.reader.GetRecords(nnsContainerDomain(name), rpcNNS.TXT)
