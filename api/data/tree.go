@@ -132,8 +132,6 @@ type PartInfo struct {
 	HomoHash []byte
 	// Elements contain [oid.ID] and size for each element for the current part.
 	Elements []LinkObjectPayload
-	// FirstSplitOID contains first object part in the split chain.
-	FirstSplitOID oid.ID
 }
 
 // ToHeaderString form short part representation to use in S3-Completed-Parts header.

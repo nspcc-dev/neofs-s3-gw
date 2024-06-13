@@ -141,7 +141,7 @@ type (
 	}
 )
 
-func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error {
+func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) (string, error) {
 	metaSize := len(p.Header)
 	if p.Data != nil {
 		metaSize += len(p.Data.ACLHeaders)
@@ -150,12 +150,11 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 
 	ownerPubKey, err := n.OwnerPublicKey(ctx)
 	if err != nil {
-		return fmt.Errorf("owner pub key: %w", err)
+		return "", fmt.Errorf("owner pub key: %w", err)
 	}
 
 	info := &data.MultipartInfo{
 		Key:          p.Info.Key,
-		UploadID:     p.Info.UploadID,
 		Owner:        n.Owner(ctx),
 		OwnerPubKey:  *ownerPubKey,
 		Created:      TimeNow(ctx),
@@ -179,11 +178,27 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 
 	if p.Info.Encryption.Enabled() {
 		if err := addEncryptionHeaders(info.Meta, p.Info.Encryption); err != nil {
-			return fmt.Errorf("add encryption header: %w", err)
+			return "", fmt.Errorf("add encryption header: %w", err)
 		}
 	}
 
-	return n.treeService.CreateMultipartUpload(ctx, p.Info.Bkt, info)
+	zeroPartInfo, err := n.uploadZeroPart(ctx, info, p.Info)
+	if err != nil {
+		return "", fmt.Errorf("upload zero part: %w", err)
+	}
+
+	info.UploadID = zeroPartInfo.UploadID
+
+	nodeID, err := n.treeService.CreateMultipartUpload(ctx, p.Info.Bkt, info)
+	if err != nil {
+		return "", fmt.Errorf("create multipart upload: %w", err)
+	}
+
+	if err = n.finalizeZeroPart(ctx, p.Info.Bkt, nodeID, zeroPartInfo); err != nil {
+		return "", fmt.Errorf("finalize zero part: %w", err)
+	}
+
+	return zeroPartInfo.UploadID, nil
 }
 
 func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, error) {
@@ -249,28 +264,28 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	lastPart, err := n.treeService.GetPartByNumber(ctx, bktInfo, multipartInfo.ID, p.PartNumber-1)
 	if err != nil {
-		// if ErrPartListIsEmpty, there is the first part of multipart.
-		if !errors.Is(err, ErrPartListIsEmpty) {
-			return nil, fmt.Errorf("getLastPart: %w", err)
-		}
-	} else {
-		// try to restore hash state from the last part.
-		// the required interface is guaranteed according to the docs, so just cast without checks.
-		binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
-		if err = binaryUnmarshaler.UnmarshalBinary(lastPart.MultipartHash); err != nil {
-			return nil, fmt.Errorf("unmarshal previous part hash: %w", err)
-		}
+		return nil, fmt.Errorf("getLastPart: %w", err)
+	}
 
-		if tzHash != nil {
-			binaryUnmarshaler = tzHash.(encoding.BinaryUnmarshaler)
-			if err = binaryUnmarshaler.UnmarshalBinary(lastPart.HomoHash); err != nil {
-				return nil, fmt.Errorf("unmarshal previous part homo hash: %w", err)
-			}
-		}
+	// try to restore hash state from the last part.
+	// the required interface is guaranteed according to the docs, so just cast without checks.
+	binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
+	if err = binaryUnmarshaler.UnmarshalBinary(lastPart.MultipartHash); err != nil {
+		return nil, fmt.Errorf("unmarshal previous part hash: %w", err)
+	}
 
-		isSetSplitPreviousID = true
-		splitPreviousID = lastPart.OID
-		splitFirstID = lastPart.FirstSplitOID
+	if tzHash != nil {
+		binaryUnmarshaler = tzHash.(encoding.BinaryUnmarshaler)
+		if err = binaryUnmarshaler.UnmarshalBinary(lastPart.HomoHash); err != nil {
+			return nil, fmt.Errorf("unmarshal previous part homo hash: %w", err)
+		}
+	}
+
+	isSetSplitPreviousID = true
+	splitPreviousID = lastPart.OID
+
+	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
+		return nil, fmt.Errorf("failed to decode multipart upload ID: %w", err)
 	}
 
 	var (
@@ -298,10 +313,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		},
 	}
 
-	if lastPart != nil {
-		splitFirstID = lastPart.FirstSplitOID
-	}
-
 	chunk := n.buffers.Get().(*[]byte)
 	var totalBytes int
 	// slice part manually. Simultaneously considering the part is a single object for user.
@@ -324,10 +335,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 			id, _, err = n.objectPutAndHash(ctx, prm, bktInfo)
 			if err != nil {
 				return nil, err
-			}
-
-			if splitFirstID.Equals(oid.ID{}) {
-				splitFirstID = id
 			}
 
 			isSetSplitPreviousID = true
@@ -365,10 +372,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		ETag:     hex.EncodeToString(currentPartHash.Sum(nil)),
 		Created:  prm.CreationTime,
 		Elements: elements,
-	}
-
-	if !splitFirstID.Equals(oid.ID{}) {
-		partInfo.FirstSplitOID = splitFirstID
 	}
 
 	// encoding hash.Hash state to save it in tree service.
@@ -415,6 +418,114 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	return objInfo, nil
+}
+
+func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadInfoParams) (*data.PartInfo, error) {
+	encInfo := FormEncryptionInfo(multipartInfo.Meta)
+	if err := p.Encryption.MatchObjectEncryption(encInfo); err != nil {
+		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
+	}
+
+	var (
+		bktInfo         = p.Bkt
+		attributes      [][2]string
+		multipartHash   = sha256.New()
+		tzHash          hash.Hash
+		id              oid.ID
+		elements        []data.LinkObjectPayload
+		creationTime    = TimeNow(ctx)
+		currentPartHash = sha256.New()
+	)
+
+	if p.Encryption.Enabled() {
+		attributes = append(attributes, [2]string{AttributeDecryptedSize, "0"})
+	}
+
+	if n.neoFS.IsHomomorphicHashingEnabled() {
+		tzHash = tz.New()
+	}
+
+	var objHashes []hash.Hash
+	if tzHash != nil {
+		objHashes = append(objHashes, tzHash)
+	}
+
+	prm := PrmObjectCreate{
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		Attributes:   attributes,
+		CreationTime: creationTime,
+		CopiesNumber: multipartInfo.CopiesNumber,
+		Multipart: &Multipart{
+			MultipartHashes: objHashes,
+		},
+		Payload: bytes.NewBuffer(nil),
+	}
+
+	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	elements = append(elements, data.LinkObjectPayload{OID: id, Size: 0})
+
+	reqInfo := api.GetReqInfo(ctx)
+	n.log.Debug("upload zero part",
+		zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", bktInfo.Name), zap.Stringer("cid", bktInfo.CID),
+		zap.String("multipart upload", id.String()),
+		zap.Int("part number", 0), zap.String("object", p.Key), zap.Stringer("oid", id))
+
+	partInfo := &data.PartInfo{
+		Key: p.Key,
+		// UploadID equals zero part ID intentionally.
+		UploadID: id.String(),
+		Number:   0,
+		OID:      id,
+		Size:     0,
+		ETag:     hex.EncodeToString(currentPartHash.Sum(nil)),
+		Created:  prm.CreationTime,
+		Elements: elements,
+	}
+
+	// encoding hash.Hash state to save it in tree service.
+	// the required interface is guaranteed according to the docs, so just cast without checks.
+	binaryMarshaler := multipartHash.(encoding.BinaryMarshaler)
+	partInfo.MultipartHash, err = binaryMarshaler.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("marshalBinary: %w", err)
+	}
+
+	if tzHash != nil {
+		binaryMarshaler = tzHash.(encoding.BinaryMarshaler)
+		partInfo.HomoHash, err = binaryMarshaler.MarshalBinary()
+
+		if err != nil {
+			return nil, fmt.Errorf("marshalBinary: %w", err)
+		}
+	}
+
+	return partInfo, nil
+}
+
+func (n *layer) finalizeZeroPart(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64, partInfo *data.PartInfo) error {
+	oldPartID, err := n.treeService.AddPart(ctx, bktInfo, nodeID, partInfo)
+	oldPartIDNotFound := errors.Is(err, ErrNoNodeToRemove)
+	if err != nil && !oldPartIDNotFound {
+		return err
+	}
+
+	if !oldPartIDNotFound {
+		if err = n.objectDelete(ctx, bktInfo, oldPartID); err != nil {
+			n.log.Error("couldn't delete old part object", zap.Error(err),
+				zap.String("cnrID", bktInfo.CID.EncodeToString()),
+				zap.String("bucket name", bktInfo.Name),
+				zap.String("objID", oldPartID.EncodeToString()))
+		}
+	}
+
+	return nil
 }
 
 func (n *layer) reUploadFollowingParts(ctx context.Context, uploadParams UploadPartParams, partID int, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
@@ -535,8 +646,21 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	var encMultipartObjectSize uint64
 	var lastPartID int
 	var completedPartsHeader strings.Builder
+	var splitFirstID oid.ID
+
+	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
+		return nil, nil, fmt.Errorf("decode splitFirstID from UploadID :%w", err)
+	}
+
+	// +1 is the zero part, it equals to the uploadID.
 	// +1 is the last part, it will be created later in the code.
-	var measuredObjects = make([]object.MeasuredObject, 0, len(p.Parts)+1)
+	var measuredObjects = make([]object.MeasuredObject, 0, len(p.Parts)+2)
+
+	// user know nothing about zero part, we have to add this part manually.
+	var zeroObject object.MeasuredObject
+	zeroObject.SetObjectID(splitFirstID)
+	measuredObjects = append(measuredObjects, zeroObject)
+
 	for i, part := range p.Parts {
 		partInfo := partsInfo[part.PartNumber]
 		if partInfo == nil || part.ETag != partInfo.ETag {
@@ -580,7 +704,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	multipartHash := sha256.New()
 	var homoHash hash.Hash
 	var splitPreviousID oid.ID
-	var splitFirstID oid.ID
 
 	if lastPartID > 0 {
 		lastPart := partsInfo[lastPartID]
@@ -588,7 +711,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		if lastPart != nil {
 			if len(lastPart.MultipartHash) > 0 {
 				splitPreviousID = lastPart.OID
-				splitFirstID = lastPart.FirstSplitOID
 
 				if len(lastPart.MultipartHash) > 0 {
 					binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
@@ -842,6 +964,11 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	parts := make([]*Part, 0, len(partsInfo))
 
 	for _, partInfo := range partsInfo {
+		// We need to skip this part, it is an artificial and not a client uploaded.
+		if partInfo.Number == 0 {
+			continue
+		}
+
 		parts = append(parts, &Part{
 			ETag:         partInfo.ETag,
 			LastModified: partInfo.Created.UTC().Format(time.RFC3339),

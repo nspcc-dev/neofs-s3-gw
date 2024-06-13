@@ -53,7 +53,6 @@ const (
 	versioningKV        = "Versioning"
 	lockConfigurationKV = "LockConfiguration"
 	oidKV               = "OID"
-	firstSplitOidKV     = "FirstSplitOID"
 	fileNameKV          = "FileName"
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "IsTag"
@@ -262,10 +261,6 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 			if err = partInfo.OID.DecodeString(value); err != nil {
 				return nil, fmt.Errorf("invalid oid: %w", err)
 			}
-		case firstSplitOidKV:
-			if err = partInfo.FirstSplitOID.DecodeString(value); err != nil {
-				return nil, fmt.Errorf("invalid FirstSplitOID: %w", err)
-			}
 		case etagKV:
 			partInfo.ETag = value
 		case sizeKV:
@@ -302,7 +297,7 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 		}
 	}
 
-	if partInfo.Number <= 0 {
+	if partInfo.Number < 0 {
 		return nil, fmt.Errorf("it's not a part node")
 	}
 
@@ -865,12 +860,10 @@ func (c *TreeClient) RemoveVersion(ctx context.Context, bktInfo *data.BucketInfo
 	return c.removeNode(ctx, bktInfo, versionTree, id)
 }
 
-func (c *TreeClient) CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) error {
+func (c *TreeClient) CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {
 	path := pathFromName(info.Key)
 	meta := metaFromMultipart(info, path[len(path)-1])
-	_, err := c.addNodeByPath(ctx, bktInfo, systemTree, path[:len(path)-1], meta)
-
-	return err
+	return c.addNodeByPath(ctx, bktInfo, systemTree, path[:len(path)-1], meta)
 }
 
 func (c *TreeClient) GetMultipartUploadsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.MultipartInfo, error) {
@@ -950,7 +943,6 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 	meta := map[string]string{
 		partNumberKV:    strconv.Itoa(info.Number),
 		oidKV:           info.OID.EncodeToString(),
-		firstSplitOidKV: info.FirstSplitOID.EncodeToString(),
 		sizeKV:          strconv.FormatInt(info.Size, 10),
 		createdKV:       strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 		serverCreatedKV: strconv.FormatInt(time.Now().UTC().UnixMilli(), 10),
@@ -1013,7 +1005,7 @@ func (c *TreeClient) GetPartByNumber(ctx context.Context, bktInfo *data.BucketIn
 		return nil, fmt.Errorf("get parts: %w", err)
 	}
 
-	if len(parts) == 0 || number == 0 {
+	if len(parts) == 0 {
 		return nil, layer.ErrPartListIsEmpty
 	}
 
