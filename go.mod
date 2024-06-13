@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.31.0
-	github.com/nspcc-dev/neo-go v0.106.1
+	github.com/nspcc-dev/neo-go v0.106.2
 	github.com/nspcc-dev/neofs-contract v0.19.2-0.20240610103236-d50c8e0c9396
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12
 	github.com/nspcc-dev/tzhash v1.8.0
