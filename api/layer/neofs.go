@@ -123,15 +123,15 @@ type PrmObjectCreate struct {
 type Multipart struct {
 	// MultipartHashes contains hashes for the multipart object payload calculation (optional).
 	MultipartHashes []hash.Hash
-	// SplitID contains splitID for multipart object (optional).
-	SplitID string
 	// SplitPreviousID contains [oid.ID] of previous object in chain (optional).
 	SplitPreviousID *oid.ID
-	// Children contains all objects in multipart chain, for linking object (optional).
-	Children []oid.ID
+	// SplitFirstID contains [oid.ID] of the first object in chain (The first object has nil here).
+	SplitFirstID *oid.ID
 	// HeaderObject is a virtual representation of complete multipart object (optional). It is used to set Parent in
 	// linking object.
 	HeaderObject *object.Object
+	// Link contains info for linking object.
+	Link *object.Link
 }
 
 // PrmObjectDelete groups parameters of NeoFS.DeleteObject operation.

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,12 +34,18 @@ func (h *handler) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, encodeV1(params, list)); err != nil {
+	encoded, err := encodeV1(params, list)
+	if err != nil {
+		h.logAndSendError(w, "encode V1", reqInfo, err)
+		return
+	}
+
+	if err = api.EncodeToResponse(w, encoded); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
-func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *ListObjectsV1Response {
+func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) (*ListObjectsV1Response, error) {
 	res := &ListObjectsV1Response{
 		Name:         p.BktInfo.Name,
 		EncodingType: p.Encode,
@@ -52,9 +59,14 @@ func encodeV1(p *layer.ListObjectsParamsV1, list *layer.ListObjectsInfoV1) *List
 
 	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
 
-	res.Contents = fillContentsWithOwner(list.Objects, p.Encode)
+	content, err := fillContentsWithOwner(list.Objects, p.Encode)
+	if err != nil {
+		return nil, fmt.Errorf("fill contents with owner: %w", err)
+	}
 
-	return res
+	res.Contents = content
+
+	return res, nil
 }
 
 // ListObjectsV2Handler handles objects listing requests for API version 2.
@@ -77,12 +89,18 @@ func (h *handler) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = api.EncodeToResponse(w, encodeV2(params, list)); err != nil {
+	encoded, err := encodeV2(params, list)
+	if err != nil {
+		h.logAndSendError(w, "encode V2", reqInfo, err)
+		return
+	}
+
+	if err = api.EncodeToResponse(w, encoded); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
 
-func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *ListObjectsV2Response {
+func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) (*ListObjectsV2Response, error) {
 	res := &ListObjectsV2Response{
 		Name:                  p.BktInfo.Name,
 		EncodingType:          p.Encode,
@@ -98,9 +116,14 @@ func encodeV2(p *layer.ListObjectsParamsV2, list *layer.ListObjectsInfoV2) *List
 
 	res.CommonPrefixes = fillPrefixes(list.Prefixes, p.Encode)
 
-	res.Contents = fillContents(list.Objects, p.Encode, p.FetchOwner)
+	content, err := fillContents(list.Objects, p.Encode, p.FetchOwner)
+	if err != nil {
+		return nil, fmt.Errorf("fill content: %w", err)
+	}
 
-	return res
+	res.Contents = content
+
+	return res, nil
 }
 
 func parseListObjectsArgsV1(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsV1, error) {
@@ -184,11 +207,11 @@ func fillPrefixes(src []string, encode string) []CommonPrefix {
 	return dst
 }
 
-func fillContentsWithOwner(src []*data.ObjectInfo, encode string) []Object {
+func fillContentsWithOwner(src []*data.ObjectInfo, encode string) ([]Object, error) {
 	return fillContents(src, encode, true)
 }
 
-func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) []Object {
+func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) ([]Object, error) {
 	var dst []Object
 	for _, obj := range src {
 		res := Object{
@@ -196,6 +219,15 @@ func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) []Obje
 			Size:         obj.Size,
 			LastModified: obj.Created.UTC().Format(time.RFC3339),
 			ETag:         obj.HashSum,
+		}
+
+		if size, ok := obj.Headers[layer.AttributeDecryptedSize]; ok {
+			sz, err := strconv.ParseInt(size, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse decrypted size %s: %w", size, err)
+			}
+
+			res.Size = sz
 		}
 
 		if fetchOwner {
@@ -207,7 +239,7 @@ func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) []Obje
 
 		dst = append(dst, res)
 	}
-	return dst
+	return dst, nil
 }
 
 func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +309,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 			Key:          ver.ObjectInfo.Name,
 			LastModified: ver.ObjectInfo.Created.UTC().Format(time.RFC3339),
 			Owner: Owner{
-				ID:          ver.ObjectInfo.Owner.String(),
+				ID:          ver.ObjectInfo.OwnerPublicKey.StringCompressed(),
 				DisplayName: ver.ObjectInfo.Owner.String(),
 			},
 			Size:      ver.ObjectInfo.Size,

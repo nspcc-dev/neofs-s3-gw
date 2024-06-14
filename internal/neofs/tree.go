@@ -2,6 +2,7 @@ package neofs
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -56,7 +57,6 @@ const (
 	isUnversionedKV     = "IsUnversioned"
 	isTagKV             = "IsTag"
 	uploadIDKV          = "UploadId"
-	splitIDKV           = "SplitId"
 	partNumberKV        = "Number"
 	sizeKV              = "Size"
 	etagKV              = "ETag"
@@ -74,6 +74,7 @@ const (
 	// keys for delete marker nodes.
 	isDeleteMarkerKV = "IsDeleteMarker"
 	ownerKV          = "Owner"
+	ownerPubKeyKV    = "OwnerPubKey"
 	createdKV        = "Created"
 	serverCreatedKV  = "SrvCreated"
 
@@ -226,8 +227,13 @@ func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 			}
 		case ownerKV:
 			_ = multipartInfo.Owner.DecodeString(string(kv.GetValue()))
-		case splitIDKV:
-			multipartInfo.SplitID = string(kv.GetValue())
+		case ownerPubKeyKV:
+			pk, err := keys.NewPublicKeyFromString(string(kv.GetValue()))
+			if err != nil {
+				return nil, fmt.Errorf("decode pub key: %w", err)
+			}
+
+			multipartInfo.OwnerPubKey = *pk
 		default:
 			multipartInfo.Meta[kv.GetKey()] = string(kv.GetValue())
 		}
@@ -279,19 +285,19 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 			partInfo.HomoHash = []byte(value)
 		case elementsKV:
 			elements := strings.Split(value, ",")
-			partInfo.Elements = make([]oid.ID, len(elements))
+			partInfo.Elements = make([]data.LinkObjectPayload, len(elements))
 			for i, e := range elements {
-				var id oid.ID
-				if err = id.DecodeString(e); err != nil {
-					return nil, fmt.Errorf("invalid oid: %w", err)
+				var element data.LinkObjectPayload
+				if err = element.Unmarshal(e); err != nil {
+					return nil, fmt.Errorf("invalid element: %w", err)
 				}
 
-				partInfo.Elements[i] = id
+				partInfo.Elements[i] = element
 			}
 		}
 	}
 
-	if partInfo.Number <= 0 {
+	if partInfo.Number < 0 {
 		return nil, fmt.Errorf("it's not a part node")
 	}
 
@@ -854,12 +860,10 @@ func (c *TreeClient) RemoveVersion(ctx context.Context, bktInfo *data.BucketInfo
 	return c.removeNode(ctx, bktInfo, versionTree, id)
 }
 
-func (c *TreeClient) CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) error {
+func (c *TreeClient) CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {
 	path := pathFromName(info.Key)
 	meta := metaFromMultipart(info, path[len(path)-1])
-	_, err := c.addNodeByPath(ctx, bktInfo, systemTree, path[:len(path)-1], meta)
-
-	return err
+	return c.addNodeByPath(ctx, bktInfo, systemTree, path[:len(path)-1], meta)
 }
 
 func (c *TreeClient) GetMultipartUploadsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.MultipartInfo, error) {
@@ -933,7 +937,7 @@ func (c *TreeClient) AddPart(ctx context.Context, bktInfo *data.BucketInfo, mult
 
 	elements := make([]string, len(info.Elements))
 	for i, e := range info.Elements {
-		elements[i] = e.String()
+		elements[i] = e.Marshal()
 	}
 
 	meta := map[string]string{
@@ -995,7 +999,7 @@ func (c *TreeClient) GetParts(ctx context.Context, bktInfo *data.BucketInfo, mul
 	return result, nil
 }
 
-func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+func (c *TreeClient) GetPartByNumber(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, number int) (*data.PartInfo, error) {
 	parts, err := c.GetParts(ctx, bktInfo, multipartNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("get parts: %w", err)
@@ -1022,7 +1026,18 @@ func (c *TreeClient) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, 
 		return 1
 	})
 
-	return parts[len(parts)-1], nil
+	var pi *data.PartInfo
+	for _, part := range parts {
+		if part.Number != number {
+			continue
+		}
+
+		if pi == nil || pi.ServerCreated.Before(part.ServerCreated) {
+			pi = part
+		}
+	}
+
+	return pi, nil
 }
 
 // GetPartsAfter returns parts uploaded after partID. These parts are sorted and filtered by creation time.
@@ -1318,9 +1333,9 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 func metaFromMultipart(info *data.MultipartInfo, fileName string) map[string]string {
 	info.Meta[fileNameKV] = fileName
 	info.Meta[uploadIDKV] = info.UploadID
+	info.Meta[ownerPubKeyKV] = hex.EncodeToString(info.OwnerPubKey.Bytes())
 	info.Meta[ownerKV] = info.Owner.EncodeToString()
 	info.Meta[createdKV] = strconv.FormatInt(info.Created.UTC().UnixMilli(), 10)
-	info.Meta[splitIDKV] = info.SplitID
 
 	return info.Meta
 }

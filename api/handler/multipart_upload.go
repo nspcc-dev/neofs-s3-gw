@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -101,17 +100,14 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	uploadID := uuid.New()
 	additional := []zap.Field{
-		zap.String("uploadID", uploadID.String()),
 		zap.String("Key", reqInfo.ObjectName),
 	}
 
 	p := &layer.CreateMultipartParams{
 		Info: &layer.UploadInfoParams{
-			UploadID: uploadID.String(),
-			Bkt:      bktInfo,
-			Key:      reqInfo.ObjectName,
+			Bkt: bktInfo,
+			Key: reqInfo.ObjectName,
 		},
 		Data: &layer.UploadData{},
 	}
@@ -154,7 +150,8 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err = h.obj.CreateMultipartUpload(r.Context(), p); err != nil {
+	uploadID, err := h.obj.CreateMultipartUpload(r.Context(), p)
+	if err != nil {
 		h.logAndSendError(w, "could create multipart upload", reqInfo, err, additional...)
 		return
 	}
@@ -166,9 +163,10 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	resp := InitiateMultipartUploadResponse{
 		Bucket:   reqInfo.BucketName,
 		Key:      reqInfo.ObjectName,
-		UploadID: uploadID.String(),
+		UploadID: uploadID,
 	}
 
+	additional = append(additional, zap.String("uploadID", uploadID))
 	if err = api.EncodeToResponse(w, resp); err != nil {
 		h.logAndSendError(w, "could not encode InitiateMultipartUploadResponse to response", reqInfo, err, additional...)
 		return
@@ -648,12 +646,12 @@ func encodeListMultipartUploadsToResponse(info *layer.ListMultipartUploadsInfo, 
 		m := MultipartUpload{
 			Initiated: u.Created.UTC().Format(time.RFC3339),
 			Initiator: Initiator{
-				ID:          u.Owner.String(),
+				ID:          u.OwnerPubKey.StringCompressed(),
 				DisplayName: u.Owner.String(),
 			},
 			Key: u.Key,
 			Owner: Owner{
-				ID:          u.Owner.String(),
+				ID:          u.OwnerPubKey.StringCompressed(),
 				DisplayName: u.Owner.String(),
 			},
 			UploadID: u.UploadID,
@@ -671,7 +669,7 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		XMLName: xml.Name{},
 		Bucket:  params.Info.Bkt.Name,
 		Initiator: Initiator{
-			ID:          info.Owner.String(),
+			ID:          info.OwnerPubKey.StringCompressed(),
 			DisplayName: info.Owner.String(),
 		},
 		IsTruncated:          info.IsTruncated,
@@ -679,7 +677,7 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		MaxParts:             params.MaxParts,
 		NextPartNumberMarker: info.NextPartNumberMarker,
 		Owner: Owner{
-			ID:          info.Owner.String(),
+			ID:          info.OwnerPubKey.StringCompressed(),
 			DisplayName: info.Owner.String(),
 		},
 		PartNumberMarker: params.PartNumberMarker,

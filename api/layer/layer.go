@@ -226,7 +226,7 @@ type (
 
 		DeleteObjects(ctx context.Context, p *DeleteObjectParams) []*VersionedObject
 
-		CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) error
+		CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) (string, error)
 		CompleteMultipartUpload(ctx context.Context, p *CompleteMultipartParams) (*UploadData, *data.ExtendedObjectInfo, error)
 		UploadPart(ctx context.Context, p *UploadPartParams) (string, error)
 		UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.ObjectInfo, error)

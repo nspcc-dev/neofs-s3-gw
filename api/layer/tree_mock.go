@@ -276,13 +276,13 @@ func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, bktInfo *dat
 	return result, nil
 }
 
-func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) error {
+func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {
 	cnrMultipartsMap, ok := t.multiparts[bktInfo.CID.EncodeToString()]
 	if !ok {
 		t.multiparts[bktInfo.CID.EncodeToString()] = map[string][]*data.MultipartInfo{
 			info.Key: {info},
 		}
-		return nil
+		return 0, nil
 	}
 
 	multiparts := cnrMultipartsMap[info.Key]
@@ -291,7 +291,7 @@ func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, bktInfo *data
 	}
 	cnrMultipartsMap[info.Key] = append(multiparts, info)
 
-	return nil
+	return info.ID, nil
 }
 
 func (t *TreeServiceMock) GetMultipartUploadsByPrefix(_ context.Context, _ *data.BucketInfo, _ string) ([]*data.MultipartInfo, error) {
@@ -363,7 +363,7 @@ LOOP:
 	return result, nil
 }
 
-func (t *TreeServiceMock) GetLastPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) (*data.PartInfo, error) {
+func (t *TreeServiceMock) GetPartByNumber(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, number int) (*data.PartInfo, error) {
 	parts, err := t.GetParts(ctx, bktInfo, multipartNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("get parts: %w", err)
@@ -390,7 +390,18 @@ func (t *TreeServiceMock) GetLastPart(ctx context.Context, bktInfo *data.BucketI
 		return 1
 	})
 
-	return parts[len(parts)-1], nil
+	var pi *data.PartInfo
+	for _, part := range parts {
+		if part.Number != number {
+			continue
+		}
+
+		if pi == nil || pi.ServerCreated.Before(part.ServerCreated) {
+			pi = part
+		}
+	}
+
+	return pi, nil
 }
 
 func (t *TreeServiceMock) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error) {
