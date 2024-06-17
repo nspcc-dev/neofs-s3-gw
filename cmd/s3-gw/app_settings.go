@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/term"
 )
 
 const (
@@ -404,7 +405,11 @@ func newLogger(v *viper.Viper) *Logger {
 	c := zap.NewProductionConfig()
 	c.Level = zap.NewAtomicLevelAt(lvl)
 	c.Encoding = "console"
-	c.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		c.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	} else {
+		c.EncoderConfig.EncodeTime = func(t time.Time, encoder zapcore.PrimitiveArrayEncoder) {}
+	}
 
 	l, err := c.Build(
 		zap.AddStacktrace(zap.NewAtomicLevelAt(zap.FatalLevel)),
