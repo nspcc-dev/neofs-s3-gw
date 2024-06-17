@@ -150,6 +150,21 @@ func appendCORS(handler Handler) mux.MiddlewareFunc {
 	}
 }
 
+func appendPreflight(handler Handler) mux.MiddlewareFunc {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler.Preflight(w, r)
+			if www, ok := w.(*logResponseWriter); ok {
+				if www.statusCode != 0 {
+					return
+				}
+			}
+
+			h.ServeHTTP(w, r)
+		})
+	}
+}
+
 func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +214,8 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 
 		// -- logging error requests
 		logErrorResponse(log),
+
+		appendPreflight(h),
 	)
 
 	// Attach user authentication for all S3 routes.
