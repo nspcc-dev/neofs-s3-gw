@@ -136,6 +136,10 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions {
+		return
+	}
+
 	reqInfo := api.GetReqInfo(r.Context())
 	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
 	if err != nil {
@@ -146,6 +150,7 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get(api.Origin)
 	if origin == "" {
 		h.logAndSendError(w, "origin request header needed", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
+		return
 	}
 
 	method := r.Header.Get(api.AccessControlRequestMethod)
