@@ -4,6 +4,28 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+## [0.30.1] - 2024-06-19
+
+### Added
+- ARM64 and Darwin binaries (#949)
+
+### Changed
+- Split object scheme for multipart uploads to v2 scheme (#957)
+- Timestamp is hidden if program is not running in TTY (#965)
+
+### Fixed
+- Inability to use "*" in ACLs (#958)
+- Useless EACL record (#961)
+- Incorrect owner returned for versioned/multipart objects (#957)
+- Incorrect size retured for encrypted objects (#957)
+- OPTIONS handling for pre-auth requests (#964)
+
+### Updated
+- Documentation (#946)
+- NeoFS SDK to RC12 (#943, #940, #960)
+- golang.org/x/net dependency from 0.21.0 to 0.23.0 (#948)
+- NeoGo dependency to 0.106.2 (#956, #960, #963)
+
 ## [0.30.0] - 2024-03-27
 
 ### Added
@@ -543,4 +565,5 @@ releases.
 [0.28.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.1...v0.28.2
 [0.29.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.2...v0.29.0
 [0.30.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.29.0...v0.30.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.0...master
+[0.30.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.0...v0.30.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.1...master
