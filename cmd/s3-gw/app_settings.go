@@ -408,7 +408,7 @@ func newLogger(v *viper.Viper) *Logger {
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		c.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	} else {
-		c.EncoderConfig.EncodeTime = func(t time.Time, encoder zapcore.PrimitiveArrayEncoder) {}
+		c.EncoderConfig.EncodeTime = func(_ time.Time, _ zapcore.PrimitiveArrayEncoder) {}
 	}
 
 	l, err := c.Build(
