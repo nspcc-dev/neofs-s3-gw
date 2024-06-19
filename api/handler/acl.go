@@ -300,6 +300,31 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 		return false, fmt.Errorf("could not translate ast to table: %w", err)
 	}
 
+	for _, rec := range table.Records() {
+		var fff []string
+		for _, f := range rec.Filters() {
+			fff = append(fff, fmt.Sprintf("key: %s, val: %s, from: %s, match: %s", f.Key(), f.Value(), f.From().String(), f.Matcher().String()))
+		}
+
+		var ttt []string
+		for _, f := range rec.Targets() {
+			var ks []string
+			for _, asdasd := range f.BinaryKeys() {
+				ks = append(ks, hex.EncodeToString(asdasd))
+			}
+
+			ttt = append(ttt, fmt.Sprintf("role: %s, keys: %s", f.Role(), strings.Join(ks, ", ")))
+		}
+
+		h.log.Warn(
+			"set bucket eacl",
+			zap.String("action", rec.Action().EncodeToString()),
+			zap.String("operation", rec.Operation().EncodeToString()),
+			zap.Strings("filters", fff),
+			zap.Strings("targets", ttt),
+		)
+	}
+
 	p := &layer.PutBucketACLParams{
 		BktInfo:      bktInfo,
 		EACL:         table,
