@@ -1417,6 +1417,8 @@ func getBearer(ctx context.Context, bktInfo *data.BucketInfo) []byte {
 			if bktInfo.Owner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
 				return bd.Gate.BearerToken.Marshal()
 			}
+
+			fmt.Println("pub key requesting data from tree", hex.EncodeToString(bd.Gate.BearerToken.SigningKeyBytes()))
 		}
 	}
 	return nil
