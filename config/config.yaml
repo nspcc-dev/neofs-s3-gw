@@ -49,7 +49,9 @@ tree:
   service: node1.neofs:8080
 
 # RPC endpoint and order of resolving of bucket names
-rpc_endpoint: http://morph-chain.neofs.devenv:30333
+fschain:
+  endpoints:
+    - http://morph-chain.neofs.devenv:30333
 
 # Metrics
 pprof:

@@ -106,7 +106,7 @@ const ( // Settings.
 	cfgTreeServiceEndpoint = "tree.service"
 
 	// NeoGo.
-	cfgRPCEndpoint = "rpc_endpoint"
+	cfgRPCEndpoints = "fschain.endpoints"
 
 	// Application.
 	cfgApplicationBuildTime = "app.build_time"
@@ -237,7 +237,7 @@ func newSettings() *viper.Viper {
 
 	peers := flags.StringArrayP(cfgPeers, "p", nil, "set NeoFS nodes")
 
-	flags.StringP(cfgRPCEndpoint, "r", "", "set RPC endpoint")
+	flags.StringP(cfgRPCEndpoints, "r", "", "set RPC endpoints")
 
 	domains := flags.StringSliceP(cfgListenDomains, "d", nil, "set domains to be listened")
 
@@ -356,7 +356,7 @@ func bindFlags(v *viper.Viper, flags *pflag.FlagSet) error {
 	if err := v.BindPFlag(cfgMaxClientsDeadline, flags.Lookup(cfgMaxClientsDeadline)); err != nil {
 		return err
 	}
-	if err := v.BindPFlag(cfgRPCEndpoint, flags.Lookup(cfgRPCEndpoint)); err != nil {
+	if err := v.BindPFlag(cfgRPCEndpoints, flags.Lookup(cfgRPCEndpoints)); err != nil {
 		return err
 	}
 

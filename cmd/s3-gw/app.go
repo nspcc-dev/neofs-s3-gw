@@ -223,11 +223,11 @@ func (a *App) initMetrics() {
 }
 
 func (a *App) initResolver(ctx context.Context) {
-	endpoint := a.cfg.GetString(cfgRPCEndpoint)
+	endpoints := a.cfg.GetStringSlice(cfgRPCEndpoints)
 
-	a.log.Info("rpc endpoint", zap.String("address", endpoint))
+	a.log.Info("rpc endpoints", zap.Strings("address", endpoints))
 
-	res, err := resolver.NewContainer(ctx, []string{endpoint})
+	res, err := resolver.NewContainer(ctx, endpoints)
 	if err != nil {
 		a.log.Fatal("resolver", zap.Error(err))
 	}
@@ -496,7 +496,7 @@ func (a *App) configReload(ctx context.Context) {
 		return
 	}
 
-	if err := a.resolverContainer.UpdateResolvers(ctx, []string{a.cfg.GetString(cfgRPCEndpoint)}); err != nil {
+	if err := a.resolverContainer.UpdateResolvers(ctx, a.cfg.GetStringSlice(cfgRPCEndpoints)); err != nil {
 		a.log.Warn("failed to update resolvers", zap.Error(err))
 	}
 
