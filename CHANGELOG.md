@@ -4,6 +4,23 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Changed
+- Single `rpc_endpoint` config option replaced with multiple endpoints `fschain.endpoints` option (#968)
+
+### Updating from 0.30.1
+
+Notice that the configuration parameter `fschain.endpoints` contains multiple endpoints.
+For migration, you should update config from old notation
+```yaml
+rpc_endpoint: http://some-host:30333
+```
+to the new one
+```yaml
+fschain:
+  endpoints:
+    - http://some-host:30333
+```
+
 ## [0.30.1] - 2024-06-19
 
 ### Added
