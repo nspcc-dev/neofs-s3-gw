@@ -569,7 +569,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
-			return obj
+			n.log.Info("remove old version", zap.Error(obj.Error))
 		}
 
 		obj.Error = n.treeService.RemoveVersion(ctx, bkt, nodeVersion.ID)
