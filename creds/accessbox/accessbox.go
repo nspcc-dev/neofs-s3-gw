@@ -19,6 +19,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var (
+	hkdfSalt = []byte{0x34, 0xf9, 0xe4, 0xfb, 0xaf, 0x1c, 0x7d, 0x6e}
+	hkdfInfo = []byte("neofs-s3-gw")
+)
+
 // Box represents friendly AccessBox.
 type Box struct {
 	Gate     *GateData
@@ -259,7 +264,7 @@ func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, er
 
 func deriveKey(secret []byte) ([]byte, error) {
 	hash := sha256.New
-	kdf := hkdf.New(hash, secret, nil, nil)
+	kdf := hkdf.New(hash, secret, hkdfSalt, hkdfInfo)
 	key := make([]byte, 32)
 	_, err := io.ReadFull(kdf, key)
 	return key, err
