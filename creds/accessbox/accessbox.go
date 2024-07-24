@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -17,6 +18,14 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
+)
+
+const (
+	hkdfSaltLength = 16
+)
+
+var (
+	hkdfInfo = []byte("neofs-s3-gw")
 )
 
 // Box represents friendly AccessBox.
@@ -257,16 +266,21 @@ func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, er
 	return sk, nil
 }
 
-func deriveKey(secret []byte) ([]byte, error) {
+func deriveKey(secret []byte, hkdfSalt []byte) ([]byte, error) {
 	hash := sha256.New
-	kdf := hkdf.New(hash, secret, nil, nil)
+	kdf := hkdf.New(hash, secret, hkdfSalt, hkdfInfo)
 	key := make([]byte, 32)
 	_, err := io.ReadFull(kdf, key)
 	return key, err
 }
 
 func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
-	enc, err := getCipher(owner, sender)
+	hkdfSalt := make([]byte, hkdfSaltLength)
+	if _, err := rand.Read(hkdfSalt); err != nil {
+		return nil, fmt.Errorf("generate hkdf salt: %w", err)
+	}
+
+	enc, err := getCipher(owner, sender, hkdfSalt)
 	if err != nil {
 		return nil, fmt.Errorf("get chiper: %w", err)
 	}
@@ -276,14 +290,19 @@ func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 		return nil, fmt.Errorf("generate random nonce: %w", err)
 	}
 
-	return enc.Seal(nonce, nonce, data, nil), nil
+	return append(hkdfSalt, enc.Seal(nonce, nonce, data, nil)...), nil
 }
 
 func decrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
-	dec, err := getCipher(owner, sender)
+	if len(data) < hkdfSaltLength {
+		return nil, errors.New("invalid data length")
+	}
+
+	dec, err := getCipher(owner, sender, data[:hkdfSaltLength])
 	if err != nil {
 		return nil, fmt.Errorf("get chiper: %w", err)
 	}
+	data = data[hkdfSaltLength:]
 
 	if ld, ns := len(data), dec.NonceSize(); ld < ns {
 		return nil, fmt.Errorf("wrong data size (%d), should be greater than %d", ld, ns)
@@ -293,13 +312,13 @@ func decrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 	return dec.Open(nil, nonce, cypher, nil)
 }
 
-func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey) (cipher.AEAD, error) {
+func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey, hkdfSalt []byte) (cipher.AEAD, error) {
 	secret, err := generateShared256(owner, sender)
 	if err != nil {
 		return nil, fmt.Errorf("generate shared key: %w", err)
 	}
 
-	key, err := deriveKey(secret)
+	key, err := deriveKey(secret, hkdfSalt)
 	if err != nil {
 		return nil, fmt.Errorf("derive key: %w", err)
 	}
