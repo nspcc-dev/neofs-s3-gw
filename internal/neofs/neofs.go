@@ -284,13 +284,11 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 
 		if prm.Multipart.HeaderObject != nil {
-			id, isSet := prm.Multipart.HeaderObject.ID()
-			if !isSet {
-				return oid.ID{}, errors.New("HeaderObject id is not set")
-			}
-
-			obj.SetParentID(id)
 			obj.SetParent(prm.Multipart.HeaderObject)
+
+			if id, isSet := prm.Multipart.HeaderObject.ID(); isSet {
+				obj.SetParentID(id)
+			}
 		}
 
 		if prm.Multipart.Link != nil {
