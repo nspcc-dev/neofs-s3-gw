@@ -252,11 +252,10 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	var (
-		splitPreviousID      oid.ID
-		splitFirstID         oid.ID
-		isSetSplitPreviousID bool
-		multipartHash        = sha256.New()
-		tzHash               hash.Hash
+		splitPreviousID oid.ID
+		splitFirstID    oid.ID
+		multipartHash   = sha256.New()
+		tzHash          hash.Hash
 	)
 
 	if n.neoFS.IsHomomorphicHashingEnabled() {
@@ -282,7 +281,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		}
 	}
 
-	isSetSplitPreviousID = true
 	splitPreviousID = lastPart.OID
 
 	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
@@ -318,9 +316,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	var totalBytes int
 	// slice part manually. Simultaneously considering the part is a single object for user.
 	for {
-		if isSetSplitPreviousID {
-			prm.Multipart.SplitPreviousID = &splitPreviousID
-		}
+		prm.Multipart.SplitPreviousID = &splitPreviousID
 
 		if !splitFirstID.Equals(oid.ID{}) {
 			prm.Multipart.SplitFirstID = &splitFirstID
@@ -338,7 +334,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 				return nil, err
 			}
 
-			isSetSplitPreviousID = true
 			splitPreviousID = id
 			elements = append(elements, data.LinkObjectPayload{OID: id, Size: uint32(nBts)})
 		}
