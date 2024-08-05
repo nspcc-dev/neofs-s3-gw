@@ -467,6 +467,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	hashlessHeaderObject.SetType(object.TypeRegular)
 	hashlessHeaderObject.SetOwnerID(&bktInfo.Owner)
 	hashlessHeaderObject.SetAttributes(attrs...)
+	hashlessHeaderObject.SetCreationEpoch(n.neoFS.CurrentEpoch())
 
 	currentVersion := version.Current()
 	hashlessHeaderObject.SetVersion(&currentVersion)

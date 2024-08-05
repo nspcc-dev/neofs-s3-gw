@@ -537,6 +537,11 @@ func (x *NeoFS) IsHomomorphicHashingEnabled() bool {
 	return x.cfg.IsHomomorphicEnabled
 }
 
+// CurrentEpoch returns current epoch.
+func (x *NeoFS) CurrentEpoch() uint64 {
+	return x.epochGetter.CurrentEpoch()
+}
+
 func isErrAccessDenied(err error) (string, bool) {
 	unwrappedErr := errors.Unwrap(err)
 	for unwrappedErr != nil {
