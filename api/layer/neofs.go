@@ -250,4 +250,7 @@ type NeoFS interface {
 
 	// IsHomomorphicHashingEnabled shows if homomorphic hashing is enabled in config.
 	IsHomomorphicHashingEnabled() bool
+
+	// CurrentEpoch returns current epoch.
+	CurrentEpoch() uint64
 }

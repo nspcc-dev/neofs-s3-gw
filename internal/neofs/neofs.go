@@ -284,13 +284,11 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 
 		if prm.Multipart.HeaderObject != nil {
-			id, isSet := prm.Multipart.HeaderObject.ID()
-			if !isSet {
-				return oid.ID{}, errors.New("HeaderObject id is not set")
-			}
-
-			obj.SetParentID(id)
 			obj.SetParent(prm.Multipart.HeaderObject)
+
+			if id, isSet := prm.Multipart.HeaderObject.ID(); isSet {
+				obj.SetParentID(id)
+			}
 		}
 
 		if prm.Multipart.Link != nil {
@@ -537,6 +535,11 @@ func (x *NeoFS) MaxObjectSize() int64 {
 // IsHomomorphicHashingEnabled shows if homomorphic hashing is enabled in config.
 func (x *NeoFS) IsHomomorphicHashingEnabled() bool {
 	return x.cfg.IsHomomorphicEnabled
+}
+
+// CurrentEpoch returns current epoch.
+func (x *NeoFS) CurrentEpoch() uint64 {
+	return x.epochGetter.CurrentEpoch()
 }
 
 func isErrAccessDenied(err error) (string, bool) {

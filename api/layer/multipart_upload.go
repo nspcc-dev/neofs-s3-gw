@@ -24,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"github.com/nspcc-dev/tzhash/tz"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
@@ -251,11 +252,10 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	var (
-		splitPreviousID      oid.ID
-		splitFirstID         oid.ID
-		isSetSplitPreviousID bool
-		multipartHash        = sha256.New()
-		tzHash               hash.Hash
+		splitPreviousID oid.ID
+		splitFirstID    oid.ID
+		multipartHash   = sha256.New()
+		tzHash          hash.Hash
 	)
 
 	if n.neoFS.IsHomomorphicHashingEnabled() {
@@ -281,7 +281,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		}
 	}
 
-	isSetSplitPreviousID = true
 	splitPreviousID = lastPart.OID
 
 	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
@@ -317,9 +316,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	var totalBytes int
 	// slice part manually. Simultaneously considering the part is a single object for user.
 	for {
-		if isSetSplitPreviousID {
-			prm.Multipart.SplitPreviousID = &splitPreviousID
-		}
+		prm.Multipart.SplitPreviousID = &splitPreviousID
 
 		if !splitFirstID.Equals(oid.ID{}) {
 			prm.Multipart.SplitFirstID = &splitFirstID
@@ -337,7 +334,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 				return nil, err
 			}
 
-			isSetSplitPreviousID = true
 			splitPreviousID = id
 			elements = append(elements, data.LinkObjectPayload{OID: id, Size: uint32(nBts)})
 		}
@@ -451,6 +447,31 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		objHashes = append(objHashes, tzHash)
 	}
 
+	attrs := make([]object.Attribute, 0, len(multipartInfo.Meta)+1)
+	attrs = append(attrs, *object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
+
+	for key, val := range multipartInfo.Meta {
+		if strings.HasPrefix(key, metaPrefix) {
+			attrs = append(attrs, *object.NewAttribute(strings.TrimPrefix(key, metaPrefix), val))
+		}
+	}
+
+	if encInfo.Enabled {
+		attrs = append(attrs, *object.NewAttribute(AttributeEncryptionAlgorithm, encInfo.Algorithm))
+		attrs = append(attrs, *object.NewAttribute(AttributeHMACKey, encInfo.HMACKey))
+		attrs = append(attrs, *object.NewAttribute(AttributeHMACSalt, encInfo.HMACSalt))
+	}
+
+	var hashlessHeaderObject object.Object
+	hashlessHeaderObject.SetContainerID(bktInfo.CID)
+	hashlessHeaderObject.SetType(object.TypeRegular)
+	hashlessHeaderObject.SetOwnerID(&bktInfo.Owner)
+	hashlessHeaderObject.SetAttributes(attrs...)
+	hashlessHeaderObject.SetCreationEpoch(n.neoFS.CurrentEpoch())
+
+	currentVersion := version.Current()
+	hashlessHeaderObject.SetVersion(&currentVersion)
+
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
@@ -459,6 +480,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
 			MultipartHashes: objHashes,
+			HeaderObject:    &hashlessHeaderObject,
 		},
 		Payload: bytes.NewBuffer(nil),
 	}
