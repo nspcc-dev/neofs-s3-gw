@@ -21,7 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/crypto/test"
+	neofscryptotest "github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -1469,7 +1469,7 @@ func generateRecord(action eacl.Action, op eacl.Operation, targets []eacl.Target
 }
 
 func TestEACLEncode(t *testing.T) {
-	s := test.RandomSignerRFC6979(t)
+	s := user.NewAutoIDSigner(neofscryptotest.ECDSAPrivateKey())
 
 	b := make([]byte, s.Public().MaxEncodedSize())
 	s.Public().Encode(b)
