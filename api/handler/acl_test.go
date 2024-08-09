@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -27,6 +26,7 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -52,8 +52,17 @@ func TestTableToAst(t *testing.T) {
 	record2 := eacl.NewRecord()
 	record2.SetAction(eacl.ActionDeny)
 	record2.SetOperation(eacl.OperationPut)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record2, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()), *((*ecdsa.PublicKey)(key2.PublicKey())))
+
+	target := eacl.NewTarget()
+	// Unknown role is used, because it is ignored when accounts are set
+	target.SetRole(eacl.RoleUnknown)
+	target.SetAccounts([]user.ID{
+		user.NewFromScriptHash(key.PublicKey().GetScriptHash()),
+		user.NewFromScriptHash(key2.PublicKey().GetScriptHash()),
+	})
+
+	record2.SetTargets(*target)
+
 	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
 	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
 	table.AddRecord(record2)
@@ -73,9 +82,9 @@ func TestTableToAst(t *testing.T) {
 					Version: id.EncodeToString(),
 				},
 				Operations: []*astOperation{{
-					Users: []string{
-						hex.EncodeToString(key.PublicKey().Bytes()),
-						hex.EncodeToString(key2.PublicKey().Bytes()),
+					Users: []user.ID{
+						user.NewFromScriptHash(key.PublicKey().GetScriptHash()),
+						user.NewFromScriptHash(key2.PublicKey().GetScriptHash()),
 					},
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionDeny,
@@ -109,7 +118,7 @@ func TestPolicyToAst(t *testing.T) {
 			{
 				Effect: "Deny",
 				Principal: principal{
-					CanonicalUser: hex.EncodeToString(key.PublicKey().Bytes()),
+					CanonicalUser: user.NewFromScriptHash(key.GetScriptHash()).String(),
 				},
 				Action:   stringOrSlice{values: []string{"s3:GetObject"}},
 				Resource: stringOrSlice{values: []string{"arn:aws:s3:::bucketName/object"}},
@@ -153,10 +162,10 @@ func TestPolicyToAst(t *testing.T) {
 func getReadOps(key *keys.PrivateKey, groupGrantee bool, action eacl.Action) []*astOperation {
 	var (
 		result []*astOperation
-		users  []string
+		users  []user.ID
 	)
 	if !groupGrantee {
-		users = append(users, hex.EncodeToString(key.PublicKey().Bytes()))
+		users = append(users, user.NewFromScriptHash(key.GetScriptHash()))
 	}
 
 	for _, op := range readOps {
@@ -182,7 +191,7 @@ func TestMergeAstUnModified(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
+					Users:  []user.ID{user.NewFromScriptHash(key.GetScriptHash())},
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionDeny,
 				}},
@@ -211,6 +220,9 @@ func TestMergeAstUnModified(t *testing.T) {
 }
 
 func TestMergeAstModified(t *testing.T) {
+	user1 := usertest.ID()
+	user2 := usertest.ID()
+
 	child := &ast{
 		Resources: []*astResource{
 			{
@@ -222,7 +234,7 @@ func TestMergeAstModified(t *testing.T) {
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionDeny,
 				}, {
-					Users:  []string{"user2"},
+					Users:  []user.ID{user2},
 					Op:     eacl.OperationGet,
 					Action: eacl.ActionDeny,
 				}},
@@ -238,7 +250,7 @@ func TestMergeAstModified(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{"user1"},
+					Users:  []user.ID{user1},
 					Op:     eacl.OperationGet,
 					Action: eacl.ActionDeny,
 				}},
@@ -256,7 +268,7 @@ func TestMergeAstModified(t *testing.T) {
 				Operations: []*astOperation{
 					child.Resources[0].Operations[0],
 					{
-						Users:  []string{"user1", "user2"},
+						Users:  []user.ID{user1, user2},
 						Op:     eacl.OperationGet,
 						Action: eacl.ActionDeny,
 					},
@@ -273,7 +285,7 @@ func TestMergeAstModified(t *testing.T) {
 func TestMergeAppended(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
-	users := []string{hex.EncodeToString(key.PublicKey().Bytes())}
+	users := []user.ID{user.NewFromScriptHash(key.GetScriptHash())}
 
 	parent := &ast{
 		Resources: []*astResource{
@@ -435,9 +447,9 @@ func TestMergeAppended(t *testing.T) {
 func TestOrder(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
-	users := []string{hex.EncodeToString(key.PublicKey().Bytes())}
+	users := []user.ID{user.NewFromScriptHash(key.GetScriptHash())}
 	targetUser := eacl.NewTarget()
-	targetUser.SetBinaryKeys([][]byte{key.PublicKey().Bytes()})
+	targetUser.SetAccounts(users)
 	targetOther := eacl.NewTarget()
 	targetOther.SetRole(eacl.RoleOthers)
 	bucketName := "bucket"
@@ -550,6 +562,10 @@ func TestOrder(t *testing.T) {
 }
 
 func TestMergeAstModifiedConflict(t *testing.T) {
+	user1 := usertest.ID()
+	user2 := usertest.ID()
+	user3 := usertest.ID()
+
 	child := &ast{
 		Resources: []*astResource{
 			{
@@ -558,11 +574,11 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{"user1"},
+					Users:  []user.ID{user1},
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionDeny,
 				}, {
-					Users:  []string{"user3"},
+					Users:  []user.ID{user3},
 					Op:     eacl.OperationGet,
 					Action: eacl.ActionAllow,
 				}},
@@ -578,15 +594,15 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{"user1"},
+					Users:  []user.ID{user1},
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionAllow,
 				}, {
-					Users:  []string{"user2"},
+					Users:  []user.ID{user2},
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionDeny,
 				}, {
-					Users:  []string{"user3"},
+					Users:  []user.ID{user3},
 					Op:     eacl.OperationGet,
 					Action: eacl.ActionDeny,
 				}},
@@ -603,11 +619,11 @@ func TestMergeAstModifiedConflict(t *testing.T) {
 				},
 				Operations: []*astOperation{
 					{
-						Users:  []string{"user2", "user1"},
+						Users:  []user.ID{user2, user1},
 						Op:     eacl.OperationPut,
 						Action: eacl.ActionDeny,
 					}, {
-						Users:  []string{"user3"},
+						Users:  []user.ID{user3},
 						Op:     eacl.OperationGet,
 						Action: eacl.ActionAllow,
 					},
@@ -632,7 +648,7 @@ func TestAstToTable(t *testing.T) {
 					Bucket: "bucketName",
 				},
 				Operations: []*astOperation{{
-					Users:  []string{hex.EncodeToString(key.PublicKey().Bytes())},
+					Users:  []user.ID{user.NewFromScriptHash(key.GetScriptHash())},
 					Op:     eacl.OperationPut,
 					Action: eacl.ActionAllow,
 				}},
@@ -654,8 +670,13 @@ func TestAstToTable(t *testing.T) {
 	record1 := eacl.NewRecord()
 	record1.SetAction(eacl.ActionAllow)
 	record1.SetOperation(eacl.OperationPut)
-	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record1, eacl.RoleUnknown, *(*ecdsa.PublicKey)(key.PublicKey()))
+
+	target := eacl.NewTarget()
+	// Unknown role is used, because it is ignored when accounts are set
+	target.SetRole(eacl.RoleUnknown)
+	target.SetAccounts([]user.ID{user.NewFromScriptHash(key.PublicKey().GetScriptHash())})
+
+	record1.SetTargets(*target)
 
 	record2 := eacl.NewRecord()
 	record2.SetAction(eacl.ActionDeny)
@@ -672,17 +693,23 @@ func TestAstToTable(t *testing.T) {
 }
 
 func TestRemoveUsers(t *testing.T) {
+	user1 := usertest.ID()
+	user2 := usertest.ID()
+	user3 := usertest.ID()
+	user4 := usertest.ID()
+	user5 := usertest.ID()
+
 	resource := &astResource{
 		resourceInfo: resourceInfo{
 			Bucket: "bucket",
 		},
 		Operations: []*astOperation{{
-			Users:  []string{"user1", "user3", "user4"},
+			Users:  []user.ID{user1, user3, user4},
 			Op:     eacl.OperationPut,
 			Action: eacl.ActionAllow,
 		},
 			{
-				Users:  []string{"user5"},
+				Users:  []user.ID{user5},
 				Op:     eacl.OperationGet,
 				Action: eacl.ActionDeny,
 			},
@@ -698,11 +725,11 @@ func TestRemoveUsers(t *testing.T) {
 		Action: eacl.ActionDeny,
 	}
 
-	removeUsers(resource, op1, []string{"user1", "user2", "user4"}) // modify astOperation
-	removeUsers(resource, op2, []string{"user5"})                   // remove astOperation
+	removeUsers(resource, op1, []user.ID{user1, user2, user4}) // modify astOperation
+	removeUsers(resource, op2, []user.ID{user5})               // remove astOperation
 
 	require.Equal(t, len(resource.Operations), 1)
-	require.Equal(t, []string{"user3"}, resource.Operations[0].Users)
+	require.Equal(t, []user.ID{user3}, resource.Operations[0].Users)
 }
 
 func TestBucketAclToPolicy(t *testing.T) {
@@ -711,12 +738,12 @@ func TestBucketAclToPolicy(t *testing.T) {
 	key2, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
 	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: "user1",
 		},
 		AccessControlList: []*Grant{{
@@ -744,7 +771,7 @@ func TestBucketAclToPolicy(t *testing.T) {
 			{
 				Effect: "Allow",
 				Principal: principal{
-					CanonicalUser: id,
+					CanonicalUser: id.String(),
 				},
 				Action:   stringOrSlice{values: []string{"s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:PutObject", "s3:DeleteObject"}},
 				Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
@@ -777,17 +804,17 @@ func TestObjectAclToPolicy(t *testing.T) {
 	key2, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
 	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: "user1",
 		},
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
-				ID:   id,
+				ID:   id.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermFullControl,
@@ -817,7 +844,7 @@ func TestObjectAclToPolicy(t *testing.T) {
 			{
 				Effect: "Allow",
 				Principal: principal{
-					CanonicalUser: id,
+					CanonicalUser: id.String(),
 				},
 				Action:   stringOrSlice{values: []string{s3GetObject, s3GetObjectVersion, s3PutObject, s3DeleteObject}},
 				Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
@@ -847,16 +874,16 @@ func TestObjectAclToPolicy(t *testing.T) {
 func TestObjectWithVersionAclToTable(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
-	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: "user1",
 		},
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
-				ID:   id,
+				ID:   id.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermFullControl,
@@ -977,7 +1004,7 @@ func TestParseCannedACLHeaders(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
 	address := key.PublicKey().Address()
 
 	req := &http.Request{
@@ -988,12 +1015,12 @@ func TestParseCannedACLHeaders(t *testing.T) {
 
 	expectedACL := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: address,
 		},
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
-				ID:          id,
+				ID:          id.String(),
 				DisplayName: address,
 				Type:        granteeCanonicalUser,
 			},
@@ -1007,7 +1034,7 @@ func TestParseCannedACLHeaders(t *testing.T) {
 		}},
 	}
 
-	actualACL, err := parseACLHeaders(req.Header, key.PublicKey())
+	actualACL, err := parseACLHeaders(req.Header, user.NewFromScriptHash(key.GetScriptHash()))
 	require.NoError(t, err)
 	require.Equal(t, expectedACL, actualACL)
 }
@@ -1016,32 +1043,36 @@ func TestParseACLHeaders(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
 	address := key.PublicKey().Address()
+
+	user1 := usertest.ID()
+	user2 := usertest.ID()
+	user3 := usertest.ID()
 
 	req := &http.Request{
 		Header: map[string][]string{
-			api.AmzGrantFullControl: {"id=\"user1\""},
-			api.AmzGrantRead:        {"uri=\"" + allUsersGroup + "\", id=\"user2\""},
-			api.AmzGrantWrite:       {"id=\"user2\", id=\"user3\""},
+			api.AmzGrantFullControl: {fmt.Sprintf("id=\"%s\"", user1.String())},
+			api.AmzGrantRead:        {"uri=\"" + allUsersGroup + fmt.Sprintf("\", id=\"%s\"", user2.String())},
+			api.AmzGrantWrite:       {fmt.Sprintf("id=\"%s\", id=\"%s\"", user2.String(), user3.String())},
 		},
 	}
 
 	expectedACL := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: address,
 		},
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
-				ID:          id,
+				ID:          id.String(),
 				DisplayName: address,
 				Type:        granteeCanonicalUser,
 			},
 			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
-				ID:   "user1",
+				ID:   user1.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermFullControl,
@@ -1053,26 +1084,26 @@ func TestParseACLHeaders(t *testing.T) {
 			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
-				ID:   "user2",
+				ID:   user2.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
-				ID:   "user2",
+				ID:   user2.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermWrite,
 		}, {
 			Grantee: &Grantee{
-				ID:   "user3",
+				ID:   user3.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermWrite,
 		}},
 	}
 
-	actualACL, err := parseACLHeaders(req.Header, key.PublicKey())
+	actualACL, err := parseACLHeaders(req.Header, user.NewFromScriptHash(key.GetScriptHash()))
 	require.NoError(t, err)
 	require.Equal(t, expectedACL, actualACL)
 }
@@ -1116,12 +1147,12 @@ func TestBucketAclToTable(t *testing.T) {
 	key2, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
-	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
+	id2 := user.NewFromScriptHash(key2.GetScriptHash())
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: "user1",
 		},
 		AccessControlList: []*Grant{{
@@ -1132,7 +1163,7 @@ func TestBucketAclToTable(t *testing.T) {
 			Permission: awsPermRead,
 		}, {
 			Grantee: &Grantee{
-				ID:   id2,
+				ID:   id2.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermWrite,
@@ -1170,23 +1201,23 @@ func TestObjectAclToAst(t *testing.T) {
 	key2, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
-	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
+	id2 := user.NewFromScriptHash(key2.GetScriptHash())
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: "user1",
 		},
 		AccessControlList: []*Grant{{
 			Grantee: &Grantee{
-				ID:   id,
+				ID:   id.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermFullControl,
 		}, {
 			Grantee: &Grantee{
-				ID:   id2,
+				ID:   id2.String(),
 				Type: granteeCanonicalUser,
 			},
 			Permission: awsPermRead,
@@ -1202,9 +1233,9 @@ func TestObjectAclToAst(t *testing.T) {
 
 	var operations []*astOperation
 	for _, op := range readOps {
-		astOp := &astOperation{Users: []string{
-			hex.EncodeToString(key.PublicKey().Bytes()),
-			hex.EncodeToString(key2.PublicKey().Bytes()),
+		astOp := &astOperation{Users: []user.ID{
+			user.NewFromScriptHash(key.GetScriptHash()),
+			user.NewFromScriptHash(key2.GetScriptHash()),
 		},
 			Op:     op,
 			Action: eacl.ActionAllow,
@@ -1213,8 +1244,8 @@ func TestObjectAclToAst(t *testing.T) {
 	}
 
 	for _, op := range writeOps {
-		astOp := &astOperation{Users: []string{
-			hex.EncodeToString(key.PublicKey().Bytes()),
+		astOp := &astOperation{Users: []user.ID{
+			user.NewFromScriptHash(key.GetScriptHash()),
 		},
 			Op:     op,
 			Action: eacl.ActionAllow,
@@ -1248,18 +1279,18 @@ func TestBucketAclToAst(t *testing.T) {
 	key2, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	id := hex.EncodeToString(key.PublicKey().Bytes())
-	id2 := hex.EncodeToString(key2.PublicKey().Bytes())
+	id := user.NewFromScriptHash(key.GetScriptHash())
+	id2 := user.NewFromScriptHash(key2.GetScriptHash())
 
 	acl := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          id,
+			ID:          id.String(),
 			DisplayName: "user1",
 		},
 		AccessControlList: []*Grant{
 			{
 				Grantee: &Grantee{
-					ID:   id2,
+					ID:   id2.String(),
 					Type: granteeCanonicalUser,
 				},
 				Permission: awsPermWrite,
@@ -1275,8 +1306,8 @@ func TestBucketAclToAst(t *testing.T) {
 
 	var operations []*astOperation
 	for _, op := range readOps {
-		astOp := &astOperation{Users: []string{
-			hex.EncodeToString(key.PublicKey().Bytes()),
+		astOp := &astOperation{Users: []user.ID{
+			user.NewFromScriptHash(key.GetScriptHash()),
 		},
 			Op:     op,
 			Action: eacl.ActionAllow,
@@ -1284,9 +1315,9 @@ func TestBucketAclToAst(t *testing.T) {
 		operations = append(operations, astOp)
 	}
 	for _, op := range writeOps {
-		astOp := &astOperation{Users: []string{
-			hex.EncodeToString(key.PublicKey().Bytes()),
-			hex.EncodeToString(key2.PublicKey().Bytes()),
+		astOp := &astOperation{Users: []user.ID{
+			user.NewFromScriptHash(key.GetScriptHash()),
+			user.NewFromScriptHash(key2.GetScriptHash()),
 		},
 			Op:     op,
 			Action: eacl.ActionAllow,
@@ -1342,7 +1373,7 @@ func TestBucketPolicy(t *testing.T) {
 	bktPolicy := getBucketPolicy(hc, bktName)
 	for _, st := range bktPolicy.Statement {
 		if st.Effect == "Allow" {
-			require.Equal(t, hex.EncodeToString(key.PublicKey().Bytes()), st.Principal.CanonicalUser)
+			require.Equal(t, user.NewFromScriptHash(key.GetScriptHash()).String(), st.Principal.CanonicalUser)
 			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource.values)
 		} else {
 			require.Equal(t, allUsersWildcard, st.Principal.AWS)
@@ -1476,6 +1507,7 @@ func TestEACLEncode(t *testing.T) {
 
 	pubKey, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
 	require.NoError(t, err)
+	owner := user.NewFromScriptHash(pubKey.GetScriptHash())
 
 	acl := layer.BucketACL{
 		Info: &data.BucketInfo{
@@ -1489,7 +1521,7 @@ func TestEACLEncode(t *testing.T) {
 	acl.EACL.SetCID(containerID)
 
 	var userTarget eacl.Target
-	userTarget.SetBinaryKeys([][]byte{b})
+	userTarget.SetAccounts([]user.ID{s.UserID()})
 
 	var othersTarget eacl.Target
 	othersTarget.SetRole(eacl.RoleOthers)
@@ -1534,7 +1566,7 @@ func TestEACLEncode(t *testing.T) {
 		},
 		{
 			Grantee: &Grantee{
-				ID:          hex.EncodeToString(b),
+				ID:          owner.String(),
 				Type:        granteeCanonicalUser,
 				DisplayName: s.UserID().String(),
 			},

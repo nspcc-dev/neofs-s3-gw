@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -118,7 +119,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
 			return
 		}
-		if _, err = parseACLHeaders(r.Header, key); err != nil {
+		if _, err = parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash())); err != nil {
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return
 		}
@@ -426,7 +427,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
 			return
 		}
-		acl, err := parseACLHeaders(r.Header, key)
+		acl, err := parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
 		if err != nil {
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return
@@ -646,12 +647,12 @@ func encodeListMultipartUploadsToResponse(info *layer.ListMultipartUploadsInfo, 
 		m := MultipartUpload{
 			Initiated: u.Created.UTC().Format(time.RFC3339),
 			Initiator: Initiator{
-				ID:          u.OwnerPubKey.StringCompressed(),
+				ID:          u.Owner.String(),
 				DisplayName: u.Owner.String(),
 			},
 			Key: u.Key,
 			Owner: Owner{
-				ID:          u.OwnerPubKey.StringCompressed(),
+				ID:          u.Owner.String(),
 				DisplayName: u.Owner.String(),
 			},
 			UploadID: u.UploadID,
@@ -669,7 +670,7 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		XMLName: xml.Name{},
 		Bucket:  params.Info.Bkt.Name,
 		Initiator: Initiator{
-			ID:          info.OwnerPubKey.StringCompressed(),
+			ID:          info.Owner.String(),
 			DisplayName: info.Owner.String(),
 		},
 		IsTruncated:          info.IsTruncated,
@@ -677,7 +678,7 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		MaxParts:             params.MaxParts,
 		NextPartNumberMarker: info.NextPartNumberMarker,
 		Owner: Owner{
-			ID:          info.OwnerPubKey.StringCompressed(),
+			ID:          info.Owner.String(),
 			DisplayName: info.Owner.String(),
 		},
 		PartNumberMarker: params.PartNumberMarker,
