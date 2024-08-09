@@ -2,39 +2,41 @@ package handler
 
 import (
 	"encoding/xml"
+	"fmt"
 	"testing"
 
+	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAccessControlPolicyXML(t *testing.T) {
 	// slightly modified (all possible fields are set) sample of AWS S3 ACL from
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html
-	const policyXML = `
+	var policyTemplate = `
 <?xml version="1.0" encoding="UTF-8"?>
 <AccessControlPolicy xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
   <Owner>
-    <ID>Owner-canonical-user-ID</ID>
+    <ID>%[1]s</ID>
     <DisplayName>display-name</DisplayName>
   </Owner>
   <AccessControlList>
     <Grant>
       <Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
-        <ID>Owner-canonical-user-ID</ID>
+        <ID>%[1]s</ID>
         <DisplayName>owner-display-name</DisplayName>
       </Grantee>
       <Permission>FULL_CONTROL</Permission>
     </Grant>
     <Grant>
       <Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
-        <ID>user1-canonical-user-ID</ID>
+        <ID>%[2]s</ID>
         <DisplayName>user1-display-name</DisplayName>
       </Grantee>
       <Permission>WRITE</Permission>
     </Grant>
     <Grant>
       <Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
-        <ID>user2-canonical-user-ID</ID>
+        <ID>%[3]s</ID>
         <DisplayName>user2-display-name</DisplayName>
       </Grantee>
       <Permission>READ</Permission>
@@ -61,13 +63,18 @@ func TestAccessControlPolicyXML(t *testing.T) {
 </AccessControlPolicy>
 `
 
+	var uid = usertest.ID()
+	var user1 = usertest.ID()
+	var user2 = usertest.ID()
+
+	var policyXML = fmt.Sprintf(policyTemplate, uid.String(), user1.String(), user2.String())
 	var p AccessControlPolicy
 
 	err := xml.Unmarshal([]byte(policyXML), &p)
 	require.NoError(t, err)
 
 	require.Equal(t, Owner{
-		ID:          "Owner-canonical-user-ID",
+		ID:          uid.String(),
 		DisplayName: "display-name",
 	}, p.Owner)
 
@@ -78,7 +85,7 @@ func TestAccessControlPolicyXML(t *testing.T) {
 	require.Equal(t, awsPermFullControl, g.Permission)
 	require.Equal(t, "owner-display-name", g.Grantee.DisplayName)
 	require.Empty(t, g.Grantee.EmailAddress)
-	require.Equal(t, "Owner-canonical-user-ID", g.Grantee.ID)
+	require.Equal(t, uid.String(), g.Grantee.ID)
 	require.EqualValues(t, "CanonicalUser", g.Grantee.Type)
 	require.Empty(t, g.Grantee.URI)
 
@@ -87,7 +94,7 @@ func TestAccessControlPolicyXML(t *testing.T) {
 	require.Equal(t, awsPermWrite, g.Permission)
 	require.Equal(t, "user1-display-name", g.Grantee.DisplayName)
 	require.Empty(t, g.Grantee.EmailAddress)
-	require.Equal(t, "user1-canonical-user-ID", g.Grantee.ID)
+	require.Equal(t, user1.String(), g.Grantee.ID)
 	require.EqualValues(t, "CanonicalUser", g.Grantee.Type)
 	require.Empty(t, g.Grantee.URI)
 
@@ -96,7 +103,7 @@ func TestAccessControlPolicyXML(t *testing.T) {
 	require.Equal(t, awsPermRead, g.Permission)
 	require.Equal(t, "user2-display-name", g.Grantee.DisplayName)
 	require.Empty(t, g.Grantee.EmailAddress)
-	require.Equal(t, "user2-canonical-user-ID", g.Grantee.ID)
+	require.Equal(t, user2.String(), g.Grantee.ID)
 	require.EqualValues(t, "CanonicalUser", g.Grantee.Type)
 	require.Empty(t, g.Grantee.URI)
 

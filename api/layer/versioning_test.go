@@ -143,7 +143,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
-	bearerToken := bearertest.Token(t)
+	bearerToken := bearertest.Token()
 	require.NoError(t, bearerToken.Sign(signer))
 
 	ctx := context.WithValue(context.Background(), api.BoxData, &accessbox.Box{

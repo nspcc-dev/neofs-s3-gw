@@ -20,7 +20,7 @@ func getTestConfig() *Config {
 }
 
 func TestCache(t *testing.T) {
-	obj := objecttest.Object(t)
+	obj := objecttest.Object()
 	objID, _ := obj.ID()
 	cnrID, _ := obj.ContainerID()
 
