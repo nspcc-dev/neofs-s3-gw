@@ -931,14 +931,14 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 	// Order of these loops is important for test.
 	for i := len(writeOps) - 1; i >= 0; i-- {
 		op := writeOps[i]
-		record := getAllowRecord(op, key.PublicKey())
+		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
 		applyFilters(record)
 		expectedTable.AddRecord(record)
 	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
-		record := getAllowRecord(op, key.PublicKey())
+		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
 		applyFilters(record)
 		expectedTable.AddRecord(record)
@@ -1175,10 +1175,10 @@ func TestBucketAclToTable(t *testing.T) {
 		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionAllow))
 	}
 	for _, op := range writeOps {
-		expectedTable.AddRecord(getAllowRecord(op, key2.PublicKey()))
+		expectedTable.AddRecord(getAllowRecordWithUser(op, user.NewFromScriptHash(key2.GetScriptHash())))
 	}
 	for _, op := range fullOps {
-		expectedTable.AddRecord(getAllowRecord(op, key.PublicKey()))
+		expectedTable.AddRecord(getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
 	}
 	for _, op := range fullOps {
 		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))

@@ -1568,21 +1568,6 @@ func isValidGrant(grant *Grant) bool {
 		(grant.Grantee.Type == granteeCanonicalUser || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI == allUsersGroup))
 }
 
-func getAllowRecord(op eacl.Operation, pk *keys.PublicKey) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(eacl.ActionAllow)
-
-	t := eacl.NewTarget()
-	// Unknown role is used, because it is ignored when keys are set
-	t.SetRole(eacl.RoleUnknown)
-	t.SetAccounts([]user.ID{user.NewFromScriptHash(pk.GetScriptHash())})
-
-	record.SetTargets(*t)
-
-	return record
-}
-
 func getAllowRecordWithUser(op eacl.Operation, acc user.ID) *eacl.Record {
 	record := eacl.NewRecord()
 	record.SetOperation(op)
