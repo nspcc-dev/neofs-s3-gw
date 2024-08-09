@@ -646,12 +646,12 @@ func encodeListMultipartUploadsToResponse(info *layer.ListMultipartUploadsInfo, 
 		m := MultipartUpload{
 			Initiated: u.Created.UTC().Format(time.RFC3339),
 			Initiator: Initiator{
-				ID:          u.OwnerPubKey.StringCompressed(),
+				ID:          u.Owner.String(),
 				DisplayName: u.Owner.String(),
 			},
 			Key: u.Key,
 			Owner: Owner{
-				ID:          u.OwnerPubKey.StringCompressed(),
+				ID:          u.Owner.String(),
 				DisplayName: u.Owner.String(),
 			},
 			UploadID: u.UploadID,
@@ -669,7 +669,7 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		XMLName: xml.Name{},
 		Bucket:  params.Info.Bkt.Name,
 		Initiator: Initiator{
-			ID:          info.OwnerPubKey.StringCompressed(),
+			ID:          info.Owner.String(),
 			DisplayName: info.Owner.String(),
 		},
 		IsTruncated:          info.IsTruncated,
@@ -677,7 +677,7 @@ func encodeListPartsToResponse(info *layer.ListPartsInfo, params *layer.ListPart
 		MaxParts:             params.MaxParts,
 		NextPartNumberMarker: info.NextPartNumberMarker,
 		Owner: Owner{
-			ID:          info.OwnerPubKey.StringCompressed(),
+			ID:          info.Owner.String(),
 			DisplayName: info.Owner.String(),
 		},
 		PartNumberMarker: params.PartNumberMarker,

@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +23,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -175,7 +175,7 @@ func (r *resourceInfo) IsBucket() bool {
 }
 
 type astOperation struct {
-	Users  []string
+	Users  []user.ID
 	Op     eacl.Operation
 	Action eacl.Action
 }
@@ -493,14 +493,18 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func parseACLHeaders(header http.Header, key *keys.PublicKey) (*AccessControlPolicy, error) {
-	var err error
+	var (
+		err     error
+		account = user.NewFromScriptHash(key.GetScriptHash()).String()
+	)
+
 	acp := &AccessControlPolicy{Owner: Owner{
-		ID:          hex.EncodeToString(key.Bytes()),
+		ID:          account,
 		DisplayName: key.Address(),
 	}}
 	acp.AccessControlList = []*Grant{{
 		Grantee: &Grantee{
-			ID:          hex.EncodeToString(key.Bytes()),
+			ID:          account,
 			DisplayName: key.Address(),
 			Type:        granteeCanonicalUser,
 		},
@@ -590,8 +594,12 @@ func formGrantee(granteeType, value string) (*Grantee, error) {
 	value = strings.Trim(value, "\"")
 	switch granteeType {
 	case "id":
+		id, err := user.DecodeString(value)
+		if err != nil {
+			return nil, fmt.Errorf("decode grantee user.ID: %w", err)
+		}
 		return &Grantee{
-			ID:   value,
+			ID:   id.String(),
 			Type: granteeCanonicalUser,
 		}, nil
 	case "uri":
@@ -794,9 +802,9 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 }
 
 func handleAddOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
-	var needToAdd []string
+	var needToAdd []user.ID
 	for _, user := range astOp.Users {
-		if !containsStr(existedOp.Users, user) {
+		if !containsUser(existedOp.Users, user) {
 			needToAdd = append(needToAdd, user)
 		}
 	}
@@ -808,9 +816,9 @@ func handleAddOperations(parentResource *astResource, astOp, existedOp *astOpera
 }
 
 func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
-	var needToRemove []string
+	var needToRemove []user.ID
 	for _, user := range astOp.Users {
-		if containsStr(existedOp.Users, user) {
+		if containsUser(existedOp.Users, user) {
 			needToRemove = append(needToRemove, user)
 		}
 	}
@@ -822,7 +830,7 @@ func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOp
 	return false
 }
 
-func containsStr(list []string, element string) bool {
+func containsUser(list []user.ID, element user.ID) bool {
 	for _, str := range list {
 		if str == element {
 			return true
@@ -850,7 +858,7 @@ func removeAstOp(resource *astResource, group bool, op eacl.Operation, action ea
 	}
 }
 
-func addUsers(resource *astResource, astO *astOperation, users []string) {
+func addUsers(resource *astResource, astO *astOperation, users []user.ID) {
 	for _, astOp := range resource.Operations {
 		if astOp.IsGroupGrantee() == astO.IsGroupGrantee() && astOp.Op == astO.Op && astOp.Action == astO.Action {
 			astOp.Users = append(astO.Users, users...)
@@ -859,12 +867,12 @@ func addUsers(resource *astResource, astO *astOperation, users []string) {
 	}
 }
 
-func removeUsers(resource *astResource, astOperation *astOperation, users []string) {
+func removeUsers(resource *astResource, astOperation *astOperation, users []user.ID) {
 	for ind, astOp := range resource.Operations {
 		if !astOp.IsGroupGrantee() && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
 			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
-				if !containsStr(users, user) {
+				if !containsUser(users, user) {
 					filteredUsers = append(filteredUsers, user)
 				}
 			}
@@ -946,16 +954,12 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 		if astOp.IsGroupGrantee() {
 			eacl.AddFormedTarget(record, eacl.RoleOthers)
 		} else {
-			targetKeys := make([]ecdsa.PublicKey, 0, len(astOp.Users))
-			for _, user := range astOp.Users {
-				pk, err := keys.NewPublicKeyFromString(user)
-				if err != nil {
-					return nil, errInvalidPublicKey
-				}
-				targetKeys = append(targetKeys, (ecdsa.PublicKey)(*pk))
-			}
+			t := eacl.NewTarget()
 			// Unknown role is used, because it is ignored when keys are set
-			eacl.AddFormedTarget(record, eacl.RoleUnknown, targetKeys...)
+			t.SetRole(eacl.RoleUnknown)
+			t.SetAccounts(astOp.Users)
+
+			record.SetTargets(*t)
 		}
 		if len(resource.Object) != 0 {
 			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
@@ -989,18 +993,38 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 	if found != nil {
 		if !groupTarget {
 			for _, key := range target.BinaryKeys() {
-				pubKey := hex.EncodeToString(key)
-				var exist bool
+				pk, err := keys.NewPublicKeyFromString(hex.EncodeToString(key))
+				if err != nil {
+					panic(errInvalidPublicKey)
+				}
 
-				for _, userPubKey := range found.Users {
-					if userPubKey == pubKey {
+				var exist bool
+				var acc = user.NewFromScriptHash(pk.GetScriptHash())
+
+				for _, accounts := range found.Users {
+					if accounts == acc {
 						exist = true
 						break
 					}
 				}
 
 				if !exist {
-					found.Users = append(found.Users, pubKey)
+					found.Users = append(found.Users, acc)
+				}
+			}
+
+			for _, acc := range target.Accounts() {
+				var exist bool
+
+				for _, accounts := range found.Users {
+					if accounts == acc {
+						exist = true
+						break
+					}
+				}
+
+				if !exist {
+					found.Users = append(found.Users, acc)
 				}
 			}
 		}
@@ -1011,8 +1035,15 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 		}
 		if !groupTarget {
 			for _, key := range target.BinaryKeys() {
-				astOperation.Users = append(astOperation.Users, hex.EncodeToString(key))
+				pk, err := keys.NewPublicKeyFromString(hex.EncodeToString(key))
+				if err != nil {
+					panic(errInvalidPublicKey)
+				}
+
+				astOperation.Users = append(astOperation.Users, user.NewFromScriptHash(pk.GetScriptHash()))
 			}
+
+			astOperation.Users = append(astOperation.Users, target.Accounts()...)
 		}
 
 		operations = append(operations, astOperation)
@@ -1050,7 +1081,20 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			for _, action := range state.Action.values {
 				for _, op := range actionToOpMap[action] {
 					toAction := effectToAction(state.Effect)
-					r.Operations = addTo(r.Operations, state.Principal.CanonicalUser, op, groupGrantee, toAction)
+
+					var (
+						canonicalUser user.ID
+						err           error
+					)
+
+					if len(state.Principal.CanonicalUser) > 0 {
+						canonicalUser, err = user.DecodeString(state.Principal.CanonicalUser)
+						if err != nil {
+							return nil, fmt.Errorf("canonical user: decode user.ID: %w", err)
+						}
+					}
+
+					r.Operations = addTo(r.Operations, canonicalUser, op, groupGrantee, toAction)
 				}
 			}
 
@@ -1102,9 +1146,9 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 	for _, op := range list {
 		if !op.IsGroupGrantee() {
 			for _, user := range op.Users {
-				userOps := userOpsMap[user]
+				userOps := userOpsMap[user.String()]
 				userOps = append(userOps, op.Op)
-				userOpsMap[user] = userOps
+				userOpsMap[user.String()] = userOps
 			}
 		} else {
 			userOps := userOpsMap[allUsersGroup]
@@ -1151,7 +1195,7 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 	return allowed, denied
 }
 
-func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee bool, action eacl.Action) []*astOperation {
+func addTo(list []*astOperation, userID user.ID, op eacl.Operation, groupGrantee bool, action eacl.Action) []*astOperation {
 	var found *astOperation
 	for _, astop := range list {
 		if astop.Op == op && astop.IsGroupGrantee() == groupGrantee {
@@ -1160,7 +1204,7 @@ func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee 
 	}
 
 	if found != nil {
-		if !groupGrantee {
+		if !groupGrantee && !userID.IsZero() {
 			found.Users = append(found.Users, userID)
 		}
 	} else {
@@ -1168,7 +1212,7 @@ func addTo(list []*astOperation, userID string, op eacl.Operation, groupGrantee 
 			Op:     op,
 			Action: action,
 		}
-		if !groupGrantee {
+		if !groupGrantee && !userID.IsZero() {
 			astoperation.Users = append(astoperation.Users, userID)
 		}
 
@@ -1199,8 +1243,18 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 	}
 
 	for _, op := range ops {
+		var accounts []user.ID
+
+		if len(acl.Owner.ID) > 0 {
+			account, err := user.DecodeString(acl.Owner.ID)
+			if err != nil {
+				return nil, fmt.Errorf("decode user.ID: %w", err)
+			}
+			accounts = append(accounts, account)
+		}
+
 		operation := &astOperation{
-			Users:  []string{acl.Owner.ID},
+			Users:  accounts,
 			Op:     op,
 			Action: eacl.ActionAllow,
 		}
@@ -1221,7 +1275,19 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 
 		for _, action := range getActions(grant.Permission, resInfo.IsBucket()) {
 			for _, op := range actionToOpMap[action] {
-				resource.Operations = addTo(resource.Operations, grant.Grantee.ID, op, groupGrantee, eacl.ActionAllow)
+				var (
+					id  user.ID
+					err error
+				)
+
+				if len(grant.Grantee.ID) > 0 {
+					id, err = user.DecodeString(grant.Grantee.ID)
+					if err != nil {
+						return nil, fmt.Errorf("decode user.ID: %w", err)
+					}
+				}
+
+				resource.Operations = addTo(resource.Operations, id, op, groupGrantee, eacl.ActionAllow)
 			}
 		}
 	}
@@ -1358,13 +1424,15 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 }
 
 func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+	account := user.NewFromScriptHash(bucketACL.Info.OwnerPublicKey.GetScriptHash()).String()
+
 	ownerGrantee := NewGrantee(granteeCanonicalUser)
-	ownerGrantee.ID = bucketACL.Info.PubKeyHex()
+	ownerGrantee.ID = account
 	ownerGrantee.DisplayName = bucketACL.Info.Owner.String()
 
 	res := &AccessControlPolicy{
 		Owner: Owner{
-			ID:          bucketACL.Info.PubKeyHex(),
+			ID:          account,
 			DisplayName: bucketACL.Info.Owner.String(),
 		},
 		AccessControlList: []*Grant{
@@ -1394,8 +1462,8 @@ func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, ob
 				m[allUsersGroup] = list
 			} else {
 				for _, user := range op.Users {
-					list := append(m[user], op.Op)
-					m[user] = list
+					list := append(m[user.String()], op.Op)
+					m[user.String()] = list
 				}
 			}
 		}
@@ -1480,11 +1548,6 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	var found bool
 	table := eacl.NewTable()
 
-	ownerKey, err := keys.NewPublicKeyFromString(acp.Owner.ID)
-	if err != nil {
-		return nil, fmt.Errorf("public key from string: %w", err)
-	}
-
 	for _, grant := range acp.AccessControlList {
 		if !isValidGrant(grant) {
 			return nil, errors.New("unsupported grantee")
@@ -1499,12 +1562,12 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		default:
 			return nil, fmt.Errorf("unknown grantee type: %s", grant.Grantee.Type)
 		case granteeCanonicalUser:
-			key, err := keys.NewPublicKeyFromString(grant.Grantee.ID)
+			id, err := user.DecodeString(grant.Grantee.ID)
 			if err != nil {
 				return nil, fmt.Errorf("grantee ID to public key (%s): %w", grant.Grantee.ID, err)
 			}
 
-			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecord(op, key) }
+			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
 		case granteeGroup:
 			recordFromOp = func(op eacl.Operation) *eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
 		}
@@ -1516,7 +1579,13 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 
 	if !found {
 		for _, op := range fullOps {
-			table.AddRecord(getAllowRecord(op, ownerKey))
+			if len(acp.Owner.ID) > 0 {
+				account, err := user.DecodeString(acp.Owner.ID)
+				if err != nil {
+					return nil, fmt.Errorf("decode user.ID: %w", err)
+				}
+				table.AddRecord(getAllowRecordWithUser(op, account))
+			}
 		}
 	}
 
@@ -1536,8 +1605,29 @@ func getAllowRecord(op eacl.Operation, pk *keys.PublicKey) *eacl.Record {
 	record := eacl.NewRecord()
 	record.SetOperation(op)
 	record.SetAction(eacl.ActionAllow)
+
+	t := eacl.NewTarget()
 	// Unknown role is used, because it is ignored when keys are set
-	eacl.AddFormedTarget(record, eacl.RoleUnknown, (ecdsa.PublicKey)(*pk))
+	t.SetRole(eacl.RoleUnknown)
+	t.SetAccounts([]user.ID{user.NewFromScriptHash(pk.GetScriptHash())})
+
+	record.SetTargets(*t)
+
+	return record
+}
+
+func getAllowRecordWithUser(op eacl.Operation, acc user.ID) *eacl.Record {
+	record := eacl.NewRecord()
+	record.SetOperation(op)
+	record.SetAction(eacl.ActionAllow)
+
+	t := eacl.NewTarget()
+	// Unknown role is used, because it is ignored when keys are set
+	t.SetRole(eacl.RoleUnknown)
+	t.SetAccounts([]user.ID{acc})
+
+	record.SetTargets(*t)
+
 	return record
 }
 
