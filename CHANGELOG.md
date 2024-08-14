@@ -4,9 +4,27 @@ This document outlines major changes between releases.
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Updated
+
+## [0.31.0] - 2024-08-20
+
+### Added
+- Use HKDF salt and info (#972)
+- Allow addresses to be used in EACLs (#976)
+
+### Updated
+- github.com/nspcc-dev/neofs-sdk-go dependency from v1.0.0-rc.12 to v1.0.0-rc.12.0.20240807160341-3528eb5bb1cc
+
 ### Changed
 - Single `rpc_endpoint` config option replaced with multiple endpoints `fschain.endpoints` option (#968)
 - Go 1.21+ is required to build now (#811)
+- Replaced HTTP 500 with HTTP 400 if user.ID decode failed (#983)
 
 ### Updated
 - github.com/nspcc-dev/neo-go dependency from v0.106.2 to v0.106.3 (#811)
@@ -23,7 +41,13 @@ This document outlines major changes between releases.
 - google.golang.org/grpc dependency from v1.62.0 to v1.62.1 (#811)
 - github.com/minio/sio dependency from v0.3.0 to v0.4.0 (#811)
 
+### Fixed
+- Save hashless object header in SpitV2 (#974)
+- Clean actual object version (#970)
+
 ### Updating from 0.30.1
+- Old access boxes are incompatible with this version.
+- The gate compatible only with node 0.43.0+.
 
 Notice that the configuration parameter `fschain.endpoints` contains multiple endpoints.
 For migration, you should update config from old notation
@@ -599,4 +623,5 @@ releases.
 [0.29.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.28.2...v0.29.0
 [0.30.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.29.0...v0.30.0
 [0.30.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.0...v0.30.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.1...master
+[0.31.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.1...v0.31.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.0...master
