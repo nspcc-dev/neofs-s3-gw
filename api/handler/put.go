@@ -25,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -594,7 +595,7 @@ func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, obj
 	if err != nil {
 		return nil, fmt.Errorf("get bearer token issuer: %w", err)
 	}
-	objectACL, err := parseACLHeaders(r.Header, key)
+	objectACL, err := parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
 	if err != nil {
 		return nil, fmt.Errorf("could not parse object acl: %w", err)
 	}
@@ -688,7 +689,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktACL, err := parseACLHeaders(r.Header, key)
+	bktACL, err := parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
 	if err != nil {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
