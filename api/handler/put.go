@@ -25,7 +25,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -591,11 +590,12 @@ func containsACLHeaders(r *http.Request) bool {
 
 func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) (*eacl.Table, error) {
 	var newEaclTable *eacl.Table
-	key, err := h.bearerTokenIssuerKey(r.Context())
+
+	iss, err := h.bearerTokenIssuer(r.Context())
 	if err != nil {
 		return nil, fmt.Errorf("get bearer token issuer: %w", err)
 	}
-	objectACL, err := parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
+	objectACL, err := parseACLHeaders(r.Header, iss)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse object acl: %w", err)
 	}
@@ -683,13 +683,13 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key, err := h.bearerTokenIssuerKey(r.Context())
+	iss, err := h.bearerTokenIssuer(r.Context())
 	if err != nil {
-		h.logAndSendError(w, "couldn't get bearer token signature key", reqInfo, err)
+		h.logAndSendError(w, "couldn't get bearer token issuer", reqInfo, err)
 		return
 	}
 
-	bktACL, err := parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
+	bktACL, err := parseACLHeaders(r.Header, iss)
 	if err != nil {
 		h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 		return
