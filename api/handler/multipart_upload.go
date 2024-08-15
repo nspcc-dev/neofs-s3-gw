@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -114,12 +113,12 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if containsACLHeaders(r) {
-		key, err := h.bearerTokenIssuerKey(r.Context())
+		iss, err := h.bearerTokenIssuer(r.Context())
 		if err != nil {
-			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+			h.logAndSendError(w, "couldn't get bearer token issuer", reqInfo, err)
 			return
 		}
-		if _, err = parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash())); err != nil {
+		if _, err = parseACLHeaders(r.Header, iss); err != nil {
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return
 		}
@@ -422,12 +421,12 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	if len(uploadData.ACLHeaders) != 0 {
-		key, err := h.bearerTokenIssuerKey(r.Context())
+		iss, err := h.bearerTokenIssuer(r.Context())
 		if err != nil {
 			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
 			return
 		}
-		acl, err := parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
+		acl, err := parseACLHeaders(r.Header, iss)
 		if err != nil {
 			h.logAndSendError(w, "could not parse acl", reqInfo, err)
 			return

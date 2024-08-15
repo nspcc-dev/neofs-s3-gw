@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"crypto/elliptic"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -13,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -214,25 +212,25 @@ func (h *handler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) bearerTokenIssuerKey(ctx context.Context) (*keys.PublicKey, error) {
+func (h *handler) bearerTokenIssuer(ctx context.Context) (user.ID, error) {
 	box, err := layer.GetBoxData(ctx)
 	if err != nil {
-		return nil, err
+		return user.ID{}, err
 	}
 
-	key, err := keys.NewPublicKeyFromBytes(box.Gate.BearerToken.SigningKeyBytes(), elliptic.P256())
-	if err != nil {
-		return nil, fmt.Errorf("public key from bytes: %w", err)
+	iss := box.Gate.BearerToken.ResolveIssuer()
+	if iss.IsZero() {
+		return user.ID{}, errors.New("can't resolve issuer from bearer token")
 	}
 
-	return key, nil
+	return iss, nil
 }
 
 func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	key, err := h.bearerTokenIssuerKey(r.Context())
+	iss, err := h.bearerTokenIssuer(r.Context())
 	if err != nil {
-		h.logAndSendError(w, "couldn't get bearer token issuer key", reqInfo, err)
+		h.logAndSendError(w, "couldn't get bearer token issuer", reqInfo, err)
 		return
 	}
 
@@ -244,7 +242,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 
 	list := &AccessControlPolicy{}
 	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
+		list, err = parseACLHeaders(r.Header, iss)
 		if err != nil {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
@@ -347,9 +345,9 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
-	key, err := h.bearerTokenIssuerKey(r.Context())
+	iss, err := h.bearerTokenIssuer(r.Context())
 	if err != nil {
-		h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
+		h.logAndSendError(w, "couldn't get bearer token issues", reqInfo, err)
 		return
 	}
 
@@ -379,7 +377,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 
 	list := &AccessControlPolicy{}
 	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r.Header, user.NewFromScriptHash(key.GetScriptHash()))
+		list, err = parseACLHeaders(r.Header, iss)
 		if err != nil {
 			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
 			return
