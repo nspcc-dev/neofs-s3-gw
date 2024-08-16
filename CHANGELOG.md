@@ -16,6 +16,7 @@ This document outlines major changes between releases.
 - github.com/nspcc-dev/tzhash dependency from v1.8.0 to v1.8.1 (#811)
 - github.com/prometheus/client_golang dependency from v1.19.0 to v1.20.0 (#811)
 - google.golang.org/protobuf dependency from v1.33.0 to v1.34.2 (#811)
+- github.com/panjf2000/ants/v2 dependency from v2.5.0 to v2.10.0 (#811)
 
 ### Updating from 0.30.1
 
