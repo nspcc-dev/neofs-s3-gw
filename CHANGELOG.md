@@ -21,6 +21,7 @@ This document outlines major changes between releases.
 - github.com/spf13/viper dependency from v1.18.2 to v1.19.0 (#811)
 - github.com/nats-io/nats.go dependency from v1.31.0 to v1.34.0 (#811)
 - google.golang.org/grpc dependency from v1.62.0 to v1.62.1 (#811)
+- github.com/minio/sio dependency from v0.3.0 to v0.4.0 (#811)
 
 ### Updating from 0.30.1
 
