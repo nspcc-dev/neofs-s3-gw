@@ -8,6 +8,10 @@ This document outlines major changes between releases.
 - Single `rpc_endpoint` config option replaced with multiple endpoints `fschain.endpoints` option (#968)
 - Go 1.21+ is required to build now (#811)
 
+### Updated
+- github.com/nspcc-dev/neo-go dependency from v0.106.2 to v0.106.3 (#811)
+- github.com/urfave/cli/v2 dependency from v2.3.0 to v2.27.2 (#811)
+
 ### Updating from 0.30.1
 
 Notice that the configuration parameter `fschain.endpoints` contains multiple endpoints.
