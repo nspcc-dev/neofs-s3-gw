@@ -6,6 +6,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - Single `rpc_endpoint` config option replaced with multiple endpoints `fschain.endpoints` option (#968)
+- Go 1.21+ is required to build now (#811)
 
 ### Updating from 0.30.1
 
