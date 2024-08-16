@@ -14,6 +14,8 @@ This document outlines major changes between releases.
 - github.com/nspcc-dev/neofs-contract dependency from v0.19.2-0.20240610103236-d50c8e0c9396 to v0.20.0 (#811)
 - golang.org/x/crypto dependency from v0.21.0 to v0.26.0 (#811)
 - github.com/nspcc-dev/tzhash dependency from v1.8.0 to v1.8.1 (#811)
+- github.com/prometheus/client_golang dependency from v1.19.0 to v1.20.0 (#811)
+- google.golang.org/protobuf dependency from v1.33.0 to v1.34.2 (#811)
 
 ### Updating from 0.30.1
 
