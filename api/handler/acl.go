@@ -802,7 +802,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 func handleAddOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
 	var needToAdd []user.ID
 	for _, user := range astOp.Users {
-		if !containsUser(existedOp.Users, user) {
+		if !slices.Contains(existedOp.Users, user) {
 			needToAdd = append(needToAdd, user)
 		}
 	}
@@ -816,7 +816,7 @@ func handleAddOperations(parentResource *astResource, astOp, existedOp *astOpera
 func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
 	var needToRemove []user.ID
 	for _, user := range astOp.Users {
-		if containsUser(existedOp.Users, user) {
+		if slices.Contains(existedOp.Users, user) {
 			needToRemove = append(needToRemove, user)
 		}
 	}
@@ -825,15 +825,6 @@ func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOp
 		return true
 	}
 
-	return false
-}
-
-func containsUser(list []user.ID, element user.ID) bool {
-	for _, str := range list {
-		if str == element {
-			return true
-		}
-	}
 	return false
 }
 
@@ -870,7 +861,7 @@ func removeUsers(resource *astResource, astOperation *astOperation, users []user
 		if !astOp.IsGroupGrantee() && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
 			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
-				if !containsUser(users, user) {
+				if !slices.Contains(users, user) {
 					filteredUsers = append(filteredUsers, user)
 				}
 			}
