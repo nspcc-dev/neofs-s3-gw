@@ -11,6 +11,7 @@ This document outlines major changes between releases.
 ### Updated
 - github.com/nspcc-dev/neo-go dependency from v0.106.2 to v0.106.3 (#811)
 - github.com/urfave/cli/v2 dependency from v2.3.0 to v2.27.2 (#811)
+- github.com/nspcc-dev/neofs-contract dependency from v0.19.2-0.20240610103236-d50c8e0c9396 to v0.20.0 (#811)
 
 ### Updating from 0.30.1
 

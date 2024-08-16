@@ -10,7 +10,7 @@ require (
 	github.com/minio/sio v0.3.0
 	github.com/nats-io/nats.go v1.31.0
 	github.com/nspcc-dev/neo-go v0.106.3
-	github.com/nspcc-dev/neofs-contract v0.19.2-0.20240610103236-d50c8e0c9396
+	github.com/nspcc-dev/neofs-contract v0.20.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20240807160341-3528eb5bb1cc
 	github.com/nspcc-dev/tzhash v1.8.0
 	github.com/panjf2000/ants/v2 v2.5.0
