@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"github.com/nspcc-dev/tzhash/tz"
 	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
 )
 
 const (

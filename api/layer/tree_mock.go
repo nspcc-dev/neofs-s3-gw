@@ -4,11 +4,11 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"golang.org/x/exp/slices"
 )
 
 type TreeServiceMock struct {

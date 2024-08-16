@@ -21,7 +21,6 @@ require (
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.21.0
-	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.33.0
 )
@@ -43,6 +42,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	go.etcd.io/bbolt v1.3.9 // indirect
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240221002015-b0ce06bbee7c // indirect
 )
 
