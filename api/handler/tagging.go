@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"cmp"
 	"encoding/xml"
 	"io"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -227,8 +228,9 @@ func encodeTagging(tagSet map[string]string) *Tagging {
 	for k, v := range tagSet {
 		tagging.TagSet = append(tagging.TagSet, Tag{Key: k, Value: v})
 	}
-	sort.Slice(tagging.TagSet, func(i, j int) bool {
-		return tagging.TagSet[i].Key < tagging.TagSet[j].Key
+
+	slices.SortFunc(tagging.TagSet, func(a, b Tag) int {
+		return cmp.Compare(a.Key, b.Key)
 	})
 
 	return tagging

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -287,7 +287,7 @@ func newSettings() *viper.Viper {
 		fmt.Println("Default environments:")
 		fmt.Println()
 		keys := v.AllKeys()
-		sort.Strings(keys)
+		slices.Sort(keys)
 
 		for i := range keys {
 			if _, ok := ignore[keys[i]]; ok {

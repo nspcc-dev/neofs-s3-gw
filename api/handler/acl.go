@@ -2,13 +2,14 @@ package handler
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -674,8 +675,8 @@ func formReverseOrderResources(resourceMap map[string]orderedAstResource) []*ast
 	for _, resource := range resourceMap {
 		orderedResources = append(orderedResources, resource)
 	}
-	sort.Slice(orderedResources, func(i, j int) bool {
-		return orderedResources[i].Index >= orderedResources[j].Index // reverse order
+	slices.SortFunc(orderedResources, func(a, b orderedAstResource) int {
+		return cmp.Compare(b.Index, a.Index) // reverse order
 	})
 
 	result := make([]*astResource, len(orderedResources))

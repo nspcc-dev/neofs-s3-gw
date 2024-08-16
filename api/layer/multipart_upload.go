@@ -2,6 +2,7 @@ package layer
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding"
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -918,11 +918,11 @@ func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUpload
 		}
 	}
 
-	sort.Slice(uploads, func(i, j int) bool {
-		if uploads[i].Key == uploads[j].Key {
-			return uploads[i].UploadID < uploads[j].UploadID
+	slices.SortFunc(uploads, func(a, b *UploadInfo) int {
+		if compare := cmp.Compare(a.Key, b.Key); compare != 0 {
+			return compare
 		}
-		return uploads[i].Key < uploads[j].Key
+		return cmp.Compare(a.UploadID, b.UploadID)
 	})
 
 	if p.KeyMarker != "" {
@@ -999,8 +999,8 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 		})
 	}
 
-	sort.Slice(parts, func(i, j int) bool {
-		return parts[i].PartNumber < parts[j].PartNumber
+	slices.SortFunc(parts, func(a, b *Part) int {
+		return cmp.Compare(a.PartNumber, b.PartNumber)
 	})
 
 	if p.PartNumberMarker != 0 {

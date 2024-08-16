@@ -1,9 +1,9 @@
 package layer
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -146,8 +146,8 @@ func (t *TreeServiceMock) GetLatestVersion(_ context.Context, bktInfo *data.Buck
 		return nil, ErrNodeNotFound
 	}
 
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i].ID < versions[j].ID
+	slices.SortFunc(versions, func(a, b *data.NodeVersion) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 
 	if len(versions) != 0 {
@@ -170,8 +170,8 @@ func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, bktInfo *
 			continue
 		}
 
-		sort.Slice(versions, func(i, j int) bool {
-			return versions[i].ID < versions[j].ID
+		slices.SortFunc(versions, func(a, b *data.NodeVersion) int {
+			return cmp.Compare(a.ID, b.ID)
 		})
 
 		if len(versions) != 0 {
@@ -217,8 +217,8 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, bktInfo *data.BucketInfo
 		return newVersion.ID, nil
 	}
 
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i].ID < versions[j].ID
+	slices.SortFunc(versions, func(a, b *data.NodeVersion) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 
 	if len(versions) != 0 {
