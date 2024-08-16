@@ -18,6 +18,9 @@ This document outlines major changes between releases.
 - google.golang.org/protobuf dependency from v1.33.0 to v1.34.2 (#811)
 - github.com/panjf2000/ants/v2 dependency from v2.5.0 to v2.10.0 (#811)
 - github.com/aws/aws-sdk-go dependency from v1.50.27 to v1.55.5 (#811)
+- github.com/spf13/viper dependency from v1.18.2 to v1.19.0 (#811)
+- github.com/nats-io/nats.go dependency from v1.31.0 to v1.34.0 (#811)
+- google.golang.org/grpc dependency from v1.62.0 to v1.62.1 (#811)
 
 ### Updating from 0.30.1
 
