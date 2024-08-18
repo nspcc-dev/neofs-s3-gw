@@ -1,7 +1,8 @@
 package layer
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,11 +28,12 @@ func TestTrimAfterUploadIDAndKey(t *testing.T) {
 		{},
 	}
 
-	sort.Slice(uploads, func(i, j int) bool {
-		if uploads[i].Key == uploads[j].Key {
-			return uploads[i].UploadID < uploads[j].UploadID
+	slices.SortFunc(uploads, func(a, b *UploadInfo) int {
+		if compare := cmp.Compare(a.Key, b.Key); compare != 0 {
+			return compare
 		}
-		return uploads[i].Key < uploads[j].Key
+
+		return cmp.Compare(a.UploadID, b.UploadID)
 	})
 
 	length := len(uploads)

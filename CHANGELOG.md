@@ -6,6 +6,22 @@ This document outlines major changes between releases.
 
 ### Changed
 - Single `rpc_endpoint` config option replaced with multiple endpoints `fschain.endpoints` option (#968)
+- Go 1.21+ is required to build now (#811)
+
+### Updated
+- github.com/nspcc-dev/neo-go dependency from v0.106.2 to v0.106.3 (#811)
+- github.com/urfave/cli/v2 dependency from v2.3.0 to v2.27.2 (#811)
+- github.com/nspcc-dev/neofs-contract dependency from v0.19.2-0.20240610103236-d50c8e0c9396 to v0.20.0 (#811)
+- golang.org/x/crypto dependency from v0.21.0 to v0.26.0 (#811)
+- github.com/nspcc-dev/tzhash dependency from v1.8.0 to v1.8.1 (#811)
+- github.com/prometheus/client_golang dependency from v1.19.0 to v1.20.0 (#811)
+- google.golang.org/protobuf dependency from v1.33.0 to v1.34.2 (#811)
+- github.com/panjf2000/ants/v2 dependency from v2.5.0 to v2.10.0 (#811)
+- github.com/aws/aws-sdk-go dependency from v1.50.27 to v1.55.5 (#811)
+- github.com/spf13/viper dependency from v1.18.2 to v1.19.0 (#811)
+- github.com/nats-io/nats.go dependency from v1.31.0 to v1.34.0 (#811)
+- google.golang.org/grpc dependency from v1.62.0 to v1.62.1 (#811)
+- github.com/minio/sio dependency from v0.3.0 to v0.4.0 (#811)
 
 ### Updating from 0.30.1
 

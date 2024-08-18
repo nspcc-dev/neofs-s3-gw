@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,7 +11,7 @@ import (
 	"io"
 	"mime"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -573,8 +574,8 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 		return nil, nil, nil
 	}
 
-	sort.Slice(nodeVersions, func(i, j int) bool {
-		return nodeVersions[i].FilePath < nodeVersions[j].FilePath
+	slices.SortFunc(nodeVersions, func(a, b *data.NodeVersion) int {
+		return cmp.Compare(a.FilePath, b.FilePath)
 	})
 
 	poolCtx, cancel := context.WithCancel(ctx)
@@ -590,8 +591,8 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 		objects = append(objects, obj)
 	}
 
-	sort.Slice(objects, func(i, j int) bool {
-		return objects[i].Name < objects[j].Name
+	slices.SortFunc(objects, func(a, b *data.ObjectInfo) int {
+		return cmp.Compare(a.Name, b.Name)
 	})
 
 	if len(objects) > p.MaxKeys {

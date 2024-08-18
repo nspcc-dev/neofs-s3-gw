@@ -2,13 +2,14 @@ package handler
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -674,8 +675,8 @@ func formReverseOrderResources(resourceMap map[string]orderedAstResource) []*ast
 	for _, resource := range resourceMap {
 		orderedResources = append(orderedResources, resource)
 	}
-	sort.Slice(orderedResources, func(i, j int) bool {
-		return orderedResources[i].Index >= orderedResources[j].Index // reverse order
+	slices.SortFunc(orderedResources, func(a, b orderedAstResource) int {
+		return cmp.Compare(b.Index, a.Index) // reverse order
 	})
 
 	result := make([]*astResource, len(orderedResources))
@@ -801,7 +802,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 func handleAddOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
 	var needToAdd []user.ID
 	for _, user := range astOp.Users {
-		if !containsUser(existedOp.Users, user) {
+		if !slices.Contains(existedOp.Users, user) {
 			needToAdd = append(needToAdd, user)
 		}
 	}
@@ -815,7 +816,7 @@ func handleAddOperations(parentResource *astResource, astOp, existedOp *astOpera
 func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOperation) bool {
 	var needToRemove []user.ID
 	for _, user := range astOp.Users {
-		if containsUser(existedOp.Users, user) {
+		if slices.Contains(existedOp.Users, user) {
 			needToRemove = append(needToRemove, user)
 		}
 	}
@@ -824,15 +825,6 @@ func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOp
 		return true
 	}
 
-	return false
-}
-
-func containsUser(list []user.ID, element user.ID) bool {
-	for _, str := range list {
-		if str == element {
-			return true
-		}
-	}
 	return false
 }
 
@@ -869,7 +861,7 @@ func removeUsers(resource *astResource, astOperation *astOperation, users []user
 		if !astOp.IsGroupGrantee() && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
 			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
-				if !containsUser(users, user) {
+				if !slices.Contains(users, user) {
 					filteredUsers = append(filteredUsers, user)
 				}
 			}

@@ -62,7 +62,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -340,7 +340,7 @@ func (v4 Signer) signWithBody(r *http.Request, body io.ReadSeeker, service, regi
 	}
 
 	for key := range ctx.Query {
-		sort.Strings(ctx.Query[key])
+		slices.Sort(ctx.Query[key])
 	}
 
 	if ctx.isRequestSigned() {
@@ -637,7 +637,7 @@ func (ctx *signingCtx) buildCanonicalHeaders(r rule, header http.Header) {
 		headers = append(headers, lowerCaseKey)
 		ctx.SignedHeaderVals[lowerCaseKey] = v
 	}
-	sort.Strings(headers)
+	slices.Sort(headers)
 
 	ctx.signedHeaders = strings.Join(headers, ";")
 

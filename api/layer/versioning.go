@@ -1,8 +1,9 @@
 package layer
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 )
@@ -22,12 +23,12 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 	for k := range versions {
 		sortedNames = append(sortedNames, k)
 	}
-	sort.Strings(sortedNames)
+	slices.Sort(sortedNames)
 
 	for _, name := range sortedNames {
 		sortedVersions := versions[name]
-		sort.Slice(sortedVersions, func(i, j int) bool {
-			return sortedVersions[j].NodeVersion.Timestamp < sortedVersions[i].NodeVersion.Timestamp // sort in reverse order
+		slices.SortFunc(sortedVersions, func(a, b *data.ExtendedObjectInfo) int {
+			return cmp.Compare(b.NodeVersion.Timestamp, a.NodeVersion.Timestamp) // sort in reverse order
 		})
 
 		for i, version := range sortedVersions {
