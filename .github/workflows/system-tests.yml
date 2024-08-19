@@ -188,7 +188,6 @@ jobs:
 
       - name: Run s3 gw e2e tests
         timeout-minutes: 120
-        if: github.event_name == 'pull_request'
         run: |
           source venv.pytest/bin/activate && pytest --alluredir=${{ env.ALLURE_RESULTS_DIR }} pytest_tests/tests/services/s3_gate
         working-directory: neofs-testcases
