@@ -52,6 +52,10 @@ func transformToS3Error(err error) error {
 		return s3errors.GetAPIError(s3errors.ErrBadRequest)
 	}
 
+	if errors.Is(err, layer.ErrDecodeUserID) {
+		return s3errors.GetAPIError(s3errors.ErrInvalidArgument)
+	}
+
 	return s3errors.GetAPIError(s3errors.ErrInternalError)
 }
 

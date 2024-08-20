@@ -594,7 +594,7 @@ func formGrantee(granteeType, value string) (*Grantee, error) {
 	case "id":
 		id, err := user.DecodeString(value)
 		if err != nil {
-			return nil, fmt.Errorf("decode grantee user.ID: %w", err)
+			return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 		}
 		return &Grantee{
 			ID:   id.String(),
@@ -1049,7 +1049,7 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 					if len(state.Principal.CanonicalUser) > 0 {
 						canonicalUser, err = user.DecodeString(state.Principal.CanonicalUser)
 						if err != nil {
-							return nil, fmt.Errorf("canonical user: decode user.ID: %w", err)
+							return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 						}
 					}
 
@@ -1207,7 +1207,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 		if len(acl.Owner.ID) > 0 {
 			account, err := user.DecodeString(acl.Owner.ID)
 			if err != nil {
-				return nil, fmt.Errorf("decode user.ID: %w", err)
+				return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 			}
 			accounts = append(accounts, account)
 		}
@@ -1242,7 +1242,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 				if len(grant.Grantee.ID) > 0 {
 					id, err = user.DecodeString(grant.Grantee.ID)
 					if err != nil {
-						return nil, fmt.Errorf("decode user.ID: %w", err)
+						return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 					}
 				}
 
@@ -1521,7 +1521,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		case granteeCanonicalUser:
 			id, err := user.DecodeString(grant.Grantee.ID)
 			if err != nil {
-				return nil, fmt.Errorf("grantee ID to public key (%s): %w", grant.Grantee.ID, err)
+				return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 			}
 
 			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
@@ -1539,7 +1539,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 			if len(acp.Owner.ID) > 0 {
 				account, err := user.DecodeString(acp.Owner.ID)
 				if err != nil {
-					return nil, fmt.Errorf("decode user.ID: %w", err)
+					return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 				}
 				table.AddRecord(getAllowRecordWithUser(op, account))
 			}
