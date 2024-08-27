@@ -254,7 +254,7 @@ const (
 	AttributeHMACSalt            = api.NeoFSSystemMetadataPrefix + "HMAC-Salt"
 	AttributeHMACKey             = api.NeoFSSystemMetadataPrefix + "HMAC-Key"
 
-	AttributeNeofsCopiesNumber = "neofs-copies-number" // such formate to match X-Amz-Meta-Neofs-Copies-Number header
+	AttributeNeofsCopiesNumber = "neofs-copies-number" // such format to match X-Amz-Meta-Neofs-Copies-Number header
 )
 
 var (
