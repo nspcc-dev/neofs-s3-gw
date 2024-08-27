@@ -41,7 +41,7 @@ Reference:
 
 For now there are some limitations:
 * [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) supports only one `Principal` per `Statement`. 
-Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser": "0313b1ac3a8076e155a7e797b24f0b650cccad5941ea59d7cfd51a024a8b2a06bf"` (hex encoded public key of desired user).
+Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"` (base58 encoded address of desired user).
 ```json
 {
   "Statement": [
