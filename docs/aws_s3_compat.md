@@ -31,7 +31,12 @@ Reference:
 * DeleteObjects limited by max amount of objects which can be deleted per request. See `max_object_to_delete_per_request` parameter.
 * For calculating object ETag, we use SHA256 hash instead of MD5. 
 * PutObject into a container with public-write permissions as an anonymous user (for instance, with CLI option --no-sign-request) is impossible, if try to set custom ACL for the object. It happens because container ACL rules may be changed only by container owner.
-
+* Header `X-Amz-Meta-Neofs-Copies-Number` can be used with `PutObject`, `CopyObject`, `CreateMultipartUpload` methods to set object copies number. Otherwise, the default value from config will be used. See [neofs section](https://github.com/nspcc-dev/neofs-s3-gw/blob/master/docs/configuration.md#neofs-section) for more details.
+    * Use metadata `neofs-copies-number` parameter for aws CLI. For instance:
+    ```shell
+    aws s3api put-object --endpoint $S3HOST --bucket $BUCKET --key $OBJECT_KEY --body /path/to/file.txt --metadata neofs-copies-number=3
+    ```
+      
 ## ACL
 
 For now there are some limitations:
