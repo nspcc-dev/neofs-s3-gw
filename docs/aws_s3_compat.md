@@ -170,6 +170,12 @@ See also `GetObject` and other method parameters.
 | 🟢 | ListBuckets          |           |
 | 🔵 | PutPublicAccessBlock |           |
 
+* `CreateBucket` method allows you to select a placement policy using the `LocationConstraint` parameter in the AWS CLI. The policy name should be passed as a value.
+  * Policies mapping can be defined via:
+    * [Authmate](./authmate.md#containers-policy) during bucket creation. These policies are available only for generated credentials.
+    * [Gate configuration](./configuration.md#placement_policy-section). These policies are shared and available for all gate clients.
+  * Example: aws s3api create-bucket --bucket $BUCKET --endpoint $S3HOST --create-bucket-configuration LocationConstraint=$POLICY_NAME
+
 ## Acceleration
 
 |    | Method                           | Comments            |
