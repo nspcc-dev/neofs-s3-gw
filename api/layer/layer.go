@@ -569,6 +569,10 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		if obj.DeleteMarkVersion, obj.Error = n.removeOldVersion(ctx, bkt, nodeVersion, obj); obj.Error != nil {
+			if strings.Contains(obj.Error.Error(), "2050 message = object is locked") {
+				return obj
+			}
+
 			n.log.Info("remove old version", zap.Error(obj.Error))
 		}
 
