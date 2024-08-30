@@ -467,7 +467,18 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 
 	n.cache.DeleteObject(newAddress(bktInfo.CID, idObj))
 
-	return n.neoFS.DeleteObject(ctx, prm)
+	err := n.neoFS.DeleteObject(ctx, prm)
+
+	reqInfo := api.GetReqInfo(ctx)
+	n.log.Debug("delete object",
+		zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", bktInfo.Name),
+		zap.Stringer("cid", bktInfo.CID),
+		zap.Stringer("oid", idObj),
+		zap.Error(err),
+	)
+
+	return err
 }
 
 // objectPutAndHash prepare auth parameters and invoke neofs.CreateObject.
