@@ -3,7 +3,9 @@ package neofs
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -54,6 +56,11 @@ type NeoFS struct {
 	epochGetter EpochGetter
 	buffers     *sync.Pool
 }
+
+const (
+	objectNonceSize      = 8
+	objectNonceAttribute = "__NEOFS__NONCE"
+)
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
 func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, cfg Config, epochGetter EpochGetter) *NeoFS {
@@ -267,6 +274,13 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		a = object.NewAttribute(object.AttributeFilePath, prm.Filepath)
 		attrs = append(attrs, *a)
 	}
+
+	nonce := make([]byte, objectNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
+	}
+	objectNonceAttr := object.NewAttribute(objectNonceAttribute, base64.StdEncoding.EncodeToString(nonce))
+	attrs = append(attrs, *objectNonceAttr)
 
 	var obj object.Object
 	obj.SetContainerID(prm.Container)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"runtime"
@@ -19,7 +20,10 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	cidtest "github.com/nspcc-dev/neofs-sdk-go/container/id/test"
+	neofscryptotest "github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/waiter"
@@ -232,5 +236,47 @@ func uploadDownload(ctx context.Context, t *testing.T, neo *NeoFS, p *pool.Pool,
 		require.NoError(t, err)
 
 		require.True(t, bytes.Equal(payload, pl))
+	}
+}
+
+func TestObjectNonce(t *testing.T) {
+	var (
+		signer  = user.NewAutoIDSignerRFC6979(neofscryptotest.Signer().ECDSAPrivateKey)
+		cnrID   = cidtest.ID()
+		payload = []byte{1, 2, 3, 4, 5}
+		uid     = signer.UserID()
+		m       = make(map[string]int)
+		ts      = time.Now().Unix()
+		attrTS  = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(ts, 10))
+	)
+
+	for i := 0; i < 10; i++ {
+		var (
+			obj   object.Object
+			nonce = make([]byte, objectNonceSize)
+		)
+
+		_, err := rand.Read(nonce)
+		require.NoError(t, err)
+
+		obj.SetContainerID(cnrID)
+		obj.SetOwnerID(&uid)
+		obj.SetPayloadSize(uint64(len(payload)))
+		obj.SetPayload(payload)
+
+		var (
+			attr  = object.NewAttribute(objectNonceAttribute, base64.StdEncoding.EncodeToString(nonce))
+			attrs = []object.Attribute{*attrTS, *attr}
+		)
+
+		obj.SetAttributes(attrs...)
+		require.NoError(t, obj.CalculateAndSetID())
+
+		m[obj.GetID().String()]++
+	}
+
+	// each ID is uniq
+	for _, v := range m {
+		require.Equal(t, 1, v)
 	}
 }
