@@ -107,6 +107,13 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
 * AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
 * Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html).
 `Authenticated Users group` is not supported. It is a part of `All Users Group` and can't be separated from it.
+* It is not possible to remove GRANTS from container owner. Using PutObjectAcl with empty grants has no effect to GRANTS for container owner, despite method completes without error.
+```json
+{
+    "Owner": {"DisplayName": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q","ID": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"},
+    "Grants": []
+}
+```
 
 |    | Method       | Comments        |
 |----|--------------|-----------------|
