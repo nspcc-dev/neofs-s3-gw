@@ -12,6 +12,7 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
+- github.com/minio/sio from v0.4.0 to v0.4.1 (#927)
 
 ## [0.31.0] - 2024-08-20
 

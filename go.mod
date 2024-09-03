@@ -7,7 +7,7 @@ require (
 	github.com/bluele/gcache v0.0.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/minio/sio v0.4.0
+	github.com/minio/sio v0.4.1
 	github.com/nats-io/nats.go v1.34.0
 	github.com/nspcc-dev/neo-go v0.106.3
 	github.com/nspcc-dev/neofs-contract v0.20.0
