@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/minio/sio v0.4.1
-	github.com/nats-io/nats.go v1.34.0
+	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.106.3
 	github.com/nspcc-dev/neofs-contract v0.20.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20240807160341-3528eb5bb1cc
