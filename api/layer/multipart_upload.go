@@ -330,7 +330,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	for {
 		prm.Multipart.SplitPreviousID = &splitPreviousID
 
-		if !splitFirstID.Equals(oid.ID{}) {
+		if !splitFirstID.IsZero() {
 			prm.Multipart.SplitFirstID = &splitFirstID
 		}
 
