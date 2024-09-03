@@ -312,7 +312,19 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		},
 	}
 
-	chunk := n.buffers.Get().(*[]byte)
+	var (
+		chunk          *[]byte
+		isReturnToPool bool
+	)
+
+	if p.Size > n.neoFS.MaxObjectSize()/2 {
+		chunk = n.buffers.Get().(*[]byte)
+		isReturnToPool = true
+	} else {
+		smallChunk := make([]byte, p.Size)
+		chunk = &smallChunk
+	}
+
 	var totalBytes int
 	// slice part manually. Simultaneously considering the part is a single object for user.
 	for {
@@ -350,7 +362,10 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 		break
 	}
-	n.buffers.Put(chunk)
+
+	if isReturnToPool {
+		n.buffers.Put(chunk)
+	}
 
 	reqInfo := api.GetReqInfo(ctx)
 	n.log.Debug("upload part",
