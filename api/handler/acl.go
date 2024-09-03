@@ -792,7 +792,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 		}
 
 		if newOps != nil {
-			parentResource.Operations = append(newOps, parentResource.Operations...)
+			parentResource.Operations = slices.Concat(newOps, parentResource.Operations)
 		}
 	}
 
@@ -841,7 +841,7 @@ func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
 func removeAstOp(resource *astResource, group bool, op eacl.Operation, action eacl.Action) {
 	for i, astOp := range resource.Operations {
 		if astOp.IsGroupGrantee() == group && astOp.Op == op && astOp.Action == action {
-			resource.Operations = append(resource.Operations[:i], resource.Operations[i+1:]...)
+			resource.Operations = slices.Delete(resource.Operations, i, i+1)
 			return
 		}
 	}
@@ -866,7 +866,7 @@ func removeUsers(resource *astResource, astOperation *astOperation, users []user
 				}
 			}
 			if len(filteredUsers) == 0 { // remove ast resource
-				resource.Operations = append(resource.Operations[:ind], resource.Operations[ind+1:]...)
+				resource.Operations = slices.Delete(resource.Operations, ind, ind+1)
 			} else {
 				astOp.Users = filteredUsers
 			}
@@ -1186,7 +1186,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 
 	resource := &astResource{resourceInfo: *resInfo}
 
-	ops := append(readOps, writeOps...)
+	ops := slices.Concat(readOps, writeOps)
 
 	// Expect to have at least 1 full control grant for owner which is set in
 	// parseACLHeaders(). If there is no other grants, then user sets private

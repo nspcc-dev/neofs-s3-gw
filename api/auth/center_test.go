@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -156,7 +157,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, append(chunkOnePayload, chunkTwoPayload...), payload.Bytes())
+		require.Equal(t, slices.Concat(chunkOnePayload, chunkTwoPayload), payload.Bytes())
 	})
 
 	t.Run("err invalid chunk signature", func(t *testing.T) {

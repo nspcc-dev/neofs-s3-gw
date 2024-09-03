@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -182,7 +183,7 @@ func (r *ReqInfo) GetTags() []KeyVal {
 	}
 	r.RLock()
 	defer r.RUnlock()
-	return append([]KeyVal(nil), r.tags...)
+	return slices.Clone(r.tags)
 }
 
 // SetReqInfo sets ReqInfo in the context.

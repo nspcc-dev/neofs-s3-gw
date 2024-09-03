@@ -251,7 +251,7 @@ func (t *TreeServiceMock) RemoveVersion(_ context.Context, bktInfo *data.BucketI
 	for key, versions := range cnrVersionsMap {
 		for i, node := range versions {
 			if node.ID == nodeID {
-				cnrVersionsMap[key] = append(versions[:i], versions[i+1:]...)
+				cnrVersionsMap[key] = slices.Delete(versions, i, i+1)
 				return nil
 			}
 		}
@@ -468,7 +468,7 @@ LOOP:
 		for i, multipart := range multiparts {
 			if multipart.ID == multipartNodeID {
 				uploadID = multipart.UploadID
-				cnrMultipartsMap[key] = append(multiparts[:i], multiparts[i+1:]...)
+				cnrMultipartsMap[key] = slices.Delete(multiparts, i, i+1)
 				break LOOP
 			}
 		}

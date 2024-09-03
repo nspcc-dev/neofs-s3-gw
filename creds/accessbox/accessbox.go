@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
@@ -290,7 +291,7 @@ func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 		return nil, fmt.Errorf("generate random nonce: %w", err)
 	}
 
-	return append(hkdfSalt, enc.Seal(nonce, nonce, data, nil)...), nil
+	return slices.Concat(hkdfSalt, enc.Seal(nonce, nonce, data, nil)), nil
 }
 
 func decrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {

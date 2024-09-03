@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -249,7 +250,7 @@ func TestMultipartEncrypted(t *testing.T) {
 
 	res, _ := getEncryptedObject(t, hc, bktName, objName)
 	require.Equal(t, len(part1)+len(part2), len(res))
-	require.Equal(t, append(part1, part2...), res)
+	require.Equal(t, slices.Concat(part1, part2), res)
 
 	part2Range := getEncryptedObjectRange(t, hc, bktName, objName, len(part1), len(part1)+len(part2)-1)
 	require.Equal(t, part2[0:], part2Range)
