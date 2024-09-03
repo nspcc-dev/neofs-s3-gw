@@ -111,7 +111,7 @@ func TestSignature(t *testing.T) {
 // TestAwsEncodedChunkReader checks example from https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
 func TestAwsEncodedChunkReader(t *testing.T) {
 	chunkOnePayload := make([]byte, 65536)
-	for i := 0; i < 65536; i++ {
+	for i := range 65536 {
 		chunkOnePayload[i] = 'a'
 	}
 
@@ -125,7 +125,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 	require.NoError(t, err)
 
 	chunkTwoPayload := make([]byte, 1024)
-	for i := 0; i < 1024; i++ {
+	for i := range 1024 {
 		chunkTwoPayload[i] = 'a'
 	}
 
@@ -318,7 +318,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 	t.Run("err chunk header too long", func(t *testing.T) {
 		streamSigner := v4.NewChunkSigner("us-east-1", "s3", seedSignature, ts, awsCreds)
 		chunkThreeBody := make([]byte, 4097)
-		for i := 0; i < len(chunkThreeBody); i++ {
+		for i := range chunkThreeBody {
 			chunkThreeBody[i] = 'a'
 		}
 
@@ -360,7 +360,7 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	chunkSize := 65536
 
 	payload := make([]byte, totalPayloadLength)
-	for i := 0; i < totalPayloadLength; i++ {
+	for i := range totalPayloadLength {
 		payload[i] = 'a'
 	}
 

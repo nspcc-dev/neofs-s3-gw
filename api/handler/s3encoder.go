@@ -32,7 +32,7 @@ func shouldEscape(c byte) bool {
 // while considering some S3 exceptions.
 func s3URLEncode(s string, mode encoding) string {
 	spaceCount, hexCount := 0, 0
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		c := s[i]
 		if shouldEscape(c) {
 			if c == ' ' && mode == encodeQueryComponent {
@@ -59,7 +59,7 @@ func s3URLEncode(s string, mode encoding) string {
 
 	if hexCount == 0 {
 		copy(t, s)
-		for i := 0; i < len(s); i++ {
+		for i := range s {
 			if s[i] == ' ' {
 				t[i] = '+'
 			}
@@ -68,7 +68,7 @@ func s3URLEncode(s string, mode encoding) string {
 	}
 
 	j := 0
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		switch c := s[i]; {
 		case c == ' ' && mode == encodeQueryComponent:
 			t[j] = '+'

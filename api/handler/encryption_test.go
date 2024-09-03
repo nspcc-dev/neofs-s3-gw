@@ -52,7 +52,7 @@ func TestGetEncryptedRange(t *testing.T) {
 	createTestBucket(tc, bktName)
 
 	var sb strings.Builder
-	for i := 0; i < 1<<16+11; i++ {
+	for i := range 1<<16 + 11 {
 		switch i {
 		case 0:
 			sb.Write([]byte("b"))
@@ -120,7 +120,7 @@ func equalDataSlices(t *testing.T, expected, actual []byte) {
 		return
 	}
 
-	for i := 0; i < len(expected); i++ {
+	for i := range len(expected) {
 		if expected[i] != actual[i] {
 			require.Equalf(t, expected[i], actual[i], "differ start with '%d' position, length: %d", i, len(expected))
 		}
