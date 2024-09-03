@@ -29,7 +29,7 @@ func TestObjectsListCache(t *testing.T) {
 		cidKey, cidKey2 = cidtest.ID(), cidtest.ID()
 	)
 
-	for i := 0; i < listSize; i++ {
+	for range listSize {
 		versions = append(versions, &data.NodeVersion{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}})
 	}
 

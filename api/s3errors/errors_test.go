@@ -8,7 +8,7 @@ import (
 func BenchmarkErrCode(b *testing.B) {
 	err := GetAPIError(ErrNoSuchKey)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if IsS3Error(err, ErrNoSuchKey) {
 			_ = err
 		}
@@ -18,7 +18,7 @@ func BenchmarkErrCode(b *testing.B) {
 func BenchmarkErrorsIs(b *testing.B) {
 	err := GetAPIError(ErrNoSuchKey)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if errors.Is(err, GetAPIError(ErrNoSuchKey)) {
 			_ = err
 		}

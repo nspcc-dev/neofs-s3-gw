@@ -127,7 +127,7 @@ func TestAccessboxMultipleKeys(t *testing.T) {
 	gates := make([]*GateData, 0, count)
 	privateKeys := make([]*keys.PrivateKey, 0, count)
 	{ // generate keys
-		for i := 0; i < count; i++ {
+		for range count {
 			cred, err := keys.NewPrivateKey()
 			require.NoError(t, err)
 

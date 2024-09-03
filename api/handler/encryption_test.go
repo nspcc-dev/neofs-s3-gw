@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -52,7 +53,7 @@ func TestGetEncryptedRange(t *testing.T) {
 	createTestBucket(tc, bktName)
 
 	var sb strings.Builder
-	for i := 0; i < 1<<16+11; i++ {
+	for i := range 1<<16 + 11 {
 		switch i {
 		case 0:
 			sb.Write([]byte("b"))
@@ -120,7 +121,7 @@ func equalDataSlices(t *testing.T, expected, actual []byte) {
 		return
 	}
 
-	for i := 0; i < len(expected); i++ {
+	for i := range len(expected) {
 		if expected[i] != actual[i] {
 			require.Equalf(t, expected[i], actual[i], "differ start with '%d' position, length: %d", i, len(expected))
 		}
@@ -249,7 +250,7 @@ func TestMultipartEncrypted(t *testing.T) {
 
 	res, _ := getEncryptedObject(t, hc, bktName, objName)
 	require.Equal(t, len(part1)+len(part2), len(res))
-	require.Equal(t, append(part1, part2...), res)
+	require.Equal(t, slices.Concat(part1, part2), res)
 
 	part2Range := getEncryptedObjectRange(t, hc, bktName, objName, len(part1), len(part1)+len(part2)-1)
 	require.Equal(t, part2[0:], part2Range)

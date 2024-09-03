@@ -9,11 +9,11 @@ import (
 
 func TestTagsValidity(t *testing.T) {
 	sbKey := strings.Builder{}
-	for i := 0; i < keyTagMaxLength; i++ {
+	for range keyTagMaxLength {
 		sbKey.WriteByte('a')
 	}
 	sbValue := strings.Builder{}
-	for i := 0; i < valueTagMaxLength; i++ {
+	for range valueTagMaxLength {
 		sbValue.WriteByte('a')
 	}
 

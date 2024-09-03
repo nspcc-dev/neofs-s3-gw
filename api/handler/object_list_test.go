@@ -154,12 +154,12 @@ func validateListV2(t *testing.T, tc *handlerContext, bktName, prefix, delimiter
 	require.Equal(t, last, len(response.NextContinuationToken) == 0)
 
 	require.Len(t, response.Contents, len(checkObjects))
-	for i := 0; i < len(checkObjects); i++ {
+	for i := range checkObjects {
 		require.Equal(t, checkObjects[i], response.Contents[i].Key)
 	}
 
 	require.Len(t, response.CommonPrefixes, len(checkPrefixes))
-	for i := 0; i < len(checkPrefixes); i++ {
+	for i := range checkPrefixes {
 		require.Equal(t, checkPrefixes[i], response.CommonPrefixes[i].Prefix)
 	}
 

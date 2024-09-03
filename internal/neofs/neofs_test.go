@@ -100,7 +100,7 @@ func Benchmark(b *testing.B) {
 			b.ResetTimer()
 			b.StartTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				b.StopTimer()
 				createParams.Payload = bytes.NewReader(payload)
 				createParams.CreationTime = time.Now()
@@ -182,7 +182,7 @@ func TestConcurrencyAndConsistency(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(gorutines)
 
-	for i := 0; i < gorutines; i++ {
+	for range gorutines {
 		go func() {
 			uploadDownload(ctx, t, neo, p, signer, createParams, &wg)
 		}()
@@ -250,7 +250,7 @@ func TestObjectNonce(t *testing.T) {
 		attrTS  = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(ts, 10))
 	)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var (
 			obj   object.Object
 			nonce = make([]byte, objectNonceSize)

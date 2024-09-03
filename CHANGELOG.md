@@ -7,10 +7,16 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Go 1.22+ is required to build now (#927)
 
 ### Fixed
 
 ### Updated
+- github.com/minio/sio from v0.4.0 to v0.4.1 (#927)
+- github.com/nats-io/nats.go from v1.34.0 to v1.37.0 (#927)
+- github.com/nspcc-dev/tzhash from v1.8.1 to v1.8.2 (#927)
+- github.com/prometheus/client_golang from v1.20.0 to v1.20.2 (#927)
+- github.com/urfave/cli/v2 from v2.27.2 to v2.27.4 (#927)
 
 ## [0.31.0] - 2024-08-20
 
