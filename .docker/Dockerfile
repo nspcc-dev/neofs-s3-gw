@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine as builder
+FROM golang:1.23-alpine as builder
 
 ARG BUILD=now
 ARG REPO=github.com/nspcc-dev/neofs-s3-gw

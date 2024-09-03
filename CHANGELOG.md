@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Go 1.22+ is required to build now (#927)
 
 ### Fixed
 
