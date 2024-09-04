@@ -335,8 +335,20 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		opts.SetCurrentNeoFSEpoch(x.epochGetter.CurrentEpoch())
 		opts.SetPayloadSize(prm.PayloadSize)
 
-		data := x.buffers.Get()
-		chunk := data.(*[]byte)
+		var (
+			chunk        *[]byte
+			returnToPool bool
+		)
+
+		if prm.PayloadSize > 0 && prm.PayloadSize < uint64(x.MaxObjectSize()/2) {
+			c := make([]byte, prm.PayloadSize)
+			chunk = &c
+		} else {
+			data := x.buffers.Get()
+			chunk = data.(*[]byte)
+			returnToPool = true
+		}
+
 		opts.SetPayloadBuffer(*chunk)
 
 		if x.cfg.IsHomomorphicEnabled {
@@ -348,7 +360,9 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 
 		objID, err := slicer.Put(ctx, x.pool, obj, x.signer(ctx), prm.Payload, opts)
-		x.buffers.Put(chunk)
+		if returnToPool {
+			x.buffers.Put(chunk)
+		}
 
 		if err != nil {
 			return oid.ID{}, fmt.Errorf("slicer put: %w", err)
@@ -373,11 +387,24 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return oid.ID{}, fmt.Errorf("put init: %w", err)
 	}
 
-	data := x.buffers.Get()
-	chunk := data.(*[]byte)
+	var (
+		chunk        *[]byte
+		returnToPool bool
+	)
+
+	if prm.PayloadSize > 0 && prm.PayloadSize < uint64(x.MaxObjectSize()/2) {
+		c := make([]byte, prm.PayloadSize)
+		chunk = &c
+	} else {
+		data := x.buffers.Get()
+		chunk = data.(*[]byte)
+		returnToPool = true
+	}
 
 	_, err = io.CopyBuffer(writer, prm.Payload, *chunk)
-	x.buffers.Put(chunk)
+	if returnToPool {
+		x.buffers.Put(chunk)
+	}
 
 	if err != nil {
 		return oid.ID{}, fmt.Errorf("copy payload with buffer: %w", err)
