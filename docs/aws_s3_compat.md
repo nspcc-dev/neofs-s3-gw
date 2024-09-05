@@ -176,6 +176,7 @@ See also `GetObject` and other method parameters.
 | 🟢 | HeadBucket           |           |
 | 🟢 | ListBuckets          |           |
 | 🔵 | PutPublicAccessBlock |           |
+| 🔵 | GetPublicAccessBlock |           |
 
 * `CreateBucket` method allows you to select a placement policy using the `LocationConstraint` parameter in the AWS CLI. The policy name should be passed as a value.
   * Policies mapping can be defined via:
