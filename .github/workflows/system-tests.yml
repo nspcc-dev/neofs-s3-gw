@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nspcc-dev/neofs-node
-          ref: c6a3201722521b99338548e388fa043889c714ad
+          ref: v0.43.0
           path: neofs-node
 
       - name: Checkout neofs-s3-gw repository
@@ -111,7 +111,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neo-go'
-          version: 'tags/v0.105.1'
+          version: 'tags/v0.106.3'
           file: 'neo-go-linux-amd64'
           target: 'neofs-testcases/neo-go'
 
