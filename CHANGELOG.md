@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - Go 1.22+ is required to build now (#927)
+- stream_timeout default timeout from 10s to 60s (#973)
 
 ### Fixed
 
