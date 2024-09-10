@@ -488,6 +488,20 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 	hash := sha256.New()
 	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
 		hash.Write(buf)
+	})
+	id, err := n.neoFS.CreateObject(ctx, prm)
+	if err != nil {
+		return oid.ID{}, nil, err
+	}
+	return id, hash.Sum(nil), nil
+}
+
+// multipartObjectPut writes only Multipart hash collection.
+// It doesn't calculate hash from payload, it already calculated in prm.Multipart.PayloadHash, if required.
+func (n *layer) multipartObjectPut(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (oid.ID, error) {
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
+
+	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
 		if prm.Multipart != nil {
 			for _, h := range prm.Multipart.MultipartHashes {
 				h.Write(buf)
@@ -496,9 +510,9 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 	})
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {
-		return oid.ID{}, nil, err
+		return oid.ID{}, err
 	}
-	return id, hash.Sum(nil), nil
+	return id, nil
 }
 
 // ListObjectsV1 returns objects in a bucket for requests of Version 1.

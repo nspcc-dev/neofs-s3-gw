@@ -132,6 +132,10 @@ type Multipart struct {
 	HeaderObject *object.Object
 	// Link contains info for linking object.
 	Link *object.Link
+	// PayloadHash contains precalculated hash for object.
+	PayloadHash hash.Hash
+	// HomoHash contains precalculated homomorphic hash for object if enabled.
+	HomoHash hash.Hash
 }
 
 // PrmObjectDelete groups parameters of NeoFS.DeleteObject operation.
