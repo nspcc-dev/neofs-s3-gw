@@ -1,6 +1,7 @@
 package s3errors
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -1686,8 +1687,11 @@ var errorCodes = errorCodeMap{
 
 // IsS3Error checks if the provided error is a specific s3 error.
 func IsS3Error(err error, code ErrorCode) bool {
-	e, ok := err.(Error)
-	return ok && e.ErrCode == code
+	var e Error
+	if errors.As(err, &e) {
+		return e.ErrCode == code
+	}
+	return false
 }
 
 func (e errorCodeMap) toAPIErrWithErr(errCode ErrorCode, err error) Error {

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -111,12 +112,15 @@ var s3ErrorResponseMap = map[string]string{
 
 // WriteErrorResponse writes error headers.
 func WriteErrorResponse(w http.ResponseWriter, reqInfo *ReqInfo, err error) int {
-	code := http.StatusInternalServerError
+	var (
+		code  = http.StatusInternalServerError
+		s3err s3errors.Error
+	)
 
-	if e, ok := err.(s3errors.Error); ok {
-		code = e.HTTPStatusCode
+	if errors.As(err, &s3err) {
+		code = s3err.HTTPStatusCode
 
-		switch e.Code {
+		switch s3err.Code {
 		case "SlowDown", "XNeoFSServerNotInitialized", "XNeoFSReadQuorum", "XNeoFSWriteQuorum":
 			// Set retry-after header to indicate user-agents to retry request after 120secs.
 			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
@@ -228,12 +232,15 @@ func (e ErrorResponse) Error() string {
 // getErrorResponse gets in standard error and resource value and
 // provides an encodable populated response values.
 func getAPIErrorResponse(info *ReqInfo, err error) ErrorResponse {
-	code := "InternalError"
-	desc := err.Error()
+	var (
+		code  = "InternalError"
+		desc  = err.Error()
+		s3err s3errors.Error
+	)
 
-	if e, ok := err.(s3errors.Error); ok {
-		code = e.Code
-		desc = e.Description
+	if errors.As(err, &s3err) {
+		code = s3err.Code
+		desc = s3err.Description
 	}
 
 	var resource string
