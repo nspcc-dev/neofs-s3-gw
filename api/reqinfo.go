@@ -136,7 +136,7 @@ func NewReqInfo(w http.ResponseWriter, r *http.Request, req ObjectRequest) *ReqI
 		ObjectName:   req.Object,
 		UserAgent:    r.UserAgent(),
 		RemoteHost:   GetSourceIP(r),
-		RequestID:    GetRequestID(w),
+		RequestID:    GetWriterRequestID(w),
 		DeploymentID: deploymentID.String(),
 		URL:          r.URL,
 	}
