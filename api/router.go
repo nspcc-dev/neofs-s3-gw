@@ -134,7 +134,7 @@ func setRequestID(h http.Handler) http.Handler {
 		))
 
 		// set request info into context
-		r = r.WithContext(prepareContext(w, r))
+		r = r.WithContext(prepareContext(w, r)) //nolint:contextcheck // In fact, r.Context() is reused internally
 
 		// continue execution
 		h.ServeHTTP(w, r)
