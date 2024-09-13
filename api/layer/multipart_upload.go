@@ -340,8 +340,15 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		if nBts > 0 {
 			prm.Payload = bytes.NewReader((*chunk)[:nBts])
 			prm.PayloadSize = uint64(nBts)
+			prm.Multipart.PayloadHash = sha256.New()
+			prm.Multipart.PayloadHash.Write((*chunk)[:nBts])
 
-			id, _, err = n.objectPutAndHash(ctx, prm, bktInfo)
+			if n.neoFS.IsHomomorphicHashingEnabled() {
+				prm.Multipart.HomoHash = tz.New()
+				prm.Multipart.HomoHash.Write((*chunk)[:nBts])
+			}
+
+			id, err = n.multipartObjectPut(ctx, prm, bktInfo)
 			if err != nil {
 				return nil, err
 			}
@@ -496,11 +503,16 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		Multipart: &Multipart{
 			MultipartHashes: objHashes,
 			HeaderObject:    &hashlessHeaderObject,
+			PayloadHash:     sha256.New(),
 		},
 		Payload: bytes.NewBuffer(nil),
 	}
 
-	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
+	if n.neoFS.IsHomomorphicHashingEnabled() {
+		prm.Multipart.HomoHash = tz.New()
+	}
+
+	id, err := n.multipartObjectPut(ctx, prm, bktInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -822,11 +834,16 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			SplitFirstID:    &splitFirstID,
 			SplitPreviousID: &splitPreviousID,
 			HeaderObject:    header,
+			PayloadHash:     sha256.New(),
 		},
 		Payload: bytes.NewBuffer(nil),
 	}
 
-	lastPartObjID, _, err := n.objectPutAndHash(ctx, prm, p.Info.Bkt)
+	if n.neoFS.IsHomomorphicHashingEnabled() {
+		prm.Multipart.HomoHash = tz.New()
+	}
+
+	lastPartObjID, err := n.multipartObjectPut(ctx, prm, p.Info.Bkt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -852,7 +869,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		},
 	}
 
-	_, _, err = n.objectPutAndHash(ctx, prm, p.Info.Bkt)
+	_, err = n.multipartObjectPut(ctx, prm, p.Info.Bkt)
 	if err != nil {
 		return nil, nil, err
 	}

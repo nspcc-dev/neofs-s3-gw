@@ -26,6 +26,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -246,6 +247,19 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 	return nil
 }
 
+func (x *NeoFS) signMultipartObject(obj *object.Object, signer neofscrypto.Signer, payloadHash, homoHash hash.Hash) error {
+	obj.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, payloadHash))
+	if homoHash != nil {
+		obj.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homoHash))
+	}
+
+	if err := obj.SetIDWithSignature(signer); err != nil {
+		return fmt.Errorf("set id with signature: %w", err)
+	}
+
+	return nil
+}
+
 // CreateObject implements neofs.NeoFS interface method.
 func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oid.ID, error) {
 	attrNum := len(prm.Attributes) + 1 // + creation time
@@ -310,8 +324,25 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			prm.Payload = bytes.NewReader(obj.Payload())
 			obj.SetPayloadSize(uint64(len(obj.Payload())))
 
+			prm.Multipart.PayloadHash = sha256.New()
+			prm.Multipart.PayloadHash.Write(obj.Payload())
+
+			if x.IsHomomorphicHashingEnabled() {
+				prm.Multipart.HomoHash = tz.New()
+				prm.Multipart.HomoHash.Write(obj.Payload())
+			}
+
 			// Link object should never have a previous one.
 			obj.ResetPreviousID()
+		}
+
+		if err := x.signMultipartObject(
+			&obj,
+			x.signer(ctx),
+			prm.Multipart.PayloadHash,
+			prm.Multipart.HomoHash,
+		); err != nil {
+			return oid.ID{}, errors.New("failed to sign object")
 		}
 	}
 
