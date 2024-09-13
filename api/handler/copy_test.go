@@ -109,7 +109,9 @@ func getObjectTagging(t *testing.T, tc *handlerContext, bktName, objName, versio
 	assertStatus(t, w, http.StatusOK)
 
 	tagging := &Tagging{}
-	err := xml.NewDecoder(w.Result().Body).Decode(tagging)
+	body := w.Result().Body
+	err := xml.NewDecoder(body).Decode(tagging)
+	body.Close()
 	require.NoError(t, err)
 	return tagging
 }

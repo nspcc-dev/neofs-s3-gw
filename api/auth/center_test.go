@@ -426,7 +426,8 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	req.Body = io.NopCloser(buff)
 	req.Header.Set("content-length", strconv.Itoa(buff.Len()))
 
-	_, err = http.DefaultClient.Do(req)
+	res, err := http.DefaultClient.Do(req)
+	res.Body.Close()
 	require.NoError(t, err)
 }
 

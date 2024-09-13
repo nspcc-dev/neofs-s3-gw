@@ -24,7 +24,9 @@ func TestConditionalHead(t *testing.T) {
 	w, r := prepareTestRequest(tc, bktName, objName, nil)
 	tc.Handler().HeadObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
-	etag := w.Result().Header.Get(api.ETag)
+	res := w.Result()
+	etag := res.Header.Get(api.ETag)
+	res.Body.Close()
 
 	headers := map[string]string{api.IfMatch: etag}
 	headObject(t, tc, bktName, objName, headers, http.StatusOK)

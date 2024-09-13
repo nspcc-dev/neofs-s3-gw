@@ -269,7 +269,9 @@ func getEncryptedObject(t *testing.T, tc *handlerContext, bktName, objName strin
 	setEncryptHeaders(r)
 	tc.Handler().GetObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
-	content, err := io.ReadAll(w.Result().Body)
+	body := w.Result().Body
+	content, err := io.ReadAll(body)
+	body.Close()
 	require.NoError(t, err)
 	return content, w.Header()
 }
@@ -280,7 +282,9 @@ func getEncryptedObjectRange(t *testing.T, tc *handlerContext, bktName, objName 
 	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	tc.Handler().GetObjectHandler(w, r)
 	assertStatus(t, w, http.StatusPartialContent)
-	content, err := io.ReadAll(w.Result().Body)
+	body := w.Result().Body
+	content, err := io.ReadAll(body)
+	body.Close()
 	require.NoError(t, err)
 	return content
 }

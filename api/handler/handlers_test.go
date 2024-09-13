@@ -213,7 +213,9 @@ func prepareTestPayloadRequest(hc *handlerContext, bktName, objName string, payl
 
 func parseTestResponse(t *testing.T, response *httptest.ResponseRecorder, body any) {
 	assertStatus(t, response, http.StatusOK)
-	err := xml.NewDecoder(response.Result().Body).Decode(body)
+	b := response.Result().Body
+	err := xml.NewDecoder(b).Decode(body)
+	b.Close()
 	require.NoError(t, err)
 }
 
@@ -236,7 +238,9 @@ func listOIDsFromMockedNeoFS(t *testing.T, tc *handlerContext, bktName string) [
 
 func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
 	if w.Code != status {
-		resp, err := io.ReadAll(w.Result().Body)
+		body := w.Result().Body
+		resp, err := io.ReadAll(body)
+		body.Close()
 		require.NoError(t, err)
 		require.Failf(t, "unexpected status", "expected: %d, actual: %d, resp: '%s'", status, w.Code, string(resp))
 	}
@@ -244,6 +248,8 @@ func assertStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
 
 func readResponse(t *testing.T, w *httptest.ResponseRecorder, status int, model any) {
 	assertStatus(t, w, status)
-	err := xml.NewDecoder(w.Result().Body).Decode(model)
+	body := w.Result().Body
+	err := xml.NewDecoder(body).Decode(model)
+	body.Close()
 	require.NoError(t, err)
 }
