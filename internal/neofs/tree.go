@@ -100,7 +100,7 @@ const (
 func NewTreeClient(ctx context.Context, addr string, key *keys.PrivateKey) (*TreeClient, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, fmt.Errorf("did not connect: %v", err)
+		return nil, fmt.Errorf("did not connect: %w", err)
 	}
 
 	c := tree.NewTreeServiceClient(conn)
