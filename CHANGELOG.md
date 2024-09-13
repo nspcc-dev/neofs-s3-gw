@@ -7,10 +7,25 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- Go 1.22+ is required to build now (#927)
-- stream_timeout default timeout from 10s to 60s (#973)
 
 ### Fixed
+
+### Updated
+
+## [0.31.1] - 2024-09-13
+
+### Added
+
+### Changed
+- Documentation for extensions and unsupported features (#990, #991, #995, #998)
+- Go 1.22+ is required to build now (#927)
+- stream_timeout default timeout from 10s to 60s (#973)
+- Multipart objects are signed directly by gate now (#1001)
+
+### Fixed
+- Incorrect locked object deletion (#992)
+- Potential version ID collisions in some cases (#993)
+- Excessive memory use when working with small objects (#997)
 
 ### Updated
 - github.com/minio/sio from v0.4.0 to v0.4.1 (#927)
@@ -631,4 +646,5 @@ releases.
 [0.30.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.29.0...v0.30.0
 [0.30.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.0...v0.30.1
 [0.31.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.1...v0.31.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.0...master
+[0.31.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.0...v0.31.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.1...master
