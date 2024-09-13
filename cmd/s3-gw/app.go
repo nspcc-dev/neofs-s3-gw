@@ -469,19 +469,19 @@ LOOP:
 		}
 	}
 
-	ctx, cancel := shutdownContext()
+	ctx, cancel := shutdownContext(ctx)
 	defer cancel()
 
 	a.log.Info("stopping server", zap.Error(srv.Shutdown(ctx)))
 
 	a.metrics.Shutdown()
-	a.stopServices()
+	a.stopServices(ctx)
 
 	close(a.webDone)
 }
 
-func shutdownContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), defaultShutdownTimeout)
+func shutdownContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, defaultShutdownTimeout)
 }
 
 func (a *App) configReload(ctx context.Context) {
@@ -504,7 +504,9 @@ func (a *App) configReload(ctx context.Context) {
 		a.log.Warn("failed to reload server parameters", zap.Error(err))
 	}
 
-	a.stopServices()
+	ctx, cancel := shutdownContext(ctx)
+	defer cancel()
+	a.stopServices(ctx)
 	a.startServices()
 
 	a.updateSettings()
@@ -573,10 +575,7 @@ func (a *App) updateServers() error {
 	return nil
 }
 
-func (a *App) stopServices() {
-	ctx, cancel := shutdownContext()
-	defer cancel()
-
+func (a *App) stopServices(ctx context.Context) {
 	for _, svc := range a.services {
 		svc.ShutDown(ctx)
 	}
