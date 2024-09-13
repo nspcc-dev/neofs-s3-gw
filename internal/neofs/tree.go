@@ -1309,7 +1309,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, bktInfo *data.BucketInfo, t
 	var subtree []*tree.GetSubTreeResponse_Body
 	for {
 		resp, err := cli.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, handleError("failed to get sub tree", err)
