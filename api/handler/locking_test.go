@@ -332,7 +332,7 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(body))
-			r = r.WithContext(api.SetReqInfo(r.Context(), api.NewReqInfo(w, r, api.ObjectRequest{Bucket: tc.bucket})))
+			r = r.WithContext(api.SetReqInfo(r.Context(), api.NewReqInfo(w, r, api.ObjectRequest{Bucket: tc.bucket}))) //nolint:contextcheck
 
 			hc.Handler().PutBucketObjectLockConfigHandler(w, r)
 
