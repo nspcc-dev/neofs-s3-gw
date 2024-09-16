@@ -5,6 +5,7 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- Config option placement_policy.locations as alternative for placement_policy.region_mapping (#989)
 
 ### Changed
 
