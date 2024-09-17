@@ -38,7 +38,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 	var (
 		err error
 		res *container.Container
-		rid = api.GetRequestID(ctx)
+		rid = api.GetContextRequestID(ctx)
 		log = n.log.With(zap.Stringer("cid", idCnr), zap.String("request_id", rid))
 
 		info = &data.BucketInfo{
@@ -97,7 +97,7 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 		err error
 		own = n.Owner(ctx)
 		res []cid.ID
-		rid = api.GetRequestID(ctx)
+		rid = api.GetContextRequestID(ctx)
 	)
 	res, err = n.neoFS.UserContainers(ctx, own)
 	if err != nil {

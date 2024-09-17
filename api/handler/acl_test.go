@@ -1411,7 +1411,9 @@ func getBucketPolicy(hc *handlerContext, bktName string) *bucketPolicy {
 
 	assertStatus(hc.t, w, http.StatusOK)
 	policy := &bucketPolicy{}
-	err := json.NewDecoder(w.Result().Body).Decode(policy)
+	body := w.Result().Body
+	err := json.NewDecoder(body).Decode(policy)
+	body.Close()
 	require.NoError(hc.t, err)
 	return policy
 }

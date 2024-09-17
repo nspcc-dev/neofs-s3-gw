@@ -129,13 +129,13 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 		}
 
 		if p.Matching == "content-length-range" {
-			min, ok := v[1].(float64)
-			max, ok2 := v[2].(float64)
+			minV, ok := v[1].(float64)
+			maxV, ok2 := v[2].(float64)
 			if !ok || !ok2 {
 				return errInvalidCondition
 			}
-			p.Key = strconv.FormatFloat(min, 'f', 0, 32)
-			p.Value = strconv.FormatFloat(max, 'f', 0, 32)
+			p.Key = strconv.FormatFloat(minV, 'f', 0, 32)
+			p.Value = strconv.FormatFloat(maxV, 'f', 0, 32)
 		} else {
 			key, ok2 := v[1].(string)
 			p.Value, ok = v[2].(string)

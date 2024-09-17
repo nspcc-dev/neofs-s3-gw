@@ -332,7 +332,7 @@ func TestPutBucketLockConfigurationHandler(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodPut, defaultURL, bytes.NewReader(body))
-			r = r.WithContext(api.SetReqInfo(r.Context(), api.NewReqInfo(w, r, api.ObjectRequest{Bucket: tc.bucket})))
+			r = r.WithContext(api.SetReqInfo(r.Context(), api.NewReqInfo(w, r, api.ObjectRequest{Bucket: tc.bucket}))) //nolint:contextcheck
 
 			hc.Handler().PutBucketObjectLockConfigHandler(w, r)
 
@@ -415,7 +415,9 @@ func TestGetBucketLockConfigurationHandler(t *testing.T) {
 			}
 
 			actualConf := &data.ObjectLockConfiguration{}
-			err := xml.NewDecoder(w.Result().Body).Decode(actualConf)
+			body := w.Result().Body
+			err := xml.NewDecoder(body).Decode(actualConf)
+			body.Close()
 			require.NoError(t, err)
 
 			require.Equal(t, tc.expectedConf.ObjectLockEnabled, actualConf.ObjectLockEnabled)
@@ -426,7 +428,9 @@ func TestGetBucketLockConfigurationHandler(t *testing.T) {
 
 func assertS3Error(t *testing.T, w *httptest.ResponseRecorder, expectedError s3errors.Error) {
 	actualErrorResponse := &api.ErrorResponse{}
-	err := xml.NewDecoder(w.Result().Body).Decode(actualErrorResponse)
+	body := w.Result().Body
+	err := xml.NewDecoder(body).Decode(actualErrorResponse)
+	body.Close()
 	require.NoError(t, err)
 
 	require.Equal(t, expectedError.HTTPStatusCode, w.Code)
@@ -476,7 +480,9 @@ func putObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
 
 func assertLegalHold(t *testing.T, w *httptest.ResponseRecorder, status string) {
 	actualHold := &data.LegalHold{}
-	err := xml.NewDecoder(w.Result().Body).Decode(actualHold)
+	body := w.Result().Body
+	err := xml.NewDecoder(body).Decode(actualHold)
+	body.Close()
 	require.NoError(t, err)
 	require.Equal(t, status, actualHold.Status)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -532,7 +538,9 @@ func putObjectRetention(hc *handlerContext, bktName, objName string, retention *
 
 func assertRetention(t *testing.T, w *httptest.ResponseRecorder, retention *data.Retention) {
 	actualRetention := &data.Retention{}
-	err := xml.NewDecoder(w.Result().Body).Decode(actualRetention)
+	body := w.Result().Body
+	err := xml.NewDecoder(body).Decode(actualRetention)
+	body.Close()
 	require.NoError(t, err)
 	require.Equal(t, retention.Mode, actualRetention.Mode)
 	require.Equal(t, retention.RetainUntilDate, actualRetention.RetainUntilDate)
@@ -639,7 +647,9 @@ func putObjectRetentionFailed(t *testing.T, hc *handlerContext, bktName, objName
 
 func assertRetentionApproximate(t *testing.T, w *httptest.ResponseRecorder, retention *data.Retention, delta float64) {
 	actualRetention := &data.Retention{}
-	err := xml.NewDecoder(w.Result().Body).Decode(actualRetention)
+	body := w.Result().Body
+	err := xml.NewDecoder(body).Decode(actualRetention)
+	body.Close()
 	require.NoError(t, err)
 	require.Equal(t, retention.Mode, actualRetention.Mode)
 	require.Equal(t, http.StatusOK, w.Code)

@@ -182,7 +182,9 @@ func getObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, s
 	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	tc.Handler().GetObjectHandler(w, r)
 	assertStatus(t, w, http.StatusPartialContent)
-	content, err := io.ReadAll(w.Result().Body)
+	body := w.Result().Body
+	content, err := io.ReadAll(body)
+	body.Close()
 	require.NoError(t, err)
 	return content
 }

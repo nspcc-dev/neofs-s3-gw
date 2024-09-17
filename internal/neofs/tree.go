@@ -100,7 +100,7 @@ const (
 func NewTreeClient(ctx context.Context, addr string, key *keys.PrivateKey) (*TreeClient, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, fmt.Errorf("did not connect: %v", err)
+		return nil, fmt.Errorf("did not connect: %w", err)
 	}
 
 	c := tree.NewTreeServiceClient(conn)
@@ -1309,7 +1309,7 @@ func (c *TreeClient) getSubTree(ctx context.Context, bktInfo *data.BucketInfo, t
 	var subtree []*tree.GetSubTreeResponse_Body
 	for {
 		resp, err := cli.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, handleError("failed to get sub tree", err)

@@ -615,19 +615,17 @@ func (x *NeoFS) CurrentEpoch() uint64 {
 }
 
 func isErrAccessDenied(err error) (string, bool) {
-	unwrappedErr := errors.Unwrap(err)
-	for unwrappedErr != nil {
-		err = unwrappedErr
-		unwrappedErr = errors.Unwrap(err)
-	}
-
-	switch err := err.(type) {
+	var (
+		oad  apistatus.ObjectAccessDenied
+		oadp *apistatus.ObjectAccessDenied
+	)
+	switch {
+	case errors.As(err, &oad):
+		return oad.Reason(), true
+	case errors.As(err, &oadp):
+		return oadp.Reason(), true
 	default:
 		return "", false
-	case apistatus.ObjectAccessDenied:
-		return err.Reason(), true
-	case *apistatus.ObjectAccessDenied:
-		return err.Reason(), true
 	}
 }
 

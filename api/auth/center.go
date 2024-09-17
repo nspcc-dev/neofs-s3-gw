@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -289,7 +288,7 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 }
 
 func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
-	otherRequest := r.Clone(context.TODO())
+	otherRequest := r.Clone(r.Context())
 	otherRequest.Header = make(http.Header)
 
 	for key, val := range r.Header {

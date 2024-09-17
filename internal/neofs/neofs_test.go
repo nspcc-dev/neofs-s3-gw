@@ -222,14 +222,14 @@ func uploadDownload(ctx context.Context, t *testing.T, neo *NeoFS, p *pool.Pool,
 		createParams.Payload = bytes.NewReader(payload)
 		createParams.CreationTime = time.Now()
 
-		objID, err := neo.CreateObject(opContext, createParams)
+		objID, err := neo.CreateObject(opContext, createParams) //nolint:contextcheck // It's intentional, see above
 		require.NoError(t, err)
 
 		var objReadPrm layer.PrmObjectRead
 		objReadPrm.Object = objID
 		objReadPrm.Container = id
 
-		op, err := neo.ReadObject(opContext, objReadPrm)
+		op, err := neo.ReadObject(opContext, objReadPrm) //nolint:contextcheck // It's intentional, see above
 		require.NoError(t, err)
 
 		pl, err := io.ReadAll(op.Payload)

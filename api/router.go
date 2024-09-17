@@ -134,7 +134,7 @@ func setRequestID(h http.Handler) http.Handler {
 		))
 
 		// set request info into context
-		r = r.WithContext(prepareContext(w, r))
+		r = r.WithContext(prepareContext(w, r)) //nolint:contextcheck // In fact, r.Context() is reused internally
 
 		// continue execution
 		h.ServeHTTP(w, r)
@@ -182,7 +182,7 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 			l.Info("call method",
 				zap.Int("status", lw.statusCode),
 				zap.String("host", r.Host),
-				zap.String("request_id", GetRequestID(r.Context())),
+				zap.String("request_id", reqInfo.RequestID),
 				zap.String("method", mux.CurrentRoute(r).GetName()),
 				zap.String("bucket", reqInfo.BucketName),
 				zap.String("object", reqInfo.ObjectName),
@@ -191,16 +191,14 @@ func logErrorResponse(l *zap.Logger) mux.MiddlewareFunc {
 	}
 }
 
-// GetRequestID returns the request ID from the response writer or the context.
-func GetRequestID(v any) string {
-	switch t := v.(type) {
-	case context.Context:
-		return GetReqInfo(t).RequestID
-	case http.ResponseWriter:
-		return t.Header().Get(hdrAmzRequestID)
-	default:
-		panic("unknown type")
-	}
+// GetContextRequestID returns the request ID from the context.
+func GetContextRequestID(ctx context.Context) string {
+	return GetReqInfo(ctx).RequestID
+}
+
+// GetWriterRequestID extracts request ID from the response writer.
+func GetWriterRequestID(w http.ResponseWriter) string {
+	return w.Header().Get(hdrAmzRequestID)
 }
 
 // Attach adds S3 API handlers from h to r for domains with m client limit using

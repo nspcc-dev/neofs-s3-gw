@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/xml"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -142,12 +143,15 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func isErrObjectLocked(err error) bool {
-	switch err.(type) {
+	var (
+		ol  apistatus.ObjectLocked
+		olp *apistatus.ObjectLocked
+	)
+	switch {
+	case errors.As(err, &ol), errors.As(err, &olp):
+		return true
 	default:
 		return strings.Contains(err.Error(), "object is locked")
-	case apistatus.ObjectLocked,
-		*apistatus.ObjectLocked:
-		return true
 	}
 }
 
@@ -226,8 +230,12 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	var errs []error
 	for _, obj := range deletedObjects {
 		if obj.Error != nil {
-			code := "BadRequest"
-			if s3err, ok := obj.Error.(s3errors.Error); ok {
+			var (
+				code  = "BadRequest"
+				s3err s3errors.Error
+			)
+
+			if errors.As(obj.Error, &s3err) {
 				code = s3err.Code
 			}
 			response.Errors = append(response.Errors, DeleteError{

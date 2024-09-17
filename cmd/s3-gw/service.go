@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -20,7 +21,7 @@ func (ms *Service) Start() {
 	if ms.enabled {
 		ms.log.Info("service is running", zap.String("endpoint", ms.Addr))
 		err := ms.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			ms.log.Warn("service couldn't start on configured port")
 		}
 	} else {
