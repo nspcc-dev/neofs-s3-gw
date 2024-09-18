@@ -84,6 +84,7 @@ const ( // Settings.
 	// Policy.
 	cfgPolicyDefault       = "placement_policy.default"
 	cfgPolicyRegionMapFile = "placement_policy.region_mapping"
+	cfgPolicyLocations     = "placement_policy.locations"
 
 	// CORS.
 	cfgDefaultMaxAge = "cors.default_max_age"

@@ -190,8 +190,31 @@ func (a *App) initLayer(ctx context.Context, anonSigner user.Signer, neoFS *neof
 	}
 }
 
+func loadLocations(v *viper.Viper) (map[string]string, error) {
+	var (
+		rawLocations = v.GetStringMap(cfgPolicyLocations)
+		locations    = make(map[string]string, len(rawLocations))
+	)
+
+	for key, val := range rawLocations {
+		if s, ok := val.(string); ok {
+			locations[key] = s
+			continue
+		}
+
+		return nil, fmt.Errorf("location %q value is not a string: %s", key, val)
+	}
+
+	return locations, nil
+}
+
 func newAppSettings(log *Logger, v *viper.Viper) *appSettings {
-	policies, err := newPlacementPolicy(getDefaultPolicyValue(v), v.GetString(cfgPolicyRegionMapFile))
+	locations, err := loadLocations(v)
+	if err != nil {
+		log.logger.Fatal("load locations failed", zap.Error(err))
+	}
+
+	policies, err := newPlacementPolicy(getDefaultPolicyValue(v), v.GetString(cfgPolicyRegionMapFile), locations)
 	if err != nil {
 		log.logger.Fatal("failed to create new policy mapping", zap.Error(err))
 	}
@@ -311,12 +334,12 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 	return p, key, poolStat
 }
 
-func newPlacementPolicy(defaultPolicy string, regionPolicyFilepath string) (*placementPolicy, error) {
+func newPlacementPolicy(defaultPolicy string, regionPolicyFilepath string, locations map[string]string) (*placementPolicy, error) {
 	policies := &placementPolicy{
 		regionMap: make(map[string]netmap.PlacementPolicy),
 	}
 
-	return policies, policies.update(defaultPolicy, regionPolicyFilepath)
+	return policies, policies.update(defaultPolicy, regionPolicyFilepath, locations)
 }
 
 func (p *placementPolicy) Default() netmap.PlacementPolicy {
@@ -333,7 +356,28 @@ func (p *placementPolicy) Get(name string) (netmap.PlacementPolicy, bool) {
 	return policy, ok
 }
 
-func (p *placementPolicy) update(defaultPolicy string, regionPolicyFilepath string) error {
+func parsePolicies(regionMap map[string]netmap.PlacementPolicy, locations map[string]string) error {
+	var err error
+
+	for location, policy := range locations {
+		var pp netmap.PlacementPolicy
+		if err = pp.DecodeString(policy); err == nil {
+			regionMap[location] = pp
+			continue
+		}
+
+		if err = pp.UnmarshalJSON([]byte(policy)); err == nil {
+			regionMap[location] = pp
+			continue
+		}
+
+		return fmt.Errorf("%q: %w", location, err)
+	}
+
+	return nil
+}
+
+func (p *placementPolicy) update(defaultPolicy string, regionPolicyFilepath string, locations map[string]string) error {
 	var defaultPlacementPolicy netmap.PlacementPolicy
 	if err := defaultPlacementPolicy.DecodeString(defaultPolicy); err != nil {
 		return fmt.Errorf("parse default policy '%s': %w", defaultPolicy, err)
@@ -344,20 +388,13 @@ func (p *placementPolicy) update(defaultPolicy string, regionPolicyFilepath stri
 		return fmt.Errorf("read region map file: %w", err)
 	}
 
-	regionMap := make(map[string]netmap.PlacementPolicy, len(regionPolicyMap))
-	for region, policy := range regionPolicyMap {
-		var pp netmap.PlacementPolicy
-		if err = pp.DecodeString(policy); err == nil {
-			regionMap[region] = pp
-			continue
-		}
+	regionMap := make(map[string]netmap.PlacementPolicy, len(regionPolicyMap)+len(locations))
+	if err = parsePolicies(regionMap, regionPolicyMap); err != nil {
+		return fmt.Errorf("parse region map: %w", err)
+	}
 
-		if err = pp.UnmarshalJSON([]byte(policy)); err == nil {
-			regionMap[region] = pp
-			continue
-		}
-
-		return fmt.Errorf("parse region '%s' to policy mapping: %w", region, err)
+	if err = parsePolicies(regionMap, locations); err != nil {
+		return fmt.Errorf("parse locations: %w", err)
 	}
 
 	p.mu.Lock()
@@ -524,7 +561,12 @@ func (a *App) updateSettings() {
 		a.settings.logLevel.SetLevel(lvl)
 	}
 
-	if err := a.settings.policies.update(getDefaultPolicyValue(a.cfg), a.cfg.GetString(cfgPolicyRegionMapFile)); err != nil {
+	regions, err := loadLocations(a.cfg)
+	if err != nil {
+		a.log.Warn("locations won't be updated", zap.Error(err))
+	}
+
+	if err := a.settings.policies.update(getDefaultPolicyValue(a.cfg), a.cfg.GetString(cfgPolicyRegionMapFile), regions); err != nil {
 		a.log.Warn("policies won't be updated", zap.Error(err))
 	}
 }

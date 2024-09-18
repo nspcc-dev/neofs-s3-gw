@@ -257,10 +257,11 @@ placement_policy:
   region_mapping: /path/to/mapping/rules.json
 ```
 
-| Parameter        | Type     | SIGHUP reload | Default value | Description                                                                                                                                                                                                       |
-|------------------|----------|---------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `default`        | `string` | yes           | `REP 3`       | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy. |
-| `region_mapping` | `string` | yes           |               | Path to file that maps aws `LocationContraint` values to NeoFS placement policy. The similar to `--container-policy` flag in `neofs-s3-authmate` util, see in [docs](./authmate.md#containers-policy)             |
+| Parameter        | Type     | SIGHUP reload | Default value | Description                                                                                                                                                                                                                                  |
+|------------------|----------|---------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `default`        | `string` | yes           | `REP 3`       | Default policy of placing containers in NeoFS. If a user sends a request `CreateBucket` and doesn't define policy for placing of a container in NeoFS, the S3 Gateway will put the container with default policy.                            |
+| `region_mapping` | `string` | yes           |               | Path to file that maps aws `LocationConstraint` values to NeoFS placement policy. The similar to `--container-policy` flag in `neofs-s3-authmate` util, see in [docs](./authmate.md#containers-policy)                                       |
+| `locations`      | `map`    | yes           |               | Hashtable that maps aws LocationConstraint values to NeoFS placement policy. It's similar to the region_mapping config option, but allows for in-place configuration and extends/overrides values from region_mapping file if it's provided. |
 
 File for `region_mapping` must contain something like this:
 
@@ -270,6 +271,15 @@ File for `region_mapping` must contain something like this:
    "complex": "REP 1 IN X CBF 1 SELECT 1 FROM * AS X",
    "example-json-policy": "{\"replicas\":[{\"count\":3,\"selector\":\"SelASD0\"}],\"container_backup_factor\":3,\"selectors\":[{\"name\":\"SelASD0\",\"count\":3,\"filter\":\"*\"}],\"filters\":[]}"
 }
+```
+
+The option `placement_policy.regions` may look like:
+```yaml
+placement_policy:
+  locations:
+    REP-1: "REP 1"
+    REP-3: "REP 3"
+    complex: "REP 1 IN X CBF 1 SELECT 1 FROM * AS X"
 ```
 
 **Note:** on SIGHUP reload policies will be updated only if both parameters are valid. 

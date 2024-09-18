@@ -127,6 +127,10 @@ placement_policy:
   # Region to placement policy mapping json file.
   # Path to container policy mapping. The same as '--container-policy' flag for authmate
   region_mapping: /path/to/container/policy.json
+  locations:
+    REP-1: "REP 1"
+    REP-3: "REP 3"
+    complex: "REP 1 IN X CBF 1 SELECT 1 FROM * AS X"
 
 # CORS
 # value of Access-Control-Max-Age header if this value is not set in a rule. Has an int type.
