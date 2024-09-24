@@ -82,9 +82,10 @@ const ( // Settings.
 	cfgNATSRootCAFiles        = "nats.root_ca"
 
 	// Policy.
-	cfgPolicyDefault       = "placement_policy.default"
-	cfgPolicyRegionMapFile = "placement_policy.region_mapping"
-	cfgPolicyLocations     = "placement_policy.locations"
+	cfgPolicyDefault               = "placement_policy.default"
+	cfgPolicyRegionMapFile         = "placement_policy.region_mapping"
+	cfgPolicyLocations             = "placement_policy.locations"
+	cfgPolicyLocationsContractName = "placement_policy.contract_name"
 
 	// CORS.
 	cfgDefaultMaxAge = "cors.default_max_age"

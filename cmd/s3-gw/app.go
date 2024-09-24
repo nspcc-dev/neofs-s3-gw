@@ -60,8 +60,9 @@ type (
 	}
 
 	appSettings struct {
-		logLevel zap.AtomicLevel
-		policies *placementPolicy
+		logLevel      zap.AtomicLevel
+		policies      *placementPolicy
+		policyService *storagePolicyService
 	}
 
 	Logger struct {
@@ -142,7 +143,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		wrkDone: make(chan struct{}, 1),
 
 		maxClients: newMaxClients(v),
-		settings:   newAppSettings(log, v),
+		settings:   newAppSettings(ctx, log, v),
 	}
 
 	app.init(ctx, anonSigner, neoFS)
@@ -208,7 +209,7 @@ func loadLocations(v *viper.Viper) (map[string]string, error) {
 	return locations, nil
 }
 
-func newAppSettings(log *Logger, v *viper.Viper) *appSettings {
+func newAppSettings(ctx context.Context, log *Logger, v *viper.Viper) *appSettings {
 	locations, err := loadLocations(v)
 	if err != nil {
 		log.logger.Fatal("load locations failed", zap.Error(err))
@@ -219,9 +220,19 @@ func newAppSettings(log *Logger, v *viper.Viper) *appSettings {
 		log.logger.Fatal("failed to create new policy mapping", zap.Error(err))
 	}
 
+	var policyProvider servicePolicyProvider = &noOpStoragePolicyProvider{}
+
+	if contractName := v.GetString(cfgPolicyLocationsContractName); contractName != "" {
+		policyProvider, err = newStoragePolicyProvider(ctx, contractName, v.GetStringSlice(cfgRPCEndpoints))
+		if err != nil {
+			log.logger.Fatal("failed to init provider", zap.Error(err))
+		}
+	}
+
 	return &appSettings{
-		logLevel: log.lvl,
-		policies: policies,
+		logLevel:      log.lvl,
+		policies:      policies,
+		policyService: newStoragePolicyService(policyProvider),
 	}
 }
 
@@ -546,7 +557,7 @@ func (a *App) configReload(ctx context.Context) {
 	a.stopServices(ctx)
 	a.startServices()
 
-	a.updateSettings()
+	a.updateSettings(ctx)
 
 	a.metrics.SetEnabled(a.cfg.GetBool(cfgPrometheusEnabled))
 	a.setHealthStatus()
@@ -554,7 +565,7 @@ func (a *App) configReload(ctx context.Context) {
 	a.log.Info("SIGHUP config reload completed")
 }
 
-func (a *App) updateSettings() {
+func (a *App) updateSettings(ctx context.Context) {
 	if lvl, err := getLogLevel(a.cfg); err != nil {
 		a.log.Warn("log level won't be updated", zap.Error(err))
 	} else {
@@ -569,6 +580,16 @@ func (a *App) updateSettings() {
 	if err := a.settings.policies.update(getDefaultPolicyValue(a.cfg), a.cfg.GetString(cfgPolicyRegionMapFile), regions); err != nil {
 		a.log.Warn("policies won't be updated", zap.Error(err))
 	}
+
+	var policyProvider servicePolicyProvider = &noOpStoragePolicyProvider{}
+	if contractName := a.cfg.GetString(cfgPolicyLocationsContractName); contractName != "" {
+		policyProvider, err = newStoragePolicyProvider(ctx, contractName, a.cfg.GetStringSlice(cfgRPCEndpoints))
+		if err != nil {
+			a.log.Warn("failed to init policy provider", zap.Error(err))
+		}
+	}
+
+	a.settings.policyService.UpdateProvider(policyProvider)
 }
 
 func (a *App) startServices() {
@@ -706,10 +727,11 @@ func getAccessBoxCacheConfig(v *viper.Viper, l *zap.Logger) *cache.Config {
 
 func (a *App) initHandler() {
 	cfg := &handler.Config{
-		Policy:             a.settings.policies,
-		DefaultMaxAge:      handler.DefaultMaxAge,
-		NotificatorEnabled: a.cfg.GetBool(cfgEnableNATS),
-		CopiesNumber:       handler.DefaultCopiesNumber,
+		Policy:                  a.settings.policies,
+		PlacementPolicyProvider: a.settings.policyService,
+		DefaultMaxAge:           handler.DefaultMaxAge,
+		NotificatorEnabled:      a.cfg.GetBool(cfgEnableNATS),
+		CopiesNumber:            handler.DefaultCopiesNumber,
 	}
 
 	if a.cfg.IsSet(cfgDefaultMaxAge) {
