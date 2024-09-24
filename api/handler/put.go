@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -338,7 +338,7 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 	}
 
 	if r.TLS == nil {
-		return enc, errorsStd.New("encryption available only when TLS is enabled")
+		return enc, errors.New("encryption available only when TLS is enabled")
 	}
 
 	if sseCustomerAlgorithm != layer.AESEncryptionAlgorithm {
@@ -780,7 +780,7 @@ func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160,
 	policy, err := h.cfg.PlacementPolicyProvider.GetPlacementPolicy(userAddr, locationConstraint)
 	if err != nil {
 		// nothing to do.
-		if errorsStd.Is(err, models.ErrNotFound) {
+		if errors.Is(err, models.ErrNotFound) {
 			return
 		}
 
