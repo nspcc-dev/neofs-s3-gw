@@ -275,7 +275,7 @@ File for `region_mapping` must contain something like this:
 }
 ```
 
-The option `placement_policy.regions` may look like:
+The option `placement_policy.locations` may look like:
 ```yaml
 placement_policy:
   locations:
