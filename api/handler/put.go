@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -23,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/models"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
@@ -336,7 +338,7 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 	}
 
 	if r.TLS == nil {
-		return enc, errorsStd.New("encryption available only when TLS is enabled")
+		return enc, errors.New("encryption available only when TLS is enabled")
 	}
 
 	if sseCustomerAlgorithm != layer.AESEncryptionAlgorithm {
@@ -708,11 +710,13 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var policies []*accessbox.ContainerPolicy
+	var userAddr util.Uint160
 	boxData, err := layer.GetBoxData(r.Context())
 	if err == nil {
 		policies = boxData.Policies
 		p.SessionContainerCreation = boxData.Gate.SessionTokenForPut()
 		p.SessionEACL = boxData.Gate.SessionTokenForSetEACL()
+		userAddr = boxData.Gate.BearerToken.Issuer().ScriptHash()
 	}
 
 	if p.SessionContainerCreation == nil {
@@ -725,7 +729,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setPolicy(p, createParams.LocationConstraint, policies)
+	h.setPolicy(p, userAddr, createParams.LocationConstraint, policies)
 
 	p.ObjectLockEnabled = isLockEnabled(r.Header)
 
@@ -753,7 +757,7 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
-func (h handler) setPolicy(prm *layer.CreateBucketParams, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
+func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
 	prm.Policy = h.cfg.Policy.Default()
 
 	if locationConstraint == "" {
@@ -772,6 +776,20 @@ func (h handler) setPolicy(prm *layer.CreateBucketParams, locationConstraint str
 			return
 		}
 	}
+
+	policy, err := h.cfg.PlacementPolicyProvider.GetPlacementPolicy(userAddr, locationConstraint)
+	if err != nil {
+		// nothing to do.
+		if errors.Is(err, models.ErrNotFound) {
+			return
+		}
+
+		h.log.Error("get policy from provider", zap.Error(err))
+		return
+	}
+
+	prm.Policy = *policy
+	prm.LocationConstraint = locationConstraint
 }
 
 func isLockEnabled(header http.Header) bool {

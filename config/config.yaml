@@ -131,6 +131,8 @@ placement_policy:
     REP-1: "REP 1"
     REP-3: "REP 3"
     complex: "REP 1 IN X CBF 1 SELECT 1 FROM * AS X"
+  # Contract name for resolving policies. Leave name empty for disabling the feature.
+  contract_name: ""
 
 # CORS
 # value of Access-Control-Max-Age header if this value is not set in a rule. Has an int type.

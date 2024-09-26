@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
@@ -25,16 +26,24 @@ type (
 
 	// Config contains data which handler needs to keep.
 	Config struct {
-		Policy              PlacementPolicy
-		DefaultMaxAge       int
-		NotificatorEnabled  bool
-		CopiesNumber        uint32
-		MaxDeletePerRequest int
+		Policy                  PlacementPolicy
+		PlacementPolicyProvider PlacementPolicyProvider
+		DefaultMaxAge           int
+		NotificatorEnabled      bool
+		CopiesNumber            uint32
+		MaxDeletePerRequest     int
 	}
 
 	PlacementPolicy interface {
 		Default() netmap.PlacementPolicy
 		Get(string) (netmap.PlacementPolicy, bool)
+	}
+
+	// PlacementPolicyProvider takes placement policy from contract.
+	PlacementPolicyProvider interface {
+		// GetPlacementPolicy get policy by name.
+		// Returns [models.ErrNotFound] if policy not found.
+		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error)
 	}
 )
 
