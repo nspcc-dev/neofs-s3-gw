@@ -189,7 +189,7 @@ jobs:
       - name: Run s3 gw e2e tests
         timeout-minutes: 120
         run: |
-          source venv.pytest/bin/activate && pytest --alluredir=${{ env.ALLURE_RESULTS_DIR }} pytest_tests/tests/services/s3_gate
+          source venv.pytest/bin/activate && pytest --alluredir=${{ env.ALLURE_RESULTS_DIR }} pytest_tests/tests/s3
         working-directory: neofs-testcases
 
       - name: Publish to NeoFS
