@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,10 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
+)
+
+const (
+	xAmzDecodedContentLength = "X-Amz-Decoded-Content-Length"
 )
 
 func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo *api.ReqInfo, err error, additional ...zap.Field) {
@@ -126,4 +131,20 @@ func getSessionTokenSetEACL(ctx context.Context) (*session.Container, error) {
 	}
 
 	return sessionToken, nil
+}
+
+func contentLengthFromRequest(r *http.Request) (int64, error) {
+	var (
+		cl  = r.ContentLength
+		err error
+	)
+
+	if value := r.Header.Get(xAmzDecodedContentLength); value != "" {
+		cl, err = strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid content length value %q inside %s header", value, xAmzDecodedContentLength)
+		}
+	}
+
+	return cl, nil
 }

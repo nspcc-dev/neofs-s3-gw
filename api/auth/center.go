@@ -74,10 +74,12 @@ const (
 	AmzSignedHeaders          = "X-Amz-SignedHeaders"
 	AmzExpires                = "X-Amz-Expires"
 	AmzDate                   = "X-Amz-Date"
+	AmzContentSha256          = "X-Amz-Content-Sha256"
 	AuthorizationHdr          = "Authorization"
 	ContentTypeHdr            = "Content-Type"
 	ContentEncodingHdr        = "Content-Encoding"
 	ContentEncodingAwsChunked = "aws-chunked"
+	ContentEncodingChunked    = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
 
 	timeFormatISO8601 = "20060102T150405Z"
 )
@@ -209,7 +211,9 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		return nil, err
 	}
 
-	if hdr := r.Header.Get(ContentEncodingHdr); hdr == ContentEncodingAwsChunked {
+	amzContent := r.Header.Get(AmzContentSha256)
+
+	if contentEncodingHdr := r.Header.Get(ContentEncodingHdr); contentEncodingHdr == ContentEncodingAwsChunked || amzContent == ContentEncodingChunked {
 		sig, err := hex.DecodeString(authHdr.SignatureV4)
 		if err != nil {
 			return nil, fmt.Errorf("DecodeString: %w", err)

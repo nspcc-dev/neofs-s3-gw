@@ -226,11 +226,17 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cl, err := contentLengthFromRequest(r)
+	if err != nil {
+		h.logAndSendError(w, "content length parse failed", reqInfo, err)
+		return
+	}
+
 	params := &layer.PutObjectParams{
 		BktInfo:      bktInfo,
 		Object:       reqInfo.ObjectName,
 		Reader:       r.Body,
-		Size:         r.ContentLength,
+		Size:         cl,
 		Header:       metadata,
 		Encryption:   encryptionParams,
 		CopiesNumber: copiesNumber,
