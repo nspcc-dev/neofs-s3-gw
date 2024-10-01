@@ -121,7 +121,7 @@ func equalDataSlices(t *testing.T, expected, actual []byte) {
 		return
 	}
 
-	for i := range len(expected) {
+	for i := range expected {
 		if expected[i] != actual[i] {
 			require.Equalf(t, expected[i], actual[i], "differ start with '%d' position, length: %d", i, len(expected))
 		}
