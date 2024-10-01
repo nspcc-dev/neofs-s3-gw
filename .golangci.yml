@@ -22,6 +22,18 @@ linters-settings:
     # 'default' case is present, even if all enum members aren't listed in the
     # switch
     default-signifies-exhaustive: true
+  gofmt:
+    rewrite-rules:
+      - pattern: 'interface{}'
+        replacement: 'any'
+  gomodguard:
+    blocked:
+      modules:
+        - github.com/pkg/errors:
+            reason: "Obsolete after the 1.13 release; use the standard `errors` package"
+  revive:
+    rules:
+      - name: duplicated-imports
 
 linters:
   enable:
@@ -32,17 +44,34 @@ linters:
     # some default golangci-lint linters
     - errcheck
     - gosimple
+    - godot
     - ineffassign
     - staticcheck
     - typecheck
     - unused
 
     # extra linters
+    # - goconst
+    # - goerr113
+    # - gomnd
+    # - nonamedreturns
+    # - unparam
+    - bidichk
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - decorder
+    - durationcheck
+    - errorlint
     - exhaustive
-    - godot
     - gofmt
-    - whitespace
     - goimports
+    - gomodguard
+    - intrange
+    - misspell
+    - predeclared
+    - reassign
+    - whitespace
   disable-all: true
   fast: false
 
