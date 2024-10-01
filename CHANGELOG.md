@@ -5,13 +5,21 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- Config option placement_policy.locations as alternative for placement_policy.region_mapping (#989)
 
 ### Changed
 
 ### Fixed
 
 ### Updated
+
+## [0.32.0] - 2024-10-01
+
+### Added
+- placement_policy.locations config option (#989)
+- Placement policy search using contract (#999)
+
+### Fixed
+- Reading chunked payload if header content-encoding: aws-chunked is not set (#1009)
 
 ## [0.31.1] - 2024-09-13
 
@@ -648,4 +656,5 @@ releases.
 [0.30.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.0...v0.30.1
 [0.31.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.1...v0.31.0
 [0.31.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.0...v0.31.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.1...master
+[0.32.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.1...v0.32.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.32.0...master
