@@ -267,6 +267,11 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		return nil, fmt.Errorf("getLastPart: %w", err)
 	}
 
+	// The previous part is not uploaded yet.
+	if lastPart == nil {
+		return nil, s3errors.GetAPIError(s3errors.ErrOperationAborted)
+	}
+
 	// try to restore hash state from the last part.
 	// the required interface is guaranteed according to the docs, so just cast without checks.
 	binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)

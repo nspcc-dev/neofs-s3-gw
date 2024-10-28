@@ -268,6 +268,7 @@ const (
 	ErrEvaluatorBindingDoesNotExist
 	ErrMissingHeaders
 	ErrInvalidColumnIndex
+	ErrOperationAborted
 
 	ErrPostPolicyConditionInvalidFormat
 
@@ -1681,6 +1682,12 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidArgument",
 		Description:    "Part number must be an integer between 1 and 10000, inclusive",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrOperationAborted: {
+		ErrCode:        ErrOperationAborted,
+		Code:           "OperationAborted",
+		Description:    "A conflicting conditional operation is currently in progress against this resource. Try again.",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	// Add your error structure here.
 }
