@@ -113,6 +113,20 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if containsACLHeaders(r) {
+		state, err := h.cachedACLGetter.GetState(r.Context(), bktInfo.CID)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket acl state", reqInfo, err)
+			return
+		}
+
+		if state == data.BucketACLBucketOwnerEnforced {
+			if !isValidOwnerEnforced(r) {
+				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
+				return
+			}
+			r.Header.Set(api.AmzACL, "")
+		}
+
 		iss, err := h.bearerTokenIssuer(r.Context())
 		if err != nil {
 			h.logAndSendError(w, "couldn't get bearer token issuer", reqInfo, err)

@@ -754,8 +754,11 @@ func (a *App) initHandler() {
 		cfg.MaxDeletePerRequest = defaultMaxObjectDeletePerRequest
 	}
 
+	stateCache := cache.NewEACLCache(cache.DefaultBucketACLStateCacheConfig(a.log))
+	aclGetter := handler.NewACLCachedProvider(a.log, a.pool, stateCache)
+
 	var err error
-	a.api, err = handler.New(a.log, a.obj, a.nc, cfg)
+	a.api, err = handler.New(a.log, a.obj, a.nc, cfg, aclGetter)
 	if err != nil {
 		a.log.Fatal("could not initialize API handler", zap.Error(err))
 	}
