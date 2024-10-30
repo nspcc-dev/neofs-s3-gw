@@ -105,11 +105,12 @@ type bucketPolicy struct {
 }
 
 type statement struct {
-	Sid       string        `json:"Sid"`
-	Effect    string        `json:"Effect"`
-	Principal principal     `json:"Principal"`
-	Action    stringOrSlice `json:"Action"`
-	Resource  stringOrSlice `json:"Resource"`
+	Sid       string                       `json:"Sid"`
+	Effect    string                       `json:"Effect"`
+	Principal principal                    `json:"Principal"`
+	Action    stringOrSlice                `json:"Action"`
+	Resource  stringOrSlice                `json:"Resource"`
+	Condition map[string]map[string]string `json:"Condition"`
 }
 
 type principal struct {
@@ -964,6 +965,11 @@ func tryServiceRecord(record eacl.Record) *ServiceRecord {
 
 func formRecords(resource *astResource) ([]*eacl.Record, error) {
 	var res []*eacl.Record
+
+	if resource.Version == amzBucketOwnerEnforced && resource.Object == amzBucketOwnerEnforced {
+		res = append(res, bucketOwnerEnforcedRecord())
+		return res, nil
+	}
 
 	for i := len(resource.Operations) - 1; i >= 0; i-- {
 		astOp := resource.Operations[i]

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"slices"
 )
 
 type (
@@ -36,4 +37,15 @@ func (s stringOrSlice) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(values)
+}
+
+func (s stringOrSlice) Equal(v stringOrSlice) bool {
+	if len(s.values) != len(v.values) {
+		return false
+	}
+
+	slices.Sort(s.values)
+	slices.Sort(v.values)
+
+	return slices.Compare(s.values, v.values) == 0
 }
