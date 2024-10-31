@@ -971,6 +971,11 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 		return res, nil
 	}
 
+	if resource.Version == aclEnabledObjectWriter && resource.Object == aclEnabledObjectWriter {
+		res = append(res, bucketACLObjectWriterRecord())
+		return res, nil
+	}
+
 	for i := len(resource.Operations) - 1; i >= 0; i-- {
 		astOp := resource.Operations[i]
 		record := eacl.NewRecord()
@@ -1071,6 +1076,20 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			}
 
 			return nil, fmt.Errorf("unsupported ownership: %v", state.Principal)
+		}
+
+		if state.Sid == "BucketEnableACL" &&
+			state.Action.Equal(stringOrSlice{values: []string{"s3:PutObject"}}) &&
+			state.Effect == "Allow" &&
+			state.Resource.Equal(stringOrSlice{values: []string{"*"}}) {
+			rr[aclEnabledObjectWriter] = &astResource{
+				resourceInfo: resourceInfo{
+					Version: aclEnabledObjectWriter,
+					Object:  aclEnabledObjectWriter,
+				},
+			}
+
+			continue
 		}
 
 		if state.Principal.AWS != "" && state.Principal.AWS != allUsersWildcard ||
@@ -1664,6 +1683,18 @@ func isValidOwnerEnforced(r *http.Request) bool {
 	}
 
 	return true
+}
+
+func bucketACLObjectWriterRecord() *eacl.Record {
+	var markerRecord = eacl.CreateRecord(eacl.ActionAllow, eacl.OperationPut)
+	markerRecord.AddFilter(
+		eacl.HeaderFromRequest,
+		eacl.MatchStringEqual,
+		amzBucketOwnerField,
+		aclEnabledObjectWriter,
+	)
+
+	return markerRecord
 }
 
 func checkACLRestrictions(table *eacl.Table) error {
