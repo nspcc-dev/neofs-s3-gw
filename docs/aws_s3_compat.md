@@ -310,6 +310,20 @@ In case you need to disable ACLs manually (for instance your bucket has ACLs ena
     ]
 }
 ```
+In case you need to enable ACLs (not recommended) option you should use `PutBucketPolicy` command with the next policy:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "BucketEnableACL",
+            "Action": "s3:PutObject",
+            "Effect": "Allow",
+            "Resource": "*"
+        }
+    ]
+}
+```
 
 ## Request payment
 

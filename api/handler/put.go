@@ -172,6 +172,8 @@ const (
 
 	amzBucketOwnerField    = "BucketOwnerEnforcedField"
 	amzBucketOwnerEnforced = "BucketOwnerEnforced"
+
+	aclEnabledObjectWriter = "ObjectWriter"
 )
 
 type createBucketParams struct {
