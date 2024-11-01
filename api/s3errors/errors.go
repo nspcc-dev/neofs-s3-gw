@@ -275,6 +275,8 @@ const (
 	// CORS configuration errors.
 	ErrCORSUnsupportedMethod
 	ErrCORSWildcardExposeHeaders
+
+	ErrAccessControlListNotSupported
 )
 
 // error code to Error structure, these fields carry respective
@@ -1688,6 +1690,12 @@ var errorCodes = errorCodeMap{
 		Code:           "OperationAborted",
 		Description:    "A conflicting conditional operation is currently in progress against this resource. Try again.",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAccessControlListNotSupported: {
+		ErrCode:        ErrAccessControlListNotSupported,
+		Code:           "AccessControlListNotSupported",
+		Description:    "The bucket does not allow ACLs.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
 }

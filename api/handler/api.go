@@ -1,22 +1,26 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"go.uber.org/zap"
 )
 
 type (
 	handler struct {
-		log         *zap.Logger
-		obj         layer.Client
-		notificator Notificator
-		cfg         *Config
+		log             *zap.Logger
+		obj             layer.Client
+		notificator     Notificator
+		cfg             *Config
+		cachedACLGetter ACLStateProvider
 	}
 
 	Notificator interface {
@@ -45,6 +49,11 @@ type (
 		// Returns [models.ErrNotFound] if policy not found.
 		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error)
 	}
+
+	// ACLStateProvider get bucket ACL state.
+	ACLStateProvider interface {
+		GetState(ctx context.Context, idCnr cid.ID) (data.BucketACLState, error)
+	}
 )
 
 const (
@@ -57,7 +66,7 @@ const (
 var _ api.Handler = (*handler)(nil)
 
 // New creates new api.Handler using given logger and client.
-func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config) (api.Handler, error) {
+func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config, cachedACLGetter ACLStateProvider) (api.Handler, error) {
 	switch {
 	case obj == nil:
 		return nil, errors.New("empty NeoFS Object Layer")
@@ -72,9 +81,10 @@ func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config
 	}
 
 	return &handler{
-		log:         log,
-		obj:         obj,
-		cfg:         cfg,
-		notificator: notificator,
+		log:             log,
+		obj:             obj,
+		cfg:             cfg,
+		notificator:     notificator,
+		cachedACLGetter: cachedACLGetter,
 	}, nil
 }

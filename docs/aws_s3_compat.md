@@ -290,6 +290,41 @@ See also `GetObject` and other method parameters.
 | 🟡 | PutBucketPolicy         | See ACL limitations         |
 | 🔵 | PutBucketReplication    |                             |
 
+By default bucket ACLs is disabled. See details [here](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html).
+In case you need to disable ACLs manually (for instance your bucket has ACLs enabled) you should use `PutBucketPolicy` command with the next policy:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "BucketOwnerEnforced",
+            "Action": "*",
+            "Effect": "Deny",
+            "Resource": "*",
+            "Condition": {
+                "StringNotEquals": {
+                    "s3:x-amz-object-ownership": "BucketOwnerEnforced"
+                }
+            }
+        }
+    ]
+}
+```
+In case you need to enable ACLs (not recommended) option you should use `PutBucketPolicy` command with the next policy:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "BucketEnableACL",
+            "Action": "s3:PutObject",
+            "Effect": "Allow",
+            "Resource": "*"
+        }
+    ]
+}
+```
+
 ## Request payment
 
 |    | Method                  | Comments |
