@@ -649,6 +649,7 @@ func formGrantee(granteeType, value string) (*Grantee, error) {
 func addPredefinedACP(acp *AccessControlPolicy, cannedACL string) (*AccessControlPolicy, error) {
 	switch cannedACL {
 	case basicACLPrivate:
+	case cannedACLBucketOwnerFullControl:
 	case basicACLPublic:
 		acp.AccessControlList = append(acp.AccessControlList, &Grant{
 			Grantee: &Grantee{
