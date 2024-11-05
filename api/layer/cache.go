@@ -4,19 +4,21 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
 type Cache struct {
-	logger      *zap.Logger
-	listsCache  *cache.ObjectsListCache
-	objCache    *cache.ObjectsCache
-	namesCache  *cache.ObjectsNameCache
-	bucketCache *cache.BucketCache
-	systemCache *cache.SystemCache
-	accessCache *cache.AccessControlCache
+	logger         *zap.Logger
+	listsCache     *cache.ObjectsListCache
+	objCache       *cache.ObjectsCache
+	namesCache     *cache.ObjectsNameCache
+	bucketCache    *cache.BucketCache
+	bucketACLCache *cache.BucketACLCache
+	systemCache    *cache.SystemCache
+	accessCache    *cache.AccessControlCache
 }
 
 // CachesConfig contains params for caches.
@@ -26,6 +28,7 @@ type CachesConfig struct {
 	ObjectsList   *cache.Config
 	Names         *cache.Config
 	Buckets       *cache.Config
+	BucketACLs    *cache.Config
 	System        *cache.Config
 	AccessControl *cache.Config
 }
@@ -38,6 +41,7 @@ func DefaultCachesConfigs(logger *zap.Logger) *CachesConfig {
 		ObjectsList:   cache.DefaultObjectsListConfig(logger),
 		Names:         cache.DefaultObjectsNameConfig(logger),
 		Buckets:       cache.DefaultBucketConfig(logger),
+		BucketACLs:    cache.DefaultBucketACLCacheConfig(logger),
 		System:        cache.DefaultSystemConfig(logger),
 		AccessControl: cache.DefaultAccessControlConfig(logger),
 	}
@@ -45,13 +49,14 @@ func DefaultCachesConfigs(logger *zap.Logger) *CachesConfig {
 
 func NewCache(cfg *CachesConfig) *Cache {
 	return &Cache{
-		logger:      cfg.Logger,
-		listsCache:  cache.NewObjectsListCache(cfg.ObjectsList),
-		objCache:    cache.New(cfg.Objects),
-		namesCache:  cache.NewObjectsNameCache(cfg.Names),
-		bucketCache: cache.NewBucketCache(cfg.Buckets),
-		systemCache: cache.NewSystemCache(cfg.System),
-		accessCache: cache.NewAccessControlCache(cfg.AccessControl),
+		logger:         cfg.Logger,
+		listsCache:     cache.NewObjectsListCache(cfg.ObjectsList),
+		objCache:       cache.New(cfg.Objects),
+		namesCache:     cache.NewObjectsNameCache(cfg.Names),
+		bucketCache:    cache.NewBucketCache(cfg.Buckets),
+		bucketACLCache: cache.NewEACLCache(cfg.BucketACLs),
+		systemCache:    cache.NewSystemCache(cfg.System),
+		accessCache:    cache.NewAccessControlCache(cfg.AccessControl),
 	}
 }
 
@@ -247,5 +252,16 @@ func (c *Cache) PutNotificationConfiguration(owner user.ID, bktInfo *data.Bucket
 
 	if err := c.accessCache.Put(owner, key); err != nil {
 		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
+	}
+}
+
+func (c *Cache) GetBucketACL(id cid.ID) *eacl.Table {
+	return c.bucketACLCache.Get(id)
+}
+
+func (c *Cache) PutBucketACL(id cid.ID, acl *eacl.Table) {
+	var err = c.bucketACLCache.Put(id, acl)
+	if err != nil {
+		c.logger.Warn("couldn't cache bucket EACL", zap.Error(err), zap.String("cid", id.String()))
 	}
 }

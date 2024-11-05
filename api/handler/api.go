@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"go.uber.org/zap"
 )
@@ -44,6 +47,11 @@ type (
 		// GetPlacementPolicy get policy by name.
 		// Returns [models.ErrNotFound] if policy not found.
 		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error)
+	}
+
+	// ACLStateProvider get bucket ACL state.
+	ACLStateProvider interface {
+		GetState(ctx context.Context, idCnr cid.ID) (data.BucketACLState, error)
 	}
 )
 

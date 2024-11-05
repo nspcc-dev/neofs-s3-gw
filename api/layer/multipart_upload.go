@@ -269,7 +269,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	// The previous part is not uploaded yet.
 	if lastPart == nil {
-		return nil, s3errors.GetAPIError(s3errors.ErrOperationAborted)
+		return nil, fmt.Errorf("uploading %d, unable get %d: %w", p.PartNumber, p.PartNumber-1, s3errors.GetAPIError(s3errors.ErrOperationAborted))
 	}
 
 	// try to restore hash state from the last part.

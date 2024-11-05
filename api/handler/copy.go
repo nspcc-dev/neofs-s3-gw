@@ -91,6 +91,20 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
+		eacl, err := h.obj.GetBucketACL(r.Context(), dstBktInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+			return
+		}
+
+		if isBucketOwnerForced(eacl.EACL) {
+			if !isValidOwnerEnforced(r) {
+				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
+				return
+			}
+			r.Header.Set(api.AmzACL, "")
+		}
+
 		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
 			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
 			return

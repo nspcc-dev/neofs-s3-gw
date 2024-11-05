@@ -164,10 +164,16 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 
 // keywords of predefined basic ACL values.
 const (
-	basicACLPrivate   = "private"
-	basicACLReadOnly  = "public-read"
-	basicACLPublic    = "public-read-write"
-	cannedACLAuthRead = "authenticated-read"
+	basicACLPrivate                 = "private"
+	basicACLReadOnly                = "public-read"
+	basicACLPublic                  = "public-read-write"
+	cannedACLAuthRead               = "authenticated-read"
+	cannedACLBucketOwnerFullControl = "bucket-owner-full-control"
+
+	amzBucketOwnerField    = "BucketOwnerEnforcedField"
+	amzBucketOwnerEnforced = "BucketOwnerEnforced"
+
+	aclEnabledObjectWriter = "ObjectWriter"
 )
 
 type createBucketParams struct {
@@ -201,6 +207,22 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
 		return
+	}
+
+	if containsACL {
+		eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+			return
+		}
+
+		if isBucketOwnerForced(eacl.EACL) {
+			if !isValidOwnerEnforced(r) {
+				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
+				return
+			}
+			r.Header.Set(api.AmzACL, "")
+		}
 	}
 
 	metadata := parseMetadata(r)
@@ -434,6 +456,22 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
+	}
+
+	if containsACL {
+		eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+			return
+		}
+
+		if isBucketOwnerForced(eacl.EACL) {
+			if !isValidOwnerEnforced(r) {
+				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
+				return
+			}
+			r.Header.Set(api.AmzACL, "")
+		}
 	}
 
 	params := &layer.PutObjectParams{

@@ -113,6 +113,20 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if containsACLHeaders(r) {
+		eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+			return
+		}
+
+		if isBucketOwnerForced(eacl.EACL) {
+			if !isValidOwnerEnforced(r) {
+				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
+				return
+			}
+			r.Header.Set(api.AmzACL, "")
+		}
+
 		iss, err := h.bearerTokenIssuer(r.Context())
 		if err != nil {
 			h.logAndSendError(w, "couldn't get bearer token issuer", reqInfo, err)
@@ -166,7 +180,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		UploadID: uploadID,
 	}
 
-	additional = append(additional, zap.String("uploadID", uploadID))
+	additional = append(additional, zap.String("uploadID", uploadID), zap.String("reqId", reqInfo.RequestID))
 	if err = api.EncodeToResponse(w, resp); err != nil {
 		h.logAndSendError(w, "could not encode InitiateMultipartUploadResponse to response", reqInfo, err, additional...)
 		return
@@ -204,7 +218,7 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		queryValues = r.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
-		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName), zap.String("reqId", reqInfo.RequestID)}
 	)
 
 	partNumber, err := strconv.Atoi(queryValues.Get(partNumberHeaderName))
@@ -250,7 +264,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		reqInfo     = api.GetReqInfo(r.Context())
 		queryValues = reqInfo.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
-		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName), zap.String("reqId", reqInfo.RequestID)}
 	)
 
 	partNumber, err := strconv.Atoi(queryValues.Get(partNumberHeaderName))
@@ -378,7 +392,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			Bkt:      bktInfo,
 			Key:      reqInfo.ObjectName,
 		}
-		additional = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+		additional = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName), zap.String("reqId", reqInfo.RequestID)}
 	)
 
 	reqBody := new(CompleteMultipartUpload)
@@ -545,7 +559,7 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 
 		queryValues = reqInfo.URL.Query()
 		uploadID    = queryValues.Get(uploadIDHeaderName)
-		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+		additional  = []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName), zap.String("reqId", reqInfo.RequestID)}
 		maxParts    = layer.MaxSizePartsList
 	)
 
@@ -604,7 +618,7 @@ func (h *handler) AbortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	uploadID := reqInfo.URL.Query().Get(uploadIDHeaderName)
-	additional := []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName)}
+	additional := []zap.Field{zap.String("uploadID", uploadID), zap.String("Key", reqInfo.ObjectName), zap.String("reqId", reqInfo.RequestID)}
 
 	p := &layer.UploadInfoParams{
 		UploadID: uploadID,
