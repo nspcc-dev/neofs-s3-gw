@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"go.uber.org/zap"
 )
 
 type (
-	// BucketACLStateCache contains cache with bucket ACL state.
-	BucketACLStateCache struct {
+	// BucketACLCache contains cache with bucket EACL.
+	BucketACLCache struct {
 		cache  gcache.Cache
 		logger *zap.Logger
 	}
@@ -25,8 +25,8 @@ const (
 	DefaultEACLCacheLifetime = time.Minute
 )
 
-// DefaultBucketACLStateCacheConfig returns new default cache expiration values.
-func DefaultBucketACLStateCacheConfig(logger *zap.Logger) *Config {
+// DefaultBucketACLCacheConfig returns new default cache expiration values.
+func DefaultBucketACLCacheConfig(logger *zap.Logger) *Config {
 	return &Config{
 		Size:     DefaultEACLCacheSize,
 		Lifetime: DefaultEACLCacheLifetime,
@@ -34,21 +34,21 @@ func DefaultBucketACLStateCacheConfig(logger *zap.Logger) *Config {
 	}
 }
 
-// NewEACLCache creates an object of BucketACLStateCache.
-func NewEACLCache(config *Config) *BucketACLStateCache {
-	return &BucketACLStateCache{
+// NewEACLCache creates an object of BucketACLCache.
+func NewEACLCache(config *Config) *BucketACLCache {
+	return &BucketACLCache{
 		cache:  gcache.New(config.Size).LRU().Expiration(config.Lifetime).Build(),
 		logger: config.Logger}
 }
 
 // Get returns a cached state.
-func (o *BucketACLStateCache) Get(id cid.ID) *data.BucketACLState {
+func (o *BucketACLCache) Get(id cid.ID) *eacl.Table {
 	entry, err := o.cache.Get(id.String())
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.(*data.BucketACLState)
+	result, ok := entry.(*eacl.Table)
 	if !ok {
 		o.logger.Warn("invalid cache entry type",
 			zap.String("actual", fmt.Sprintf("%T", entry)),
@@ -61,11 +61,11 @@ func (o *BucketACLStateCache) Get(id cid.ID) *data.BucketACLState {
 }
 
 // Put puts a state to cache.
-func (o *BucketACLStateCache) Put(id cid.ID, v data.BucketACLState) error {
-	return o.cache.Set(id.String(), &v)
+func (o *BucketACLCache) Put(id cid.ID, v *eacl.Table) error {
+	return o.cache.Set(id.String(), v)
 }
 
 // Delete deletes a state from cache.
-func (o *BucketACLStateCache) Delete(id cid.ID) bool {
+func (o *BucketACLCache) Delete(id cid.ID) bool {
 	return o.cache.Remove(id.String())
 }

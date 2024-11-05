@@ -91,13 +91,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
-		state, err := h.cachedACLGetter.GetState(r.Context(), dstBktInfo.CID)
+		eacl, err := h.obj.GetBucketACL(r.Context(), dstBktInfo)
 		if err != nil {
-			h.logAndSendError(w, "could not get bucket acl state", reqInfo, err)
+			h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
 			return
 		}
 
-		if state == data.BucketACLBucketOwnerEnforced {
+		if isBucketOwnerForced(eacl.EACL) {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return

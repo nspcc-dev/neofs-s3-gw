@@ -376,10 +376,16 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 
 // GetBucketACL returns bucket acl info by name.
 func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*BucketACL, error) {
+	var eACL = n.cache.GetBucketACL(bktInfo.CID)
+
+	if eACL == nil {
+		return &BucketACL{Info: bktInfo, EACL: eACL}, nil
+	}
 	eACL, err := n.GetContainerEACL(ctx, bktInfo.CID)
 	if err != nil {
 		return nil, fmt.Errorf("get container eacl: %w", err)
 	}
+	n.cache.PutBucketACL(bktInfo.CID, eACL)
 
 	return &BucketACL{
 		Info: bktInfo,

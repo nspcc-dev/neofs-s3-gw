@@ -16,11 +16,10 @@ import (
 
 type (
 	handler struct {
-		log             *zap.Logger
-		obj             layer.Client
-		notificator     Notificator
-		cfg             *Config
-		cachedACLGetter ACLStateProvider
+		log         *zap.Logger
+		obj         layer.Client
+		notificator Notificator
+		cfg         *Config
 	}
 
 	Notificator interface {
@@ -66,7 +65,7 @@ const (
 var _ api.Handler = (*handler)(nil)
 
 // New creates new api.Handler using given logger and client.
-func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config, cachedACLGetter ACLStateProvider) (api.Handler, error) {
+func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config) (api.Handler, error) {
 	switch {
 	case obj == nil:
 		return nil, errors.New("empty NeoFS Object Layer")
@@ -81,10 +80,9 @@ func New(log *zap.Logger, obj layer.Client, notificator Notificator, cfg *Config
 	}
 
 	return &handler{
-		log:             log,
-		obj:             obj,
-		cfg:             cfg,
-		notificator:     notificator,
-		cachedACLGetter: cachedACLGetter,
+		log:         log,
+		obj:         obj,
+		cfg:         cfg,
+		notificator: notificator,
 	}, nil
 }

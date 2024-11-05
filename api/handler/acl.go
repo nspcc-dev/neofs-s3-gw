@@ -53,8 +53,6 @@ var actionToOpMap = map[string][]eacl.Operation{
 
 var (
 	errInvalidPublicKey = errors.New("invalid public key")
-
-	errBucketOwnerEnforced = errors.New("bucket owner enforced")
 )
 
 var rawWildcardJSON = []byte(`"*"`)
@@ -250,13 +248,13 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.cachedACLGetter.GetState(r.Context(), bktInfo.CID)
+	eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket acl state", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
 		return
 	}
 
-	if state == data.BucketACLBucketOwnerEnforced {
+	if isBucketOwnerForced(eacl.EACL) {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -381,13 +379,13 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.cachedACLGetter.GetState(r.Context(), bktInfo.CID)
+	eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket acl state", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
 		return
 	}
 
-	if state == data.BucketACLBucketOwnerEnforced {
+	if isBucketOwnerForced(eacl.EACL) {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -1698,9 +1696,9 @@ func bucketACLObjectWriterRecord() *eacl.Record {
 	return markerRecord
 }
 
-func checkACLRestrictions(table *eacl.Table) error {
+func isBucketOwnerForced(table *eacl.Table) bool {
 	if table == nil {
-		return nil
+		return false
 	}
 
 	for _, r := range table.Records() {
@@ -1710,11 +1708,11 @@ func checkACLRestrictions(table *eacl.Table) error {
 					f.Value() == amzBucketOwnerEnforced &&
 					f.From() == eacl.HeaderFromRequest &&
 					f.Matcher() == eacl.MatchStringNotEqual {
-					return errBucketOwnerEnforced
+					return true
 				}
 			}
 		}
 	}
 
-	return nil
+	return false
 }

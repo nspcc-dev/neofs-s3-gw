@@ -175,6 +175,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	}
 
 	n.cache.PutBucket(bktInfo)
+	n.cache.PutBucketACL(bktInfo.CID, p.EACL)
 
 	return bktInfo, nil
 }
