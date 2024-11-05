@@ -15,9 +15,12 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -32,6 +35,19 @@ type contResolver struct {
 
 func (r *contResolver) ResolveCID(_ context.Context, name string) (cid.ID, error) {
 	return r.layer.ContainerID(name)
+}
+
+type eaclGetter struct {
+	neofs *layer.TestNeoFS
+}
+
+func (e *eaclGetter) ContainerEACL(ctx context.Context, id cid.ID, _ client.PrmContainerEACL) (eacl.Table, error) {
+	var t eacl.Table
+	tp, err := e.neofs.ContainerEACL(ctx, id)
+	if tp != nil {
+		t = *tp
+	}
+	return t, err
 }
 
 type handlerContext struct {
@@ -99,8 +115,9 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	require.NoError(t, err)
 
 	h := &handler{
-		log: l,
-		obj: layer.NewLayer(l, tp, layerCfg),
+		log:             l,
+		cachedACLGetter: NewACLCachedProvider(l, &eaclGetter{tp}, cache.NewEACLCache(&cache.Config{Size: 1, Lifetime: 0, Logger: l})),
+		obj:             layer.NewLayer(l, tp, layerCfg),
 		cfg: &Config{
 			Policy: &placementPolicyMock{defaultPolicy: pp},
 		},

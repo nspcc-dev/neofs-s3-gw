@@ -1183,6 +1183,7 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))
 	}
+	expectedTable.AddRecord(bucketOwnerEnforcedRecord())
 
 	actualTable, err := bucketACLToTable(acl)
 	require.NoError(t, err)
@@ -1356,10 +1357,23 @@ func TestPutBucketACL(t *testing.T) {
 	bktInfo := createBucket(t, tc, bktName, box)
 
 	header := map[string]string{api.AmzACL: "public-read"}
-	putBucketACL(t, tc, bktName, box, header)
+	// ACLs disabled.
+	putBucketACL(t, tc, bktName, box, header, http.StatusBadRequest)
 
+	aclPolicy := &bucketPolicy{
+		Statement: []statement{{
+			Sid:      "BucketEnableACL",
+			Effect:   "Allow",
+			Action:   stringOrSlice{values: []string{"s3:PutObject"}},
+			Resource: stringOrSlice{values: []string{"*"}},
+		}},
+	}
+	putBucketPolicy(tc, bktName, aclPolicy, box, http.StatusOK)
+
+	// ACLs enabled.
+	putBucketACL(t, tc, bktName, box, header, http.StatusOK)
 	header = map[string]string{api.AmzACL: "private"}
-	putBucketACL(t, tc, bktName, box, header)
+	putBucketACL(t, tc, bktName, box, header, http.StatusOK)
 	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny)
 }
 
@@ -1481,7 +1495,7 @@ func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessb
 	return bktInfo
 }
 
-func putBucketACL(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box, header map[string]string) {
+func putBucketACL(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box, header map[string]string, status int) {
 	w, r := prepareTestRequest(tc, bktName, "", nil)
 	for key, val := range header {
 		r.Header.Set(key, val)
@@ -1489,7 +1503,7 @@ func putBucketACL(t *testing.T, tc *handlerContext, bktName string, box *accessb
 	ctx := context.WithValue(r.Context(), api.BoxData, box)
 	r = r.WithContext(ctx)
 	tc.Handler().PutBucketACLHandler(w, r)
-	assertStatus(t, w, http.StatusOK)
+	assertStatus(t, w, status)
 }
 
 func generateRecord(action eacl.Action, op eacl.Operation, targets []eacl.Target) *eacl.Record {
