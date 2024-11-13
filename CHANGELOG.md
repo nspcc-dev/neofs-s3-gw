@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Log sampling is disabled now (#1024)
 
 ### Fixed
 
