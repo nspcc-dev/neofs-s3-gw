@@ -183,7 +183,12 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionToken *session.Container) error {
 	table.SetCID(idCnr)
 
-	return n.neoFS.SetContainerEACL(ctx, *table, sessionToken)
+	err := n.neoFS.SetContainerEACL(ctx, *table, sessionToken)
+	if err == nil {
+		n.cache.PutBucketACL(idCnr, table)
+	}
+
+	return err
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table, error) {
