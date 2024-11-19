@@ -1685,10 +1685,10 @@ func isValidOwnerEnforced(r *http.Request) bool {
 }
 
 func bucketACLObjectWriterRecord() *eacl.Record {
-	var markerRecord = eacl.CreateRecord(eacl.ActionAllow, eacl.OperationPut)
+	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
 	markerRecord.AddFilter(
 		eacl.HeaderFromRequest,
-		eacl.MatchStringEqual,
+		eacl.MatchStringNotEqual,
 		amzBucketOwnerField,
 		aclEnabledObjectWriter,
 	)
