@@ -87,6 +87,7 @@ type (
 		GetObjectTorrentHandler(http.ResponseWriter, *http.Request)
 		PutPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
 		GetPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
+		PutBucketOwnershipControlsHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME types used in API responses.
@@ -481,6 +482,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("putbucketnotification", h.PutBucketNotificationHandler))).Queries("notification", "").
 			Name("PutBucketNotification")
+		// PutBucketOwnershipControls
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putbucketownershipcontrols", h.PutBucketOwnershipControlsHandler))).Queries("ownershipControls", "").
+			Name("PutBucketOwnershipControls")
 		// CreateBucket
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("createbucket", h.CreateBucketHandler))).

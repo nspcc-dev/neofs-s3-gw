@@ -198,6 +198,9 @@ See also `GetObject` and other method parameters.
 | 🟡 | GetBucketAcl | See ACL limitations |
 | 🟡 | PutBucketAcl | See ACL Limitations |
 
+Bucket ACLs are disabled, by default. See details [here](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html).
+See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
+
 ## Analytics
 
 |    | Method                             | Comments |
@@ -274,7 +277,25 @@ See also `GetObject` and other method parameters.
 |----|-------------------------------|----------|
 | 🔵 | DeleteBucketOwnershipControls |          |
 | 🔵 | GetBucketOwnershipControls    |          |
-| 🔵 | PutBucketOwnershipControls    |          |
+| 🟢 | PutBucketOwnershipControls    |          |
+
+In case you need to disable ACLs manually (for instance your bucket has ACLs enabled) you should use `PutBucketOwnershipControls` command:
+```shell
+$ aws s3api put-bucket-ownership-controls --endpoint $S3HOST --bucket $BUCKET --ownership-controls "Rules=[{ObjectOwnership=BucketOwnerEnforced}]"
+```
+
+Switch to `Preferred` mode with the next command:
+```shell
+$ aws s3api put-bucket-ownership-controls --endpoint $S3HOST --bucket $BUCKET --ownership-controls "Rules=[{ObjectOwnership=BucketOwnerPreferred}]"
+```
+
+Switch to `ObjectWriter` mode with the next command:
+```shell
+$ aws s3api put-bucket-ownership-controls --endpoint $S3HOST --bucket $BUCKET --ownership-controls "Rules=[{ObjectOwnership=ObjectWriter}]"
+```
+
+Note: `ObjectWriter` mode means fully enabled ACL.
+Pay attention to the fact that object owner in NeoFS is bucket owner in any case.
 
 ## Policy and replication
 
@@ -289,41 +310,6 @@ See also `GetObject` and other method parameters.
 | 🟢 | PostPolicyBucket        | Upload file using POST form |
 | 🟡 | PutBucketPolicy         | See ACL limitations         |
 | 🔵 | PutBucketReplication    |                             |
-
-By default bucket ACLs is disabled. See details [here](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html).
-In case you need to disable ACLs manually (for instance your bucket has ACLs enabled) you should use `PutBucketPolicy` command with the next policy:
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "BucketOwnerEnforced",
-            "Action": "*",
-            "Effect": "Deny",
-            "Resource": "*",
-            "Condition": {
-                "StringNotEquals": {
-                    "s3:x-amz-object-ownership": "BucketOwnerEnforced"
-                }
-            }
-        }
-    ]
-}
-```
-In case you need to enable ACLs (not recommended) option you should use `PutBucketPolicy` command with the next policy:
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "BucketEnableACL",
-            "Action": "s3:PutObject",
-            "Effect": "Allow",
-            "Resource": "*"
-        }
-    ]
-}
-```
 
 ## Request payment
 
