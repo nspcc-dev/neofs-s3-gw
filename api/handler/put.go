@@ -170,7 +170,7 @@ const (
 	cannedACLAuthRead               = "authenticated-read"
 	cannedACLBucketOwnerFullControl = "bucket-owner-full-control"
 
-	amzBucketOwnerField    = "BucketOwnerEnforcedField"
+	amzBucketOwnerField    = "BucketOwnerField"
 	amzBucketOwnerEnforced = "BucketOwnerEnforced"
 
 	aclEnabledObjectWriter = "ObjectWriter"
