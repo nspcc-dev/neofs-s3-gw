@@ -59,7 +59,7 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		rec = bucketOwnerEnforcedRecord()
 	case amzBucketOwnerPreferred:
 		rec = bucketOwnerPreferredRecord()
-	case aclEnabledObjectWriter:
+	case amzBucketOwnerObjectWriter:
 		rec = bucketACLObjectWriterRecord()
 	default:
 		h.logAndSendError(w, "invalid ownership", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))

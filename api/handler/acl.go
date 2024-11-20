@@ -1705,7 +1705,7 @@ func bucketACLObjectWriterRecord() *eacl.Record {
 		eacl.HeaderFromRequest,
 		eacl.MatchStringNotEqual,
 		amzBucketOwnerField,
-		aclEnabledObjectWriter,
+		amzBucketOwnerObjectWriter,
 	)
 
 	t := eacl.NewTarget()

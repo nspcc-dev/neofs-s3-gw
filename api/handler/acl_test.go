@@ -1362,7 +1362,7 @@ func TestPutBucketACL(t *testing.T) {
 	// ACLs disabled.
 	putBucketACL(t, tc, bktName, box, header, http.StatusBadRequest)
 
-	putBucketOwnership(tc, bktName, box, aclEnabledObjectWriter, http.StatusOK)
+	putBucketOwnership(tc, bktName, box, amzBucketOwnerObjectWriter, http.StatusOK)
 
 	// ACLs enabled.
 	putBucketACL(t, tc, bktName, box, header, http.StatusOK)

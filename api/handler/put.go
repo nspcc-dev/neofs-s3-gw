@@ -170,11 +170,10 @@ const (
 	cannedACLAuthRead               = "authenticated-read"
 	cannedACLBucketOwnerFullControl = "bucket-owner-full-control"
 
-	amzBucketOwnerField     = "BucketOwnerField"
-	amzBucketOwnerEnforced  = "BucketOwnerEnforced"
-	amzBucketOwnerPreferred = "BucketOwnerPreferred"
-
-	aclEnabledObjectWriter = "ObjectWriter"
+	amzBucketOwnerField        = "BucketOwnerField"
+	amzBucketOwnerEnforced     = "BucketOwnerEnforced"
+	amzBucketOwnerPreferred    = "BucketOwnerPreferred"
+	amzBucketOwnerObjectWriter = "ObjectWriter"
 )
 
 type createBucketParams struct {
