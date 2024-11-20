@@ -1060,6 +1060,7 @@ func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) 
 	for _, astOp := range operations {
 		if astOp.Op == rec.Operation() && astOp.Action == rec.Action() && astOp.IsGroupGrantee() == groupTarget {
 			found = astOp
+			break
 		}
 	}
 
