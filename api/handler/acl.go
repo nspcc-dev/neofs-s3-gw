@@ -1782,7 +1782,7 @@ func isValidOwnerPreferred(r *http.Request) bool {
 	return cannedACL == cannedACLBucketOwnerFullControl
 }
 
-func updateBucketOwnership(records []eacl.Record, newRecord eacl.Record) []eacl.Record {
+func updateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) []eacl.Record {
 	var (
 		rowID = -1
 	)
@@ -1808,7 +1808,10 @@ func updateBucketOwnership(records []eacl.Record, newRecord eacl.Record) []eacl.
 		records = slices.Delete(records, rowID, rowID+1)
 	}
 
-	records = append(records, newRecord)
+	if newRecord != nil {
+		records = append(records, *newRecord)
+	}
+
 	return records
 }
 

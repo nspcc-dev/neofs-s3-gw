@@ -92,7 +92,7 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 
 	var newEACL eacl.Table
 
-	newRecords := updateBucketOwnership(bucketACL.EACL.Records(), *rec)
+	newRecords := updateBucketOwnership(bucketACL.EACL.Records(), rec)
 	for _, record := range newRecords {
 		newEACL.AddRecord(&record)
 	}
@@ -157,4 +157,54 @@ func (h *handler) GetBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
+}
+
+func (h *handler) DeleteBucketOwnershipControlsHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		reqInfo = api.GetReqInfo(r.Context())
+	)
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
+		return
+	}
+
+	if expectedBucketOwner := r.Header.Get(xAmzExpectedBucketOwner); expectedBucketOwner != "" {
+		if expectedBucketOwner != bktInfo.Owner.String() {
+			h.logAndSendError(w, "bucket owner mismatch", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
+		}
+	}
+
+	token, err := getSessionTokenSetEACL(r.Context())
+	if err != nil {
+		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
+		return
+	}
+
+	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		return
+	}
+
+	var newEACL eacl.Table
+
+	newRecords := updateBucketOwnership(bucketACL.EACL.Records(), nil)
+	for _, record := range newRecords {
+		newEACL.AddRecord(&record)
+	}
+
+	p := layer.PutBucketACLParams{
+		BktInfo:      bktInfo,
+		EACL:         &newEACL,
+		SessionToken: token,
+	}
+
+	if err = h.obj.PutBucketACL(r.Context(), &p); err != nil {
+		h.logAndSendError(w, "could not put bucket eacl", reqInfo, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

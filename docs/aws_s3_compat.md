@@ -275,7 +275,7 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 
 |    | Method                        | Comments |
 |----|-------------------------------|----------|
-| 🔵 | DeleteBucketOwnershipControls |          |
+| 🟢 | DeleteBucketOwnershipControls |          |
 | 🟢 | GetBucketOwnershipControls    |          |
 | 🟢 | PutBucketOwnershipControls    |          |
 
