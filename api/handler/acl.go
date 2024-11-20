@@ -1101,40 +1101,6 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 	rr := make(map[string]*astResource)
 
 	for _, state := range bktPolicy.Statement {
-		if state.Sid == "BucketOwnerEnforced" &&
-			state.Action.Equal(stringOrSlice{values: []string{"*"}}) &&
-			state.Effect == "Deny" &&
-			state.Resource.Equal(stringOrSlice{values: []string{"*"}}) {
-			if conditionObj, ok := state.Condition["StringNotEquals"]; ok {
-				if val := conditionObj["s3:x-amz-object-ownership"]; val == amzBucketOwnerEnforced {
-					rr[amzBucketOwnerEnforced] = &astResource{
-						resourceInfo: resourceInfo{
-							Version: amzBucketOwnerEnforced,
-							Object:  amzBucketOwnerEnforced,
-						},
-					}
-
-					continue
-				}
-			}
-
-			return nil, fmt.Errorf("unsupported ownership: %v", state.Principal)
-		}
-
-		if state.Sid == "BucketEnableACL" &&
-			state.Action.Equal(stringOrSlice{values: []string{"s3:PutObject"}}) &&
-			state.Effect == "Allow" &&
-			state.Resource.Equal(stringOrSlice{values: []string{"*"}}) {
-			rr[aclEnabledObjectWriter] = &astResource{
-				resourceInfo: resourceInfo{
-					Version: aclEnabledObjectWriter,
-					Object:  aclEnabledObjectWriter,
-				},
-			}
-
-			continue
-		}
-
 		if state.Principal.AWS != "" && state.Principal.AWS != allUsersWildcard ||
 			state.Principal.AWS == "" && state.Principal.CanonicalUser == "" {
 			return nil, fmt.Errorf("unsupported principal: %v", state.Principal)
