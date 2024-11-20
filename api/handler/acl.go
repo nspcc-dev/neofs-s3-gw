@@ -1811,3 +1811,26 @@ func updateBucketOwnership(records []eacl.Record, newRecord eacl.Record) []eacl.
 	records = append(records, newRecord)
 	return records
 }
+
+func isBucketOwnerObjectWriter(table *eacl.Table) bool {
+	if table == nil {
+		return false
+	}
+
+	for _, r := range table.Records() {
+		if r.Action() == eacl.ActionDeny && r.Operation() == eacl.OperationPut {
+			for _, f := range r.Filters() {
+				if f.Key() == amzBucketOwnerField &&
+					f.Value() == amzBucketOwnerObjectWriter &&
+					f.From() == eacl.HeaderFromRequest &&
+					f.Matcher() == eacl.MatchStringNotEqual {
+					if len(r.Targets()) == 1 && len(r.Targets()[0].Accounts()) == 1 {
+						return r.Targets()[0].Accounts()[0] == ownerObjectWriterUserID
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}

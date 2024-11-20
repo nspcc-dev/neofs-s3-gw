@@ -110,3 +110,51 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 
 	w.WriteHeader(http.StatusOK)
 }
+
+func (h *handler) GetBucketOwnershipControlsHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		reqInfo  = api.GetReqInfo(r.Context())
+		response *putBucketOwnershipControlsParams
+	)
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
+		return
+	}
+
+	if expectedBucketOwner := r.Header.Get(xAmzExpectedBucketOwner); expectedBucketOwner != "" {
+		if expectedBucketOwner != bktInfo.Owner.String() {
+			h.logAndSendError(w, "bucket owner mismatch", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
+		}
+	}
+
+	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		return
+	}
+
+	if isBucketOwnerForced(bucketACL.EACL) {
+		response = &putBucketOwnershipControlsParams{
+			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerEnforced}},
+		}
+	} else if isBucketOwnerPreferred(bucketACL.EACL) {
+		response = &putBucketOwnershipControlsParams{
+			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerPreferred}},
+		}
+	} else if isBucketOwnerObjectWriter(bucketACL.EACL) {
+		response = &putBucketOwnershipControlsParams{
+			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerObjectWriter}},
+		}
+	}
+
+	if response == nil {
+		api.WriteSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	if err = api.EncodeToResponse(w, response); err != nil {
+		h.logAndSendError(w, "something went wrong", reqInfo, err)
+	}
+}

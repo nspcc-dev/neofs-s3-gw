@@ -276,7 +276,7 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 |    | Method                        | Comments |
 |----|-------------------------------|----------|
 | 🔵 | DeleteBucketOwnershipControls |          |
-| 🔵 | GetBucketOwnershipControls    |          |
+| 🟢 | GetBucketOwnershipControls    |          |
 | 🟢 | PutBucketOwnershipControls    |          |
 
 In case you need to disable ACLs manually (for instance your bucket has ACLs enabled) you should use `PutBucketOwnershipControls` command:

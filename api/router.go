@@ -88,6 +88,7 @@ type (
 		PutPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
 		GetPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
 		PutBucketOwnershipControlsHandler(http.ResponseWriter, *http.Request)
+		GetBucketOwnershipControlsHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME types used in API responses.
@@ -448,6 +449,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getpublicaccessblock", h.GetPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
 			Name("GetPublicAccessBlock")
+		// GetBucketOwnershipControls
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getbucketownershipcontrols", h.GetBucketOwnershipControlsHandler))).Queries("ownershipControls", "").
+			Name("GetBucketOwnershipControls")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv1", h.ListObjectsV1Handler))).
