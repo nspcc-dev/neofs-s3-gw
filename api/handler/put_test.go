@@ -117,6 +117,8 @@ func TestPutObjectOverrideCopiesNumber(t *testing.T) {
 	r.Header.Set(api.MetadataPrefix+strings.ToUpper(layer.AttributeNeofsCopiesNumber), "1")
 	tc.Handler().PutObjectHandler(w, r)
 
+	require.Equal(t, http.StatusOK, w.Code)
+
 	p := &layer.HeadObjectParams{
 		BktInfo: bktInfo,
 		Object:  objName,

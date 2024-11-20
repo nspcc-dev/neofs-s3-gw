@@ -8,9 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -1360,21 +1362,13 @@ func TestPutBucketACL(t *testing.T) {
 	// ACLs disabled.
 	putBucketACL(t, tc, bktName, box, header, http.StatusBadRequest)
 
-	aclPolicy := &bucketPolicy{
-		Statement: []statement{{
-			Sid:      "BucketEnableACL",
-			Effect:   "Allow",
-			Action:   stringOrSlice{values: []string{"s3:PutObject"}},
-			Resource: stringOrSlice{values: []string{"*"}},
-		}},
-	}
-	putBucketPolicy(tc, bktName, aclPolicy, box, http.StatusOK)
+	putBucketOwnership(tc, bktName, box, aclEnabledObjectWriter, http.StatusOK)
 
 	// ACLs enabled.
 	putBucketACL(t, tc, bktName, box, header, http.StatusOK)
 	header = map[string]string{api.AmzACL: "private"}
 	putBucketACL(t, tc, bktName, box, header, http.StatusOK)
-	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny)
+	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny, ownerObjectWriterUserID)
 }
 
 func TestBucketPolicy(t *testing.T) {
@@ -1390,7 +1384,13 @@ func TestBucketPolicy(t *testing.T) {
 			require.Equal(t, user.NewFromScriptHash(key.GetScriptHash()).String(), st.Principal.CanonicalUser)
 			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource.values)
 		} else {
-			require.Equal(t, allUsersWildcard, st.Principal.AWS)
+			if st.Principal.AWS != "" {
+				require.Equal(t, allUsersWildcard, st.Principal.AWS)
+			} else {
+				// special marker record for ownership.
+				require.Equal(t, ownerEnforcedUserID.String(), st.Principal.CanonicalUser)
+			}
+
 			require.Equal(t, "Deny", st.Effect)
 			require.Equal(t, []string{arnAwsPrefix + bktName}, st.Resource.values)
 		}
@@ -1443,7 +1443,32 @@ func putBucketPolicy(hc *handlerContext, bktName string, bktPolicy *bucketPolicy
 	assertStatus(hc.t, w, status)
 }
 
-func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo, action eacl.Action) {
+func putBucketOwnership(hc *handlerContext, bktName string, box *accessbox.Box, ownership string, status int) {
+	p := putBucketOwnershipControlsParams{
+		Rules: []objectOwnershipRules{
+			{
+				ObjectOwnership: ownership,
+			},
+		},
+	}
+
+	var b bytes.Buffer
+	err := xml.NewEncoder(&b).Encode(p)
+	require.NoError(hc.t, err)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, defaultURL, &b)
+
+	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName})
+	r = r.WithContext(api.SetReqInfo(hc.Context(), reqInfo))
+	ctx := context.WithValue(r.Context(), api.BoxData, box)
+	r = r.WithContext(ctx)
+	hc.Handler().PutBucketOwnershipControlsHandler(w, r)
+
+	assertStatus(hc.t, w, status)
+}
+
+func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo, action eacl.Action, markerUserID user.ID) {
 	bktACL, err := tc.Layer().GetBucketACL(tc.Context(), bktInfo)
 	require.NoError(t, err)
 
@@ -1454,8 +1479,11 @@ func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo
 	}
 
 	for _, rec := range bktACL.EACL.Records()[length-7:] {
-		if rec.Action() != action || rec.Targets()[0].Role() != eacl.RoleOthers {
-			t.Fatalf("inavid last record: '%s', '%s', '%s',", rec.Action(), rec.Operation(), rec.Targets()[0].Role())
+		if rec.Targets()[0].Role() == eacl.RoleOthers {
+			require.Equal(t, action, rec.Action())
+		} else {
+			// special ownership marker rule.
+			require.Equal(t, markerUserID, rec.Targets()[0].Accounts()[0])
 		}
 	}
 }
