@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -475,6 +476,15 @@ It will be ceil rounded to the nearest amount of epoch.`,
 					AccessKeyID:     accessKeyIDFlag,
 					SecretAccessKey: secretAccessKeyFlag,
 				})
+			}
+
+			u, err := url.Parse(endpointFlag)
+			if err != nil {
+				return fmt.Errorf("invalid endpoint %q: %w", endpointFlag, err)
+			}
+
+			if u.Scheme != "http" && u.Scheme != "https" {
+				return fmt.Errorf("invalid endpoint %[1]q, you must specify scheme. For instance: http://%[1]s or https://%[1]s", endpointFlag, err)
 			}
 
 			sess, err := session.NewSessionWithOptions(session.Options{
