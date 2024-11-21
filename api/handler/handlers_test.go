@@ -124,6 +124,20 @@ func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {
 
 	bktInfo, err := hc.Layer().GetBucketInfo(hc.Context(), bktName)
 	require.NoError(hc.t, err)
+
+	p := layer.PutBucketACLParams{
+		BktInfo: bktInfo,
+	}
+
+	acp, err := parseACLHeaders(http.Header{}, hc.owner)
+	require.NoError(hc.t, err)
+
+	p.EACL, err = bucketACLToTable(acp)
+	require.NoError(hc.t, err)
+
+	err = hc.Layer().PutBucketACL(hc.Context(), &p)
+	require.NoError(hc.t, err)
+
 	return bktInfo
 }
 
@@ -143,6 +157,19 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 		ObjectLockEnabled: true,
 		Owner:             ownerID,
 	}
+
+	p := layer.PutBucketACLParams{
+		BktInfo: bktInfo,
+	}
+
+	acp, err := parseACLHeaders(http.Header{}, hc.owner)
+	require.NoError(hc.t, err)
+
+	p.EACL, err = bucketACLToTable(acp)
+	require.NoError(hc.t, err)
+
+	err = hc.Layer().PutBucketACL(hc.Context(), &p)
+	require.NoError(hc.t, err)
 
 	sp := &layer.PutSettingsParams{
 		BktInfo: bktInfo,

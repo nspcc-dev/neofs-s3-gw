@@ -87,6 +87,9 @@ type (
 		GetObjectTorrentHandler(http.ResponseWriter, *http.Request)
 		PutPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
 		GetPublicAccessBlockHandler(http.ResponseWriter, *http.Request)
+		PutBucketOwnershipControlsHandler(http.ResponseWriter, *http.Request)
+		GetBucketOwnershipControlsHandler(http.ResponseWriter, *http.Request)
+		DeleteBucketOwnershipControlsHandler(http.ResponseWriter, *http.Request)
 	}
 
 	// mimeType represents various MIME types used in API responses.
@@ -447,6 +450,10 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("getpublicaccessblock", h.GetPublicAccessBlockHandler))).Queries("publicAccessBlock", "").
 			Name("GetPublicAccessBlock")
+		// GetBucketOwnershipControls
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			m.Handle(metrics.APIStats("getbucketownershipcontrols", h.GetBucketOwnershipControlsHandler))).Queries("ownershipControls", "").
+			Name("GetBucketOwnershipControls")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectsv1", h.ListObjectsV1Handler))).
@@ -481,6 +488,14 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("putbucketnotification", h.PutBucketNotificationHandler))).Queries("notification", "").
 			Name("PutBucketNotification")
+		// PutBucketOwnershipControls
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			m.Handle(metrics.APIStats("putbucketownershipcontrols", h.PutBucketOwnershipControlsHandler))).Queries("ownershipControls", "").
+			Name("PutBucketOwnershipControls")
+		// DeleteBucketOwnershipControls
+		bucket.Methods(http.MethodDelete).HandlerFunc(
+			m.Handle(metrics.APIStats("deletebucketownershipcontrols", h.DeleteBucketOwnershipControlsHandler))).Queries("ownershipControls", "").
+			Name("DeleteBucketOwnershipControls")
 		// CreateBucket
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			m.Handle(metrics.APIStats("createbucket", h.CreateBucketHandler))).
