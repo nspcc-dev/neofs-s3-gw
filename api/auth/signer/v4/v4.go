@@ -257,69 +257,6 @@ type signingCtx struct {
 	signature        string
 }
 
-// Sign signs AWS v4 requests with the provided body, service name, region the
-// request is made to, and time the request is signed at. The signTime allows
-// you to specify that a request is signed for the future, and cannot be
-// used until then.
-//
-// Returns a list of HTTP headers that were included in the signature or an
-// error if signing the request failed. Generally for signed requests this value
-// is not needed as the full request context will be captured by the http.Request
-// value. It is included for reference though.
-//
-// Sign will set the request's Body to be the `body` parameter passed in. If
-// the body is not already an io.ReadCloser, it will be wrapped within one. If
-// a `nil` body parameter passed to Sign, the request's Body field will be
-// also set to nil. Its important to note that this functionality will not
-// change the request's ContentLength of the request.
-//
-// Sign differs from Presign in that it will sign the request using HTTP
-// header values. This type of signing is intended for http.Request values that
-// will not be shared, or are shared in a way the header values on the request
-// will not be lost.
-//
-// The requests body is an io.ReadSeeker so the SHA256 of the body can be
-// generated. To bypass the signer computing the hash you can set the
-// "X-Amz-Content-Sha256" header with a precomputed value. The signer will
-// only compute the hash if the request header value is empty.
-func (v4 Signer) Sign(r *http.Request, body io.ReadSeeker, service, region string, signTime time.Time) (http.Header, error) {
-	return v4.signWithBody(r, body, service, region, 0, false, signTime)
-}
-
-// Presign signs AWS v4 requests with the provided body, service name, region
-// the request is made to, and time the request is signed at. The signTime
-// allows you to specify that a request is signed for the future, and cannot
-// be used until then.
-//
-// Returns a list of HTTP headers that were included in the signature or an
-// error if signing the request failed. For presigned requests these headers
-// and their values must be included on the HTTP request when it is made. This
-// is helpful to know what header values need to be shared with the party the
-// presigned request will be distributed to.
-//
-// Presign differs from Sign in that it will sign the request using query string
-// instead of header values. This allows you to share the Presigned Request's
-// URL with third parties, or distribute it throughout your system with minimal
-// dependencies.
-//
-// Presign also takes an exp value which is the duration the
-// signed request will be valid after the signing time. This is allows you to
-// set when the request will expire.
-//
-// The requests body is an io.ReadSeeker so the SHA256 of the body can be
-// generated. To bypass the signer computing the hash you can set the
-// "X-Amz-Content-Sha256" header with a precomputed value. The signer will
-// only compute the hash if the request header value is empty.
-//
-// Presigning a S3 request will not compute the body's SHA256 hash by default.
-// This is done due to the general use case for S3 presigned URLs is to share
-// PUT/GET capabilities. If you would like to include the body's SHA256 in the
-// presigned request's signature you can set the "X-Amz-Content-Sha256"
-// HTTP header and that will be included in the request's signature.
-func (v4 Signer) Presign(r *http.Request, body io.ReadSeeker, service, region string, exp time.Duration, signTime time.Time) (http.Header, error) {
-	return v4.signWithBody(r, body, service, region, exp, true, signTime)
-}
-
 func (v4 Signer) signWithBody(r *http.Request, body io.ReadSeeker, service, region string, exp time.Duration, isPresign bool, signTime time.Time) (http.Header, error) {
 	currentTimeFn := v4.currentTimeFn
 	if currentTimeFn == nil {
