@@ -1010,21 +1010,7 @@ func (c *TreeClient) GetPartByNumber(ctx context.Context, bktInfo *data.BucketIn
 	}
 
 	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
-	slices.SortFunc(parts, func(a, b *data.PartInfo) int {
-		if a.Number < b.Number {
-			return -1
-		}
-
-		if a.ServerCreated.Before(b.ServerCreated) {
-			return -1
-		}
-
-		if a.ServerCreated.Equal(b.ServerCreated) {
-			return 0
-		}
-
-		return 1
-	})
+	slices.SortFunc(parts, data.SortPartInfo)
 
 	var pi *data.PartInfo
 	for _, part := range parts {
@@ -1090,21 +1076,7 @@ func (c *TreeClient) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo
 	}
 
 	// Sort parts by part number, then by server creation time to make actual last uploaded parts with the same number.
-	slices.SortFunc(result, func(a, b *data.PartInfo) int {
-		if a.Number < b.Number {
-			return -1
-		}
-
-		if a.ServerCreated.Before(b.ServerCreated) {
-			return -1
-		}
-
-		if a.ServerCreated.Equal(b.ServerCreated) {
-			return 0
-		}
-
-		return 1
-	})
+	slices.SortFunc(result, data.SortPartInfo)
 
 	return result, nil
 }
