@@ -330,49 +330,8 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		chunk = &smallChunk
 	}
 
-	var totalBytes int
-	// slice part manually. Simultaneously considering the part is a single object for user.
-	for {
-		prm.Multipart.SplitPreviousID = &splitPreviousID
-
-		if !splitFirstID.IsZero() {
-			prm.Multipart.SplitFirstID = &splitFirstID
-		}
-
-		nBts, readErr := io.ReadAtLeast(payloadReader, *chunk, len(*chunk))
-		totalBytes += nBts
-
-		if nBts > 0 {
-			prm.Payload = bytes.NewReader((*chunk)[:nBts])
-			prm.PayloadSize = uint64(nBts)
-			prm.Multipart.PayloadHash = sha256.New()
-			prm.Multipart.PayloadHash.Write((*chunk)[:nBts])
-
-			if n.neoFS.IsHomomorphicHashingEnabled() {
-				prm.Multipart.HomoHash = tz.New()
-				prm.Multipart.HomoHash.Write((*chunk)[:nBts])
-			}
-
-			id, err = n.multipartObjectPut(ctx, prm, bktInfo)
-			if err != nil {
-				return nil, err
-			}
-
-			splitPreviousID = id
-			elements = append(elements, data.LinkObjectPayload{OID: id, Size: uint32(nBts)})
-		}
-
-		if readErr == nil {
-			continue
-		}
-
-		// If an EOF happens after reading fewer than min bytes, ReadAtLeast returns ErrUnexpectedEOF.
-		// We have the whole payload.
-		if !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
-			return nil, fmt.Errorf("read payload chunk: %w", err)
-		}
-
-		break
+	if id, elements, err = n.manualSlice(ctx, bktInfo, prm, splitFirstID, splitPreviousID, *chunk, payloadReader); err != nil {
+		return nil, err
 	}
 
 	if isReturnToPool {
@@ -1154,4 +1113,58 @@ func uploadInfoFromMultipartInfo(uploadInfo *data.MultipartInfo, prefix, delimit
 		OwnerPubKey: uploadInfo.OwnerPubKey,
 		Created:     uploadInfo.Created,
 	}
+}
+
+func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm PrmObjectCreate, splitFirstID, splitPreviousID oid.ID, chunk []byte, payloadReader io.Reader) (oid.ID, []data.LinkObjectPayload, error) {
+	var (
+		totalBytes int
+		id         oid.ID
+		err        error
+		elements   []data.LinkObjectPayload
+	)
+	// slice part manually. Simultaneously considering the part is a single object for user.
+	for {
+		prm.Multipart.SplitPreviousID = &splitPreviousID
+
+		if !splitFirstID.IsZero() {
+			prm.Multipart.SplitFirstID = &splitFirstID
+		}
+
+		nBts, readErr := io.ReadAtLeast(payloadReader, chunk, len(chunk))
+		totalBytes += nBts
+
+		if nBts > 0 {
+			prm.Payload = bytes.NewReader((chunk)[:nBts])
+			prm.PayloadSize = uint64(nBts)
+			prm.Multipart.PayloadHash = sha256.New()
+			prm.Multipart.PayloadHash.Write((chunk)[:nBts])
+
+			if n.neoFS.IsHomomorphicHashingEnabled() {
+				prm.Multipart.HomoHash = tz.New()
+				prm.Multipart.HomoHash.Write((chunk)[:nBts])
+			}
+
+			id, err = n.multipartObjectPut(ctx, prm, bktInfo)
+			if err != nil {
+				return id, nil, fmt.Errorf("multipart object put: %w", err)
+			}
+
+			splitPreviousID = id
+			elements = append(elements, data.LinkObjectPayload{OID: id, Size: uint32(nBts)})
+		}
+
+		if readErr == nil {
+			continue
+		}
+
+		// If an EOF happens after reading fewer than min bytes, ReadAtLeast returns ErrUnexpectedEOF.
+		// We have the whole payload.
+		if !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+			return id, nil, fmt.Errorf("read payload chunk: %w", err)
+		}
+
+		break
+	}
+
+	return id, elements, nil
 }
