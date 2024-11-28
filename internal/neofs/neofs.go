@@ -629,32 +629,6 @@ func isErrAccessDenied(err error) (string, bool) {
 	}
 }
 
-// ResolverNeoFS represents virtual connection to the NeoFS network.
-// It implements resolver.NeoFS.
-type ResolverNeoFS struct {
-	pool *pool.Pool
-}
-
-// NewResolverNeoFS creates new ResolverNeoFS using provided pool.Pool.
-func NewResolverNeoFS(p *pool.Pool) *ResolverNeoFS {
-	return &ResolverNeoFS{pool: p}
-}
-
-// SystemDNS implements resolver.NeoFS interface method.
-func (x *ResolverNeoFS) SystemDNS(ctx context.Context) (string, error) {
-	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		return "", fmt.Errorf("read network info via client: %w", err)
-	}
-
-	domain := networkInfo.RawNetworkParameter("SystemDNS")
-	if domain == nil {
-		return "", errors.New("system DNS parameter not found or empty")
-	}
-
-	return string(domain), nil
-}
-
 // AuthmateNeoFS is a mediator which implements authmate.NeoFS through pool.Pool.
 type AuthmateNeoFS struct {
 	neoFS layer.NeoFS
