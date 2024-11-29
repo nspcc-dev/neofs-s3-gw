@@ -150,6 +150,21 @@ type PrmObjectDelete struct {
 	Object oid.ID
 }
 
+// PrmObjectSearch groups parameters of NeoFS.SearchObjects operation.
+type PrmObjectSearch struct {
+	// Authentication parameters.
+	PrmAuth
+
+	// Container to read the object header from.
+	Container cid.ID
+
+	// Filters for object filtering.
+	Filters object.SearchFilters
+
+	// XHeaders for object filtering.
+	XHeaders []string
+}
+
 // ErrAccessDenied is returned from NeoFS in case of access violation.
 var ErrAccessDenied = errors.New("access denied")
 
@@ -260,4 +275,7 @@ type NeoFS interface {
 
 	// CurrentEpoch returns current epoch.
 	CurrentEpoch() uint64
+
+	// SearchObjects searches objects with corresponding filters.
+	SearchObjects(ctx context.Context, prm PrmObjectSearch) ([]oid.ID, error)
 }

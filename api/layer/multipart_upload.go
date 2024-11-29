@@ -42,6 +42,10 @@ const (
 	UploadMaxPartNumber = 10000
 	uploadMinSize       = 5 * 1048576    // 5MB
 	uploadMaxSize       = 5 * 1073741824 // 5GB
+
+	headerS3MultipartUpload  = "S3MultipartUpload"
+	headerS3MultipartNumber  = "S3MultipartNumber"
+	headerS3MultipartCreated = "S3MultipartCreated"
 )
 
 type (
@@ -140,6 +144,24 @@ type (
 		OwnerPubKey keys.PublicKey
 		Created     time.Time
 	}
+
+	slotAttributes struct {
+		PartNumber int64
+		// in nanoseconds
+		CreatedAt int64
+		FilePath  string
+	}
+
+	uploadPartAsSlotParams struct {
+		bktInfo          *data.BucketInfo
+		multipartInfo    *data.MultipartInfo
+		tzHash           hash.Hash
+		attributes       [][2]string
+		uploadPartParams *UploadPartParams
+		creationTime     time.Time
+		payloadReader    io.Reader
+		decSize          int64
+	}
 )
 
 func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) (string, error) {
@@ -220,10 +242,6 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 		return "", err
 	}
 
-	if err = n.reUploadFollowingParts(ctx, *p, p.PartNumber, p.Info.Bkt, multipartInfo); err != nil {
-		return "", fmt.Errorf("reuploading parts: %w", err)
-	}
-
 	return objInfo.HashSum, nil
 }
 
@@ -256,6 +274,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		splitFirstID    oid.ID
 		multipartHash   = sha256.New()
 		tzHash          hash.Hash
+		creationTime    = TimeNow(ctx)
 	)
 
 	if n.neoFS.IsHomomorphicHashingEnabled() {
@@ -269,7 +288,23 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	// The previous part is not uploaded yet.
 	if lastPart == nil {
-		return nil, fmt.Errorf("uploading %d, unable get %d: %w", p.PartNumber, p.PartNumber-1, s3errors.GetAPIError(s3errors.ErrOperationAborted))
+		params := uploadPartAsSlotParams{
+			bktInfo:          bktInfo,
+			multipartInfo:    multipartInfo,
+			tzHash:           tzHash,
+			attributes:       attributes,
+			uploadPartParams: p,
+			creationTime:     creationTime,
+			payloadReader:    payloadReader,
+			decSize:          decSize,
+		}
+
+		objInfo, err := n.uploadPartAsSlot(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		return objInfo, nil
 	}
 
 	// try to restore hash state from the last part.
@@ -293,9 +328,8 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	var (
-		id           oid.ID
-		elements     []data.LinkObjectPayload
-		creationTime = TimeNow(ctx)
+		id       oid.ID
+		elements []data.LinkObjectPayload
 		// User may upload part large maxObjectSize in NeoFS. From users point of view it is a single object.
 		// We have to calculate the hash from this object separately.
 		currentPartHash = sha256.New()
@@ -631,10 +665,6 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 		return nil, fmt.Errorf("upload part: %w", err)
 	}
 
-	if err = n.reUploadFollowingParts(ctx, *params, p.PartNumber, p.Info.Bkt, multipartInfo); err != nil {
-		return nil, fmt.Errorf("reuploading parts: %w", err)
-	}
-
 	return objInfo, nil
 }
 
@@ -645,6 +675,42 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 	}
 
+	partNumber, err := n.getFirstArbitraryPart(ctx, p.Info.UploadID, p.Info.Bkt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get first arbitrary part: %w", err)
+	}
+
+	// Take current multipart state.
+	multipartInfo, err := n.treeService.GetMultipartUpload(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
+	if err != nil {
+		if errors.Is(err, ErrNodeNotFound) {
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
+		}
+
+		return nil, nil, fmt.Errorf("get multipart upload: %w", err)
+	}
+
+	// There are no parts which were uploaded in arbitrary order.
+	if partNumber == 0 {
+		// In case of all parts were uploaded subsequently, but some of them were re-uploaded.
+		partNumber, err = n.getMinDuplicatedPartNumber(ctx, p.Info, multipartInfo)
+		if err != nil {
+			return nil, nil, fmt.Errorf("get min duplicated part number: %w", err)
+		}
+	}
+
+	// We need to fix Split.
+	if partNumber > 0 {
+		var uploadPartParams = UploadPartParams{Info: p.Info}
+
+		// We should take the part which broke the multipart upload sequence and re-upload all parts including this one.
+		// This step rebuilds and recalculates Split chain and calculates the total object hash.
+		if err = n.reUploadFollowingParts(ctx, uploadPartParams, int(partNumber-1), p.Info.Bkt, multipartInfo); err != nil {
+			return nil, nil, fmt.Errorf("reupload following parts: %w", err)
+		}
+	}
+
+	// Some actions above could change the multipart state, we need to take actual one.
 	multipartInfo, partsInfo, err := n.getUploadParts(ctx, p.Info)
 	if err != nil {
 		return nil, nil, err
@@ -1167,4 +1233,214 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 	}
 
 	return id, elements, nil
+}
+
+// uploadPartAsSlot uploads multipart part, but without correct link to previous part because we don't have it.
+// It uses zero part as pivot. Actual link will be set on CompleteMultipart.
+func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotParams) (*data.ObjectInfo, error) {
+	zeroPart, err := n.treeService.GetPartByNumber(ctx, params.bktInfo, params.multipartInfo.ID, 0)
+	if err != nil {
+		return nil, fmt.Errorf("get part by number: %w", err)
+	}
+
+	var (
+		id              oid.ID
+		chunk           *[]byte
+		elements        []data.LinkObjectPayload
+		isReturnToPool  bool
+		splitFirstID    = zeroPart.OID
+		splitPreviousID = zeroPart.OID
+		multipartHash   = sha256.New()
+		currentPartHash = sha256.New()
+	)
+
+	objHashes := []hash.Hash{multipartHash, currentPartHash}
+	if params.tzHash != nil {
+		objHashes = append(objHashes, params.tzHash)
+	}
+
+	params.attributes = append(params.attributes,
+		[2]string{headerS3MultipartUpload, params.multipartInfo.UploadID},
+		[2]string{headerS3MultipartNumber, strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)},
+		[2]string{headerS3MultipartCreated, strconv.FormatInt(time.Now().UnixNano(), 10)},
+	)
+
+	prm := PrmObjectCreate{
+		Container:    params.bktInfo.CID,
+		Creator:      params.bktInfo.Owner,
+		Attributes:   params.attributes,
+		CreationTime: params.creationTime,
+		CopiesNumber: params.multipartInfo.CopiesNumber,
+		Multipart: &Multipart{
+			MultipartHashes: objHashes,
+		},
+	}
+
+	if params.uploadPartParams.Size > n.neoFS.MaxObjectSize()/2 {
+		chunk = n.buffers.Get().(*[]byte)
+		isReturnToPool = true
+	} else {
+		smallChunk := make([]byte, params.uploadPartParams.Size)
+		chunk = &smallChunk
+	}
+
+	id, elements, err = n.manualSlice(ctx, params.bktInfo, prm, splitFirstID, splitPreviousID, *chunk, params.payloadReader)
+	if isReturnToPool {
+		n.buffers.Put(chunk)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("manual slice: %w", err)
+	}
+
+	partInfo := &data.PartInfo{
+		Key:      params.uploadPartParams.Info.Key,
+		UploadID: params.uploadPartParams.Info.UploadID,
+		Number:   params.uploadPartParams.PartNumber,
+		OID:      id,
+		Size:     params.decSize,
+		ETag:     hex.EncodeToString(currentPartHash.Sum(nil)),
+		Created:  prm.CreationTime,
+		Elements: elements,
+	}
+
+	// encoding hash.Hash state to save it in tree service.
+	// the required interface is guaranteed according to the docs, so just cast without checks.
+	binaryMarshaler := multipartHash.(encoding.BinaryMarshaler)
+	partInfo.MultipartHash, err = binaryMarshaler.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("marshalBinary: %w", err)
+	}
+
+	if params.tzHash != nil {
+		binaryMarshaler = params.tzHash.(encoding.BinaryMarshaler)
+		partInfo.HomoHash, err = binaryMarshaler.MarshalBinary()
+
+		if err != nil {
+			return nil, fmt.Errorf("marshalBinary: %w", err)
+		}
+	}
+
+	oldPartID, err := n.treeService.AddPart(ctx, params.bktInfo, params.multipartInfo.ID, partInfo)
+	oldPartIDNotFound := errors.Is(err, ErrNoNodeToRemove)
+	if err != nil && !oldPartIDNotFound {
+		return nil, err
+	}
+
+	if !oldPartIDNotFound {
+		if err = n.objectDelete(ctx, params.bktInfo, oldPartID); err != nil {
+			n.log.Error("couldn't delete old part object", zap.Error(err),
+				zap.String("cnrID", params.bktInfo.CID.EncodeToString()),
+				zap.String("bucket name", params.bktInfo.Name),
+				zap.String("objID", oldPartID.EncodeToString()))
+		}
+	}
+
+	objInfo := data.ObjectInfo{
+		ID:  id,
+		CID: params.bktInfo.CID,
+
+		Owner:          params.bktInfo.Owner,
+		OwnerPublicKey: params.bktInfo.OwnerPublicKey,
+		Bucket:         params.bktInfo.Name,
+		Size:           params.decSize,
+		Created:        prm.CreationTime,
+		HashSum:        partInfo.ETag,
+	}
+
+	return &objInfo, nil
+}
+
+func (n *layer) getSlotAttributes(obj object.Object) (*slotAttributes, error) {
+	var (
+		attributes slotAttributes
+		err        error
+	)
+
+	for _, attr := range obj.Attributes() {
+		switch attr.Key() {
+		case headerS3MultipartNumber:
+			attributes.PartNumber, err = strconv.ParseInt(attr.Value(), 10, 64)
+		case headerS3MultipartCreated:
+			attributes.CreatedAt, err = strconv.ParseInt(attr.Value(), 10, 64)
+		case object.AttributeFilePath:
+			attributes.FilePath = attr.Value()
+		default:
+			continue
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("parse header: %w", err)
+		}
+	}
+
+	return &attributes, nil
+}
+
+func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, bucketInfo *data.BucketInfo) (int64, error) {
+	var filters object.SearchFilters
+	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+
+	var prmSearch = PrmObjectSearch{
+		Container: bucketInfo.CID,
+		Filters:   filters,
+	}
+
+	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, bucketInfo.Owner)
+
+	oids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	if err != nil {
+		return 0, fmt.Errorf("search objects: %w", err)
+	}
+
+	if len(oids) == 0 {
+		return 0, nil
+	}
+
+	var partNumber int64
+
+	for _, id := range oids {
+		head, err := n.objectHead(ctx, bucketInfo, id)
+		if err != nil {
+			return 0, fmt.Errorf("object head: %w", err)
+		}
+
+		attributes, err := n.getSlotAttributes(*head)
+		if err != nil {
+			return 0, fmt.Errorf("get slot attributes: %w", err)
+		}
+
+		if partNumber == 0 {
+			partNumber = attributes.PartNumber
+		} else {
+			partNumber = min(partNumber, attributes.PartNumber)
+		}
+	}
+
+	return partNumber, nil
+}
+
+func (n *layer) getMinDuplicatedPartNumber(ctx context.Context, p *UploadInfoParams, multipartInfo *data.MultipartInfo) (int64, error) {
+	parts, err := n.treeService.GetParts(ctx, p.Bkt, multipartInfo.ID)
+	if err != nil {
+		return 0, fmt.Errorf("get parts: %w", err)
+	}
+
+	uniqParts := make(map[int]int, len(parts))
+	for _, part := range parts {
+		uniqParts[part.Number] += 1
+	}
+
+	var firstNonUniqPartNumber int
+	for partNumber, v := range uniqParts {
+		if v > 1 {
+			if firstNonUniqPartNumber == 0 {
+				firstNonUniqPartNumber = partNumber
+			} else {
+				firstNonUniqPartNumber = min(firstNonUniqPartNumber, partNumber)
+			}
+		}
+	}
+
+	return int64(firstNonUniqPartNumber), nil
 }
