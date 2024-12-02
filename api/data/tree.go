@@ -139,6 +139,25 @@ func (p *PartInfo) ToHeaderString() string {
 	return strconv.Itoa(p.Number) + "-" + strconv.FormatInt(p.Size, 10) + "-" + p.ETag
 }
 
+// SortPartInfo sorts PartInfo for Number ASC, ServerCreated ASC.
+func SortPartInfo(a, b *PartInfo) int {
+	if a.Number < b.Number {
+		return -1
+	}
+
+	if a.Number == b.Number {
+		if a.ServerCreated.Before(b.ServerCreated) {
+			return -1
+		}
+
+		if a.ServerCreated.Equal(b.ServerCreated) {
+			return 0
+		}
+	}
+
+	return 1
+}
+
 // LockInfo is lock information to create appropriate tree node.
 type LockInfo struct {
 	id uint64

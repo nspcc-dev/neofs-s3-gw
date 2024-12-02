@@ -629,32 +629,6 @@ func isErrAccessDenied(err error) (string, bool) {
 	}
 }
 
-// ResolverNeoFS represents virtual connection to the NeoFS network.
-// It implements resolver.NeoFS.
-type ResolverNeoFS struct {
-	pool *pool.Pool
-}
-
-// NewResolverNeoFS creates new ResolverNeoFS using provided pool.Pool.
-func NewResolverNeoFS(p *pool.Pool) *ResolverNeoFS {
-	return &ResolverNeoFS{pool: p}
-}
-
-// SystemDNS implements resolver.NeoFS interface method.
-func (x *ResolverNeoFS) SystemDNS(ctx context.Context) (string, error) {
-	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		return "", fmt.Errorf("read network info via client: %w", err)
-	}
-
-	domain := networkInfo.RawNetworkParameter("SystemDNS")
-	if domain == nil {
-		return "", errors.New("system DNS parameter not found or empty")
-	}
-
-	return string(domain), nil
-}
-
 // AuthmateNeoFS is a mediator which implements authmate.NeoFS through pool.Pool.
 type AuthmateNeoFS struct {
 	neoFS layer.NeoFS
@@ -736,4 +710,41 @@ func NewPoolStatistic(poolStat *stat.PoolStat) *PoolStatistic {
 // Statistic implements interface method.
 func (x *PoolStatistic) Statistic() stat.Statistic {
 	return x.poolStat.Statistic()
+}
+
+// SearchObjects implements neofs.NeoFS interface method.
+func (x *NeoFS) SearchObjects(ctx context.Context, prm layer.PrmObjectSearch) ([]oid.ID, error) {
+	var prmSearch client.PrmObjectSearch
+	if prm.BearerToken != nil {
+		prmSearch.WithBearerToken(*prm.BearerToken)
+	}
+
+	prmSearch.SetFilters(prm.Filters)
+	prmSearch.WithXHeaders(prm.XHeaders...)
+
+	rdr, err := x.pool.ObjectSearchInit(ctx, prm.Container, x.signer(ctx), prmSearch)
+	if err != nil {
+		if reason, ok := isErrAccessDenied(err); ok {
+			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+		}
+
+		return nil, fmt.Errorf("init object search via connection pool: %w", err)
+	}
+
+	defer func() {
+		_ = rdr.Close()
+	}()
+
+	var oids []oid.ID
+
+	iteratorFunc := func(id oid.ID) bool {
+		oids = append(oids, id)
+		return false
+	}
+
+	if err = rdr.Iterate(iteratorFunc); err != nil {
+		return nil, fmt.Errorf("iterate object search via connection pool: %w", err)
+	}
+
+	return oids, nil
 }
