@@ -13,7 +13,7 @@ var (
 	versionInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "neofs_s3",
-			Name:      "version_info",
+			Name:      "version",
 			Help:      "Version of current NeoFS S3 Gate instance",
 		},
 		[]string{
