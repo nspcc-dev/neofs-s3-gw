@@ -225,7 +225,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isBucketOwnerPreferred(eacl.EACL) {
+	if isBucketOwnerPreferredAndRestricted(eacl.EACL) {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -303,7 +303,8 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	if containsACL {
+	// The bucket policy could change ACL headers. Check actual state.
+	if containsACLHeaders(r) {
 		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
 			return
@@ -482,7 +483,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isBucketOwnerPreferred(eacl.EACL) {
+	if isBucketOwnerPreferredAndRestricted(eacl.EACL) {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
