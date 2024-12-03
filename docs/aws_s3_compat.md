@@ -311,6 +311,40 @@ Pay attention to the fact that object owner in NeoFS is bucket owner in any case
 | 🟡 | PutBucketPolicy         | See ACL limitations         |
 | 🔵 | PutBucketReplication    |                             |
 
+You may set requiring the `bucket-owner-full-control` canned ACL for Amazon S3 PUT operations ([bucket owner preferred](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ensure-object-ownership.html#ensure-object-ownership-bucket-policy)):
+```shell
+$ aws s3api put-bucket-policy --endpoint $S3HOST --bucket $BUCKET --policy file://policy.json
+```
+
+policy.json:
+
+> Note that S3 gate supports only `wildcard` for `Principal` parameter see [ACL section](aws_s3_compat.md#acl) for
+> details.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Only allow writes to my bucket with bucket owner full control",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::$BUCKET/*",
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-acl": "bucket-owner-full-control"
+        }
+      }
+    }
+  ]
+}
+```
+
 ## Request payment
 
 |    | Method                  | Comments |
