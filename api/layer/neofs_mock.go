@@ -454,3 +454,30 @@ func getOwner(ctx context.Context) user.ID {
 
 	return user.ID{}
 }
+
+// SearchObjects searches objects with corresponding filters.
+func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid.ID, error) {
+	var oids []oid.ID
+
+	for _, obj := range t.objects {
+		for _, attr := range obj.Attributes() {
+			for _, f := range prm.Filters {
+				if attr.Key() == f.Header() {
+					switch f.Operation() {
+					case object.MatchStringEqual:
+						if attr.Value() == f.Value() {
+							oids = append(oids, obj.GetID())
+						}
+					case object.MatchStringNotEqual:
+						if attr.Value() != f.Value() {
+							oids = append(oids, obj.GetID())
+						}
+					default:
+					}
+				}
+			}
+		}
+	}
+
+	return oids, nil
+}
