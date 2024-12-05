@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	v4aws "github.com/aws/aws-sdk-go/aws/signer/v4"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
@@ -380,7 +381,7 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 		"79488f248493cb5175ea079a12a3e08015021d9c710a064017e1da6a2b0ae111",                          // secret_access_key
 		"")
 
-	signer := v4.NewSigner(awsCreds)
+	signer := v4aws.NewSigner(awsCreds)
 
 	signer.DisableURIPathEscaping = true
 	_, err = signer.Sign(req, nil, "s3", "us-east-1", ts)
