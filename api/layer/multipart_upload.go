@@ -285,6 +285,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	if err != nil {
 		return nil, fmt.Errorf("getLastPart: %w", err)
 	}
+	reqInfo := api.GetReqInfo(ctx)
 
 	// The previous part is not uploaded yet.
 	if lastPart == nil {
@@ -303,6 +304,12 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		if err != nil {
 			return nil, err
 		}
+
+		n.log.Debug("upload part as slot",
+			zap.String("reqId", reqInfo.RequestID),
+			zap.String("bucket", bktInfo.Name), zap.Stringer("cid", bktInfo.CID),
+			zap.String("multipart upload", p.Info.UploadID),
+			zap.Int("part number", p.PartNumber), zap.String("object", p.Info.Key), zap.Stringer("oid", objInfo.ID), zap.String("ETag", objInfo.HashSum), zap.Int64("decSize", decSize))
 
 		return objInfo, nil
 	}
@@ -372,13 +379,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		n.buffers.Put(chunk)
 	}
 
-	reqInfo := api.GetReqInfo(ctx)
-	n.log.Debug("upload part",
-		zap.String("reqId", reqInfo.RequestID),
-		zap.String("bucket", bktInfo.Name), zap.Stringer("cid", bktInfo.CID),
-		zap.String("multipart upload", p.Info.UploadID),
-		zap.Int("part number", p.PartNumber), zap.String("object", p.Info.Key), zap.Stringer("oid", id))
-
 	partInfo := &data.PartInfo{
 		Key:      p.Info.Key,
 		UploadID: p.Info.UploadID,
@@ -389,6 +389,12 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Created:  prm.CreationTime,
 		Elements: elements,
 	}
+
+	n.log.Debug("upload part",
+		zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", bktInfo.Name), zap.Stringer("cid", bktInfo.CID),
+		zap.String("multipart upload", p.Info.UploadID),
+		zap.Int("part number", p.PartNumber), zap.String("object", p.Info.Key), zap.Stringer("oid", id), zap.String("ETag", partInfo.ETag), zap.Int64("decSize", decSize))
 
 	// encoding hash.Hash state to save it in tree service.
 	// the required interface is guaranteed according to the docs, so just cast without checks.
@@ -606,6 +612,7 @@ func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams,
 	uploadParams.Size = int64(obj.PayloadSize())
 	uploadParams.Reader = bytes.NewReader(obj.Payload())
 
+	n.log.Debug("reUploadPart", zap.String("oid", id.String()), zap.Uint64("payload size", obj.PayloadSize()))
 	if _, err = n.uploadPart(ctx, multipartInfo, &uploadParams); err != nil {
 		return fmt.Errorf("upload id=%s: %w", id.String(), err)
 	}
@@ -692,6 +699,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	// There are no parts which were uploaded in arbitrary order.
 	if partNumber == 0 {
+		n.log.Debug("no arbitrary order parts", zap.String("uploadID", p.Info.UploadID))
+
 		// In case of all parts were uploaded subsequently, but some of them were re-uploaded.
 		partNumber, err = n.getMinDuplicatedPartNumber(ctx, p.Info, multipartInfo)
 		if err != nil {
@@ -701,6 +710,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	// We need to fix Split.
 	if partNumber > 0 {
+		n.log.Debug("split fix required", zap.String("uploadID", p.Info.UploadID))
+
 		var uploadPartParams = UploadPartParams{Info: p.Info}
 
 		// We should take the part which broke the multipart upload sequence and re-upload all parts including this one.
@@ -718,6 +729,11 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	encInfo := FormEncryptionInfo(multipartInfo.Meta)
 
 	if len(partsInfo) < len(p.Parts) {
+		n.log.Debug(
+			"parts amount mismatch",
+			zap.Int("partsInfo", len(partsInfo)),
+			zap.Int("p.Parts", len(p.Parts)),
+		)
 		return nil, nil, s3errors.GetAPIError(s3errors.ErrInvalidPart)
 	}
 
