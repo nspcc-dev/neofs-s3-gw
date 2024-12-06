@@ -486,9 +486,11 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (oid.ID, []byte, error) {
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 	hash := sha256.New()
-	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
-		hash.Write(buf)
-	})
+
+	if prm.Payload != nil {
+		prm.Payload = io.TeeReader(prm.Payload, hash)
+	}
+
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {
 		return oid.ID{}, nil, err
@@ -501,13 +503,16 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 func (n *layer) multipartObjectPut(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (oid.ID, error) {
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
-	prm.Payload = wrapReader(prm.Payload, 64*1024, func(buf []byte) {
-		if prm.Multipart != nil {
-			for _, h := range prm.Multipart.MultipartHashes {
-				h.Write(buf)
-			}
+	if prm.Multipart != nil && prm.Payload != nil {
+		var writers = make([]io.Writer, len(prm.Multipart.MultipartHashes))
+		for i, h := range prm.Multipart.MultipartHashes {
+			writers[i] = h
 		}
-	})
+
+		w := io.MultiWriter(writers...)
+		prm.Payload = io.TeeReader(prm.Payload, w)
+	}
+
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {
 		return oid.ID{}, err
@@ -890,27 +895,4 @@ func tryDirectoryName(node *data.NodeVersion, prefix, delimiter string) string {
 	}
 
 	return ""
-}
-
-func wrapReader(input io.Reader, bufSize int, f func(buf []byte)) io.Reader {
-	if input == nil {
-		return nil
-	}
-
-	r, w := io.Pipe()
-	go func() {
-		var buf = make([]byte, bufSize)
-		for {
-			n, err := input.Read(buf)
-			if n > 0 {
-				f(buf[:n])
-				_, _ = w.Write(buf[:n]) // ignore error, input is not ReadCloser
-			}
-			if err != nil {
-				_ = w.CloseWithError(err)
-				break
-			}
-		}
-	}()
-	return r
 }
