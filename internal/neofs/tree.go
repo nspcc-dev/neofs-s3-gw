@@ -284,15 +284,17 @@ func newPartInfo(node NodeResponse) (*data.PartInfo, error) {
 		case homoHashKV:
 			partInfo.HomoHash = []byte(value)
 		case elementsKV:
-			elements := strings.Split(value, ",")
-			partInfo.Elements = make([]data.LinkObjectPayload, len(elements))
-			for i, e := range elements {
-				var element data.LinkObjectPayload
-				if err = element.Unmarshal(e); err != nil {
-					return nil, fmt.Errorf("invalid element: %w", err)
-				}
+			if value != "" {
+				elements := strings.Split(value, ",")
+				partInfo.Elements = make([]data.LinkObjectPayload, len(elements))
+				for i, e := range elements {
+					var element data.LinkObjectPayload
+					if err = element.Unmarshal(e); err != nil {
+						return nil, fmt.Errorf("invalid element: %w", err)
+					}
 
-				partInfo.Elements[i] = element
+					partInfo.Elements[i] = element
+				}
 			}
 		}
 	}
