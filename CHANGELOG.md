@@ -7,11 +7,25 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- Log sampling is disabled now (#1024)
 
 ### Fixed
 
 ### Updated
+
+## [0.33.0] - 2024-12-10
+
+### Changed
+- ACLs are disabled now by default (like in AWS S3), but can be enabled via policy (#1018, #1026, #1036)
+- Log sampling is disabled now (#1024)
+- Concurrent parts upload is possible now for multipart uploads (#1034, #1041)
+- neofs_s3_version_info metric renamed to neofs_s3_version (#1035)
+
+### Fixed
+- authmate not checking for URL validity when creating presigned URL (#1027)
+- Panic in chunked encoding handler (#1039)
+
+### Updated
+- NeoGo dependency to 0.107.0 (#1040)
 
 ## [0.32.0] - 2024-10-01
 
@@ -658,4 +672,5 @@ releases.
 [0.31.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.30.1...v0.31.0
 [0.31.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.0...v0.31.1
 [0.32.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.1...v0.32.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.32.0...master
+[0.33.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.32.0...v0.33.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.33.0...master
