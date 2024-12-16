@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	v4amz "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -314,7 +315,7 @@ func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
 	awsCreds := credentials.NewStaticCredentials(authHeader.AccessKeyID, box.Gate.AccessKey, "")
-	signer := v4.NewSigner(awsCreds)
+	signer := v4amz.NewSigner(awsCreds)
 
 	var signature string
 	if authHeader.IsPresigned {
