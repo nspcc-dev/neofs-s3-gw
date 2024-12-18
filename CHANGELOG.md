@@ -12,6 +12,9 @@ This document outlines major changes between releases.
 
 ### Updated
 
+### Removed
+- Command generate-presigned-url from authmate (#1048)
+
 ## [0.33.0] - 2024-12-10
 
 ### Changed

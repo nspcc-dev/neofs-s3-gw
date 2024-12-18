@@ -5,8 +5,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -14,14 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
-	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
@@ -71,13 +64,6 @@ var (
 	logDebugEnabledFlag      bool
 	sessionTokenFlag         string
 	lifetimeFlag             time.Duration
-	endpointFlag             string
-	bucketFlag               string
-	objectFlag               string
-	methodFlag               string
-	profileFlag              string
-	regionFlag               string
-	secretAccessKeyFlag      string
 	containerPolicies        string
 	awcCliCredFile           string
 	timeoutFlag              time.Duration
@@ -180,7 +166,6 @@ func appCommands() []*cli.Command {
 	return []*cli.Command{
 		issueSecret(),
 		obtainSecret(),
-		generatePresignedURL(),
 	}
 }
 
@@ -396,131 +381,6 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				return cli.Exit(fmt.Sprintf("failed to issue secret: %s", err), 7)
 			}
 			return nil
-		},
-	}
-}
-
-func generatePresignedURL() *cli.Command {
-	return &cli.Command{
-		Name: "generate-presigned-url",
-		Description: `Generate presigned url using AWS credentials. Credentials must be placed in ~/.aws/credentials.
-You provide profile to load using --profile flag or explicitly provide credentials and region using
---aws-access-key-id, --aws-secret-access-key, --region.
-Note to override credentials you must provide both access key and secret key.`,
-		Usage: "generate-presigned-url --endpoint http://s3.neofs.devenv:8080 --bucket bucket-name --object object-name --method get --profile aws-profile",
-		Flags: []cli.Flag{
-			&cli.DurationFlag{
-				Name: "lifetime",
-				Usage: `Lifetime of presigned URL. For example 50h30m (note: max time unit is an hour so to set a day you should use 24h). 
-It will be ceil rounded to the nearest amount of epoch.`,
-				Required:    false,
-				Destination: &lifetimeFlag,
-				Value:       defaultPresignedLifetime,
-			},
-			&cli.StringFlag{
-				Name:        "endpoint",
-				Usage:       `Endpoint of s3-gw`,
-				Required:    true,
-				Destination: &endpointFlag,
-			},
-			&cli.StringFlag{
-				Name:        "bucket",
-				Usage:       `Bucket name to perform action`,
-				Required:    true,
-				Destination: &bucketFlag,
-			},
-			&cli.StringFlag{
-				Name:        "object",
-				Usage:       `Object name to perform action`,
-				Required:    true,
-				Destination: &objectFlag,
-			},
-			&cli.StringFlag{
-				Name:        "method",
-				Usage:       `HTTP method to perform action`,
-				Required:    true,
-				Destination: &methodFlag,
-			},
-			&cli.StringFlag{
-				Name:        "profile",
-				Usage:       `AWS profile to load`,
-				Required:    false,
-				Destination: &profileFlag,
-			},
-			&cli.StringFlag{
-				Name:        "region",
-				Usage:       `AWS region to use in signature (default is taken from ~/.aws/config)`,
-				Required:    false,
-				Destination: &regionFlag,
-			},
-			&cli.StringFlag{
-				Name:        "aws-access-key-id",
-				Usage:       `AWS access key id to sign the URL (default is taken from ~/.aws/credentials)`,
-				Required:    false,
-				Destination: &accessKeyIDFlag,
-			},
-			&cli.StringFlag{
-				Name:        "aws-secret-access-key",
-				Usage:       `AWS access secret access key to sign the URL (default is taken from ~/.aws/credentials)`,
-				Required:    false,
-				Destination: &secretAccessKeyFlag,
-			},
-		},
-		Action: func(_ *cli.Context) error {
-			var cfg aws.Config
-			if regionFlag != "" {
-				cfg.Region = &regionFlag
-			}
-			if accessKeyIDFlag != "" && secretAccessKeyFlag != "" {
-				cfg.Credentials = credentials.NewStaticCredentialsFromCreds(credentials.Value{
-					AccessKeyID:     accessKeyIDFlag,
-					SecretAccessKey: secretAccessKeyFlag,
-				})
-			}
-
-			u, err := url.Parse(endpointFlag)
-			if err != nil {
-				return fmt.Errorf("invalid endpoint %q: %w", endpointFlag, err)
-			}
-
-			if u.Scheme != "http" && u.Scheme != "https" {
-				return fmt.Errorf("invalid endpoint %[1]q, you must specify scheme. For instance: http://%[1]s or https://%[1]s", endpointFlag, err)
-			}
-
-			sess, err := session.NewSessionWithOptions(session.Options{
-				Config:            cfg,
-				Profile:           profileFlag,
-				SharedConfigState: session.SharedConfigEnable,
-			})
-			if err != nil {
-				return fmt.Errorf("couldn't get credentials: %w", err)
-			}
-
-			if lifetimeFlag > limits.MaxPreSignedLifetime {
-				return fmt.Errorf("lifetime flag upper limit is %s", limits.MaxPreSignedLifetime)
-			}
-
-			signer := v4.NewSigner(sess.Config.Credentials)
-			req, err := http.NewRequest(strings.ToUpper(methodFlag), fmt.Sprintf("%s/%s/%s", endpointFlag, bucketFlag, objectFlag), nil)
-			if err != nil {
-				return fmt.Errorf("failed to create new request: %w", err)
-			}
-
-			date := time.Now().UTC()
-			req.Header.Set(api.AmzDate, date.Format("20060102T150405Z"))
-
-			if _, err = signer.Presign(req, nil, "s3", *sess.Config.Region, lifetimeFlag, date); err != nil {
-				return fmt.Errorf("presign: %w", err)
-			}
-
-			res := &struct{ URL string }{
-				URL: req.URL.String(),
-			}
-
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			enc.SetEscapeHTML(false)
-			return enc.Encode(res)
 		},
 	}
 }
