@@ -316,6 +316,7 @@ func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
 	awsCreds := credentials.NewStaticCredentials(authHeader.AccessKeyID, box.Gate.AccessKey, "")
 	signer := v4amz.NewSigner(awsCreds)
+	signer.DisableURIPathEscaping = true
 
 	var signature string
 	if authHeader.IsPresigned {
@@ -331,7 +332,6 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		}
 		signature = request.URL.Query().Get(AmzSignature)
 	} else {
-		signer.DisableURIPathEscaping = true
 		if _, err := signer.Sign(request, nil, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
 			return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
 		}

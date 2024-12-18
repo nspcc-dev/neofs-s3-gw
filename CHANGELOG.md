@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Disable URI path escaping for presigned URLs (#1046)
 
 ### Fixed
 
