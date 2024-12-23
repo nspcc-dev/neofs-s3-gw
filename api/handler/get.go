@@ -174,10 +174,20 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
 	t := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: info.Name,
-		VersionID:  info.VersionID(),
+		// VersionID:  info.VersionID(),
+	}
+
+	if bktSettings.VersioningEnabled() {
+		t.VersionID = info.VersionID()
 	}
 
 	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
@@ -192,12 +202,6 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err = h.setLockingHeaders(bktInfo, lockInfo, w.Header()); err != nil {
 		h.logAndSendError(w, "could not get locking info", reqInfo, err)
-		return
-	}
-
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 

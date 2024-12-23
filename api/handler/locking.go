@@ -152,6 +152,28 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if p.ObjVersion.VersionID == "" && settings.VersioningEnabled() {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+			// VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		p.ObjVersion.VersionID = ei.ObjectInfo.VersionID()
+	}
+
 	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't head put legal hold", reqInfo, err)
 		return
@@ -229,6 +251,28 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		},
 		NewLock:      lock,
 		CopiesNumber: h.cfg.CopiesNumber,
+	}
+
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if p.ObjVersion.VersionID == "" && settings.VersioningEnabled() {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+			// VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		p.ObjVersion.VersionID = ei.ObjectInfo.VersionID()
 	}
 
 	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
