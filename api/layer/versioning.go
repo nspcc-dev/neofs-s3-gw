@@ -3,6 +3,7 @@ package layer
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -14,8 +15,13 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 		res        = &ListObjectVersionsInfo{}
 	)
 
+	// versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.BktInfo.Owner, p.Prefix, false)
+
 	versions, err := n.getAllObjectsVersions(ctx, p.BktInfo, p.Prefix, p.Delimiter)
 	if err != nil {
+		if errors.Is(err, ErrNodeNotFound) {
+			return res, nil
+		}
 		return nil, err
 	}
 

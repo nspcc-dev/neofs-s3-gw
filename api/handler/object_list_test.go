@@ -118,7 +118,6 @@ func TestS3BucketListV2DelimiterPrefix(t *testing.T) {
 	continuationToken := validateListV2(t, tc, bktName, prefix, delim, "", 1, true, false, []string{"asdf"}, empty)
 	continuationToken = validateListV2(t, tc, bktName, prefix, delim, continuationToken, 1, true, false, empty, []string{"boo/"})
 	validateListV2(t, tc, bktName, prefix, delim, continuationToken, 1, false, true, empty, []string{"cquux/"})
-
 	continuationToken = validateListV2(t, tc, bktName, prefix, delim, "", 2, true, false, []string{"asdf"}, []string{"boo/"})
 	validateListV2(t, tc, bktName, prefix, delim, continuationToken, 2, false, true, empty, []string{"cquux/"})
 
