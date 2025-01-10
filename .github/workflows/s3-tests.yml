@@ -198,6 +198,7 @@ jobs:
         working-directory: s3-tests
 
       - name: s3 tests
+        id: run_tests
         env:
           NEOFS_MORPH_DISABLE_CACHE: 'true'
           WALLET_PASS: 'password'
@@ -235,6 +236,6 @@ jobs:
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
           context: 'S3 tests report'
-          state: 'success'
+          state: ${{ steps.run_tests.outcome == 'success' && 'success' || 'failure' }}
           sha: ${{github.event.pull_request.head.sha || github.sha}}
           target_url: ${{ env.REPORT_NEOFS_URL }}
