@@ -5,11 +5,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -35,6 +38,11 @@ type TestNeoFS struct {
 	currentEpoch uint64
 	signer       neofscrypto.Signer
 }
+
+const (
+	objectNonceSize      = 8
+	objectNonceAttribute = "__NEOFS__NONCE"
+)
 
 func NewTestNeoFS(signer neofscrypto.Signer) *TestNeoFS {
 	return &TestNeoFS{
@@ -250,16 +258,31 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	id.SetSHA256(sha256.Sum256(b))
 
 	attrs := make([]object.Attribute, 0)
+	creationTime := prm.CreationTime
+	if creationTime.IsZero() {
+		creationTime = time.Now()
+	}
+
+	var a *object.Attribute
+	a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10))
+	attrs = append(attrs, *a)
 
 	if prm.Filepath != "" {
-		a := object.NewAttribute(object.AttributeFilePath, prm.Filepath)
+		a = object.NewAttribute(object.AttributeFilePath, prm.Filepath)
 		attrs = append(attrs, *a)
 	}
 
 	for i := range prm.Attributes {
-		a := object.NewAttribute(prm.Attributes[i][0], prm.Attributes[i][1])
+		a = object.NewAttribute(prm.Attributes[i][0], prm.Attributes[i][1])
 		attrs = append(attrs, *a)
 	}
+
+	nonce := make([]byte, objectNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
+	}
+	objectNonceAttr := object.NewAttribute(objectNonceAttribute, base64.StdEncoding.EncodeToString(nonce))
+	attrs = append(attrs, *objectNonceAttr)
 
 	obj := object.New()
 	obj.SetContainerID(prm.Container)
@@ -459,23 +482,46 @@ func getOwner(ctx context.Context) user.ID {
 func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid.ID, error) {
 	var oids []oid.ID
 
+	if len(prm.Filters) == 0 {
+		for _, obj := range t.objects {
+			oids = append(oids, obj.GetID())
+		}
+
+		return oids, nil
+	}
+
 	for _, obj := range t.objects {
+		var isOk = true
+
 		for _, attr := range obj.Attributes() {
 			for _, f := range prm.Filters {
 				if attr.Key() == f.Header() {
 					switch f.Operation() {
 					case object.MatchStringEqual:
-						if attr.Value() == f.Value() {
-							oids = append(oids, obj.GetID())
-						}
+						isOk = isOk && attr.Value() == f.Value()
+						// if attr.Value() == f.Value() {
+						//
+						// 	oids = append(oids, obj.GetID())
+						// }
 					case object.MatchStringNotEqual:
-						if attr.Value() != f.Value() {
-							oids = append(oids, obj.GetID())
-						}
+						isOk = isOk && attr.Value() != f.Value()
+						// if attr.Value() != f.Value() {
+						// 	oids = append(oids, obj.GetID())
+						// }
+					case object.MatchCommonPrefix:
+						isOk = isOk && strings.HasPrefix(attr.Value(), f.Value())
+						// if strings.HasPrefix(attr.Value(), f.Value()) {
+						// 	oids = append(oids, obj.GetID())
+						// }
 					default:
+						isOk = false
 					}
 				}
 			}
+		}
+
+		if isOk {
+			oids = append(oids, obj.GetID())
 		}
 	}
 
