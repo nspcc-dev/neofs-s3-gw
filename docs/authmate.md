@@ -141,6 +141,9 @@ interactively. You can also specify an account address to use from a wallet usin
 * `--gate-public-key` is a public `secp256r1` 33-byte short key of a gate (use flags repeatedly for multiple gates). The tokens are encrypted
 by a set of gateway keys, so you need to pass them as well.
 
+Note: If you are using the NeoFS AIO container for development purposes, you should add the parameter 
+`--container-placement-policy "REP 1"` as the AIO service has only one node.
+
 You can issue a secret using the parameters above only. The tool will 
 1. create a new container  
    1. without a friendly name
