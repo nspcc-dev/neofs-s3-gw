@@ -149,8 +149,8 @@ You can issue a secret using the parameters above only. The tool will
    1. without a friendly name
    2. with ACL `0x3c8c8cce` -- all operations are forbidden for `OTHERS` and `BEARER` user groups, except for `GET` 
    3. with policy `REP 2 IN X CBF 3 SELECT 2 FROM * AS X` 
-2. put bearer and session tokens with default rules (details in [Bearer tokens](#Bearer tokens) and 
-[Session tokens](#Session tokens))
+2. put bearer and session tokens with default rules (details in [Bearer tokens](#bearer-tokens) and 
+[Session tokens](#session-tokens))
 
 E.g.:
 ```shell
