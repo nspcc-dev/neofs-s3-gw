@@ -4,7 +4,7 @@
 REPO ?= $(shell go list -m)
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 | sed 's/^v//' 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 GO_VERSION ?= 1.22
-LINT_VERSION ?= 1.49.0
+LINT_VERSION ?= 1.59.0
 BINDIR = bin
 
 # Binaries to build
