@@ -52,7 +52,7 @@ func TestDeleteObjectFromSuspended(t *testing.T) {
 	putObject(t, tc, bktName, objName)
 
 	versionID, isDeleteMarker := deleteObject(t, tc, bktName, objName, emptyVersion)
-	require.True(t, isDeleteMarker)
+	require.False(t, isDeleteMarker)
 	require.Equal(t, data.UnversionedObjectVersionID, versionID)
 }
 
@@ -200,7 +200,7 @@ func TestDeleteMarkers(t *testing.T) {
 	require.Len(t, versions.DeleteMarker, 3, "invalid delete markers length")
 	require.Len(t, versions.Version, 0, "versions must be empty")
 
-	require.Len(t, listOIDsFromMockedNeoFS(t, tc, bktName), 0, "shouldn't be any object in neofs")
+	require.Len(t, listOIDsFromMockedNeoFS(t, tc, bktName), 3, "should be all delete marker object in neofs")
 }
 
 func TestDeleteObjectFromListCache(t *testing.T) {
@@ -237,7 +237,8 @@ func TestDeleteObjectCheckMarkerReturn(t *testing.T) {
 	require.Equal(t, deleteMarkerVersion, versions.DeleteMarker[0].VersionID)
 
 	deleteMarkerVersion2, isDeleteMarker2 := deleteObject(t, tc, bktName, objName, deleteMarkerVersion)
-	require.True(t, isDeleteMarker2)
+	// deleting object with non-empty version - remove object from storage (even it is a delete marker). No additional markers.
+	require.False(t, isDeleteMarker2)
 	versions = listVersions(t, tc, bktName)
 	require.Len(t, versions.DeleteMarker, 0)
 	require.Equal(t, deleteMarkerVersion, deleteMarkerVersion2)

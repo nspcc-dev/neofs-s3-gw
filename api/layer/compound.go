@@ -26,7 +26,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		}
 	}
 
-	tags, lockInfo, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo, nodeVersion)
+	tags, _, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo, nodeVersion)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
@@ -34,8 +34,19 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		return nil, nil, err
 	}
 
+	lockInfo, err = n.getLockDataFromObjects(ctx, objVersion.BktInfo, objVersion.ObjectName, objVersion.VersionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	n.cache.PutTagging(owner, objectTaggingCacheKey(objVersion), tags)
-	n.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
+	if lockInfo != nil {
+		if !lockInfo.LegalHold().IsZero() || lockInfo.Retention().IsZero() {
+			n.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
+		}
+	} else {
+		lockInfo = &data.LockInfo{}
+	}
 
 	return tags, lockInfo, nil
 }

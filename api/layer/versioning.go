@@ -3,6 +3,7 @@ package layer
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -16,6 +17,9 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 
 	versions, err := n.getAllObjectsVersions(ctx, p.BktInfo, p.Prefix, p.Delimiter)
 	if err != nil {
+		if errors.Is(err, ErrNodeNotFound) {
+			return res, nil
+		}
 		return nil, err
 	}
 
@@ -31,8 +35,18 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 			return cmp.Compare(b.NodeVersion.Timestamp, a.NodeVersion.Timestamp) // sort in reverse order
 		})
 
+		// The object with "null" version should be only one. We get only last (actual) one.
+		var isNullVersionCounted bool
+
 		for i, version := range sortedVersions {
 			version.IsLatest = i == 0
+			if version.NodeVersion.IsUnversioned && isNullVersionCounted {
+				continue
+			}
+
+			if version.NodeVersion.IsUnversioned {
+				isNullVersionCounted = true
+			}
 			allObjects = append(allObjects, version)
 		}
 	}
