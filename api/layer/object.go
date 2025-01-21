@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/minio/sio"
@@ -29,7 +28,6 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/version"
-	"github.com/panjf2000/ants/v2"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 )
@@ -766,14 +764,6 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	return &result, nil
 }
 
-type logWrapper struct {
-	log *zap.Logger
-}
-
-func (l *logWrapper) Printf(format string, args ...any) {
-	l.log.Info(fmt.Sprintf(format, args...))
-}
-
 func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams) (objects []*data.ObjectInfo, next *data.ObjectInfo, err error) {
 	if p.MaxKeys == 0 {
 		return nil, nil, nil
@@ -826,88 +816,6 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	}
 
 	return
-}
-
-func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams, input <-chan *data.NodeVersion) (<-chan *data.ObjectInfo, error) {
-	pool, err := ants.NewPool(size, ants.WithLogger(&logWrapper{n.log}))
-	if err != nil {
-		return nil, fmt.Errorf("coudln't init go pool for listing: %w", err)
-	}
-	objCh := make(chan *data.ObjectInfo)
-
-	go func() {
-		var wg sync.WaitGroup
-
-	LOOP:
-		for node := range input {
-			select {
-			case <-ctx.Done():
-				break LOOP
-			default:
-			}
-
-			// We have to make a copy of pointer to data.NodeVersion
-			// to get correct value in submitted task function.
-			func(node *data.NodeVersion) {
-				wg.Add(1)
-				err = pool.Submit(func() {
-					defer wg.Done()
-					oi := n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node, p.Prefix, p.Delimiter)
-					if oi == nil {
-						// try to get object again
-						if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node, p.Prefix, p.Delimiter); oi == nil {
-							// form object info with data that the tree node contains
-							oi = getPartialObjectInfo(p.Bucket, node)
-						}
-					}
-					select {
-					case <-ctx.Done():
-					case objCh <- oi:
-					}
-				})
-				if err != nil {
-					wg.Done()
-					n.log.Warn("failed to submit task to pool", zap.Error(err))
-				}
-			}(node)
-		}
-		wg.Wait()
-		close(objCh)
-		pool.Release()
-	}()
-
-	return objCh, nil
-}
-
-// getPartialObjectInfo form data.ObjectInfo using data available in data.NodeVersion.
-func getPartialObjectInfo(bktInfo *data.BucketInfo, node *data.NodeVersion) *data.ObjectInfo {
-	return &data.ObjectInfo{
-		ID:      node.OID,
-		CID:     bktInfo.CID,
-		Bucket:  bktInfo.Name,
-		Name:    node.FilePath,
-		Size:    node.Size,
-		HashSum: node.ETag,
-	}
-}
-
-func (n *layer) bucketNodeVersions(ctx context.Context, bkt *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
-	var err error
-
-	owner := n.Owner(ctx)
-	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix, false)
-	nodeVersions := n.cache.GetList(owner, cacheKey)
-
-	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt, prefix)
-		if err != nil {
-			return nil, fmt.Errorf("get all versions from tree service: %w", err)
-		}
-
-		n.cache.PutList(owner, cacheKey, nodeVersions)
-	}
-
-	return nodeVersions, nil
 }
 
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string][]*data.ExtendedObjectInfo, error) {

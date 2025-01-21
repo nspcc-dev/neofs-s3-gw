@@ -688,34 +688,6 @@ func isErrObjectAlreadyRemoved(err error) bool {
 	}
 }
 
-func dismissNotFoundError(obj *VersionedObject) *VersionedObject {
-	if s3errors.IsS3Error(obj.Error, s3errors.ErrNoSuchKey) ||
-		s3errors.IsS3Error(obj.Error, s3errors.ErrNoSuchVersion) {
-		obj.Error = nil
-	}
-
-	return obj
-}
-
-func (n *layer) getNodeVersionToDelete(ctx context.Context, bkt *data.BucketInfo, obj *VersionedObject) (*data.NodeVersion, error) {
-	objVersion := &ObjectVersion{
-		BktInfo:               bkt,
-		ObjectName:            obj.Name,
-		VersionID:             obj.VersionID,
-		NoErrorOnDeleteMarker: true,
-	}
-
-	return n.getNodeVersion(ctx, objVersion)
-}
-
-func (n *layer) removeOldVersion(ctx context.Context, bkt *data.BucketInfo, nodeVersion *data.NodeVersion, obj *VersionedObject) (string, error) {
-	if nodeVersion.IsDeleteMarker() {
-		return obj.VersionID, nil
-	}
-
-	return "", n.objectDelete(ctx, bkt, nodeVersion.OID)
-}
-
 // DeleteObjects from the storage.
 func (n *layer) DeleteObjects(ctx context.Context, p *DeleteObjectParams) []*VersionedObject {
 	for i, obj := range p.Objects {
