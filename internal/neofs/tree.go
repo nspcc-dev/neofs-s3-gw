@@ -64,13 +64,6 @@ const (
 	homoHashKV          = "HomoHash"
 	elementsKV          = "Elements"
 
-	// keys for lock.
-	isLockKV       = "IsLock"
-	legalHoldOIDKV = "LegalHoldOID"
-	retentionOIDKV = "RetentionOID"
-	untilDateKV    = "UntilDate"
-	isComplianceKV = "IsCompliance"
-
 	// keys for delete marker nodes.
 	isDeleteMarkerKV = "IsDeleteMarker"
 	ownerKV          = "Owner"
@@ -600,10 +593,6 @@ func pathFromName(objectName string) []string {
 	return strings.Split(objectName, separator)
 }
 
-func (c *TreeClient) GetLatestVersionsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
-	return c.getVersionsByPrefix(ctx, bktInfo, prefix, true)
-}
-
 func (c *TreeClient) determinePrefixNode(ctx context.Context, bktInfo *data.BucketInfo, treeID, prefix string) (uint64, string, error) {
 	var rootID uint64
 	path := strings.Split(prefix, separator)
@@ -722,117 +711,6 @@ func isIntermediate(node NodeResponse) bool {
 	return node.GetMeta()[0].GetKey() == fileNameKV
 }
 
-func (c *TreeClient) getSubTreeVersions(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64, parentFilePath string, latestOnly bool) ([]*data.NodeVersion, error) {
-	subTree, err := c.getSubTree(ctx, bktInfo, versionTree, nodeID, maxGetSubTreeDepth)
-	if err != nil {
-		return nil, err
-	}
-
-	var parentPrefix string
-	if parentFilePath != "" { // The root of subTree can also have a parent
-		parentPrefix = strings.TrimSuffix(parentFilePath, separator) + separator // To avoid 'foo//bar'
-	}
-
-	var emptyOID oid.ID
-	var filepath string
-	namesMap := make(map[uint64]string, len(subTree))
-	versions := make(map[string][]*data.NodeVersion, len(subTree))
-
-	for i, node := range subTree {
-		treeNode, fileName, err := parseTreeNode(node)
-		if err != nil {
-			continue
-		}
-
-		if i != 0 {
-			if filepath, err = formFilePath(node, fileName, namesMap); err != nil {
-				return nil, fmt.Errorf("invalid node order: %w", err)
-			}
-		} else {
-			filepath = parentPrefix + fileName
-			namesMap[treeNode.ID] = filepath
-		}
-
-		if treeNode.ObjID.Equals(emptyOID) { // The node can be intermediate but we still want to update namesMap
-			continue
-		}
-
-		key := formLatestNodeKey(node.GetParentId(), fileName)
-		versionNodes, ok := versions[key]
-		if !ok {
-			versionNodes = []*data.NodeVersion{newNodeVersionFromTreeNode(filepath, treeNode)}
-		} else if !latestOnly {
-			versionNodes = append(versionNodes, newNodeVersionFromTreeNode(filepath, treeNode))
-		} else if versionNodes[0].Timestamp <= treeNode.TimeStamp {
-			versionNodes[0] = newNodeVersionFromTreeNode(filepath, treeNode)
-		}
-
-		versions[key] = versionNodes
-	}
-
-	result := make([]*data.NodeVersion, 0, len(versions)) // consider use len(subTree)
-	for _, version := range versions {
-		if latestOnly && version[0].IsDeleteMarker() {
-			continue
-		}
-		result = append(result, version...)
-	}
-
-	return result, nil
-}
-
-func formFilePath(node *tree.GetSubTreeResponse_Body, fileName string, namesMap map[uint64]string) (string, error) {
-	parentPath, ok := namesMap[node.GetParentId()]
-	if !ok {
-		return "", fmt.Errorf("couldn't get parent path")
-	}
-
-	filepath := parentPath + separator + fileName
-	namesMap[node.GetNodeId()] = filepath
-
-	return filepath, nil
-}
-
-func parseTreeNode(node *tree.GetSubTreeResponse_Body) (*TreeNode, string, error) {
-	treeNode, err := newTreeNode(node)
-	if err != nil { // invalid OID attribute
-		return nil, "", err
-	}
-
-	fileName, ok := treeNode.FileName()
-	if !ok {
-		return nil, "", fmt.Errorf("doesn't contain FileName")
-	}
-
-	return treeNode, fileName, nil
-}
-
-func formLatestNodeKey(parentID uint64, fileName string) string {
-	return strconv.FormatUint(parentID, 10) + "." + fileName
-}
-
-func (c *TreeClient) GetAllVersionsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
-	return c.getVersionsByPrefix(ctx, bktInfo, prefix, false)
-}
-
-func (c *TreeClient) getVersionsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string, latestOnly bool) ([]*data.NodeVersion, error) {
-	prefixNodes, headPrefix, err := c.getSubTreeByPrefix(ctx, bktInfo, versionTree, prefix, latestOnly)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []*data.NodeVersion
-	for _, node := range prefixNodes {
-		versions, err := c.getSubTreeVersions(ctx, bktInfo, node.GetNodeId(), headPrefix, latestOnly)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, versions...)
-	}
-
-	return result, nil
-}
-
 func (c *TreeClient) GetUnversioned(ctx context.Context, bktInfo *data.BucketInfo, filepath string) (*data.NodeVersion, error) {
 	return c.getUnversioned(ctx, bktInfo, versionTree, filepath)
 }
@@ -856,10 +734,6 @@ func (c *TreeClient) getUnversioned(ctx context.Context, bktInfo *data.BucketInf
 
 func (c *TreeClient) AddVersion(ctx context.Context, bktInfo *data.BucketInfo, version *data.NodeVersion) (uint64, error) {
 	return c.addVersion(ctx, bktInfo, versionTree, version)
-}
-
-func (c *TreeClient) RemoveVersion(ctx context.Context, bktInfo *data.BucketInfo, id uint64) error {
-	return c.removeNode(ctx, bktInfo, versionTree, id)
 }
 
 func (c *TreeClient) CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {
@@ -1085,78 +959,6 @@ func (c *TreeClient) GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo
 
 func (c *TreeClient) DeleteMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error {
 	return c.removeNode(ctx, bktInfo, systemTree, multipartNodeID)
-}
-
-func (c *TreeClient) PutLock(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64, lock *data.LockInfo) error {
-	meta := map[string]string{isLockKV: "true"}
-
-	if lock.IsLegalHoldSet() {
-		meta[legalHoldOIDKV] = lock.LegalHold().EncodeToString()
-	}
-	if lock.IsRetentionSet() {
-		meta[retentionOIDKV] = lock.Retention().EncodeToString()
-		meta[untilDateKV] = lock.UntilDate()
-		if lock.IsCompliance() {
-			meta[isComplianceKV] = "true"
-		}
-	}
-
-	if lock.ID() == 0 {
-		_, err := c.addNode(ctx, bktInfo, versionTree, nodeID, meta)
-		return err
-	}
-
-	return c.moveNode(ctx, bktInfo, versionTree, lock.ID(), nodeID, meta)
-}
-
-func (c *TreeClient) GetLock(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64) (*data.LockInfo, error) {
-	lockNode, err := c.getTreeNode(ctx, bktInfo, nodeID, isLockKV)
-	if err != nil {
-		return nil, err
-	}
-
-	return getLock(lockNode)
-}
-
-func getLock(lockNode *TreeNode) (*data.LockInfo, error) {
-	if lockNode == nil {
-		return &data.LockInfo{}, nil
-	}
-	lockInfo := data.NewLockInfo(lockNode.ID)
-
-	if legalHold, ok := lockNode.Get(legalHoldOIDKV); ok {
-		var legalHoldOID oid.ID
-		if err := legalHoldOID.DecodeString(legalHold); err != nil {
-			return nil, fmt.Errorf("invalid legal hold object id: %w", err)
-		}
-		lockInfo.SetLegalHold(legalHoldOID)
-	}
-
-	if retention, ok := lockNode.Get(retentionOIDKV); ok {
-		var retentionOID oid.ID
-		if err := retentionOID.DecodeString(retention); err != nil {
-			return nil, fmt.Errorf("invalid retention object id: %w", err)
-		}
-		_, isCompliance := lockNode.Get(isComplianceKV)
-		untilDate, _ := lockNode.Get(untilDateKV)
-		lockInfo.SetRetention(retentionOID, untilDate, isCompliance)
-	}
-
-	return lockInfo, nil
-}
-
-func (c *TreeClient) GetObjectTaggingAndLock(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
-	nodes, err := c.getTreeNodes(ctx, bktInfo, objVersion.ID, isTagKV, isLockKV)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	lockInfo, err := getLock(nodes[isLockKV])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return getObjectTagging(nodes[isTagKV]), lockInfo, nil
 }
 
 func (c *TreeClient) Close() error {

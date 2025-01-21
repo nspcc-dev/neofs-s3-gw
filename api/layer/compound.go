@@ -26,7 +26,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		}
 	}
 
-	tags, _, err = n.treeService.GetObjectTaggingAndLock(ctx, objVersion.BktInfo, nodeVersion)
+	tags, err = n.treeService.GetObjectTagging(ctx, objVersion.BktInfo, nodeVersion)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
