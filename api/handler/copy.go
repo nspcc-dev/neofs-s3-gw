@@ -225,7 +225,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACL {
+	// In some cases upper in the code, we change ACL headers. We have to check all headers one more time.
+	if containsACLHeaders(r) {
 		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, dstObjInfo)
 		if err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
