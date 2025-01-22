@@ -233,6 +233,12 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		}
 	}
 
+	for _, v := range p.Header {
+		if v == "" {
+			return nil, ErrMetaEmptyParameterValue
+		}
+	}
+
 	prm := PrmObjectCreate{
 		Container:    p.BktInfo.CID,
 		Creator:      owner,
@@ -241,16 +247,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Payload:      r,
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
-	}
-
-	prm.Attributes = make([][2]string, 0, len(p.Header))
-
-	for k, v := range p.Header {
-		if v == "" {
-			return nil, ErrMetaEmptyParameterValue
-		}
-
-		prm.Attributes = append(prm.Attributes, [2]string{k, v})
+		Attributes:   p.Header,
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)

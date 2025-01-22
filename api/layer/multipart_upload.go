@@ -157,7 +157,7 @@ type (
 		bktInfo          *data.BucketInfo
 		multipartInfo    *data.MultipartInfo
 		tzHash           hash.Hash
-		attributes       [][2]string
+		attributes       map[string]string
 		uploadPartParams *UploadPartParams
 		creationTime     time.Time
 		payloadReader    io.Reader
@@ -257,7 +257,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		bktInfo       = p.Info.Bkt
 		payloadReader = p.Reader
 		decSize       = p.Size
-		attributes    [][2]string
+		attributes    = make(map[string]string)
 	)
 
 	if p.Info.Encryption.Enabled() {
@@ -265,7 +265,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ecnrypted reader: %w", err)
 		}
-		attributes = append(attributes, [2]string{AttributeDecryptedSize, strconv.FormatInt(p.Size, 10)})
+		attributes[AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
 		payloadReader = r
 		p.Size = int64(encSize)
 	}
@@ -452,7 +452,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 
 	var (
 		bktInfo         = p.Bkt
-		attributes      [][2]string
+		attributes      = make(map[string]string)
 		multipartHash   = sha256.New()
 		tzHash          hash.Hash
 		id              oid.ID
@@ -462,7 +462,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	)
 
 	if p.Encryption.Enabled() {
-		attributes = append(attributes, [2]string{AttributeDecryptedSize, "0"})
+		attributes[AttributeDecryptedSize] = "0"
 	}
 
 	if n.neoFS.IsHomomorphicHashingEnabled() {
@@ -1348,11 +1348,9 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 		multipartHash = sha256.New()
 	)
 
-	params.attributes = append(params.attributes,
-		[2]string{headerS3MultipartUpload, params.multipartInfo.UploadID},
-		[2]string{headerS3MultipartNumber, strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)},
-		[2]string{headerS3MultipartCreated, strconv.FormatInt(time.Now().UnixNano(), 10)},
-	)
+	params.attributes[headerS3MultipartUpload] = params.multipartInfo.UploadID
+	params.attributes[headerS3MultipartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
+	params.attributes[headerS3MultipartCreated] = strconv.FormatInt(time.Now().UnixNano(), 10)
 
 	prm := PrmObjectCreate{
 		Container:    params.bktInfo.CID,

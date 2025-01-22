@@ -256,8 +256,8 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		attrs = append(attrs, *a)
 	}
 
-	for i := range prm.Attributes {
-		a := object.NewAttribute(prm.Attributes[i][0], prm.Attributes[i][1])
+	for k, v := range prm.Attributes {
+		a := object.NewAttribute(k, v)
 		attrs = append(attrs, *a)
 	}
 

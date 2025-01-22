@@ -96,7 +96,7 @@ type PrmObjectCreate struct {
 	Creator user.ID
 
 	// Key-value object attributes.
-	Attributes [][2]string
+	Attributes map[string]string
 
 	// Value for Timestamp attribute (optional).
 	CreationTime time.Time

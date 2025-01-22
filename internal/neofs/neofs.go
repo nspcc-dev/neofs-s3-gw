@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"maps"
 	"math"
 	"strconv"
 	"sync"
@@ -262,39 +263,33 @@ func (x *NeoFS) signMultipartObject(obj *object.Object, signer neofscrypto.Signe
 
 // CreateObject implements neofs.NeoFS interface method.
 func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oid.ID, error) {
-	attrNum := len(prm.Attributes) + 1 // + creation time
-
-	if prm.Filepath != "" {
-		attrNum++
-	}
-
-	attrs := make([]object.Attribute, 0, attrNum)
-
 	creationTime := prm.CreationTime
 	if creationTime.IsZero() {
 		creationTime = time.Now()
-	}
-	var a *object.Attribute
-	a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10))
-
-	attrs = append(attrs, *a)
-
-	for i := range prm.Attributes {
-		a = object.NewAttribute(prm.Attributes[i][0], prm.Attributes[i][1])
-		attrs = append(attrs, *a)
-	}
-
-	if prm.Filepath != "" {
-		a = object.NewAttribute(object.AttributeFilePath, prm.Filepath)
-		attrs = append(attrs, *a)
 	}
 
 	nonce := make([]byte, objectNonceSize)
 	if _, err := rand.Read(nonce); err != nil {
 		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
 	}
-	objectNonceAttr := object.NewAttribute(objectNonceAttribute, base64.StdEncoding.EncodeToString(nonce))
-	attrs = append(attrs, *objectNonceAttr)
+
+	uniqAttributes := maps.Clone(prm.Attributes)
+	if uniqAttributes == nil {
+		uniqAttributes = make(map[string]string)
+	}
+
+	uniqAttributes[object.AttributeTimestamp] = strconv.FormatInt(creationTime.Unix(), 10)
+	uniqAttributes[objectNonceAttribute] = base64.StdEncoding.EncodeToString(nonce)
+
+	if prm.Filepath != "" {
+		uniqAttributes[object.AttributeFilePath] = prm.Filepath
+	}
+
+	attrs := make([]object.Attribute, 0, len(uniqAttributes))
+	for k, v := range uniqAttributes {
+		attr := object.NewAttribute(k, v)
+		attrs = append(attrs, *attr)
+	}
 
 	var obj object.Object
 	obj.SetContainerID(prm.Container)
@@ -688,12 +683,11 @@ func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr oid.Address)
 // CreateObject implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (oid.ID, error) {
 	return x.neoFS.CreateObject(ctx, layer.PrmObjectCreate{
-		Creator:   prm.Creator,
-		Container: prm.Container,
-		Filepath:  prm.Filepath,
-		Attributes: [][2]string{
-			{object.AttributeExpirationEpoch, strconv.FormatUint(prm.ExpirationEpoch, 10)}},
-		Payload: bytes.NewReader(prm.Payload),
+		Creator:    prm.Creator,
+		Container:  prm.Container,
+		Filepath:   prm.Filepath,
+		Attributes: map[string]string{object.AttributeExpirationEpoch: strconv.FormatUint(prm.ExpirationEpoch, 10)},
+		Payload:    bytes.NewReader(prm.Payload),
 	})
 }
 
