@@ -56,11 +56,11 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 
 	switch params.Rules[0].ObjectOwnership {
 	case amzBucketOwnerEnforced:
-		rec = bucketOwnerEnforcedRecord()
+		rec = BucketOwnerEnforcedRecord()
 	case amzBucketOwnerPreferred:
-		rec = bucketOwnerPreferredRecord()
+		rec = BucketOwnerPreferredRecord()
 	case amzBucketOwnerObjectWriter:
-		rec = bucketACLObjectWriterRecord()
+		rec = BucketACLObjectWriterRecord()
 	default:
 		h.logAndSendError(w, "invalid ownership", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 		return
@@ -135,11 +135,11 @@ func (h *handler) GetBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if isBucketOwnerForced(bucketACL.EACL) {
+	if IsBucketOwnerForced(bucketACL.EACL) {
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerEnforced}},
 		}
-	} else if isBucketOwnerPreferred(bucketACL.EACL) {
+	} else if IsBucketOwnerPreferred(bucketACL.EACL) {
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerPreferred}},
 		}

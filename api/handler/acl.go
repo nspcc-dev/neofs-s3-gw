@@ -299,7 +299,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isBucketOwnerForced(eacl.EACL) {
+	if IsBucketOwnerForced(eacl.EACL) {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -430,7 +430,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isBucketOwnerForced(eacl.EACL) {
+	if IsBucketOwnerForced(eacl.EACL) {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -438,7 +438,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set(api.AmzACL, "")
 	}
 
-	if isBucketOwnerPreferredAndRestricted(eacl.EACL) {
+	if IsBucketOwnerPreferredAndRestricted(eacl.EACL) {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -1026,13 +1026,13 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 
 			switch astOp.Users[0] {
 			case ownerEnforcedUserID:
-				markerRecord = bucketOwnerEnforcedRecord()
+				markerRecord = BucketOwnerEnforcedRecord()
 			case ownerPreferredUserID:
-				markerRecord = bucketOwnerPreferredRecord()
+				markerRecord = BucketOwnerPreferredRecord()
 			case ownerObjectWriterUserID:
-				markerRecord = bucketACLObjectWriterRecord()
+				markerRecord = BucketACLObjectWriterRecord()
 			case ownerPreferredAndRestrictedUserID:
-				markerRecord = bucketOwnerPreferredAndRestrictedRecord()
+				markerRecord = BucketOwnerPreferredAndRestrictedRecord()
 			}
 
 			if markerRecord != nil {
@@ -1687,7 +1687,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		table.AddRecord(getOthersRecord(op, eacl.ActionDeny))
 	}
 
-	table.AddRecord(bucketOwnerEnforcedRecord())
+	table.AddRecord(BucketOwnerEnforcedRecord())
 
 	return table, nil
 }
@@ -1720,7 +1720,8 @@ func getOthersRecord(op eacl.Operation, action eacl.Action) *eacl.Record {
 	return record
 }
 
-func bucketOwnerEnforcedRecord() *eacl.Record {
+// BucketOwnerEnforcedRecord generates special marker record for OwnerEnforced policy.
+func BucketOwnerEnforcedRecord() *eacl.Record {
 	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
 	markerRecord.AddFilter(
 		eacl.HeaderFromRequest,
@@ -1751,7 +1752,8 @@ func isValidOwnerEnforced(r *http.Request) bool {
 	return true
 }
 
-func bucketACLObjectWriterRecord() *eacl.Record {
+// BucketACLObjectWriterRecord generates special marker record for OwnerWriter policy.
+func BucketACLObjectWriterRecord() *eacl.Record {
 	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
 	markerRecord.AddFilter(
 		eacl.HeaderFromRequest,
@@ -1767,7 +1769,8 @@ func bucketACLObjectWriterRecord() *eacl.Record {
 	return markerRecord
 }
 
-func isBucketOwnerForced(table *eacl.Table) bool {
+// IsBucketOwnerForced checks special marker record for OwnerForced policy.
+func IsBucketOwnerForced(table *eacl.Table) bool {
 	if table == nil {
 		return false
 	}
@@ -1790,7 +1793,8 @@ func isBucketOwnerForced(table *eacl.Table) bool {
 	return false
 }
 
-func bucketOwnerPreferredRecord() *eacl.Record {
+// BucketOwnerPreferredRecord generates special marker record for OwnerPreferred policy.
+func BucketOwnerPreferredRecord() *eacl.Record {
 	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
 	markerRecord.AddFilter(
 		eacl.HeaderFromRequest,
@@ -1806,7 +1810,8 @@ func bucketOwnerPreferredRecord() *eacl.Record {
 	return markerRecord
 }
 
-func isBucketOwnerPreferred(table *eacl.Table) bool {
+// IsBucketOwnerPreferred checks special marker record for OwnerPreferred policy.
+func IsBucketOwnerPreferred(table *eacl.Table) bool {
 	if table == nil {
 		return false
 	}
@@ -1829,7 +1834,8 @@ func isBucketOwnerPreferred(table *eacl.Table) bool {
 	return false
 }
 
-func bucketOwnerPreferredAndRestrictedRecord() *eacl.Record {
+// BucketOwnerPreferredRecord generates special marker record for OwnerPreferred policy and sets flag for bucket owner full control acl restriction.
+func BucketOwnerPreferredAndRestrictedRecord() *eacl.Record {
 	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
 	markerRecord.AddFilter(
 		eacl.HeaderFromObject,
@@ -1845,7 +1851,8 @@ func bucketOwnerPreferredAndRestrictedRecord() *eacl.Record {
 	return markerRecord
 }
 
-func isBucketOwnerPreferredAndRestricted(table *eacl.Table) bool {
+// IsBucketOwnerPreferredAndRestricted checks special marker record and check ALC bucket owner full control flag for OwnerPreferred policy.
+func IsBucketOwnerPreferredAndRestricted(table *eacl.Table) bool {
 	if table == nil {
 		return false
 	}

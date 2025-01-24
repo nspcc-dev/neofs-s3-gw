@@ -216,7 +216,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
-		if isBucketOwnerForced(eacl.EACL) {
+		if IsBucketOwnerForced(eacl.EACL) {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
@@ -225,7 +225,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isBucketOwnerPreferredAndRestricted(eacl.EACL) {
+	if IsBucketOwnerPreferredAndRestricted(eacl.EACL) {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -474,7 +474,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
-		if isBucketOwnerForced(eacl.EACL) {
+		if IsBucketOwnerForced(eacl.EACL) {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
@@ -483,7 +483,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isBucketOwnerPreferredAndRestricted(eacl.EACL) {
+	if IsBucketOwnerPreferredAndRestricted(eacl.EACL) {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
