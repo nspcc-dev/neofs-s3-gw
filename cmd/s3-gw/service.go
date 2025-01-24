@@ -34,6 +34,6 @@ func (ms *Service) ShutDown(ctx context.Context) {
 	ms.log.Info("shutting down service", zap.String("endpoint", ms.Addr))
 	err := ms.Shutdown(ctx)
 	if err != nil {
-		ms.log.Panic("can't shut down service")
+		ms.log.Fatal("gracefully shutting down failed", zap.Error(err))
 	}
 }
