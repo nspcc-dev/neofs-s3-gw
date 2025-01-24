@@ -217,11 +217,11 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 	return nil
 }
 
-func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) ([][2]string, error) {
+func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (map[string]string, error) {
 	var (
 		err      error
 		expEpoch uint64
-		result   [][2]string
+		result   = make(map[string]string)
 	)
 
 	if lock.Retention != nil {
@@ -230,7 +230,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 		}
 
 		if lock.Retention.IsCompliance {
-			result = append(result, [2]string{AttributeComplianceMode, "true"})
+			result[AttributeComplianceMode] = "true"
 		}
 	}
 
@@ -242,9 +242,7 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 	}
 
 	if expEpoch != 0 {
-		result = append(result, [2]string{
-			object.AttributeExpirationEpoch, strconv.FormatUint(expEpoch, 10),
-		})
+		result[object.AttributeExpirationEpoch] = strconv.FormatUint(expEpoch, 10)
 	}
 
 	return result, nil
