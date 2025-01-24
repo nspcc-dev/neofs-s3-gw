@@ -14,12 +14,14 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
@@ -166,6 +168,7 @@ func appCommands() []*cli.Command {
 	return []*cli.Command{
 		issueSecret(),
 		obtainSecret(),
+		resetBucketEACL(),
 	}
 }
 
@@ -616,4 +619,127 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigne
 	neoFS := neofs.NewNeoFS(p, signer, anonSigner, neofsCfg, ni)
 
 	return neofs.NewAuthmateNeoFS(neoFS), nil
+}
+
+func resetBucketEACL() *cli.Command {
+	command := &cli.Command{
+		Name:  "reset-bucket-acl",
+		Usage: "Reset bucket ACL to default state",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "wallet",
+				Value:       "",
+				Usage:       "path to the container owner wallet",
+				Required:    true,
+				Destination: &walletPathFlag,
+			},
+			&cli.StringFlag{
+				Name:        "peer",
+				Value:       "",
+				Usage:       "address of neofs peer to connect to",
+				Required:    true,
+				Destination: &peerAddressFlag,
+			},
+			&cli.StringFlag{
+				Name:        "container-id",
+				Usage:       "neofs container id to update eacl",
+				Required:    true,
+				Destination: &containerIDFlag,
+			},
+		},
+		Action: func(_ *cli.Context) error {
+			ctx, log := prepare()
+
+			password := wallet.GetPassword(viper.GetViper(), envWalletPassphrase)
+			if password == nil {
+				var empty string
+				password = &empty
+			}
+
+			key, err := wallet.GetKeyFromPath(walletPathFlag, accountAddressFlag, password)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("failed to load neofs private key: %s", err), 1)
+			}
+
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			poolCfg := PoolConfig{
+				Key:     &key.PrivateKey,
+				Address: peerAddressFlag,
+			}
+
+			anonKey, err := keys.NewPrivateKey()
+			if err != nil {
+				log.Fatal("obtainSecret: couldn't generate random key", zap.Error(err))
+			}
+			anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
+
+			neoFS, err := createNeoFS(ctx, log, poolCfg, anonSigner, slicerEnabledFlag)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 1)
+			}
+
+			var containerID cid.ID
+			if err = containerID.DecodeString(containerIDFlag); err != nil {
+				return cli.Exit(fmt.Sprintf("failed to parse auth container id: %s", err), 1)
+			}
+
+			var (
+				newEACLTable eacl.Table
+				ownerID      = user.NewFromScriptHash(key.GetScriptHash())
+				targetOwner  eacl.Target
+			)
+
+			newEACLTable.SetCID(containerID)
+			targetOwner.SetAccounts([]user.ID{ownerID})
+
+			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
+				record := eacl.NewRecord()
+				record.SetOperation(op)
+				record.SetAction(eacl.ActionAllow)
+				record.SetTargets(targetOwner)
+
+				newEACLTable.AddRecord(record)
+			}
+
+			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
+				record := eacl.NewRecord()
+				record.SetOperation(op)
+				record.SetAction(eacl.ActionDeny)
+				eacl.AddFormedTarget(record, eacl.RoleOthers)
+
+				newEACLTable.AddRecord(record)
+			}
+
+			oldEacl, err := neoFS.ContainerEACL(ctx, containerID)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("failed to obtain old neofs EACL: %s", err), 1)
+			}
+
+			if handler.IsBucketOwnerForced(oldEacl) {
+				newEACLTable.AddRecord(handler.BucketOwnerEnforcedRecord())
+			}
+
+			if handler.IsBucketOwnerPreferred(oldEacl) {
+				newEACLTable.AddRecord(handler.BucketOwnerPreferredRecord())
+			}
+
+			if handler.IsBucketOwnerPreferredAndRestricted(oldEacl) {
+				newEACLTable.AddRecord(handler.BucketOwnerPreferredAndRestrictedRecord())
+			}
+
+			var tcancel context.CancelFunc
+			ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
+			defer tcancel()
+
+			if err = neoFS.SetContainerEACL(ctx, newEACLTable, nil); err != nil {
+				return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
+			}
+
+			return nil
+		},
+	}
+
+	return command
 }
