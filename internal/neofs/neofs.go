@@ -691,6 +691,16 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 	})
 }
 
+// SetContainerEACL implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error {
+	return x.neoFS.SetContainerEACL(ctx, table, sessionToken)
+}
+
+// ContainerEACL implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) ContainerEACL(ctx context.Context, containerID cid.ID) (*eacl.Table, error) {
+	return x.neoFS.ContainerEACL(ctx, containerID)
+}
+
 // PoolStatistic is a mediator which implements authmate.NeoFS through pool.Pool.
 type PoolStatistic struct {
 	poolStat *stat.PoolStat

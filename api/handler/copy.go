@@ -97,7 +97,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
-		if isBucketOwnerForced(eacl.EACL) {
+		if IsBucketOwnerForced(eacl.EACL) {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
@@ -111,7 +111,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isBucketOwnerPreferredAndRestricted(eacl.EACL) {
+	if IsBucketOwnerPreferredAndRestricted(eacl.EACL) {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -225,7 +225,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACL {
+	// In some cases upper in the code, we change ACL headers. We have to check all headers one more time.
+	if containsACLHeaders(r) {
 		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, dstObjInfo)
 		if err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)

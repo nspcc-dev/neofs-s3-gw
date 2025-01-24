@@ -78,6 +78,12 @@ type NeoFS interface {
 	//
 	// It returns any error encountered which prevented computing epochs.
 	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
+
+	// SetContainerEACL updates container EACL.
+	SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error
+
+	// ContainerEACL gets container EACL.
+	ContainerEACL(ctx context.Context, containerID cid.ID) (*eacl.Table, error)
 }
 
 // Agent contains client communicating with NeoFS and logger.
