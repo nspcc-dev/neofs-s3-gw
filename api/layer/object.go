@@ -257,7 +257,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	if bktSettings.VersioningEnabled() {
 		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
 	}
-	
+
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return nil, err
