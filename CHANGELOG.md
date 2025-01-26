@@ -14,6 +14,16 @@ This document outlines major changes between releases.
 
 ### Removed
 
+## [0.34.1] - 2025-01-27
+
+### Fixed
+- CopyObject returning "duplicate attributes" error in some cases (#1058)
+- EACL overflow in CopyObject (#1061)
+
+## Upgrading from 0.34.0
+authmate tool was extended with "reset-bucket-acl" command to fix erroneously
+big EACLs in containers, use it in case you have a container with this problem.
+
 ## [0.34.0] - 2024-12-30
 
 ### Changed
@@ -687,4 +697,5 @@ releases.
 [0.32.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.31.1...v0.32.0
 [0.33.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.32.0...v0.33.0
 [0.34.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.33.0...v0.34.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.0...master
+[0.34.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.0...v0.34.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.1...master
