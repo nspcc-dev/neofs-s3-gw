@@ -11,10 +11,6 @@ func (h *handler) SelectObjectContentHandler(w http.ResponseWriter, r *http.Requ
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
 }
 
-func (h *handler) GetBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
-	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
-}
-
 func (h *handler) GetBucketEncryptionHandler(w http.ResponseWriter, r *http.Request) {
 	h.logAndSendError(w, "not implemented", api.GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
 }
