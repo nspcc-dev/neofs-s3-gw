@@ -573,11 +573,14 @@ func obtainSecret() *cli.Command {
 			ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
 			defer tcancel()
 
-			if err = agent.ObtainSecret(ctx, os.Stdout, obtainSecretOptions); err != nil {
+			or, err := agent.ObtainSecret(ctx, obtainSecretOptions)
+			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to obtain secret: %s", err), 5)
 			}
 
-			return nil
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(or)
 		},
 	}
 	return command
