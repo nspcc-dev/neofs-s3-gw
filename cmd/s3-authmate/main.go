@@ -15,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
+	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
@@ -54,6 +55,7 @@ var (
 	walletPathFlag           string
 	accountAddressFlag       string
 	peerAddressFlag          string
+	rpcAddressFlag           string
 	eaclRulesFlag            string
 	gateWalletPathFlag       string
 	gateAccountAddressFlag   string
@@ -70,6 +72,7 @@ var (
 	awcCliCredFile           string
 	timeoutFlag              time.Duration
 	slicerEnabledFlag        bool
+	applyFlag                bool
 
 	// pool timeouts flag.
 	poolDialTimeoutFlag        time.Duration
@@ -630,45 +633,68 @@ func resetBucketEACL() *cli.Command {
 		Usage: "Reset bucket ACL to default state",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "wallet",
-				Value:       "",
-				Usage:       "path to the container owner wallet",
+				Name:        "access-key-id",
+				Usage:       "access key id for s3",
 				Required:    true,
-				Destination: &walletPathFlag,
+				Destination: &accessKeyIDFlag,
+			},
+			&cli.StringFlag{
+				Name:        "gate-wallet",
+				Value:       "",
+				Usage:       "path to the gate wallet",
+				Required:    true,
+				Destination: &gateWalletPathFlag,
 			},
 			&cli.StringFlag{
 				Name:        "peer",
 				Value:       "",
-				Usage:       "address of neofs peer to connect to",
+				Usage:       "address of neofs peer to connect to. localhost:8080 (without schema)",
 				Required:    true,
 				Destination: &peerAddressFlag,
 			},
 			&cli.StringFlag{
-				Name:        "container-id",
-				Usage:       "neofs container id to update eacl",
+				Name:        "rpc-endpoint",
+				Value:       "",
+				Usage:       "address of neofs RPC endpoint to connect to. https://localhost:30333 (with schema)",
+				Required:    true,
+				Destination: &rpcAddressFlag,
+			},
+			&cli.StringFlag{
+				Name:        "container-name",
+				Usage:       "s3 container name to update eacl",
 				Required:    true,
 				Destination: &containerIDFlag,
+			},
+			&cli.BoolFlag{
+				Name:        "apply",
+				Usage:       "apply EACL changes to container",
+				Required:    false,
+				Destination: &applyFlag,
 			},
 		},
 		Action: func(_ *cli.Context) error {
 			ctx, log := prepare()
 
-			password := wallet.GetPassword(viper.GetViper(), envWalletPassphrase)
+			v := viper.New()
+			v.AutomaticEnv()
+			v.SetConfigType("env")
+			v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+			password := wallet.GetPassword(v, envWalletGatePassphrase)
 			if password == nil {
 				var empty string
 				password = &empty
 			}
-
-			key, err := wallet.GetKeyFromPath(walletPathFlag, accountAddressFlag, password)
+			gateCreds, err := wallet.GetKeyFromPath(gateWalletPathFlag, gateAccountAddressFlag, password)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("failed to load neofs private key: %s", err), 1)
+				return cli.Exit(fmt.Sprintf("failed to get gate's private key: %s", err), 4)
 			}
 
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
 			poolCfg := PoolConfig{
-				Key:     &key.PrivateKey,
+				Key:     &gateCreds.PrivateKey,
 				Address: peerAddressFlag,
 			}
 
@@ -683,19 +709,40 @@ func resetBucketEACL() *cli.Command {
 				return cli.Exit(fmt.Sprintf("failed to create NeoFS component: %s", err), 1)
 			}
 
-			var containerID cid.ID
-			if err = containerID.DecodeString(containerIDFlag); err != nil {
-				return cli.Exit(fmt.Sprintf("failed to parse auth container id: %s", err), 1)
+			secretAddress := strings.Replace(accessKeyIDFlag, "0", "/", 1)
+
+			obtainSecretOptions := &authmate.ObtainSecretOptions{
+				SecretAddress:  secretAddress,
+				GatePrivateKey: gateCreds,
+			}
+
+			agent := authmate.New(log, neoFS)
+			or, err := agent.ObtainSecret(ctx, obtainSecretOptions)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("failed to obtain secret: %s", err), 5)
+			}
+
+			containerResolver, err := resolver.NewResolver(ctx, []string{rpcAddressFlag})
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("create resolver: %s", err), 5)
+			}
+
+			containerID, err := containerResolver.ResolveCID(ctx, containerIDFlag)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("resolve container: %s", err), 5)
+			}
+
+			if _, err = fmt.Fprintln(os.Stdout, "Resolved CID:", containerID); err != nil {
+				return cli.Exit(fmt.Sprintf("write resolved CID: %s", err), 5)
 			}
 
 			var (
 				newEACLTable eacl.Table
-				ownerID      = user.NewFromScriptHash(key.GetScriptHash())
 				targetOwner  eacl.Target
 			)
 
 			newEACLTable.SetCID(containerID)
-			targetOwner.SetAccounts([]user.ID{ownerID})
+			targetOwner.SetAccounts([]user.ID{or.BearerToken.Issuer()})
 
 			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
 				record := eacl.NewRecord()
@@ -732,12 +779,24 @@ func resetBucketEACL() *cli.Command {
 				newEACLTable.AddRecord(handler.BucketOwnerPreferredAndRestrictedRecord())
 			}
 
-			var tcancel context.CancelFunc
-			ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
-			defer tcancel()
+			if applyFlag {
+				var tcancel context.CancelFunc
+				ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
+				defer tcancel()
 
-			if err = neoFS.SetContainerEACL(ctx, newEACLTable, nil); err != nil {
-				return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
+				if err = neoFS.SetContainerEACL(ctx, newEACLTable, or.SessionTokenForSetEACL); err != nil {
+					return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
+				}
+			} else {
+				_, _ = fmt.Fprintln(os.Stdout, "New EACL table:")
+
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				if err = enc.Encode(newEACLTable.Records()); err != nil {
+					return cli.Exit(fmt.Sprintf("failed to encode new neofs EACL records: %s", err), 1)
+				}
+
+				_, _ = fmt.Fprintln(os.Stdout, "\nuse --apply flag to apply EACL changes")
 			}
 
 			return nil

@@ -145,8 +145,9 @@ type (
 
 	// ObtainingResult contains payload for obtainingSecret command.
 	ObtainingResult struct {
-		BearerToken     *bearer.Token `json:"-"`
-		SecretAccessKey string        `json:"secret_access_key"`
+		BearerToken            *bearer.Token      `json:"-"`
+		SessionTokenForSetEACL *session.Container `json:"-"`
+		SecretAccessKey        string             `json:"secret_access_key"`
 	}
 )
 
@@ -314,8 +315,9 @@ func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) 
 	}
 
 	return &ObtainingResult{
-		BearerToken:     box.Gate.BearerToken,
-		SecretAccessKey: box.Gate.AccessKey,
+		BearerToken:            box.Gate.BearerToken,
+		SecretAccessKey:        box.Gate.AccessKey,
+		SessionTokenForSetEACL: box.Gate.SessionTokenForSetEACL(),
 	}, nil
 }
 
