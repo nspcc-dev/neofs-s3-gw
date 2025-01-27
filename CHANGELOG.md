@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- GetBucketLifecycle operation now partially supported. It always returns NoSuchLifecycleConfiguration error (#1049)
 
 ### Fixed
 

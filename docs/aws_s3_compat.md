@@ -237,13 +237,13 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
      
 ## Lifecycle
 
-|    | Method                          | Comments |
-|----|---------------------------------|----------|
-| 🔵 | DeleteBucketLifecycle           |          |
-| 🔵 | GetBucketLifecycle              |          |
-| 🔵 | GetBucketLifecycleConfiguration |          |
-| 🔵 | PutBucketLifecycle              |          |
-| 🔵 | PutBucketLifecycleConfiguration |          |
+|    | Method                          | Comments                                             |
+|----|---------------------------------|------------------------------------------------------|
+| 🔵 | DeleteBucketLifecycle           |                                                      |
+| 🟡 | GetBucketLifecycle              | It always returns NoSuchLifecycleConfiguration error |
+| 🔵 | GetBucketLifecycleConfiguration |                                                      |
+| 🔵 | PutBucketLifecycle              |                                                      |
+| 🔵 | PutBucketLifecycleConfiguration |                                                      |
 
 ## Logging
 
