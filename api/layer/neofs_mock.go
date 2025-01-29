@@ -491,40 +491,42 @@ func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid
 	}
 
 	for _, obj := range t.objects {
-		var isOk = true
-
-		for _, attr := range obj.Attributes() {
-			for _, f := range prm.Filters {
-				if attr.Key() == f.Header() {
-					switch f.Operation() {
-					case object.MatchStringEqual:
-						if f.Header() == "$Object:objectType" {
-							isOk = isOk && obj.Type().String() == f.Value()
-						} else {
-							isOk = isOk && attr.Value() == f.Value()
-						}
-					case object.MatchStringNotEqual:
-						isOk = isOk && attr.Value() != f.Value()
-					case object.MatchCommonPrefix:
-						isOk = isOk && strings.HasPrefix(attr.Value(), f.Value())
-					case object.MatchNotPresent:
-						isOk = false
-					default:
-						isOk = false
-					}
-				}
-
-				if f.Header() == "$Object:objectType" {
-					isOk = isOk && obj.Type().String() == f.Value()
-				}
-			}
-		}
-
-		// all filters are valid for obj.
-		if isOk {
+		if checkFilters(obj, prm.Filters) {
 			oids = append(oids, obj.GetID())
 		}
 	}
 
 	return oids, nil
+}
+
+func checkFilters(obj *object.Object, filters object.SearchFilters) bool {
+	var isOk = true
+
+	attrs := make(map[string]string, len(obj.Attributes()))
+	for _, attr := range obj.Attributes() {
+		attrs[attr.Key()] = attr.Value()
+	}
+
+	for _, f := range filters {
+		val, present := attrs[f.Header()]
+
+		switch f.Operation() {
+		case object.MatchStringEqual:
+			if f.Header() == "$Object:objectType" {
+				isOk = isOk && obj.Type().String() == f.Value()
+			} else {
+				isOk = isOk && val == f.Value()
+			}
+		case object.MatchStringNotEqual:
+			isOk = isOk && val != f.Value()
+		case object.MatchCommonPrefix:
+			isOk = isOk && strings.HasPrefix(val, f.Value())
+		case object.MatchNotPresent:
+			isOk = !present
+		default:
+			isOk = false
+		}
+	}
+
+	return isOk
 }
