@@ -8,14 +8,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
 
@@ -226,65 +223,4 @@ func objectTaggingCacheKey(p *ObjectVersion) string {
 
 func bucketTaggingCacheKey(cnrID cid.ID) string {
 	return ".tagset." + cnrID.EncodeToString()
-}
-
-func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (*data.NodeVersion, error) {
-	var err error
-	var version *data.NodeVersion
-
-	if objVersion.VersionID == data.UnversionedObjectVersionID {
-		version, err = n.treeService.GetUnversioned(ctx, objVersion.BktInfo, objVersion.ObjectName)
-	} else if len(objVersion.VersionID) == 0 {
-		version, err = n.treeService.GetLatestVersion(ctx, objVersion.BktInfo, objVersion.ObjectName)
-	} else {
-		versions, err2 := n.treeService.GetVersions(ctx, objVersion.BktInfo, objVersion.ObjectName)
-		if err2 != nil {
-			return nil, err2
-		}
-		for _, v := range versions {
-			if v.OID.EncodeToString() == objVersion.VersionID {
-				version = v
-				break
-			}
-		}
-		if version == nil {
-			err = s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-		}
-	}
-
-	if err == nil && version.IsDeleteMarker() && !objVersion.NoErrorOnDeleteMarker || errorsStd.Is(err, ErrNodeNotFound) {
-		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-	}
-
-	if err == nil && version != nil && !version.IsDeleteMarker() {
-		reqInfo := api.GetReqInfo(ctx)
-		n.log.Debug("target details",
-			zap.String("reqId", reqInfo.RequestID),
-			zap.String("bucket", objVersion.BktInfo.Name), zap.Stringer("cid", objVersion.BktInfo.CID),
-			zap.String("object", objVersion.ObjectName), zap.Stringer("oid", version.OID))
-	}
-
-	return version, err
-}
-
-func (n *layer) getNodeVersionFromCache(owner user.ID, o *ObjectVersion) *data.NodeVersion {
-	if len(o.VersionID) == 0 || o.VersionID == data.UnversionedObjectVersionID {
-		return nil
-	}
-
-	var objID oid.ID
-	if objID.DecodeString(o.VersionID) != nil {
-		return nil
-	}
-
-	var addr oid.Address
-	addr.SetContainer(o.BktInfo.CID)
-	addr.SetObject(objID)
-
-	extObjectInfo := n.cache.GetObject(owner, addr)
-	if extObjectInfo == nil {
-		return nil
-	}
-
-	return extObjectInfo.NodeVersion
 }

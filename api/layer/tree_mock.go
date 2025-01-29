@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -18,39 +17,6 @@ type TreeServiceMock struct {
 	tags       map[string]map[uint64]map[string]string
 	multiparts map[string]map[string][]*data.MultipartInfo
 	parts      map[string]map[int]*data.PartInfo
-}
-
-func (t *TreeServiceMock) GetObjectTagging(_ context.Context, bktInfo *data.BucketInfo, nodeVersion *data.NodeVersion) (map[string]string, error) {
-	cnrTagsMap, ok := t.tags[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, nil
-	}
-
-	return cnrTagsMap[nodeVersion.ID], nil
-}
-
-func (t *TreeServiceMock) PutObjectTagging(_ context.Context, bktInfo *data.BucketInfo, nodeVersion *data.NodeVersion, tagSet map[string]string) error {
-	cnrTagsMap, ok := t.tags[bktInfo.CID.EncodeToString()]
-	if !ok {
-		t.tags[bktInfo.CID.EncodeToString()] = map[uint64]map[string]string{
-			nodeVersion.ID: tagSet,
-		}
-		return nil
-	}
-
-	cnrTagsMap[nodeVersion.ID] = tagSet
-
-	return nil
-}
-
-func (t *TreeServiceMock) DeleteObjectTagging(_ context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) error {
-	cnrTagsMap, ok := t.tags[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil
-	}
-
-	delete(cnrTagsMap, objVersion.ID)
-	return nil
 }
 
 func (t *TreeServiceMock) GetBucketTagging(_ context.Context, _ *data.BucketInfo) (map[string]string, error) {
@@ -112,102 +78,6 @@ func (t *TreeServiceMock) PutBucketCORS(_ context.Context, _ *data.BucketInfo, _
 
 func (t *TreeServiceMock) DeleteBucketCORS(_ context.Context, _ *data.BucketInfo) (oid.ID, error) {
 	panic("implement me")
-}
-
-func (t *TreeServiceMock) GetVersions(_ context.Context, bktInfo *data.BucketInfo, objectName string) ([]*data.NodeVersion, error) {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	versions, ok := cnrVersionsMap[objectName]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	return versions, nil
-}
-
-func (t *TreeServiceMock) GetLatestVersion(_ context.Context, bktInfo *data.BucketInfo, objectName string) (*data.NodeVersion, error) {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	versions, ok := cnrVersionsMap[objectName]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	slices.SortFunc(versions, func(a, b *data.NodeVersion) int {
-		return cmp.Compare(a.ID, b.ID)
-	})
-
-	if len(versions) != 0 {
-		return versions[len(versions)-1], nil
-	}
-
-	return nil, ErrNodeNotFound
-}
-
-func (t *TreeServiceMock) GetUnversioned(_ context.Context, bktInfo *data.BucketInfo, objectName string) (*data.NodeVersion, error) {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	versions, ok := cnrVersionsMap[objectName]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	for _, version := range versions {
-		if version.IsUnversioned {
-			return version, nil
-		}
-	}
-
-	return nil, ErrNodeNotFound
-}
-
-func (t *TreeServiceMock) AddVersion(_ context.Context, bktInfo *data.BucketInfo, newVersion *data.NodeVersion) (uint64, error) {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		t.versions[bktInfo.CID.EncodeToString()] = map[string][]*data.NodeVersion{
-			newVersion.FilePath: {newVersion},
-		}
-		return newVersion.ID, nil
-	}
-
-	versions, ok := cnrVersionsMap[newVersion.FilePath]
-	if !ok {
-		cnrVersionsMap[newVersion.FilePath] = []*data.NodeVersion{newVersion}
-		return newVersion.ID, nil
-	}
-
-	slices.SortFunc(versions, func(a, b *data.NodeVersion) int {
-		return cmp.Compare(a.ID, b.ID)
-	})
-
-	if len(versions) != 0 {
-		newVersion.ID = versions[len(versions)-1].ID + 1
-		newVersion.Timestamp = versions[len(versions)-1].Timestamp + 1
-	}
-
-	result := versions
-
-	if newVersion.IsUnversioned {
-		result = make([]*data.NodeVersion, 0, len(versions))
-		for _, node := range versions {
-			if !node.IsUnversioned {
-				result = append(result, node)
-			}
-		}
-	}
-
-	cnrVersionsMap[newVersion.FilePath] = append(result, newVersion)
-
-	return newVersion.ID, nil
 }
 
 func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {

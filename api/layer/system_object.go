@@ -179,17 +179,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	return &lock, nil
 }
 
-func (n *layer) getNodeVersionFromCacheOrNeofs(ctx context.Context, objVersion *ObjectVersion) (nodeVersion *data.NodeVersion, err error) {
-	// check cache if node version is stored inside extendedObjectVersion
-	nodeVersion = n.getNodeVersionFromCache(n.Owner(ctx), objVersion)
-	if nodeVersion == nil {
-		// else get node version from tree service
-		return n.getNodeVersion(ctx, objVersion)
-	}
-
-	return nodeVersion, nil
-}
-
 func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32, objectName, objectVersion string) (oid.ID, error) {
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,

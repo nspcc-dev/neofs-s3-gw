@@ -18,7 +18,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/services/tree"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -75,9 +74,6 @@ const (
 	notifConfFileName     = "bucket-notifications"
 	corsFilename          = "bucket-cors"
 	bucketTaggingFilename = "bucket-tagging"
-
-	// versionTree -- ID of a tree with object versions.
-	versionTree = "version"
 
 	// systemTree -- ID of a tree with system objects
 	// i.e. bucket settings with versioning and lock configuration, cors, notifications.
@@ -152,54 +148,6 @@ func (n *TreeNode) Get(key string) (string, bool) {
 func (n *TreeNode) FileName() (string, bool) {
 	value, ok := n.Meta[fileNameKV]
 	return value, ok
-}
-
-func newNodeVersion(filePath string, node NodeResponse) (*data.NodeVersion, error) {
-	treeNode, err := newTreeNode(node)
-	if err != nil {
-		return nil, fmt.Errorf("invalid tree node: %w", err)
-	}
-
-	return newNodeVersionFromTreeNode(filePath, treeNode), nil
-}
-
-func newNodeVersionFromTreeNode(filePath string, treeNode *TreeNode) *data.NodeVersion {
-	_, isUnversioned := treeNode.Get(isUnversionedKV)
-	_, isDeleteMarker := treeNode.Get(isDeleteMarkerKV)
-	eTag, _ := treeNode.Get(etagKV)
-
-	version := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			ID:        treeNode.ID,
-			ParenID:   treeNode.ParentID,
-			OID:       treeNode.ObjID,
-			Timestamp: treeNode.TimeStamp,
-			ETag:      eTag,
-			Size:      treeNode.Size,
-			FilePath:  filePath,
-		},
-		IsUnversioned: isUnversioned,
-	}
-
-	if isDeleteMarker {
-		var created time.Time
-		if createdStr, ok := treeNode.Get(createdKV); ok {
-			if utcMilli, err := strconv.ParseInt(createdStr, 10, 64); err == nil {
-				created = time.UnixMilli(utcMilli)
-			}
-		}
-
-		var owner user.ID
-		if ownerStr, ok := treeNode.Get(ownerKV); ok {
-			_ = owner.DecodeString(ownerStr)
-		}
-
-		version.DeleteMarker = &data.DeleteMarkerInfo{
-			Created: created,
-			Owner:   owner,
-		}
-	}
-	return version
 }
 
 func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
@@ -410,66 +358,6 @@ func (c *TreeClient) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketI
 	return oid.ID{}, layer.ErrNoNodeToRemove
 }
 
-func (c *TreeClient) GetObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) (map[string]string, error) {
-	tagNode, err := c.getTreeNode(ctx, bktInfo, objVersion.ID, isTagKV)
-	if err != nil {
-		return nil, err
-	}
-
-	return getObjectTagging(tagNode), nil
-}
-
-func getObjectTagging(tagNode *TreeNode) map[string]string {
-	if tagNode == nil {
-		return nil
-	}
-
-	meta := make(map[string]string)
-
-	for key, val := range tagNode.Meta {
-		if strings.HasPrefix(key, userDefinedTagPrefix) {
-			meta[strings.TrimPrefix(key, userDefinedTagPrefix)] = val
-		}
-	}
-
-	return meta
-}
-
-func (c *TreeClient) PutObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion, tagSet map[string]string) error {
-	tagNode, err := c.getTreeNode(ctx, bktInfo, objVersion.ID, isTagKV)
-	if err != nil {
-		return err
-	}
-
-	treeTagSet := make(map[string]string)
-	treeTagSet[isTagKV] = "true"
-
-	for key, val := range tagSet {
-		treeTagSet[userDefinedTagPrefix+key] = val
-	}
-
-	if tagNode == nil {
-		_, err = c.addNode(ctx, bktInfo, versionTree, objVersion.ID, treeTagSet)
-	} else {
-		err = c.moveNode(ctx, bktInfo, versionTree, tagNode.ID, objVersion.ID, treeTagSet)
-	}
-
-	return err
-}
-
-func (c *TreeClient) DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) error {
-	tagNode, err := c.getTreeNode(ctx, bktInfo, objVersion.ID, isTagKV)
-	if err != nil {
-		return err
-	}
-
-	if tagNode == nil {
-		return nil
-	}
-
-	return c.removeNode(ctx, bktInfo, versionTree, tagNode.ID)
-}
-
 func (c *TreeClient) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
 	node, err := c.getSystemNodeWithAllAttributes(ctx, bktInfo, []string{bucketTaggingFilename})
 	if err != nil {
@@ -521,71 +409,6 @@ func (c *TreeClient) DeleteBucketTagging(ctx context.Context, bktInfo *data.Buck
 	}
 
 	return nil
-}
-
-func (c *TreeClient) getTreeNode(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64, key string) (*TreeNode, error) {
-	nodes, err := c.getTreeNodes(ctx, bktInfo, nodeID, key)
-	if err != nil {
-		return nil, err
-	}
-	// if there will be many allocations, consider having separate
-	// implementations of 'getTreeNode' and 'getTreeNodes'
-	return nodes[key], nil
-}
-
-func (c *TreeClient) getTreeNodes(ctx context.Context, bktInfo *data.BucketInfo, nodeID uint64, keys ...string) (map[string]*TreeNode, error) {
-	subtree, err := c.getSubTree(ctx, bktInfo, versionTree, nodeID, 2)
-	if err != nil {
-		return nil, err
-	}
-
-	treeNodes := make(map[string]*TreeNode, len(keys))
-
-	for _, s := range subtree {
-		node, err := newTreeNode(s)
-		if err != nil {
-			return nil, err
-		}
-		for _, key := range keys {
-			if _, ok := node.Get(key); ok {
-				treeNodes[key] = node
-				break
-			}
-		}
-		if len(treeNodes) == len(keys) {
-			break
-		}
-	}
-
-	return treeNodes, nil
-}
-
-func (c *TreeClient) GetVersions(ctx context.Context, bktInfo *data.BucketInfo, filepath string) ([]*data.NodeVersion, error) {
-	return c.getVersions(ctx, bktInfo, versionTree, filepath, false)
-}
-
-func (c *TreeClient) GetLatestVersion(ctx context.Context, bktInfo *data.BucketInfo, objectName string) (*data.NodeVersion, error) {
-	meta := []string{oidKV, isUnversionedKV, isDeleteMarkerKV, etagKV, sizeKV}
-	path := pathFromName(objectName)
-
-	p := &getNodesParams{
-		BktInfo:    bktInfo,
-		TreeID:     versionTree,
-		Path:       path,
-		Meta:       meta,
-		LatestOnly: true,
-		AllAttrs:   false,
-	}
-	nodes, err := c.getNodes(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(nodes) == 0 {
-		return nil, layer.ErrNodeNotFound
-	}
-
-	return newNodeVersion(objectName, nodes[0])
 }
 
 // pathFromName splits name by '/'.
@@ -709,31 +532,6 @@ func isIntermediate(node NodeResponse) bool {
 	}
 
 	return node.GetMeta()[0].GetKey() == fileNameKV
-}
-
-func (c *TreeClient) GetUnversioned(ctx context.Context, bktInfo *data.BucketInfo, filepath string) (*data.NodeVersion, error) {
-	return c.getUnversioned(ctx, bktInfo, versionTree, filepath)
-}
-
-func (c *TreeClient) getUnversioned(ctx context.Context, bktInfo *data.BucketInfo, treeID, filepath string) (*data.NodeVersion, error) {
-	nodes, err := c.getVersions(ctx, bktInfo, treeID, filepath, true)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(nodes) > 1 {
-		return nil, fmt.Errorf("found more than one unversioned node")
-	}
-
-	if len(nodes) != 1 {
-		return nil, layer.ErrNodeNotFound
-	}
-
-	return nodes[0], nil
-}
-
-func (c *TreeClient) AddVersion(ctx context.Context, bktInfo *data.BucketInfo, version *data.NodeVersion) (uint64, error) {
-	return c.addVersion(ctx, bktInfo, versionTree, version)
 }
 
 func (c *TreeClient) CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {
@@ -967,94 +765,6 @@ func (c *TreeClient) Close() error {
 	}
 
 	return nil
-}
-
-func (c *TreeClient) addVersion(ctx context.Context, bktInfo *data.BucketInfo, treeID string, version *data.NodeVersion) (uint64, error) {
-	path := pathFromName(version.FilePath)
-	meta := map[string]string{
-		oidKV:      version.OID.EncodeToString(),
-		fileNameKV: path[len(path)-1],
-	}
-
-	if version.Size > 0 {
-		meta[sizeKV] = strconv.FormatInt(version.Size, 10)
-	}
-	if len(version.ETag) > 0 {
-		meta[etagKV] = version.ETag
-	}
-
-	if version.IsDeleteMarker() {
-		meta[isDeleteMarkerKV] = "true"
-		meta[ownerKV] = version.DeleteMarker.Owner.EncodeToString()
-		meta[createdKV] = strconv.FormatInt(version.DeleteMarker.Created.UTC().UnixMilli(), 10)
-	}
-
-	if version.IsUnversioned {
-		meta[isUnversionedKV] = "true"
-
-		node, err := c.getUnversioned(ctx, bktInfo, treeID, version.FilePath)
-		if err == nil {
-			if err = c.moveNode(ctx, bktInfo, treeID, node.ID, node.ParenID, meta); err != nil {
-				return 0, err
-			}
-
-			return node.ID, c.clearOutdatedVersionInfo(ctx, bktInfo, treeID, node.ID)
-		}
-
-		if !errors.Is(err, layer.ErrNodeNotFound) {
-			return 0, err
-		}
-	}
-
-	return c.addNodeByPath(ctx, bktInfo, treeID, path[:len(path)-1], meta)
-}
-
-func (c *TreeClient) clearOutdatedVersionInfo(ctx context.Context, bktInfo *data.BucketInfo, treeID string, nodeID uint64) error {
-	taggingNode, err := c.getTreeNode(ctx, bktInfo, nodeID, isTagKV)
-	if err != nil {
-		return err
-	}
-	if taggingNode != nil {
-		return c.removeNode(ctx, bktInfo, treeID, taggingNode.ID)
-	}
-
-	return nil
-}
-
-func (c *TreeClient) getVersions(ctx context.Context, bktInfo *data.BucketInfo, treeID, filepath string, onlyUnversioned bool) ([]*data.NodeVersion, error) {
-	keysToReturn := []string{oidKV, isUnversionedKV, isDeleteMarkerKV, etagKV, sizeKV}
-	path := pathFromName(filepath)
-	p := &getNodesParams{
-		BktInfo:    bktInfo,
-		TreeID:     treeID,
-		Path:       path,
-		Meta:       keysToReturn,
-		LatestOnly: false,
-		AllAttrs:   false,
-	}
-	nodes, err := c.getNodes(ctx, p)
-	if err != nil {
-		if errors.Is(err, layer.ErrNodeNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	result := make([]*data.NodeVersion, 0, len(nodes))
-	for _, node := range nodes {
-		nodeVersion, err := newNodeVersion(filepath, node)
-		if err != nil {
-			return nil, err
-		}
-
-		if onlyUnversioned && !nodeVersion.IsUnversioned {
-			continue
-		}
-
-		result = append(result, nodeVersion)
-	}
-
-	return result, nil
 }
 
 func (c *TreeClient) getSubTree(ctx context.Context, bktInfo *data.BucketInfo, treeID string, rootID uint64, depth uint32) ([]*tree.GetSubTreeResponse_Body, error) {
