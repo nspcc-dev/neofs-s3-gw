@@ -143,9 +143,11 @@ type (
 		ContainerID     string `json:"container_id"`
 	}
 
-	obtainingResult struct {
-		BearerToken     *bearer.Token `json:"-"`
-		SecretAccessKey string        `json:"secret_access_key"`
+	// ObtainingResult contains payload for obtainingSecret command.
+	ObtainingResult struct {
+		BearerToken            *bearer.Token      `json:"-"`
+		SessionTokenForSetEACL *session.Container `json:"-"`
+		SecretAccessKey        string             `json:"secret_access_key"`
 	}
 )
 
@@ -299,27 +301,24 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 // ObtainSecret receives an existing secret access key from NeoFS and
 // writes to io.Writer the secret access key.
-func (a *Agent) ObtainSecret(ctx context.Context, w io.Writer, options *ObtainSecretOptions) error {
+func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) (*ObtainingResult, error) {
 	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig(a.log))
 
 	var addr oid.Address
 	if err := addr.DecodeString(options.SecretAddress); err != nil {
-		return fmt.Errorf("failed to parse secret address: %w", err)
+		return nil, fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
 	box, err := bearerCreds.GetBox(ctx, addr)
 	if err != nil {
-		return fmt.Errorf("failed to get tokens: %w", err)
+		return nil, fmt.Errorf("failed to get tokens: %w", err)
 	}
 
-	or := &obtainingResult{
-		BearerToken:     box.Gate.BearerToken,
-		SecretAccessKey: box.Gate.AccessKey,
-	}
-
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(or)
+	return &ObtainingResult{
+		BearerToken:            box.Gate.BearerToken,
+		SecretAccessKey:        box.Gate.AccessKey,
+		SessionTokenForSetEACL: box.Gate.SessionTokenForSetEACL(),
+	}, nil
 }
 
 func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
