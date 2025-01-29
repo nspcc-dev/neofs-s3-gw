@@ -1027,10 +1027,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 
-	if newVersion.ID, err = n.treeService.AddVersion(ctx, p.Info.Bkt, newVersion); err != nil {
-		return nil, nil, fmt.Errorf("couldn't add multipart new verion to tree service: %w", err)
-	}
-
 	n.cache.CleanListCacheEntriesContainingObject(p.Info.Key, p.Info.Bkt.CID)
 
 	objInfo := &data.ObjectInfo{

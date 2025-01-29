@@ -318,10 +318,16 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
 			},
-			TagSet:      tagSet,
-			NodeVersion: extendedObjInfo.NodeVersion,
+			TagSet:       tagSet,
+			NodeVersion:  extendedObjInfo.NodeVersion,
+			CopiesNumber: h.cfg.CopiesNumber,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+
+		if !settings.VersioningEnabled() {
+			tagPrm.ObjectVersion.VersionID = ""
+		}
+
+		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
@@ -540,10 +546,11 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
 			},
-			NodeVersion: extendedObjInfo.NodeVersion,
+			NodeVersion:  extendedObjInfo.NodeVersion,
+			CopiesNumber: h.cfg.CopiesNumber,
 		}
 
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}

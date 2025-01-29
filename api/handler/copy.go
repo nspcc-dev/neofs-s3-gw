@@ -78,6 +78,27 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	settingsSrc, err := h.obj.GetBucketSettings(r.Context(), srcObjPrm.BktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if settingsSrc.VersioningEnabled() && srcObjPrm.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: srcObjPrm.BktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		srcObjPrm.VersionID = ei.ObjectInfo.VersionID()
+	}
+
 	dstBktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "couldn't get target bucket", reqInfo, err)
@@ -155,6 +176,10 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 				VersionID:  srcObjInfo.VersionID(),
 			},
 			NodeVersion: extendedSrcObjInfo.NodeVersion,
+		}
+
+		if !settingsSrc.VersioningEnabled() {
+			tagPrm.ObjectVersion.VersionID = ""
 		}
 
 		_, tagSet, err = h.obj.GetObjectTagging(r.Context(), tagPrm)
@@ -252,10 +277,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 				ObjectName: reqInfo.ObjectName,
 				VersionID:  dstObjInfo.VersionID(),
 			},
-			TagSet:      tagSet,
-			NodeVersion: extendedDstObjInfo.NodeVersion,
+			TagSet:       tagSet,
+			NodeVersion:  extendedDstObjInfo.NodeVersion,
+			CopiesNumber: h.cfg.CopiesNumber,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}

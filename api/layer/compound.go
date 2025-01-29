@@ -19,14 +19,11 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 		return tags, lockInfo, nil
 	}
 
-	if nodeVersion == nil {
-		nodeVersion, err = n.getNodeVersion(ctx, objVersion)
-		if err != nil {
-			return nil, nil, err
-		}
+	var p = GetObjectTaggingParams{
+		ObjectVersion: objVersion,
 	}
 
-	tags, err = n.treeService.GetObjectTagging(ctx, objVersion.BktInfo, nodeVersion)
+	_, tags, err = n.GetObjectTagging(ctx, &p)
 	if err != nil {
 		if errorsStd.Is(err, ErrNodeNotFound) {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
