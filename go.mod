@@ -13,7 +13,6 @@ require (
 	github.com/nspcc-dev/neofs-contract v0.20.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20240807160341-3528eb5bb1cc
 	github.com/nspcc-dev/tzhash v1.8.2
-	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/prometheus/client_golang v1.20.2
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
@@ -21,6 +20,7 @@ require (
 	github.com/urfave/cli/v2 v2.27.4
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.31.0
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/sync v0.10.0
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.34.2
@@ -47,7 +47,6 @@ require (
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	go.etcd.io/bbolt v1.3.11 // indirect
-	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed // indirect
 )
 

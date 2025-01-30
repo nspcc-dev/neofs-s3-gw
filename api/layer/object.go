@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/sha256"
@@ -14,7 +15,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/minio/sio"
@@ -26,9 +26,10 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/version"
-	"github.com/panjf2000/ants/v2"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 )
 
 type (
@@ -75,6 +76,9 @@ type (
 
 const (
 	continuationToken = "<continuation-token>"
+
+	attrS3VersioningState = "S3-versioning-state"
+	attrS3DeleteMarker    = "S3-delete-marker"
 )
 
 func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
@@ -250,6 +254,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Attributes:   p.Header,
 	}
 
+	if bktSettings.VersioningEnabled() {
+		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
+	}
+
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return nil, err
@@ -259,7 +267,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	n.log.Debug("put object",
 		zap.String("reqId", reqInfo.RequestID),
 		zap.String("bucket", p.BktInfo.Name), zap.Stringer("cid", p.BktInfo.CID),
-		zap.String("object", p.Object), zap.Stringer("oid", id))
+		zap.String("object", p.Object), zap.Stringer("oid", id), zap.Int64("size", p.Size))
 
 	newVersion.OID = id
 	newVersion.ETag = hex.EncodeToString(hash)
@@ -272,11 +280,14 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			ObjVersion: &ObjectVersion{
 				BktInfo:    p.BktInfo,
 				ObjectName: p.Object,
-				VersionID:  id.EncodeToString(),
 			},
 			NewLock:      p.Lock,
 			CopiesNumber: p.CopiesNumber,
 			NodeVersion:  newVersion, // provide new version to make one less tree service call in PutLockInfo
+		}
+
+		if bktSettings.VersioningEnabled() {
+			putLockInfoPrms.ObjVersion.VersionID = id.String()
 		}
 
 		if err = n.PutLockInfo(ctx, putLockInfoPrms); err != nil {
@@ -373,7 +384,7 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		return extObjInfo, nil
 	}
 
-	node, err := n.treeService.GetLatestVersion(ctx, bkt, objectName)
+	heads, err := n.searchAllVersionsInNeoFS(ctx, bkt, owner, objectName, false)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
@@ -381,19 +392,15 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 		return nil, err
 	}
 
-	if node.IsDeleteMarker() {
+	if isDeleteMarkerObject(*heads[0]) {
 		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 	}
 
-	meta, err := n.objectHead(ctx, bkt, node.OID)
-	if err != nil {
-		return nil, err
-	}
-	objInfo := objectInfoFromMeta(bkt, meta)
+	objInfo := objectInfoFromMeta(bkt, heads[0]) // latest version.
 
 	extObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo:  objInfo,
-		NodeVersion: node,
+		NodeVersion: &data.NodeVersion{},
 	}
 
 	n.cache.PutObjectWithName(owner, extObjInfo)
@@ -401,27 +408,211 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 	return extObjInfo, nil
 }
 
+// searchAllVersionsInNeoFS returns all version of object by its objectName.
+//
+// Returns ErrNodeNotFound if zero objects found.
+func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]*object.Object, error) {
+	prmSearch := PrmObjectSearch{
+		Container: bkt.CID,
+		Filters:   make(object.SearchFilters, 0, 3),
+	}
+
+	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, owner)
+	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	if len(objectName) > 0 {
+		prmSearch.Filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	}
+
+	if onlyUnversioned {
+		prmSearch.Filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+	}
+
+	return n.searchObjects(ctx, bkt, prmSearch)
+}
+
+// searchAllVersionsInNeoFS returns all version of object by its objectName.
+//
+// Returns ErrNodeNotFound if zero objects found.
+func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]*object.Object, error) {
+	prmSearch := PrmObjectSearch{
+		Container: bkt.CID,
+		Filters:   make(object.SearchFilters, 0, 3),
+	}
+
+	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, owner)
+	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	if len(prefix) > 0 {
+		prmSearch.Filters.AddFilter(object.AttributeFilePath, prefix, object.MatchCommonPrefix)
+	}
+
+	if onlyUnversioned {
+		prmSearch.Filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+	}
+
+	return n.searchObjects(ctx, bkt, prmSearch)
+}
+
+func (n *layer) searchObjects(ctx context.Context, bkt *data.BucketInfo, prmSearch PrmObjectSearch) ([]*object.Object, error) {
+	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(ids) == 0 {
+		return nil, ErrNodeNotFound
+	}
+
+	var heads = make([]*object.Object, 0, len(ids))
+
+	for i := range ids {
+		head, err := n.objectHead(ctx, bkt, ids[i])
+		if err != nil {
+			n.log.Warn("couldn't head object",
+				zap.Stringer("oid", &ids[i]),
+				zap.Stringer("cid", bkt.CID),
+				zap.Error(err))
+
+			return nil, fmt.Errorf("couldn't head object: %w", err)
+		}
+
+		// if head.Type() == object.TypeTombstone || head.Type() == object.TypeLink || head.Type() == object.TypeLock {
+		// 	continue
+		// }
+
+		// The object is a part of split chain, it doesn't exist for user.
+		if head.HasParent() {
+			continue
+		}
+
+		heads = append(heads, head)
+	}
+
+	slices.SortFunc(heads, sortObjectsFunc)
+
+	return heads, nil
+}
+
+func sortObjectsFunc(a, b *object.Object) int {
+	if c := cmp.Compare(b.CreationEpoch(), a.CreationEpoch()); c != 0 { // reverse order.
+		return c
+	}
+
+	var (
+		aCreated int64
+		bCreated int64
+	)
+
+	for _, attr := range a.Attributes() {
+		if attr.Key() == object.AttributeTimestamp {
+			aCreated, _ = strconv.ParseInt(attr.Value(), 10, 64)
+			break
+		}
+	}
+	for _, attr := range b.Attributes() {
+		if attr.Key() == object.AttributeTimestamp {
+			bCreated, _ = strconv.ParseInt(attr.Value(), 10, 64)
+			break
+		}
+	}
+
+	if c := cmp.Compare(bCreated, aCreated); c != 0 { // reverse order.
+		return c
+	}
+
+	bID := b.GetID()
+	aID := a.GetID()
+
+	// It is a temporary decision. We can't figure out what object was first and what the second right now.
+	return bytes.Compare(bID[:], aID[:]) // reverse order.
+}
+
+func sortObjectsFuncByFilePath(a, b *object.Object) int {
+	var aPath string
+	var bPath string
+
+	for _, attr := range a.Attributes() {
+		if attr.Key() == object.AttributeFilePath {
+			aPath = attr.Value()
+		}
+	}
+	for _, attr := range b.Attributes() {
+		if attr.Key() == object.AttributeFilePath {
+			bPath = attr.Value()
+		}
+	}
+
+	return cmp.Compare(aPath, bPath)
+}
+
+func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]*object.Object, error) {
+	heads, err := n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, onlyUnversioned)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("get all versions by prefix: %w", err)
+	}
+
+	var uniq = make(map[string]*object.Object, len(heads))
+
+	for _, head := range heads {
+		var filePath string
+		for _, attr := range head.Attributes() {
+			if attr.Key() == object.AttributeFilePath {
+				filePath = attr.Value()
+				break
+			}
+		}
+
+		// take only first object, because it is the freshest one.
+		if _, ok := uniq[filePath]; !ok {
+			uniq[filePath] = head
+		}
+	}
+
+	return maps.Values(uniq), nil
+}
+
 func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
 	var err error
-	var foundVersion *data.NodeVersion
+	var foundVersion *object.Object
 	if p.VersionID == data.UnversionedObjectVersionID {
-		foundVersion, err = n.treeService.GetUnversioned(ctx, bkt, p.Object)
+		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, p.Object, true)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 			}
 			return nil, err
 		}
+
+		foundVersion = versions[0]
 	} else {
-		versions, err := n.treeService.GetVersions(ctx, bkt, p.Object)
+		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, p.Object, false)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't get versions: %w", err)
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+			return nil, err
 		}
 
-		for _, version := range versions {
-			if version.OID.EncodeToString() == p.VersionID {
-				foundVersion = version
-				break
+		if p.IsBucketVersioningEnabled {
+			for _, version := range versions {
+				if version.GetID().EncodeToString() == p.VersionID {
+					foundVersion = version
+					break
+				}
+			}
+		} else {
+			// If versioning is not enabled, user "should see" only last version of uploaded object.
+			if versions[0].GetID().EncodeToString() == p.VersionID {
+				foundVersion = versions[0]
 			}
 		}
 		if foundVersion == nil {
@@ -429,12 +620,13 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		}
 	}
 
+	id := foundVersion.GetID()
 	owner := n.Owner(ctx)
-	if extObjInfo := n.cache.GetObject(owner, newAddress(bkt.CID, foundVersion.OID)); extObjInfo != nil {
+	if extObjInfo := n.cache.GetObject(owner, newAddress(bkt.CID, id)); extObjInfo != nil {
 		return extObjInfo, nil
 	}
 
-	meta, err := n.objectHead(ctx, bkt, foundVersion.OID)
+	meta, err := n.objectHead(ctx, bkt, id)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectNotFound) {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
@@ -445,7 +637,7 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 
 	extObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo:  objInfo,
-		NodeVersion: foundVersion,
+		NodeVersion: &data.NodeVersion{},
 	}
 
 	n.cache.PutObject(owner, extObjInfo)
@@ -572,14 +764,6 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	return &result, nil
 }
 
-type logWrapper struct {
-	log *zap.Logger
-}
-
-func (l *logWrapper) Printf(format string, args ...any) {
-	l.log.Info(fmt.Sprintf(format, args...))
-}
-
 func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams) (objects []*data.ObjectInfo, next *data.ObjectInfo, err error) {
 	if p.MaxKeys == 0 {
 		return nil, nil, nil
@@ -589,33 +773,37 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	cacheKey := cache.CreateObjectsListCacheKey(p.Bucket.CID, p.Prefix, true)
 	nodeVersions := n.cache.GetList(owner, cacheKey)
 
+	var rawHeads []*object.Object
+
 	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetLatestVersionsByPrefix(ctx, p.Bucket, p.Prefix)
+		rawHeads, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Bucket.Owner, p.Prefix, false)
 		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, nil, nil
+			}
+
 			return nil, nil, err
 		}
-		n.cache.PutList(owner, cacheKey, nodeVersions)
 	}
 
-	if len(nodeVersions) == 0 {
+	if len(rawHeads) == 0 {
 		return nil, nil, nil
 	}
 
-	slices.SortFunc(nodeVersions, func(a, b *data.NodeVersion) int {
-		return cmp.Compare(a.FilePath, b.FilePath)
-	})
+	slices.SortFunc(rawHeads, sortObjectsFuncByFilePath)
+	existed := make(map[string]struct{}, len(nodeVersions)) // to squash the same directories
 
-	poolCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	objOutCh, err := n.initWorkerPool(poolCtx, 2, p, nodesGenerator(poolCtx, p, nodeVersions))
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to init worker pool: %w", err)
-	}
+	for _, head := range rawHeads {
+		if shouldSkip(head, p, existed) {
+			continue
+		}
 
-	objects = make([]*data.ObjectInfo, 0, p.MaxKeys)
+		var oi *data.ObjectInfo
+		if oi = tryDirectoryFromObject(p.Bucket, p.Prefix, p.Delimiter, *head); oi == nil {
+			oi = objectInfoFromMeta(p.Bucket, head)
+		}
 
-	for obj := range objOutCh {
-		objects = append(objects, obj)
+		objects = append(objects, oi)
 	}
 
 	slices.SortFunc(objects, func(a, b *data.ObjectInfo) int {
@@ -630,118 +818,8 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	return
 }
 
-func nodesGenerator(ctx context.Context, p allObjectParams, nodeVersions []*data.NodeVersion) <-chan *data.NodeVersion {
-	nodeCh := make(chan *data.NodeVersion)
-	existed := make(map[string]struct{}, len(nodeVersions)) // to squash the same directories
-
-	go func() {
-		var generated int
-	LOOP:
-		for _, node := range nodeVersions {
-			if shouldSkip(node, p, existed) {
-				continue
-			}
-
-			select {
-			case <-ctx.Done():
-				break LOOP
-			case nodeCh <- node:
-				generated++
-				if generated == p.MaxKeys+1 { // we use maxKeys+1 to be able to know nextMarker/nextContinuationToken
-					break LOOP
-				}
-			}
-		}
-		close(nodeCh)
-	}()
-
-	return nodeCh
-}
-
-func (n *layer) initWorkerPool(ctx context.Context, size int, p allObjectParams, input <-chan *data.NodeVersion) (<-chan *data.ObjectInfo, error) {
-	pool, err := ants.NewPool(size, ants.WithLogger(&logWrapper{n.log}))
-	if err != nil {
-		return nil, fmt.Errorf("coudln't init go pool for listing: %w", err)
-	}
-	objCh := make(chan *data.ObjectInfo)
-
-	go func() {
-		var wg sync.WaitGroup
-
-	LOOP:
-		for node := range input {
-			select {
-			case <-ctx.Done():
-				break LOOP
-			default:
-			}
-
-			// We have to make a copy of pointer to data.NodeVersion
-			// to get correct value in submitted task function.
-			func(node *data.NodeVersion) {
-				wg.Add(1)
-				err = pool.Submit(func() {
-					defer wg.Done()
-					oi := n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node, p.Prefix, p.Delimiter)
-					if oi == nil {
-						// try to get object again
-						if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, p.Bucket, node, p.Prefix, p.Delimiter); oi == nil {
-							// form object info with data that the tree node contains
-							oi = getPartialObjectInfo(p.Bucket, node)
-						}
-					}
-					select {
-					case <-ctx.Done():
-					case objCh <- oi:
-					}
-				})
-				if err != nil {
-					wg.Done()
-					n.log.Warn("failed to submit task to pool", zap.Error(err))
-				}
-			}(node)
-		}
-		wg.Wait()
-		close(objCh)
-		pool.Release()
-	}()
-
-	return objCh, nil
-}
-
-// getPartialObjectInfo form data.ObjectInfo using data available in data.NodeVersion.
-func getPartialObjectInfo(bktInfo *data.BucketInfo, node *data.NodeVersion) *data.ObjectInfo {
-	return &data.ObjectInfo{
-		ID:      node.OID,
-		CID:     bktInfo.CID,
-		Bucket:  bktInfo.Name,
-		Name:    node.FilePath,
-		Size:    node.Size,
-		HashSum: node.ETag,
-	}
-}
-
-func (n *layer) bucketNodeVersions(ctx context.Context, bkt *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
-	var err error
-
-	owner := n.Owner(ctx)
-	cacheKey := cache.CreateObjectsListCacheKey(bkt.CID, prefix, false)
-	nodeVersions := n.cache.GetList(owner, cacheKey)
-
-	if nodeVersions == nil {
-		nodeVersions, err = n.treeService.GetAllVersionsByPrefix(ctx, bkt, prefix)
-		if err != nil {
-			return nil, fmt.Errorf("get all versions from tree service: %w", err)
-		}
-
-		n.cache.PutList(owner, cacheKey, nodeVersions)
-	}
-
-	return nodeVersions, nil
-}
-
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string][]*data.ExtendedObjectInfo, error) {
-	nodeVersions, err := n.bucketNodeVersions(ctx, bkt, prefix)
+	nodeVersions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, prefix, false)
 	if err != nil {
 		return nil, err
 	}
@@ -751,21 +829,66 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 	for _, nodeVersion := range nodeVersions {
 		oi := &data.ObjectInfo{}
 
-		if nodeVersion.IsDeleteMarker() { // delete marker does not match any object in NeoFS
-			oi.ID = nodeVersion.OID
-			oi.Name = nodeVersion.FilePath
-			oi.Owner = nodeVersion.DeleteMarker.Owner
-			oi.Created = nodeVersion.DeleteMarker.Created
+		if isDeleteMarkerObject(*nodeVersion) {
+			oi.ID = nodeVersion.GetID()
+			oi.Name = filepathFromObject(nodeVersion)
+			oi.Size = int64(nodeVersion.PayloadSize())
+			if owner := nodeVersion.OwnerID(); owner != nil {
+				oi.Owner = *owner
+			}
+
+			for _, attr := range nodeVersion.Attributes() {
+				if attr.Key() == object.AttributeTimestamp {
+					ts, err := strconv.ParseInt(attr.Value(), 10, 64)
+					if err != nil {
+						return nil, err
+					}
+
+					oi.Created = time.Unix(ts, 0)
+					break
+				}
+			}
+
 			oi.IsDeleteMarker = true
 		} else {
-			if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, bkt, nodeVersion, prefix, delimiter); oi == nil {
+			nv := data.NodeVersion{
+				BaseNodeVersion: data.BaseNodeVersion{
+					OID:      nodeVersion.GetID(),
+					FilePath: prefix,
+				},
+			}
+
+			state := getS3VersioningState(*nodeVersion)
+			nv.IsUnversioned = state == data.VersioningUnversioned
+
+			if oi = n.objectInfoFromObjectsCacheOrNeoFS(ctx, bkt, &nv, prefix, delimiter); oi == nil {
 				continue
 			}
 		}
 
+		state := getS3VersioningState(*nodeVersion)
+
 		eoi := &data.ExtendedObjectInfo{
-			ObjectInfo:  oi,
-			NodeVersion: nodeVersion,
+			ObjectInfo: oi,
+			NodeVersion: &data.NodeVersion{
+				BaseNodeVersion: data.BaseNodeVersion{
+					ID:        0,
+					ParenID:   0,
+					OID:       oi.ID,
+					Timestamp: uint64(oi.Created.Unix()),
+					Size:      0,
+					ETag:      "",
+					FilePath:  oi.Name,
+				},
+				IsUnversioned: state == data.VersioningUnversioned,
+			},
+		}
+
+		if oi.IsDeleteMarker {
+			eoi.NodeVersion.DeleteMarker = &data.DeleteMarkerInfo{
+				Created: oi.Created,
+				Owner:   *nodeVersion.OwnerID(),
+			}
 		}
 
 		objVersions, ok := versions[oi.Name]
@@ -785,13 +908,13 @@ func IsSystemHeader(key string) bool {
 	return ok || strings.HasPrefix(key, api.NeoFSSystemMetadataPrefix)
 }
 
-func shouldSkip(node *data.NodeVersion, p allObjectParams, existed map[string]struct{}) bool {
-	if node.IsDeleteMarker() {
+func shouldSkip(head *object.Object, p allObjectParams, existed map[string]struct{}) bool {
+	if isDeleteMarkerObject(*head) {
 		return true
 	}
 
-	filePath := node.FilePath
-	if dirName := tryDirectoryName(node, p.Prefix, p.Delimiter); len(dirName) != 0 {
+	filePath := filePathFromAttributes(*head)
+	if dirName := tryDirectoryName(filePath, p.Prefix, p.Delimiter); len(dirName) != 0 {
 		filePath = dirName
 	}
 	if _, ok := existed[filePath]; ok {
@@ -804,7 +927,7 @@ func shouldSkip(node *data.NodeVersion, p allObjectParams, existed map[string]st
 
 	if p.ContinuationToken != "" {
 		if _, ok := existed[continuationToken]; !ok {
-			if p.ContinuationToken != node.OID.EncodeToString() {
+			if p.ContinuationToken != head.GetID().EncodeToString() {
 				return true
 			}
 			existed[continuationToken] = struct{}{}
@@ -862,7 +985,7 @@ func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *
 }
 
 func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, delimiter string) *data.ObjectInfo {
-	dirName := tryDirectoryName(node, prefix, delimiter)
+	dirName := tryDirectoryName(node.FilePath, prefix, delimiter)
 	if len(dirName) == 0 {
 		return nil
 	}
@@ -877,18 +1000,68 @@ func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, deli
 	}
 }
 
+func tryDirectoryFromObject(bktInfo *data.BucketInfo, prefix, delimiter string, head object.Object) *data.ObjectInfo {
+	nv := convert(head)
+
+	dirName := tryDirectoryName(nv.FilePath, prefix, delimiter)
+	if len(dirName) == 0 {
+		return nil
+	}
+
+	return &data.ObjectInfo{
+		ID:             nv.OID, // to use it as continuation token
+		CID:            bktInfo.CID,
+		IsDir:          true,
+		IsDeleteMarker: nv.IsDeleteMarker(),
+		Bucket:         bktInfo.Name,
+		Name:           dirName,
+	}
+}
+
 // tryDirectoryName forms directory name by prefix and delimiter.
 // If node isn't a directory empty string is returned.
 // This function doesn't check if node has a prefix. It must do a caller.
-func tryDirectoryName(node *data.NodeVersion, prefix, delimiter string) string {
+func tryDirectoryName(filePath string, prefix, delimiter string) string {
 	if len(delimiter) == 0 {
 		return ""
 	}
 
-	tail := strings.TrimPrefix(node.FilePath, prefix)
+	tail := strings.TrimPrefix(filePath, prefix)
 	index := strings.Index(tail, delimiter)
 	if index >= 0 {
 		return prefix + tail[:index+1]
+	}
+
+	return ""
+}
+
+func convert(head object.Object) data.NodeVersion {
+	nv := data.NodeVersion{
+		BaseNodeVersion: data.BaseNodeVersion{
+			OID: head.GetID(),
+		},
+	}
+
+	for _, attr := range head.Attributes() {
+		switch attr.Key() {
+		case object.AttributeFilePath:
+			nv.BaseNodeVersion.FilePath = attr.Value()
+		case attrS3DeleteMarker:
+			nv.DeleteMarker = &data.DeleteMarkerInfo{
+				Created: time.Time{},
+				Owner:   *head.OwnerID(),
+			}
+		}
+	}
+
+	return nv
+}
+
+func filePathFromAttributes(head object.Object) string {
+	for _, attr := range head.Attributes() {
+		if attr.Key() == object.AttributeFilePath {
+			return attr.Value()
+		}
 	}
 
 	return ""

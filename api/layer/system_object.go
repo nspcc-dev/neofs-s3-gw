@@ -6,17 +6,22 @@ import (
 	errorsStd "errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"go.uber.org/zap"
 )
 
 const (
-	AttributeComplianceMode = ".s3-compliance-mode"
+	AttributeComplianceMode     = ".s3-compliance-mode"
+	AttributeRetentionUntilMode = ".s3-retention-until"
+	AttributeObjectVersion      = ".s3-object-version"
 )
 
 type PutLockInfoParams struct {
@@ -38,7 +43,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		}
 	}
 
-	lockInfo, err := n.treeService.GetLock(ctx, p.ObjVersion.BktInfo, versionNode.ID)
+	lockInfo, err := n.getLockDataFromObjects(ctx, p.ObjVersion.BktInfo, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return err
 	}
@@ -68,7 +73,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 			}
 		}
 		lock := &data.ObjectLock{Retention: newLock.Retention}
-		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
+		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 		if err != nil {
 			return err
 		}
@@ -78,7 +83,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	if newLock.LegalHold != nil {
 		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
 			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber)
+			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 			if err != nil {
 				return err
 			}
@@ -88,13 +93,92 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		}
 	}
 
-	if err = n.treeService.PutLock(ctx, p.ObjVersion.BktInfo, versionNode.ID, lockInfo); err != nil {
-		return fmt.Errorf("couldn't put lock into tree: %w", err)
-	}
-
 	n.cache.PutLockInfo(n.Owner(ctx), lockObjectKey(p.ObjVersion), lockInfo)
 
 	return nil
+}
+
+func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo, objectName, version string) (*data.LockInfo, error) {
+	prmSearch := PrmObjectSearch{
+		Container: bkt.CID,
+		Filters:   make(object.SearchFilters, 0, 3),
+	}
+
+	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, bkt.Owner)
+	prmSearch.Filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
+	if version != "" {
+		prmSearch.Filters.AddFilter(AttributeObjectVersion, version, object.MatchStringEqual)
+	}
+
+	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	if err != nil {
+		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var (
+		heads = make([]*object.Object, 0, len(ids))
+		lock  data.LockInfo
+	)
+
+	for i := range ids {
+		head, err := n.objectHead(ctx, bkt, ids[i])
+		if err != nil {
+			n.log.Warn("couldn't head object",
+				zap.Stringer("oid", &ids[i]),
+				zap.Stringer("cid", bkt.CID),
+				zap.Error(err))
+
+			return nil, fmt.Errorf("couldn't head object: %w", err)
+		}
+
+		heads = append(heads, head)
+	}
+
+	slices.SortFunc(heads, sortObjectsFunc)
+	slices.Reverse(heads)
+
+	for _, head := range heads {
+		var (
+			expEpoch       uint64
+			isCompliance   bool
+			retentionUntil time.Time
+		)
+
+		for _, attr := range head.Attributes() {
+			switch attr.Key() {
+			case object.AttributeExpirationEpoch:
+				expEpoch, err = strconv.ParseUint(attr.Value(), 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("parse expiration epoch: %w", err)
+				}
+			case AttributeComplianceMode:
+				isCompliance = attr.Value() == "true"
+			case AttributeRetentionUntilMode:
+				retentionUntil, err = time.Parse(time.RFC3339, attr.Value())
+				if err != nil {
+					return nil, fmt.Errorf("parse retention until attribute: %w", err)
+				}
+			}
+		}
+
+		// legal hold.
+		if expEpoch == math.MaxUint64 {
+			lock.SetLegalHold(head.GetID())
+		} else {
+			lock.SetRetention(head.GetID(), retentionUntil.Format(time.RFC3339), isCompliance)
+		}
+	}
+
+	return &lock, nil
 }
 
 func (n *layer) getNodeVersionFromCacheOrNeofs(ctx context.Context, objVersion *ObjectVersion) (nodeVersion *data.NodeVersion, err error) {
@@ -108,19 +192,24 @@ func (n *layer) getNodeVersionFromCacheOrNeofs(ctx context.Context, objVersion *
 	return nodeVersion, nil
 }
 
-func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32) (oid.ID, error) {
+func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32, objectName, objectVersion string) (oid.ID, error) {
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
 		Locks:        []oid.ID{objID},
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: copiesNumber,
+		Filepath:     objectName,
 	}
 
 	var err error
 	prm.Attributes, err = n.attributesFromLock(ctx, lock)
 	if err != nil {
 		return oid.ID{}, err
+	}
+
+	if objectVersion != "" {
+		prm.Attributes[AttributeObjectVersion] = objectVersion
 	}
 
 	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
@@ -133,12 +222,7 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		return lockInfo, nil
 	}
 
-	versionNode, err := n.getNodeVersion(ctx, objVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	lockInfo, err := n.treeService.GetLock(ctx, objVersion.BktInfo, versionNode.ID)
+	lockInfo, err := n.getLockDataFromObjects(ctx, objVersion.BktInfo, objVersion.ObjectName, objVersion.VersionID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
@@ -146,7 +230,9 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 		lockInfo = &data.LockInfo{}
 	}
 
-	n.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
+	if !lockInfo.LegalHold().IsZero() || !lockInfo.Retention().IsZero() {
+		n.cache.PutLockInfo(owner, lockObjectKey(objVersion), lockInfo)
+	}
 
 	return lockInfo, nil
 }
@@ -228,6 +314,8 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 		if _, expEpoch, err = n.neoFS.TimeToEpoch(ctx, TimeNow(ctx), lock.Retention.Until); err != nil {
 			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
+
+		result[AttributeRetentionUntilMode] = lock.Retention.Until.UTC().Format(time.RFC3339)
 
 		if lock.Retention.IsCompliance {
 			result[AttributeComplianceMode] = "true"

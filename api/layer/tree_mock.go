@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -19,12 +18,6 @@ type TreeServiceMock struct {
 	tags       map[string]map[uint64]map[string]string
 	multiparts map[string]map[string][]*data.MultipartInfo
 	parts      map[string]map[int]*data.PartInfo
-}
-
-func (t *TreeServiceMock) GetObjectTaggingAndLock(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
-	// TODO implement object tagging
-	lock, err := t.GetLock(ctx, bktInfo, objVersion.ID)
-	return nil, lock, err
 }
 
 func (t *TreeServiceMock) GetObjectTagging(_ context.Context, bktInfo *data.BucketInfo, nodeVersion *data.NodeVersion) (map[string]string, error) {
@@ -157,31 +150,6 @@ func (t *TreeServiceMock) GetLatestVersion(_ context.Context, bktInfo *data.Buck
 	return nil, ErrNodeNotFound
 }
 
-func (t *TreeServiceMock) GetLatestVersionsByPrefix(_ context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	var result []*data.NodeVersion
-
-	for key, versions := range cnrVersionsMap {
-		if !strings.HasPrefix(key, prefix) {
-			continue
-		}
-
-		slices.SortFunc(versions, func(a, b *data.NodeVersion) int {
-			return cmp.Compare(a.ID, b.ID)
-		})
-
-		if len(versions) != 0 {
-			result = append(result, versions[len(versions)-1])
-		}
-	}
-
-	return result, nil
-}
-
 func (t *TreeServiceMock) GetUnversioned(_ context.Context, bktInfo *data.BucketInfo, objectName string) (*data.NodeVersion, error) {
 	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
 	if !ok {
@@ -240,40 +208,6 @@ func (t *TreeServiceMock) AddVersion(_ context.Context, bktInfo *data.BucketInfo
 	cnrVersionsMap[newVersion.FilePath] = append(result, newVersion)
 
 	return newVersion.ID, nil
-}
-
-func (t *TreeServiceMock) RemoveVersion(_ context.Context, bktInfo *data.BucketInfo, nodeID uint64) error {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return ErrNodeNotFound
-	}
-
-	for key, versions := range cnrVersionsMap {
-		for i, node := range versions {
-			if node.ID == nodeID {
-				cnrVersionsMap[key] = slices.Delete(versions, i, i+1)
-				return nil
-			}
-		}
-	}
-
-	return ErrNodeNotFound
-}
-
-func (t *TreeServiceMock) GetAllVersionsByPrefix(_ context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.NodeVersion, error) {
-	cnrVersionsMap, ok := t.versions[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, nil
-	}
-
-	var result []*data.NodeVersion
-	for objName, versions := range cnrVersionsMap {
-		if strings.HasPrefix(objName, prefix) {
-			result = append(result, versions...)
-		}
-	}
-
-	return result, nil
 }
 
 func (t *TreeServiceMock) CreateMultipartUpload(_ context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error) {
@@ -452,27 +386,4 @@ LOOP:
 
 	delete(t.parts, uploadID)
 	return nil
-}
-
-func (t *TreeServiceMock) PutLock(_ context.Context, bktInfo *data.BucketInfo, nodeID uint64, lock *data.LockInfo) error {
-	cnrLockMap, ok := t.locks[bktInfo.CID.EncodeToString()]
-	if !ok {
-		t.locks[bktInfo.CID.EncodeToString()] = map[uint64]*data.LockInfo{
-			nodeID: lock,
-		}
-		return nil
-	}
-
-	cnrLockMap[nodeID] = lock
-
-	return nil
-}
-
-func (t *TreeServiceMock) GetLock(_ context.Context, bktInfo *data.BucketInfo, nodeID uint64) (*data.LockInfo, error) {
-	cnrLockMap, ok := t.locks[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, nil
-	}
-
-	return cnrLockMap[nodeID], nil
 }

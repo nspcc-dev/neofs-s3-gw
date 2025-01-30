@@ -152,6 +152,27 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		p.ObjVersion.VersionID = ei.ObjectInfo.VersionID()
+	}
+
 	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't head put legal hold", reqInfo, err)
 		return
@@ -231,6 +252,27 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		p.ObjVersion.VersionID = ei.ObjectInfo.VersionID()
+	}
+
 	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
 		h.logAndSendError(w, "couldn't put legal hold", reqInfo, err)
 		return
@@ -252,10 +294,31 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
 	p := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
+	}
+
+	if settings.VersioningEnabled() && p.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		p.VersionID = ei.ObjectInfo.VersionID()
 	}
 
 	lockInfo, err := h.obj.GetLockInfo(r.Context(), p)
