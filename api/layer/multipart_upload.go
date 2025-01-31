@@ -952,7 +952,12 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		CopiesNumber: multipartInfo.CopiesNumber,
 	}
 
-	header, err := n.prepareMultipartHeadObject(ctx, prmHeaderObject, multipartHash, homoHash, uint64(multipartObjetSize))
+	bktSettings, err := n.GetBucketSettings(ctx, p.Info.Bkt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
+	}
+
+	header, err := n.prepareMultipartHeadObject(ctx, prmHeaderObject, multipartHash, homoHash, uint64(multipartObjetSize), bktSettings.VersioningEnabled())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1006,11 +1011,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	_, err = n.multipartObjectPut(ctx, prm, p.Info.Bkt)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	bktSettings, err := n.GetBucketSettings(ctx, p.Info.Bkt)
-	if err != nil {
-		return nil, nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
 	}
 
 	headerObjectID, _ := header.ID()
