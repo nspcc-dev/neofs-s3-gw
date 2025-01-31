@@ -318,7 +318,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	return extendedObjInfo, nil
 }
 
-func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectParams, payloadHash hash.Hash, homoHash hash.Hash, payloadLength uint64) (*object.Object, error) {
+func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectParams, payloadHash hash.Hash, homoHash hash.Hash, payloadLength uint64, versioningEnabled bool) (*object.Object, error) {
 	var (
 		err   error
 		owner = n.Owner(ctx)
@@ -362,6 +362,10 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 
 	if p.Object != "" {
 		attributes = append(attributes, *object.NewAttribute(object.AttributeFilePath, p.Object))
+	}
+
+	if versioningEnabled {
+		attributes = append(attributes, *object.NewAttribute(attrS3VersioningState, data.VersioningEnabled))
 	}
 
 	headerObject.SetAttributes(attributes...)
