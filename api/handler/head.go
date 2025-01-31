@@ -75,6 +75,16 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID:  info.VersionID(),
 	}
 
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if !bktSettings.VersioningEnabled() {
+		t.VersionID = ""
+	}
+
 	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
 	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
@@ -100,12 +110,6 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err = h.setLockingHeaders(bktInfo, lockInfo, w.Header()); err != nil {
 		h.logAndSendError(w, "could not get locking info", reqInfo, err)
-		return
-	}
-
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 

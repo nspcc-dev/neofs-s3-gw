@@ -45,10 +45,31 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 		},
-		TagSet: tagSet,
+		TagSet:       tagSet,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
-	nodeVersion, err := h.obj.PutObjectTagging(r.Context(), tagPrm)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if settings.VersioningEnabled() && tagPrm.ObjectVersion.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		tagPrm.ObjectVersion.VersionID = ei.ObjectInfo.VersionID()
+	}
+
+	if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}
@@ -56,10 +77,7 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	s := &SendNotificationParams{
 		Event: EventObjectTaggingPut,
 		NotificationInfo: &data.NotificationInfo{
-			Name:    nodeVersion.FilePath,
-			Size:    nodeVersion.Size,
-			Version: nodeVersion.OID.EncodeToString(),
-			HashSum: nodeVersion.ETag,
+			Name: reqInfo.ObjectName,
 		},
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,
@@ -94,6 +112,21 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		},
 	}
 
+	if settings.VersioningEnabled() && tagPrm.ObjectVersion.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		tagPrm.ObjectVersion.VersionID = ei.ObjectInfo.VersionID()
+	}
+
 	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), tagPrm)
 	if err != nil {
 		h.logAndSendError(w, "could not get object tagging", reqInfo, err)
@@ -123,8 +156,28 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	nodeVersion, err := h.obj.DeleteObjectTagging(r.Context(), p)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	if settings.VersioningEnabled() && p.VersionID == "" {
+		headObjectPrm := &layer.HeadObjectParams{
+			BktInfo: bktInfo,
+			Object:  reqInfo.ObjectName,
+		}
+
+		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		p.VersionID = ei.ObjectInfo.VersionID()
+	}
+
+	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
 	}
@@ -132,10 +185,7 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 	s := &SendNotificationParams{
 		Event: EventObjectTaggingDelete,
 		NotificationInfo: &data.NotificationInfo{
-			Name:    nodeVersion.FilePath,
-			Size:    nodeVersion.Size,
-			Version: nodeVersion.OID.EncodeToString(),
-			HashSum: nodeVersion.ETag,
+			Name: reqInfo.ObjectName,
 		},
 		BktInfo: bktInfo,
 		ReqInfo: reqInfo,

@@ -271,9 +271,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 
 	newVersion.OID = id
 	newVersion.ETag = hex.EncodeToString(hash)
-	if newVersion.ID, err = n.treeService.AddVersion(ctx, p.BktInfo, newVersion); err != nil {
-		return nil, fmt.Errorf("couldn't add new verion to tree service: %w", err)
-	}
 
 	if p.Lock != nil && (p.Lock.Retention != nil || p.Lock.LegalHold != nil) {
 		putLockInfoPrms := &PutLockInfoParams{
@@ -283,7 +280,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			},
 			NewLock:      p.Lock,
 			CopiesNumber: p.CopiesNumber,
-			NodeVersion:  newVersion, // provide new version to make one less tree service call in PutLockInfo
 		}
 
 		if bktSettings.VersioningEnabled() {
@@ -414,11 +410,12 @@ func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.Bucke
 func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]*object.Object, error) {
 	prmSearch := PrmObjectSearch{
 		Container: bkt.CID,
-		Filters:   make(object.SearchFilters, 0, 3),
+		Filters:   make(object.SearchFilters, 0, 4),
 	}
 
 	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, owner)
 	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	prmSearch.Filters.AddFilter(attributeTagsMetaObject, "", object.MatchNotPresent)
 
 	if len(objectName) > 0 {
 		prmSearch.Filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
@@ -437,11 +434,12 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]*object.Object, error) {
 	prmSearch := PrmObjectSearch{
 		Container: bkt.CID,
-		Filters:   make(object.SearchFilters, 0, 3),
+		Filters:   make(object.SearchFilters, 0, 4),
 	}
 
 	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, owner)
 	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	prmSearch.Filters.AddFilter(attributeTagsMetaObject, "", object.MatchNotPresent)
 
 	if len(prefix) > 0 {
 		prmSearch.Filters.AddFilter(object.AttributeFilePath, prefix, object.MatchCommonPrefix)

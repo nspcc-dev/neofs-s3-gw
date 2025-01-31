@@ -1,15 +1,18 @@
 package layer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	errorsStd "errors"
+	"fmt"
+	"slices"
 
-	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"go.uber.org/zap"
 )
 
@@ -24,8 +27,47 @@ type PutObjectTaggingParams struct {
 	ObjectVersion *ObjectVersion
 	TagSet        map[string]string
 
+	CopiesNumber uint32
+
 	// NodeVersion can be nil. If not nil we save one request to tree service.
 	NodeVersion *data.NodeVersion // optional
+}
+
+const (
+	attributeTagsMetaObject      = ".s3-tags-meta-object"
+	attributeTagsMetaObjectValue = "true"
+)
+
+func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) error {
+	payload, err := json.Marshal(p.TagSet)
+	if err != nil {
+		return fmt.Errorf("could not marshal tag set: %w", err)
+	}
+
+	prm := PrmObjectCreate{
+		Container:    p.ObjectVersion.BktInfo.CID,
+		Creator:      p.ObjectVersion.BktInfo.Owner,
+		CreationTime: TimeNow(ctx),
+		CopiesNumber: p.CopiesNumber,
+		Filepath:     p.ObjectVersion.ObjectName,
+		Attributes:   make(map[string]string, 2),
+		Payload:      bytes.NewBuffer(payload),
+		PayloadSize:  uint64(len(payload)),
+	}
+
+	if p.ObjectVersion.VersionID != "" {
+		prm.Attributes[AttributeObjectVersion] = p.ObjectVersion.VersionID
+	}
+
+	prm.Attributes[attributeTagsMetaObject] = attributeTagsMetaObjectValue
+
+	if _, _, err = n.objectPutAndHash(ctx, prm, p.ObjectVersion.BktInfo); err != nil {
+		return fmt.Errorf("create tagging object: %w", err)
+	}
+
+	n.cache.PutTagging(n.Owner(ctx), objectTaggingCacheKey(p.ObjectVersion), p.TagSet)
+
+	return nil
 }
 
 func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams) (string, map[string]string, error) {
@@ -38,74 +80,100 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		}
 	}
 
-	nodeVersion := p.NodeVersion
-	if nodeVersion == nil {
-		nodeVersion, err = n.getNodeVersionFromCacheOrNeofs(ctx, p.ObjectVersion)
-		if err != nil {
-			return "", nil, err
-		}
-	}
-	p.ObjectVersion.VersionID = nodeVersion.OID.EncodeToString()
-
-	if tags := n.cache.GetTagging(owner, objectTaggingCacheKey(p.ObjectVersion)); tags != nil {
-		return p.ObjectVersion.VersionID, tags, nil
+	prmSearch := PrmObjectSearch{
+		Container: p.ObjectVersion.BktInfo.CID,
+		Filters:   make(object.SearchFilters, 0, 3),
 	}
 
-	tags, err := n.treeService.GetObjectTagging(ctx, p.ObjectVersion.BktInfo, nodeVersion)
+	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, p.ObjectVersion.BktInfo.Owner)
+	prmSearch.Filters.AddFilter(object.AttributeFilePath, p.ObjectVersion.ObjectName, object.MatchStringEqual)
+	prmSearch.Filters.AddFilter(attributeTagsMetaObject, attributeTagsMetaObjectValue, object.MatchStringEqual)
+	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	if p.ObjectVersion.VersionID != "" {
+		prmSearch.Filters.AddFilter(AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
+	}
+
+	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
 	if err != nil {
-		if errorsStd.Is(err, ErrNodeNotFound) {
-			return "", nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
+			return "", nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
-		return "", nil, err
+
+		return "", nil, fmt.Errorf("search object version: %w", err)
 	}
 
-	n.cache.PutTagging(owner, objectTaggingCacheKey(p.ObjectVersion), tags)
+	if len(ids) == 0 {
+		return "", nil, nil
+	}
+
+	var (
+		objects = make([]*object.Object, 0, len(ids))
+	)
+
+	for i := range ids {
+		obj, err := n.objectGet(ctx, p.ObjectVersion.BktInfo, ids[i])
+		if err != nil {
+			n.log.Warn("couldn't obj object",
+				zap.Stringer("oid", &ids[i]),
+				zap.Stringer("cid", p.ObjectVersion.BktInfo.CID),
+				zap.Error(err))
+
+			return "", nil, fmt.Errorf("couldn't obj object: %w", err)
+		}
+
+		objects = append(objects, obj)
+	}
+
+	slices.SortFunc(objects, sortObjectsFunc)
+
+	var (
+		lastObj = objects[0]
+		tags    = make(map[string]string)
+	)
+
+	if err = json.Unmarshal(lastObj.Payload(), &tags); err != nil {
+		return "", nil, fmt.Errorf("couldn't unmarshal last object: %w", err)
+	}
 
 	return p.ObjectVersion.VersionID, tags, nil
 }
 
-func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) (nodeVersion *data.NodeVersion, err error) {
-	nodeVersion = p.NodeVersion
-	if nodeVersion == nil {
-		nodeVersion, err = n.getNodeVersionFromCacheOrNeofs(ctx, p.ObjectVersion)
-		if err != nil {
-			return nil, err
+func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
+	prmSearch := PrmObjectSearch{
+		Container: p.BktInfo.CID,
+		Filters:   make(object.SearchFilters, 0, 3),
+	}
+
+	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, p.BktInfo.Owner)
+	prmSearch.Filters.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
+	prmSearch.Filters.AddFilter(attributeTagsMetaObject, "true", object.MatchStringEqual)
+	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	if p.VersionID != "" {
+		prmSearch.Filters.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+	}
+
+	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	if err != nil {
+		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
+			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(ids) == 0 {
+		return nil
+	}
+
+	for _, id := range ids {
+		if err = n.objectDelete(ctx, p.BktInfo, id); err != nil {
+			return fmt.Errorf("couldn't delete object: %w", err)
 		}
 	}
-	p.ObjectVersion.VersionID = nodeVersion.OID.EncodeToString()
-
-	err = n.treeService.PutObjectTagging(ctx, p.ObjectVersion.BktInfo, nodeVersion, p.TagSet)
-	if err != nil {
-		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-		}
-		return nil, err
-	}
-
-	n.cache.PutTagging(n.Owner(ctx), objectTaggingCacheKey(p.ObjectVersion), p.TagSet)
-
-	return nodeVersion, nil
-}
-
-func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) (*data.NodeVersion, error) {
-	version, err := n.getNodeVersion(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-
-	err = n.treeService.DeleteObjectTagging(ctx, p.BktInfo, version)
-	if err != nil {
-		if errorsStd.Is(err, ErrNodeNotFound) {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-		}
-		return nil, err
-	}
-
-	p.VersionID = version.OID.EncodeToString()
 
 	n.cache.DeleteTagging(objectTaggingCacheKey(p))
 
-	return version, nil
+	return nil
 }
 
 func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
@@ -155,65 +223,4 @@ func objectTaggingCacheKey(p *ObjectVersion) string {
 
 func bucketTaggingCacheKey(cnrID cid.ID) string {
 	return ".tagset." + cnrID.EncodeToString()
-}
-
-func (n *layer) getNodeVersion(ctx context.Context, objVersion *ObjectVersion) (*data.NodeVersion, error) {
-	var err error
-	var version *data.NodeVersion
-
-	if objVersion.VersionID == data.UnversionedObjectVersionID {
-		version, err = n.treeService.GetUnversioned(ctx, objVersion.BktInfo, objVersion.ObjectName)
-	} else if len(objVersion.VersionID) == 0 {
-		version, err = n.treeService.GetLatestVersion(ctx, objVersion.BktInfo, objVersion.ObjectName)
-	} else {
-		versions, err2 := n.treeService.GetVersions(ctx, objVersion.BktInfo, objVersion.ObjectName)
-		if err2 != nil {
-			return nil, err2
-		}
-		for _, v := range versions {
-			if v.OID.EncodeToString() == objVersion.VersionID {
-				version = v
-				break
-			}
-		}
-		if version == nil {
-			err = s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-		}
-	}
-
-	if err == nil && version.IsDeleteMarker() && !objVersion.NoErrorOnDeleteMarker || errorsStd.Is(err, ErrNodeNotFound) {
-		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-	}
-
-	if err == nil && version != nil && !version.IsDeleteMarker() {
-		reqInfo := api.GetReqInfo(ctx)
-		n.log.Debug("target details",
-			zap.String("reqId", reqInfo.RequestID),
-			zap.String("bucket", objVersion.BktInfo.Name), zap.Stringer("cid", objVersion.BktInfo.CID),
-			zap.String("object", objVersion.ObjectName), zap.Stringer("oid", version.OID))
-	}
-
-	return version, err
-}
-
-func (n *layer) getNodeVersionFromCache(owner user.ID, o *ObjectVersion) *data.NodeVersion {
-	if len(o.VersionID) == 0 || o.VersionID == data.UnversionedObjectVersionID {
-		return nil
-	}
-
-	var objID oid.ID
-	if objID.DecodeString(o.VersionID) != nil {
-		return nil
-	}
-
-	var addr oid.Address
-	addr.SetContainer(o.BktInfo.CID)
-	addr.SetObject(objID)
-
-	extObjectInfo := n.cache.GetObject(owner, addr)
-	if extObjectInfo == nil {
-		return nil
-	}
-
-	return extObjectInfo.NodeVersion
 }

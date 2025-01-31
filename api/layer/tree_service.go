@@ -44,18 +44,9 @@ type TreeService interface {
 	// If object id to remove is not found returns ErrNoNodeToRemove error.
 	DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error)
 
-	GetObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) (map[string]string, error)
-	PutObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion, tagSet map[string]string) error
-	DeleteObjectTagging(ctx context.Context, bktInfo *data.BucketInfo, objVersion *data.NodeVersion) error
-
 	GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
 	PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
 	DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
-
-	GetVersions(ctx context.Context, bktInfo *data.BucketInfo, objectName string) ([]*data.NodeVersion, error)
-	GetLatestVersion(ctx context.Context, bktInfo *data.BucketInfo, objectName string) (*data.NodeVersion, error)
-	GetUnversioned(ctx context.Context, bktInfo *data.BucketInfo, objectName string) (*data.NodeVersion, error)
-	AddVersion(ctx context.Context, bktInfo *data.BucketInfo, newVersion *data.NodeVersion) (uint64, error)
 
 	CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error)
 	DeleteMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error

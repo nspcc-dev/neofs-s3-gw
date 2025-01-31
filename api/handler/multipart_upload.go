@@ -433,10 +433,11 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
 			},
-			TagSet:      uploadData.TagSet,
-			NodeVersion: extendedObjInfo.NodeVersion,
+			TagSet:       uploadData.TagSet,
+			NodeVersion:  extendedObjInfo.NodeVersion,
+			CopiesNumber: h.cfg.CopiesNumber,
 		}
-		if _, err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
+		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
 			return
 		}

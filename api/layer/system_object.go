@@ -33,15 +33,6 @@ type PutLockInfoParams struct {
 
 func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err error) {
 	newLock := p.NewLock
-	versionNode := p.NodeVersion
-	// sometimes node version can be provided from executing context
-	// if not, then receive node version from tree service
-	if versionNode == nil {
-		versionNode, err = n.getNodeVersionFromCacheOrNeofs(ctx, p.ObjVersion)
-		if err != nil {
-			return err
-		}
-	}
 
 	lockInfo, err := n.getLockDataFromObjects(ctx, p.ObjVersion.BktInfo, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
@@ -51,6 +42,13 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	if lockInfo == nil {
 		lockInfo = &data.LockInfo{}
 	}
+
+	objList, err := n.searchAllVersionsInNeoFS(ctx, p.ObjVersion.BktInfo, p.ObjVersion.BktInfo.Owner, p.ObjVersion.ObjectName, p.ObjVersion.VersionID == "")
+	if err != nil {
+		return err
+	}
+
+	objectToLock := objList[0].GetID()
 
 	if newLock.Retention != nil {
 		if lockInfo.IsRetentionSet() {
@@ -73,7 +71,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 			}
 		}
 		lock := &data.ObjectLock{Retention: newLock.Retention}
-		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
+		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 		if err != nil {
 			return err
 		}
@@ -83,7 +81,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	if newLock.LegalHold != nil {
 		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
 			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, versionNode.OID, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
+			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 			if err != nil {
 				return err
 			}
@@ -179,17 +177,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	}
 
 	return &lock, nil
-}
-
-func (n *layer) getNodeVersionFromCacheOrNeofs(ctx context.Context, objVersion *ObjectVersion) (nodeVersion *data.NodeVersion, err error) {
-	// check cache if node version is stored inside extendedObjectVersion
-	nodeVersion = n.getNodeVersionFromCache(n.Owner(ctx), objVersion)
-	if nodeVersion == nil {
-		// else get node version from tree service
-		return n.getNodeVersion(ctx, objVersion)
-	}
-
-	return nodeVersion, nil
 }
 
 func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32, objectName, objectVersion string) (oid.ID, error) {
