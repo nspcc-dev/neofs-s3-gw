@@ -969,20 +969,22 @@ func getParentResource(parent *ast, resource *astResource) *astResource {
 }
 
 func astToTable(ast *ast) (*eacl.Table, error) {
-	table := eacl.NewTable()
+	var records []eacl.Record
 
 	for i := len(ast.Resources) - 1; i >= 0; i-- {
-		records, err := formRecords(ast.Resources[i])
+		recs, err := formRecords(ast.Resources[i])
 		if err != nil {
 			return nil, fmt.Errorf("form records: %w", err)
 		}
 
-		for _, rec := range records {
-			table.AddRecord(rec)
+		for _, rec := range recs {
+			records = append(records, *rec)
 		}
 	}
 
-	return table, nil
+	table := eacl.ConstructTable(records)
+
+	return &table, nil
 }
 
 func tryServiceRecord(record eacl.Record) *ServiceRecord {
@@ -1041,21 +1043,21 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 			}
 		}
 
-		record := eacl.NewRecord()
-		record.SetOperation(astOp.Op)
-		record.SetAction(astOp.Action)
+		record := eacl.ConstructRecord(astOp.Action, astOp.Op, []eacl.Target{})
 		if astOp.IsGroupGrantee() {
-			eacl.AddFormedTarget(record, eacl.RoleOthers)
+			record.SetTargets(eacl.NewTargetByRole(eacl.RoleOthers))
 		} else {
-			t := eacl.NewTarget()
-			// Unknown role is used, because it is ignored when accounts are set
-			t.SetRole(eacl.RoleUnknown)
-			t.SetAccounts(astOp.Users)
+			t := eacl.NewTargetByAccounts(astOp.Users)
 
-			record.SetTargets(*t)
+			record.SetTargets(t)
 		}
+
+		var filters []eacl.Filter
 		if len(resource.Object) != 0 {
-			record.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resource.Object)
+			filters = append(
+				filters,
+				eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, resource.Object),
+			)
 		}
 
 		if len(resource.Version) != 0 {
@@ -1063,9 +1065,13 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 			if err := id.DecodeString(resource.Version); err != nil {
 				return nil, fmt.Errorf("parse object version (oid): %w", err)
 			}
-			record.AddObjectIDFilter(eacl.MatchStringEqual, id)
+
+			filters = append(filters, eacl.NewFilterObjectWithID(id))
 		}
-		res = append(res, record)
+
+		record.SetFilters(filters)
+
+		res = append(res, &record)
 	}
 
 	return res, nil
@@ -1640,7 +1646,7 @@ func contains(list []eacl.Operation, op eacl.Operation) bool {
 
 func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	var found bool
-	table := eacl.NewTable()
+	var records []eacl.Record
 
 	for _, grant := range acp.AccessControlList {
 		if !isValidGrant(grant) {
@@ -1667,7 +1673,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		}
 
 		for _, op := range permissionToOperations(grant.Permission) {
-			table.AddRecord(recordFromOp(op))
+			records = append(records, *recordFromOp(op))
 		}
 	}
 
@@ -1678,18 +1684,20 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 				if err != nil {
 					return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 				}
-				table.AddRecord(getAllowRecordWithUser(op, account))
+				records = append(records, *getAllowRecordWithUser(op, account))
 			}
 		}
 	}
 
 	for _, op := range fullOps {
-		table.AddRecord(getOthersRecord(op, eacl.ActionDeny))
+		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
 
-	table.AddRecord(BucketOwnerEnforcedRecord())
+	records = append(records, *BucketOwnerEnforcedRecord())
 
-	return table, nil
+	table := eacl.ConstructTable(records)
+
+	return &table, nil
 }
 
 func isValidGrant(grant *Grant) bool {
@@ -1698,43 +1706,33 @@ func isValidGrant(grant *Grant) bool {
 }
 
 func getAllowRecordWithUser(op eacl.Operation, acc user.ID) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(eacl.ActionAllow)
+	record := eacl.ConstructRecord(eacl.ActionAllow, op,
+		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{acc})},
+	)
 
-	t := eacl.NewTarget()
-	// Unknown role is used, because it is ignored when accounts are set
-	t.SetRole(eacl.RoleUnknown)
-	t.SetAccounts([]user.ID{acc})
-
-	record.SetTargets(*t)
-
-	return record
+	return &record
 }
 
 func getOthersRecord(op eacl.Operation, action eacl.Action) *eacl.Record {
-	record := eacl.NewRecord()
-	record.SetOperation(op)
-	record.SetAction(action)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	return record
+	record := eacl.ConstructRecord(action, op,
+		[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+	)
+
+	return &record
 }
 
 // BucketOwnerEnforcedRecord generates special marker record for OwnerEnforced policy.
 func BucketOwnerEnforcedRecord() *eacl.Record {
-	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
-	markerRecord.AddFilter(
-		eacl.HeaderFromRequest,
-		eacl.MatchStringNotEqual,
-		amzBucketOwnerField,
-		amzBucketOwnerEnforced,
+	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
+		[]eacl.Target{
+			eacl.NewTargetByAccounts([]user.ID{ownerEnforcedUserID}),
+		},
+		[]eacl.Filter{
+			eacl.ConstructFilter(eacl.HeaderFromRequest, amzBucketOwnerField, eacl.MatchStringNotEqual, amzBucketOwnerEnforced),
+		}...,
 	)
 
-	t := eacl.NewTarget()
-	t.SetAccounts([]user.ID{ownerEnforcedUserID})
-	markerRecord.SetTargets(*t)
-
-	return markerRecord
+	return &markerRecord
 }
 
 func isValidOwnerEnforced(r *http.Request) bool {
@@ -1754,19 +1752,14 @@ func isValidOwnerEnforced(r *http.Request) bool {
 
 // BucketACLObjectWriterRecord generates special marker record for OwnerWriter policy.
 func BucketACLObjectWriterRecord() *eacl.Record {
-	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
-	markerRecord.AddFilter(
-		eacl.HeaderFromRequest,
-		eacl.MatchStringNotEqual,
-		amzBucketOwnerField,
-		amzBucketOwnerObjectWriter,
+	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
+		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{ownerObjectWriterUserID})},
+		[]eacl.Filter{
+			eacl.ConstructFilter(eacl.HeaderFromRequest, amzBucketOwnerField, eacl.MatchStringNotEqual, amzBucketOwnerObjectWriter),
+		}...,
 	)
 
-	t := eacl.NewTarget()
-	t.SetAccounts([]user.ID{ownerObjectWriterUserID})
-	markerRecord.SetTargets(*t)
-
-	return markerRecord
+	return &markerRecord
 }
 
 // IsBucketOwnerForced checks special marker record for OwnerForced policy.
@@ -1795,19 +1788,14 @@ func IsBucketOwnerForced(table *eacl.Table) bool {
 
 // BucketOwnerPreferredRecord generates special marker record for OwnerPreferred policy.
 func BucketOwnerPreferredRecord() *eacl.Record {
-	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
-	markerRecord.AddFilter(
-		eacl.HeaderFromRequest,
-		eacl.MatchStringNotEqual,
-		amzBucketOwnerField,
-		amzBucketOwnerPreferred,
+	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
+		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{ownerPreferredUserID})},
+		[]eacl.Filter{
+			eacl.ConstructFilter(eacl.HeaderFromRequest, amzBucketOwnerField, eacl.MatchStringNotEqual, amzBucketOwnerPreferred),
+		}...,
 	)
 
-	t := eacl.NewTarget()
-	t.SetAccounts([]user.ID{ownerPreferredUserID})
-	markerRecord.SetTargets(*t)
-
-	return markerRecord
+	return &markerRecord
 }
 
 // IsBucketOwnerPreferred checks special marker record for OwnerPreferred policy.
@@ -1836,19 +1824,14 @@ func IsBucketOwnerPreferred(table *eacl.Table) bool {
 
 // BucketOwnerPreferredRecord generates special marker record for OwnerPreferred policy and sets flag for bucket owner full control acl restriction.
 func BucketOwnerPreferredAndRestrictedRecord() *eacl.Record {
-	var markerRecord = eacl.CreateRecord(eacl.ActionDeny, eacl.OperationPut)
-	markerRecord.AddFilter(
-		eacl.HeaderFromObject,
-		eacl.MatchStringEqual,
-		amzBucketOwnerField,
-		cannedACLBucketOwnerFullControl,
+	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
+		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{ownerPreferredAndRestrictedUserID})},
+		[]eacl.Filter{
+			eacl.ConstructFilter(eacl.HeaderFromObject, amzBucketOwnerField, eacl.MatchStringEqual, cannedACLBucketOwnerFullControl),
+		}...,
 	)
 
-	t := eacl.NewTarget()
-	t.SetAccounts([]user.ID{ownerPreferredAndRestrictedUserID})
-	markerRecord.SetTargets(*t)
-
-	return markerRecord
+	return &markerRecord
 }
 
 // IsBucketOwnerPreferredAndRestricted checks special marker record and check ALC bucket owner full control flag for OwnerPreferred policy.

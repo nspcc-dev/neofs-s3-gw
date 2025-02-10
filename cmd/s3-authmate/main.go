@@ -739,27 +739,24 @@ func resetBucketEACL() *cli.Command {
 			var (
 				newEACLTable eacl.Table
 				targetOwner  eacl.Target
+				records      []eacl.Record
 			)
 
 			newEACLTable.SetCID(containerID)
 			targetOwner.SetAccounts([]user.ID{or.BearerToken.Issuer()})
 
 			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-				record := eacl.NewRecord()
-				record.SetOperation(op)
-				record.SetAction(eacl.ActionAllow)
-				record.SetTargets(targetOwner)
-
-				newEACLTable.AddRecord(record)
+				records = append(records,
+					eacl.ConstructRecord(eacl.ActionAllow, op, []eacl.Target{targetOwner}),
+				)
 			}
 
 			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-				record := eacl.NewRecord()
-				record.SetOperation(op)
-				record.SetAction(eacl.ActionDeny)
-				eacl.AddFormedTarget(record, eacl.RoleOthers)
+				record := eacl.ConstructRecord(eacl.ActionDeny, op,
+					[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+				)
 
-				newEACLTable.AddRecord(record)
+				records = append(records, record)
 			}
 
 			oldEacl, err := neoFS.ContainerEACL(ctx, containerID)
@@ -768,16 +765,18 @@ func resetBucketEACL() *cli.Command {
 			}
 
 			if handler.IsBucketOwnerForced(oldEacl) {
-				newEACLTable.AddRecord(handler.BucketOwnerEnforcedRecord())
+				records = append(records, *handler.BucketOwnerEnforcedRecord())
 			}
 
 			if handler.IsBucketOwnerPreferred(oldEacl) {
-				newEACLTable.AddRecord(handler.BucketOwnerPreferredRecord())
+				records = append(records, *handler.BucketOwnerPreferredRecord())
 			}
 
 			if handler.IsBucketOwnerPreferredAndRestricted(oldEacl) {
-				newEACLTable.AddRecord(handler.BucketOwnerPreferredAndRestrictedRecord())
+				records = append(records, *handler.BucketOwnerPreferredAndRestrictedRecord())
 			}
+
+			newEACLTable.SetRecords(records)
 
 			if applyFlag {
 				var tcancel context.CancelFunc
