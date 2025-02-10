@@ -87,7 +87,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if settingsSrc.VersioningEnabled() && srcObjPrm.VersionID == "" {
 		headObjectPrm := &layer.HeadObjectParams{
 			BktInfo: srcObjPrm.BktInfo,
-			Object:  reqInfo.ObjectName,
+			Object:  srcObject,
 		}
 
 		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
