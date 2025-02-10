@@ -1196,8 +1196,7 @@ func TestObjectAclToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	var objID oid.ID
-	objID.SetSHA256(sha256.Sum256(b))
+	var objID oid.ID = sha256.Sum256(b)
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -1274,8 +1273,6 @@ func TestBucketAclToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	var objID oid.ID
-	objID.SetSHA256(sha256.Sum256(b))
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
