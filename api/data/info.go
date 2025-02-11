@@ -93,7 +93,7 @@ type (
 
 	// CORSConfiguration stores CORS configuration of a request.
 	CORSConfiguration struct {
-		XMLName   xml.Name   `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CORSConfiguration" json:"-"`
+		XMLName   xml.Name   `xml:"CORSConfiguration" json:"-"`
 		CORSRules []CORSRule `xml:"CORSRule" json:"CORSRules"`
 	}
 

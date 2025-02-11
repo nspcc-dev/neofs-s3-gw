@@ -26,7 +26,7 @@ type (
 	}
 
 	NotificationConfiguration struct {
-		XMLName                   xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ NotificationConfiguation"`
+		XMLName                   xml.Name `xml:"NotificationConfiguation"`
 		NotificationConfiguration data.NotificationConfiguration
 	}
 )

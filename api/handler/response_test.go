@@ -14,7 +14,7 @@ func TestAccessControlPolicyXML(t *testing.T) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html
 	var policyTemplate = `
 <?xml version="1.0" encoding="UTF-8"?>
-<AccessControlPolicy xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+<AccessControlPolicy>
   <Owner>
     <ID>%[1]s</ID>
     <DisplayName>display-name</DisplayName>

@@ -1525,12 +1525,12 @@ func permissionToOperations(permission amazonS3Permission) []eacl.Operation {
 	return nil
 }
 
-func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicy {
+func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, objectVersion string) *AccessControlPolicyResponse {
 	ownerGrantee := NewGrantee(granteeCanonicalUser)
 	ownerGrantee.ID = bucketACL.Info.Owner.String()
 	ownerGrantee.DisplayName = bucketACL.Info.Owner.String()
 
-	res := &AccessControlPolicy{
+	res := &AccessControlPolicyResponse{
 		Owner: Owner{
 			ID:          bucketACL.Info.Owner.String(),
 			DisplayName: bucketACL.Info.Owner.String(),
@@ -1631,7 +1631,7 @@ func generateGrant(key string, bucketACL *layer.BucketACL, permission amazonS3Pe
 	}
 }
 
-func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicy {
+func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicyResponse {
 	return encodeObjectACL(h.log, bucketACL, bucketName, "")
 }
 
