@@ -10,6 +10,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -139,20 +140,20 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 }
 
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
-	prmSearch := PrmObjectSearch{
-		Container: p.BktInfo.CID,
-		Filters:   make(object.SearchFilters, 0, 3),
-	}
-
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, p.BktInfo.Owner)
-	prmSearch.Filters.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
-	prmSearch.Filters.AddFilter(attributeTagsMetaObject, "true", object.MatchStringEqual)
-	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	fs := make(object.SearchFilters, 0, 4)
+	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
+	fs.AddFilter(attributeTagsMetaObject, "true", object.MatchStringEqual)
+	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.VersionID != "" {
-		prmSearch.Filters.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+		fs.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
 	}
 
-	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
 	if err != nil {
 		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
 			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -161,12 +162,12 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 		return fmt.Errorf("search object version: %w", err)
 	}
 
-	if len(ids) == 0 {
+	if len(res) == 0 {
 		return nil
 	}
 
-	for _, id := range ids {
-		if err = n.objectDelete(ctx, p.BktInfo, id); err != nil {
+	for i := range res {
+		if err = n.objectDelete(ctx, p.BktInfo, res[i].ID); err != nil {
 			return fmt.Errorf("couldn't delete object: %w", err)
 		}
 	}
