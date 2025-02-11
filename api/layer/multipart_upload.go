@@ -150,7 +150,6 @@ type (
 		PartNumber int64
 		// in nanoseconds
 		CreatedAt int64
-		FilePath  string
 	}
 
 	uploadPartAsSlotParams struct {
@@ -1433,8 +1432,6 @@ func (n *layer) getSlotAttributes(obj object.Object) (*slotAttributes, error) {
 			attributes.PartNumber, err = strconv.ParseInt(attr.Value(), 10, 64)
 		case headerS3MultipartCreated:
 			attributes.CreatedAt, err = strconv.ParseInt(attr.Value(), 10, 64)
-		case object.AttributeFilePath:
-			attributes.FilePath = attr.Value()
 		default:
 			continue
 		}
