@@ -146,12 +146,6 @@ type (
 		Created     time.Time
 	}
 
-	slotAttributes struct {
-		PartNumber int64
-		// in nanoseconds
-		CreatedAt int64
-	}
-
 	uploadPartAsSlotParams struct {
 		bktInfo          *data.BucketInfo
 		multipartInfo    *data.MultipartInfo
@@ -1420,30 +1414,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	return &objInfo, nil
 }
 
-func (n *layer) getSlotAttributes(obj object.Object) (*slotAttributes, error) {
-	var (
-		attributes slotAttributes
-		err        error
-	)
-
-	for _, attr := range obj.Attributes() {
-		switch attr.Key() {
-		case headerS3MultipartNumber:
-			attributes.PartNumber, err = strconv.ParseInt(attr.Value(), 10, 64)
-		case headerS3MultipartCreated:
-			attributes.CreatedAt, err = strconv.ParseInt(attr.Value(), 10, 64)
-		default:
-			continue
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("parse header: %w", err)
-		}
-	}
-
-	return &attributes, nil
-}
-
 func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, bucketInfo *data.BucketInfo) (int64, error) {
 	var filters object.SearchFilters
 	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
@@ -1471,16 +1441,26 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 		if err != nil {
 			return 0, fmt.Errorf("object head: %w", err)
 		}
+		var nextPartNumber int64
+		for _, attr := range head.Attributes() {
+			switch attr.Key() {
+			case headerS3MultipartNumber:
+				nextPartNumber, err = strconv.ParseInt(attr.Value(), 10, 64)
+			case headerS3MultipartCreated:
+				_, err = strconv.ParseInt(attr.Value(), 10, 64)
+			default:
+				continue
+			}
 
-		attributes, err := n.getSlotAttributes(*head)
-		if err != nil {
-			return 0, fmt.Errorf("get slot attributes: %w", err)
+			if err != nil {
+				return 0, fmt.Errorf("parse header: %w", err)
+			}
 		}
 
 		if partNumber == 0 {
-			partNumber = attributes.PartNumber
+			partNumber = nextPartNumber
 		} else {
-			partNumber = min(partNumber, attributes.PartNumber)
+			partNumber = min(partNumber, nextPartNumber)
 		}
 	}
 
