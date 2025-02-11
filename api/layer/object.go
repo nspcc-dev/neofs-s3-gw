@@ -483,10 +483,6 @@ func (n *layer) searchObjects(ctx context.Context, bkt *data.BucketInfo, prmSear
 			return nil, fmt.Errorf("couldn't head object: %w", err)
 		}
 
-		// if head.Type() == object.TypeTombstone || head.Type() == object.TypeLink || head.Type() == object.TypeLock {
-		// 	continue
-		// }
-
 		// The object is a part of split chain, it doesn't exist for user.
 		if head.HasParent() {
 			continue
