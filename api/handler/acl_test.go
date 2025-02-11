@@ -46,28 +46,23 @@ func TestTableToAst(t *testing.T) {
 	require.NoError(t, err)
 
 	table := new(eacl.Table)
-	record := eacl.NewRecord()
-	record.SetAction(eacl.ActionAllow)
-	record.SetOperation(eacl.OperationGet)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	table.AddRecord(record)
-	record2 := eacl.NewRecord()
-	record2.SetAction(eacl.ActionDeny)
-	record2.SetOperation(eacl.OperationPut)
+	var records []eacl.Record
+	records = append(records, eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationGet,
+		[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+	))
 
-	target := eacl.NewTarget()
-	// Unknown role is used, because it is ignored when accounts are set
-	target.SetRole(eacl.RoleUnknown)
-	target.SetAccounts([]user.ID{
-		user.NewFromScriptHash(key.PublicKey().GetScriptHash()),
-		user.NewFromScriptHash(key2.PublicKey().GetScriptHash()),
-	})
+	records = append(records, eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
+		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{
+			user.NewFromScriptHash(key.PublicKey().GetScriptHash()),
+			user.NewFromScriptHash(key2.PublicKey().GetScriptHash()),
+		})},
+		[]eacl.Filter{
+			eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, "objectName"),
+			eacl.NewFilterObjectWithID(id),
+		}...,
+	))
 
-	record2.SetTargets(*target)
-
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
-	record2.AddObjectIDFilter(eacl.MatchStringEqual, id)
-	table.AddRecord(record2)
+	table.SetRecords(records)
 
 	expectedAst := &ast{
 		Resources: []*astResource{
@@ -450,10 +445,6 @@ func TestOrder(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 	users := []user.ID{user.NewFromScriptHash(key.GetScriptHash())}
-	targetUser := eacl.NewTarget()
-	targetUser.SetAccounts(users)
-	targetOther := eacl.NewTarget()
-	targetOther.SetRole(eacl.RoleOthers)
 	bucketName := "bucket"
 	objectName := "objectName"
 
@@ -494,47 +485,52 @@ func TestOrder(t *testing.T) {
 			},
 		},
 	}
-	bucketUsersGetRec := eacl.NewRecord()
-	bucketUsersGetRec.SetOperation(eacl.OperationGet)
-	bucketUsersGetRec.SetAction(eacl.ActionAllow)
-	bucketUsersGetRec.SetTargets(*targetUser)
-	bucketOtherGetRec := eacl.NewRecord()
-	bucketOtherGetRec.SetOperation(eacl.OperationGet)
-	bucketOtherGetRec.SetAction(eacl.ActionDeny)
-	bucketOtherGetRec.SetTargets(*targetOther)
-	objectUsersPutRec := eacl.NewRecord()
-	objectUsersPutRec.SetOperation(eacl.OperationPut)
-	objectUsersPutRec.SetAction(eacl.ActionAllow)
-	objectUsersPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, objectName)
-	objectUsersPutRec.SetTargets(*targetUser)
-	objectOtherPutRec := eacl.NewRecord()
-	objectOtherPutRec.SetOperation(eacl.OperationPut)
-	objectOtherPutRec.SetAction(eacl.ActionDeny)
-	objectOtherPutRec.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, objectName)
-	objectOtherPutRec.SetTargets(*targetOther)
 
-	expectedEacl := eacl.NewTable()
-	expectedEacl.AddRecord(objectOtherPutRec)
-	expectedEacl.AddRecord(objectUsersPutRec)
-	expectedEacl.AddRecord(bucketOtherGetRec)
-	expectedEacl.AddRecord(bucketUsersGetRec)
+	var records = []eacl.Record{
+		eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
+			[]eacl.Target{
+				eacl.NewTargetByRole(eacl.RoleOthers),
+			},
+			[]eacl.Filter{
+				eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, objectName),
+			}...,
+		),
+		eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationPut,
+			[]eacl.Target{
+				eacl.NewTargetByAccounts(users),
+			},
+			[]eacl.Filter{
+				eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, objectName),
+			}...,
+		),
+		eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationGet,
+			[]eacl.Target{
+				eacl.NewTargetByRole(eacl.RoleOthers),
+			}),
+		eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationGet,
+			[]eacl.Target{
+				eacl.NewTargetByAccounts(users),
+			}),
+	}
+
+	expectedEacl := eacl.ConstructTable(records)
 
 	t.Run("astToTable order and vice versa", func(t *testing.T) {
 		actualEacl, err := astToTable(expectedAst)
 		require.NoError(t, err)
-		require.Equal(t, expectedEacl, actualEacl)
+		require.Equal(t, &expectedEacl, actualEacl)
 
 		actualAst := tableToAst(actualEacl, bucketName)
 		require.Equal(t, expectedAst, actualAst)
 	})
 
 	t.Run("tableToAst order and vice versa", func(t *testing.T) {
-		actualAst := tableToAst(expectedEacl, bucketName)
+		actualAst := tableToAst(&expectedEacl, bucketName)
 		require.Equal(t, expectedAst, actualAst)
 
 		actualEacl, err := astToTable(actualAst)
 		require.NoError(t, err)
-		require.Equal(t, expectedEacl, actualEacl)
+		require.Equal(t, &expectedEacl, actualEacl)
 	})
 
 	t.Run("append a resource", func(t *testing.T) {
@@ -547,11 +543,14 @@ func TestOrder(t *testing.T) {
 			Operations: []*astOperation{{Op: eacl.OperationDelete, Action: eacl.ActionDeny}}}},
 		}
 
-		childRecord := eacl.NewRecord()
-		childRecord.SetOperation(eacl.OperationDelete)
-		childRecord.SetAction(eacl.ActionDeny)
-		childRecord.SetTargets(*targetOther)
-		childRecord.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, childName)
+		childRecord := eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationDelete,
+			[]eacl.Target{
+				eacl.NewTargetByRole(eacl.RoleOthers),
+			},
+			[]eacl.Filter{
+				eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, childName),
+			}...,
+		)
 
 		mergedAst, updated := mergeAst(expectedAst, child)
 		require.True(t, updated)
@@ -559,7 +558,7 @@ func TestOrder(t *testing.T) {
 		mergedEacl, err := astToTable(mergedAst)
 		require.NoError(t, err)
 
-		require.Equal(t, *childRecord, mergedEacl.Records()[0])
+		require.Equal(t, childRecord, mergedEacl.Records()[0])
 	})
 }
 
@@ -668,30 +667,23 @@ func TestAstToTable(t *testing.T) {
 		},
 	}
 
-	expectedTable := eacl.NewTable()
-	record1 := eacl.NewRecord()
-	record1.SetAction(eacl.ActionAllow)
-	record1.SetOperation(eacl.OperationPut)
+	records := []eacl.Record{
+		eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationGet,
+			[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+			[]eacl.Filter{
+				eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, "objectName"),
+			}...,
+		),
+		eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationPut,
+			[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{user.NewFromScriptHash(key.PublicKey().GetScriptHash())})},
+		),
+	}
 
-	target := eacl.NewTarget()
-	// Unknown role is used, because it is ignored when accounts are set
-	target.SetRole(eacl.RoleUnknown)
-	target.SetAccounts([]user.ID{user.NewFromScriptHash(key.PublicKey().GetScriptHash())})
-
-	record1.SetTargets(*target)
-
-	record2 := eacl.NewRecord()
-	record2.SetAction(eacl.ActionDeny)
-	record2.SetOperation(eacl.OperationGet)
-	eacl.AddFormedTarget(record2, eacl.RoleOthers)
-	record2.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, "objectName")
-
-	expectedTable.AddRecord(record2)
-	expectedTable.AddRecord(record1)
+	expectedTable := eacl.ConstructTable(records)
 
 	actualTable, err := astToTable(ast)
 	require.NoError(t, err)
-	require.Equal(t, expectedTable, actualTable)
+	require.Equal(t, &expectedTable, actualTable)
 }
 
 func TestRemoveUsers(t *testing.T) {
@@ -912,22 +904,25 @@ func TestObjectWithVersionAclToTable(t *testing.T) {
 
 func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *resourceInfo) *eacl.Table {
 	var objID oid.ID
-	var zeroObjectID oid.ID
 
 	if resInfo.Version != "" {
 		err := objID.DecodeString(resInfo.Version)
 		require.NoError(t, err)
 	}
 
-	expectedTable := eacl.NewTable()
+	var records []eacl.Record
 
 	applyFilters := func(r *eacl.Record) {
+		var filters []eacl.Filter
+
 		if resInfo.Object != "" {
-			r.AddObjectAttributeFilter(eacl.MatchStringEqual, object.AttributeFilePath, resInfo.Object)
+			filters = append(filters, eacl.NewObjectPropertyFilter(object.AttributeFilePath, eacl.MatchStringEqual, resInfo.Object))
 		}
-		if !objID.Equals(zeroObjectID) {
-			r.AddObjectIDFilter(eacl.MatchStringEqual, objID)
+		if !objID.IsZero() {
+			filters = append(filters, eacl.NewFilterObjectWithID(objID))
 		}
+
+		r.SetFilters(filters)
 	}
 
 	// Order of these loops is important for test.
@@ -936,14 +931,14 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
 		applyFilters(record)
-		expectedTable.AddRecord(record)
+		records = append(records, *record)
 	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
 		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
 		applyFilters(record)
-		expectedTable.AddRecord(record)
+		records = append(records, *record)
 	}
 
 	for i := len(writeOps) - 1; i >= 0; i-- {
@@ -951,17 +946,19 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		record := getOthersRecord(op, eacl.ActionDeny)
 
 		applyFilters(record)
-		expectedTable.AddRecord(record)
+		records = append(records, *record)
 	}
 	for i := len(readOps) - 1; i >= 0; i-- {
 		op := readOps[i]
 		record := getOthersRecord(op, eacl.ActionDeny)
 
 		applyFilters(record)
-		expectedTable.AddRecord(record)
+		records = append(records, *record)
 	}
 
-	return expectedTable
+	expectedTable := eacl.ConstructTable(records)
+
+	return &expectedTable
 }
 
 func tableFromACL(t *testing.T, acl *AccessControlPolicy, resInfo *resourceInfo) *eacl.Table {
@@ -983,8 +980,8 @@ func checkTables(t *testing.T, expectedTable, actualTable *eacl.Table) {
 		for j, target := range record.Targets() {
 			actTarget := actRecord.Targets()[j]
 
-			expected := fmt.Sprintf("%s %v", target.Role().String(), target.BinaryKeys())
-			actual := fmt.Sprintf("%s %v", actTarget.Role().String(), actTarget.BinaryKeys())
+			expected := fmt.Sprintf("%s %v", target.Role().String(), target.Accounts())
+			actual := fmt.Sprintf("%s %v", actTarget.Role().String(), actTarget.Accounts())
 			require.Equalf(t, target, actTarget, "want: '%s'\ngot: '%s'", expected, actual)
 		}
 
@@ -1172,32 +1169,31 @@ func TestBucketAclToTable(t *testing.T) {
 		}},
 	}
 
-	expectedTable := new(eacl.Table)
+	var records []eacl.Record
 	for _, op := range readOps {
-		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionAllow))
+		records = append(records, *getOthersRecord(op, eacl.ActionAllow))
 	}
 	for _, op := range writeOps {
-		expectedTable.AddRecord(getAllowRecordWithUser(op, user.NewFromScriptHash(key2.GetScriptHash())))
+		records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key2.GetScriptHash())))
 	}
 	for _, op := range fullOps {
-		expectedTable.AddRecord(getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
+		records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
 	}
 	for _, op := range fullOps {
-		expectedTable.AddRecord(getOthersRecord(op, eacl.ActionDeny))
+		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
-	expectedTable.AddRecord(BucketOwnerEnforcedRecord())
+	records = append(records, *BucketOwnerEnforcedRecord())
 
 	actualTable, err := bucketACLToTable(acl)
 	require.NoError(t, err)
-	require.Equal(t, expectedTable.Records(), actualTable.Records())
+	require.Equal(t, records, actualTable.Records())
 }
 
 func TestObjectAclToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	var objID oid.ID
-	objID.SetSHA256(sha256.Sum256(b))
+	var objID oid.ID = sha256.Sum256(b)
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -1274,8 +1270,6 @@ func TestBucketAclToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	var objID oid.ID
-	objID.SetSHA256(sha256.Sum256(b))
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -1570,27 +1564,31 @@ func TestEACLEncode(t *testing.T) {
 	var othersTarget eacl.Target
 	othersTarget.SetRole(eacl.RoleOthers)
 
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{userTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{userTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationPut, []eacl.Target{userTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationDelete, []eacl.Target{userTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{userTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{userTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{userTarget}))
+	var records []eacl.Record
 
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{userTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{userTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationPut, []eacl.Target{userTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationDelete, []eacl.Target{userTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{userTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{userTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{userTarget}))
 
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationGet, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationHead, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationPut, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationDelete, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationSearch, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationRange, []eacl.Target{othersTarget}))
-	acl.EACL.AddRecord(generateRecord(eacl.ActionDeny, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
+
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationGet, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationHead, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationPut, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationDelete, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationSearch, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationRange, []eacl.Target{othersTarget}))
+	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
+
+	acl.EACL.SetRecords(records)
 
 	logger, err := zap.NewProduction()
 	require.NoError(t, err)

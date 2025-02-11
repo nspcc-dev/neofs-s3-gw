@@ -97,7 +97,7 @@ func newTestAccessBox(t *testing.T, key *keys.PrivateKey) *accessbox.Box {
 	}
 
 	var btoken bearer.Token
-	btoken.SetEACLTable(*eacl.NewTable())
+	btoken.SetEACLTable(eacl.Table{})
 	err = btoken.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
 	require.NoError(t, err)
 

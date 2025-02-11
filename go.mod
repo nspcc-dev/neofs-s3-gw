@@ -11,7 +11,7 @@ require (
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.107.0
 	github.com/nspcc-dev/neofs-contract v0.20.0
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20240807160341-3528eb5bb1cc
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20250130151303-051c6238eaea
 	github.com/nspcc-dev/tzhash v1.8.2
 	github.com/prometheus/client_golang v1.20.2
 	github.com/spf13/pflag v1.0.5
@@ -27,7 +27,7 @@ require (
 )
 
 require (
-	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20221202181307-76fa05c21b12 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -36,8 +36,7 @@ require (
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20240830112754-291b000d1f3b // indirect
-	github.com/nspcc-dev/hrw/v2 v2.0.1 // indirect
-	github.com/nspcc-dev/neofs-api-go/v2 v2.14.1-0.20240305074711-35bc78d84dc4 // indirect
+	github.com/nspcc-dev/hrw/v2 v2.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect

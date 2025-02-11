@@ -322,31 +322,36 @@ func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) 
 }
 
 func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
-	table := eacl.NewTable()
+	var table eacl.Table
+
 	if len(eaclTable) != 0 {
-		return table, table.UnmarshalJSON(eaclTable)
+		return &table, table.UnmarshalJSON(eaclTable)
 	}
 
-	record := eacl.NewRecord()
-	record.SetOperation(eacl.OperationGet)
-	record.SetAction(eacl.ActionAllow)
-	eacl.AddFormedTarget(record, eacl.RoleOthers)
-	table.AddRecord(record)
+	var (
+		records = []eacl.Record{
+			eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationGet,
+				[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+			),
+		}
+	)
 
 	for _, rec := range restrictedRecords() {
-		table.AddRecord(rec)
+		records = append(records, *rec)
 	}
 
-	return table, nil
+	table.SetRecords(records)
+
+	return &table, nil
 }
 
 func restrictedRecords() (records []*eacl.Record) {
 	for op := eacl.OperationHead; op <= eacl.OperationRangeHash; op++ {
-		record := eacl.NewRecord()
-		record.SetOperation(op)
-		record.SetAction(eacl.ActionDeny)
-		eacl.AddFormedTarget(record, eacl.RoleOthers)
-		records = append(records, record)
+		record := eacl.ConstructRecord(eacl.ActionDeny, op,
+			[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+		)
+
+		records = append(records, &record)
 	}
 
 	return

@@ -29,7 +29,7 @@ func TestTokensEncryptDecrypt(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
 	data, err := encrypt(cred, cred.PublicKey(), tkn.Marshal())
@@ -57,7 +57,7 @@ func TestBearerTokenInAccessBox(t *testing.T) {
 	cred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
 	gate := NewGateData(cred.PublicKey(), &tkn)
@@ -120,7 +120,7 @@ func TestAccessboxMultipleKeys(t *testing.T) {
 	sec, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
 	count := 10
@@ -161,7 +161,7 @@ func TestUnknownKey(t *testing.T) {
 	wrongCred, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	tkn.SetEACLTable(*eacl.NewTable())
+	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSigner(sec.PrivateKey)))
 
 	gate := NewGateData(cred.PublicKey(), &tkn)
