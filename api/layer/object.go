@@ -22,6 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -71,6 +72,14 @@ type (
 		MaxKeys           int
 		Marker            string
 		ContinuationToken string
+	}
+
+	prefixSearchResult struct {
+		ID                oid.ID
+		FilePath          string
+		CreationEpoch     uint64
+		CreationTimestamp int64
+		IsDeleteMarker    bool
 	}
 )
 
@@ -435,25 +444,96 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
-func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]*object.Object, error) {
-	prmSearch := PrmObjectSearch{
-		Container: bkt.CID,
-		Filters:   make(object.SearchFilters, 0, 4),
+func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]prefixSearchResult, error) {
+	var (
+		filters             = make(object.SearchFilters, 0, 4)
+		returningAttributes = []string{
+			object.FilterCreationEpoch,
+			object.AttributeFilePath,
+			object.AttributeTimestamp,
+			attrS3DeleteMarker,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
 
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, owner)
-	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	prmSearch.Filters.AddFilter(attributeTagsMetaObject, "", object.MatchNotPresent)
+	filters.AddFilter(object.FilterCreationEpoch, "0", object.MatchNumGT)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 
 	if len(prefix) > 0 {
-		prmSearch.Filters.AddFilter(object.AttributeFilePath, prefix, object.MatchCommonPrefix)
+		filters.AddFilter(object.AttributeFilePath, prefix, object.MatchCommonPrefix)
 	}
+
+	filters.AddFilter(attributeTagsMetaObject, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
-		prmSearch.Filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
 	}
 
-	return n.searchObjects(ctx, bkt, prmSearch)
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search objects: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return nil, ErrNodeNotFound
+	}
+
+	var searchResults = make([]prefixSearchResult, 0, len(searchResultItems))
+
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		var psr = prefixSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[1],
+		}
+
+		if item.Attributes[0] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[0], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[0], err)
+			}
+		}
+
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		psr.IsDeleteMarker = item.Attributes[3] != ""
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b prefixSearchResult) int {
+		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
+			return c
+		}
+
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	return searchResults, nil
 }
 
 func (n *layer) searchObjects(ctx context.Context, bkt *data.BucketInfo, prmSearch PrmObjectSearch) ([]*object.Object, error) {
@@ -548,8 +628,8 @@ func sortObjectsFuncByFilePath(a, b *object.Object) int {
 	return cmp.Compare(aPath, bPath)
 }
 
-func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]*object.Object, error) {
-	heads, err := n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, onlyUnversioned)
+func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix string, onlyUnversioned bool) ([]prefixSearchResult, error) {
+	searchResults, err := n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, onlyUnversioned)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -558,20 +638,12 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 		return nil, fmt.Errorf("get all versions by prefix: %w", err)
 	}
 
-	var uniq = make(map[string]*object.Object, len(heads))
+	var uniq = make(map[string]prefixSearchResult, len(searchResults))
 
-	for _, head := range heads {
-		var filePath string
-		for _, attr := range head.Attributes() {
-			if attr.Key() == object.AttributeFilePath {
-				filePath = attr.Value()
-				break
-			}
-		}
-
+	for _, result := range searchResults {
 		// take only first object, because it is the freshest one.
-		if _, ok := uniq[filePath]; !ok {
-			uniq[filePath] = head
+		if _, ok := uniq[result.FilePath]; !ok {
+			uniq[result.FilePath] = result
 		}
 	}
 
@@ -762,7 +834,7 @@ func (n *layer) ListObjectsV2(ctx context.Context, p *ListObjectsParamsV2) (*Lis
 	return &result, nil
 }
 
-func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams) (objects []*data.ObjectInfo, next *data.ObjectInfo, err error) {
+func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams) (objects []data.ObjectListResponseContent, next *data.ObjectListResponseContent, err error) {
 	if p.MaxKeys == 0 {
 		return nil, nil, nil
 	}
@@ -771,10 +843,10 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	cacheKey := cache.CreateObjectsListCacheKey(p.Bucket.CID, p.Prefix, true)
 	nodeVersions := n.cache.GetList(owner, cacheKey)
 
-	var rawHeads []*object.Object
+	var latestVersions []prefixSearchResult
 
 	if nodeVersions == nil {
-		rawHeads, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Bucket.Owner, p.Prefix, false)
+		latestVersions, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Bucket.Owner, p.Prefix, false)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, nil, nil
@@ -784,32 +856,71 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 		}
 	}
 
-	if len(rawHeads) == 0 {
+	if len(latestVersions) == 0 {
 		return nil, nil, nil
 	}
 
-	slices.SortFunc(rawHeads, sortObjectsFuncByFilePath)
+	sortFunc := func(a, b prefixSearchResult) int {
+		return cmp.Compare(a.FilePath, b.FilePath)
+	}
+
+	slices.SortFunc(latestVersions, sortFunc)
 	existed := make(map[string]struct{}, len(nodeVersions)) // to squash the same directories
 
-	for _, head := range rawHeads {
-		if shouldSkip(head, p, existed) {
+	for _, ver := range latestVersions {
+		if shouldSkip(ver, p, existed) {
 			continue
 		}
 
-		var oi *data.ObjectInfo
-		if oi = tryDirectoryFromObject(p.Bucket, p.Prefix, p.Delimiter, *head); oi == nil {
-			oi = objectInfoFromMeta(p.Bucket, head)
+		var oi *data.ObjectListResponseContent
+
+		if oi = tryDirectoryFromObject(p.Prefix, p.Delimiter, ver.FilePath); oi == nil {
+			head, err := n.objectHead(ctx, p.Bucket, ver.ID)
+			if err != nil {
+				if isErrObjectAlreadyRemoved(err) {
+					continue
+				}
+
+				return nil, nil, fmt.Errorf("head details: %w", err)
+			}
+
+			var (
+				attributeDecryptedSize int64
+			)
+
+			for _, attr := range head.Attributes() {
+				if attr.Key() == AttributeDecryptedSize {
+					if attributeDecryptedSize, err = strconv.ParseInt(attr.Value(), 10, 64); err != nil {
+						return nil, nil, fmt.Errorf("parse decrypted size %s: %w", attr.Value(), err)
+					}
+
+					break
+				}
+			}
+
+			payloadChecksum, _ := head.PayloadChecksum()
+
+			oi = &data.ObjectListResponseContent{
+				ID:      ver.ID,
+				Owner:   p.Bucket.Owner,
+				Created: time.Unix(ver.CreationTimestamp, 0),
+				Name:    ver.FilePath,
+
+				DecryptedSize: attributeDecryptedSize,
+				Size:          int64(head.PayloadSize()),
+				HashSum:       hex.EncodeToString(payloadChecksum.Value()),
+			}
 		}
 
-		objects = append(objects, oi)
+		objects = append(objects, *oi)
 	}
 
-	slices.SortFunc(objects, func(a, b *data.ObjectInfo) int {
+	slices.SortFunc(objects, func(a, b data.ObjectListResponseContent) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
 
 	if len(objects) > p.MaxKeys {
-		next = objects[p.MaxKeys]
+		next = &objects[p.MaxKeys]
 		objects = objects[:p.MaxKeys]
 	}
 
@@ -906,13 +1017,13 @@ func IsSystemHeader(key string) bool {
 	return ok || strings.HasPrefix(key, api.NeoFSSystemMetadataPrefix)
 }
 
-func shouldSkip(head *object.Object, p allObjectParams, existed map[string]struct{}) bool {
-	if isDeleteMarkerObject(*head) {
+func shouldSkip(result prefixSearchResult, p allObjectParams, existed map[string]struct{}) bool {
+	if result.IsDeleteMarker {
 		return true
 	}
 
-	filePath := filePathFromAttributes(*head)
-	if dirName := tryDirectoryName(filePath, p.Prefix, p.Delimiter); len(dirName) != 0 {
+	filePath := result.FilePath
+	if dirName := tryDirectoryName(result.FilePath, p.Prefix, p.Delimiter); len(dirName) != 0 {
 		filePath = dirName
 	}
 	if _, ok := existed[filePath]; ok {
@@ -925,7 +1036,7 @@ func shouldSkip(head *object.Object, p allObjectParams, existed map[string]struc
 
 	if p.ContinuationToken != "" {
 		if _, ok := existed[continuationToken]; !ok {
-			if p.ContinuationToken != head.GetID().EncodeToString() {
+			if p.ContinuationToken != result.ID.EncodeToString() {
 				return true
 			}
 			existed[continuationToken] = struct{}{}
@@ -936,7 +1047,7 @@ func shouldSkip(head *object.Object, p allObjectParams, existed map[string]struc
 	return false
 }
 
-func triageObjects(allObjects []*data.ObjectInfo) (prefixes []string, objects []*data.ObjectInfo) {
+func triageObjects(allObjects []data.ObjectListResponseContent) (prefixes []string, objects []data.ObjectListResponseContent) {
 	for _, ov := range allObjects {
 		if ov.IsDir {
 			prefixes = append(prefixes, ov.Name)
@@ -998,21 +1109,15 @@ func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, deli
 	}
 }
 
-func tryDirectoryFromObject(bktInfo *data.BucketInfo, prefix, delimiter string, head object.Object) *data.ObjectInfo {
-	nv := convert(head)
-
-	dirName := tryDirectoryName(nv.FilePath, prefix, delimiter)
+func tryDirectoryFromObject(prefix, delimiter string, filePath string) *data.ObjectListResponseContent {
+	dirName := tryDirectoryName(filePath, prefix, delimiter)
 	if len(dirName) == 0 {
 		return nil
 	}
 
-	return &data.ObjectInfo{
-		ID:             nv.OID, // to use it as continuation token
-		CID:            bktInfo.CID,
-		IsDir:          true,
-		IsDeleteMarker: nv.IsDeleteMarker(),
-		Bucket:         bktInfo.Name,
-		Name:           dirName,
+	return &data.ObjectListResponseContent{
+		IsDir: true,
+		Name:  dirName,
 	}
 }
 

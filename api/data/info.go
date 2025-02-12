@@ -65,6 +65,18 @@ type (
 		Headers        map[string]string
 	}
 
+	ObjectListResponseContent struct {
+		IsDir bool
+
+		ID            oid.ID
+		DecryptedSize int64
+		Size          int64
+		Owner         user.ID
+		HashSum       string
+		Created       time.Time
+		Name          string
+	}
+
 	// NotificationInfo store info to send s3 notification.
 	NotificationInfo struct {
 		Name    string

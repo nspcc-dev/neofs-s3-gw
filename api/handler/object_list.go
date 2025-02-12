@@ -207,11 +207,11 @@ func fillPrefixes(src []string, encode string) []CommonPrefix {
 	return dst
 }
 
-func fillContentsWithOwner(src []*data.ObjectInfo, encode string) ([]Object, error) {
+func fillContentsWithOwner(src []data.ObjectListResponseContent, encode string) ([]Object, error) {
 	return fillContents(src, encode, true)
 }
 
-func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) ([]Object, error) {
+func fillContents(src []data.ObjectListResponseContent, encode string, fetchOwner bool) ([]Object, error) {
 	var dst []Object
 	for _, obj := range src {
 		res := Object{
@@ -221,13 +221,8 @@ func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) ([]Obj
 			ETag:         obj.HashSum,
 		}
 
-		if size, ok := obj.Headers[layer.AttributeDecryptedSize]; ok {
-			sz, err := strconv.ParseInt(size, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("parse decrypted size %s: %w", size, err)
-			}
-
-			res.Size = sz
+		if obj.DecryptedSize > 0 {
+			res.Size = obj.DecryptedSize
 		}
 
 		if fetchOwner {
