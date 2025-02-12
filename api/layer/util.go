@@ -20,7 +20,7 @@ type (
 	// ListObjectsInfo contains common fields of data for ListObjectsV1 and ListObjectsV2.
 	ListObjectsInfo struct {
 		Prefixes    []string
-		Objects     []*data.ObjectInfo
+		Objects     []data.ObjectListResponseContent
 		IsTruncated bool
 	}
 

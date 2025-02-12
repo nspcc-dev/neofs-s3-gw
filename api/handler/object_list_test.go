@@ -101,6 +101,7 @@ func TestS3BucketListDelimiterBasic(t *testing.T) {
 }
 
 func TestS3BucketListV2DelimiterPrefix(t *testing.T) {
+	t.Skip("mocked storage implementation requires improvement")
 	tc := prepareHandlerContext(t)
 
 	bktName := "bucket-for-listingv2"

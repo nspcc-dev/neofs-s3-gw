@@ -2,6 +2,7 @@ package layer
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/tzhash/tz"
+	"golang.org/x/exp/maps"
 )
 
 type TestNeoFS struct {
@@ -38,6 +41,11 @@ type TestNeoFS struct {
 	eaclTables   map[string]*eacl.Table
 	currentEpoch uint64
 	signer       neofscrypto.Signer
+}
+
+type searchedItem struct {
+	SearchResultItem client.SearchResultItem
+	FilePath         string
 }
 
 const (
@@ -502,34 +510,118 @@ func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid
 
 // SearchObjectsV2 implements neofs.NeoFS interface method.
 func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, _ client.SearchObjectsOptions) ([]client.SearchResultItem, error) {
-	var oids []client.SearchResultItem
-
-	if len(filters) == 0 {
-		for _, obj := range t.objects {
-			if obj.GetContainerID() != cid {
-				continue
-			}
-
-			oids = append(oids, fillResultObject(obj, attributes))
-		}
-
-		return oids, nil
-	}
+	var (
+		searchedItems []searchedItem
+		ignoreFilters = len(filters) == 0
+	)
 
 	for _, obj := range t.objects {
 		if obj.GetContainerID() != cid {
 			continue
 		}
 
-		if checkFilters(obj, filters) {
-			oids = append(oids, fillResultObject(obj, attributes))
+		if ignoreFilters || checkFilters(obj, filters) {
+			searchedItems = append(searchedItems, fillResultObject(obj, attributes))
 		}
 	}
 
-	return oids, nil
+	var result = make([]client.SearchResultItem, 0, len(searchedItems))
+	for _, item := range searchedItems {
+		result = append(result, item.SearchResultItem)
+	}
+
+	return result, nil
 }
 
-func fillResultObject(obj *object.Object, attributes []string) client.SearchResultItem {
+// SearchObjectsV2WithCursor implements neofs.NeoFS interface method.
+func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, p client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
+	var (
+		searchedItems []searchedItem
+		nextCursor    string
+		ignoreFilters = len(filters) == 0
+		limit         = int(p.Count())
+		actualCursor  string
+		err           error
+	)
+
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	if cursor != "" {
+		actualCursor, err = extractFilePath(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	objects := maps.Values(t.objects)
+	slices.SortFunc(objects, func(a, b *object.Object) int {
+		var (
+			aPath string
+			bPath string
+		)
+
+		for _, attr := range a.Attributes() {
+			if attr.Key() == object.AttributeFilePath {
+				aPath = attr.Value()
+				break
+			}
+		}
+		for _, attr := range b.Attributes() {
+			if attr.Key() == object.AttributeFilePath {
+				bPath = attr.Value()
+				break
+			}
+		}
+
+		return cmp.Compare(aPath, bPath)
+	})
+
+	for _, obj := range objects {
+		if obj.GetContainerID() != cid {
+			continue
+		}
+
+		if ignoreFilters || checkFilters(obj, filters) {
+			if actualCursor != "" {
+				var objFilePath string
+
+				for _, attr := range obj.Attributes() {
+					if attr.Key() == object.AttributeFilePath {
+						objFilePath = attr.Value()
+						break
+					}
+				}
+
+				if objFilePath <= actualCursor {
+					continue
+				}
+			}
+
+			searchedItems = append(searchedItems, fillResultObject(obj, attributes))
+		}
+	}
+
+	if limit < len(searchedItems) {
+		searchedItems = searchedItems[:limit]
+		lastElement := searchedItems[len(searchedItems)-1]
+
+		nextCursor = generateContinuationToken(lastElement.FilePath)
+	}
+
+	var result = make([]client.SearchResultItem, 0, len(searchedItems))
+	for _, item := range searchedItems {
+		result = append(result, item.SearchResultItem)
+	}
+
+	return result, nextCursor, nil
+}
+
+func fillResultObject(obj *object.Object, attributes []string) searchedItem {
+	var (
+		result searchedItem
+	)
 	resultItem := client.SearchResultItem{
 		ID: obj.GetID(),
 	}
@@ -537,6 +629,10 @@ func fillResultObject(obj *object.Object, attributes []string) client.SearchResu
 	var attrMap = make(map[string]string, len(obj.Attributes()))
 	for _, attr := range obj.Attributes() {
 		attrMap[attr.Key()] = attr.Value()
+
+		if attr.Key() == object.AttributeFilePath {
+			result.FilePath = attr.Value()
+		}
 	}
 
 	resultItem.Attributes = make([]string, len(attributes))
@@ -544,9 +640,18 @@ func fillResultObject(obj *object.Object, attributes []string) client.SearchResu
 		if v, ok := attrMap[attrName]; ok {
 			resultItem.Attributes[i] = v
 		}
+
+		switch attrName {
+		case object.FilterCreationEpoch:
+			resultItem.Attributes[i] = strconv.FormatUint(obj.CreationEpoch(), 10)
+		case object.FilterPayloadSize:
+			resultItem.Attributes[i] = strconv.FormatUint(obj.PayloadSize(), 10)
+		}
 	}
 
-	return resultItem
+	result.SearchResultItem = resultItem
+
+	return result
 }
 
 func checkFilters(obj *object.Object, filters object.SearchFilters) bool {
@@ -572,7 +677,7 @@ func checkFilters(obj *object.Object, filters object.SearchFilters) bool {
 		case object.MatchCommonPrefix:
 			isOk = isOk && strings.HasPrefix(val, f.Value())
 		case object.MatchNotPresent:
-			isOk = !present
+			isOk = isOk && !present
 		default:
 			isOk = false
 		}

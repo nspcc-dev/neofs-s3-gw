@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 // ListObjectsV1Handler handles objects listing requests for API version 1.
@@ -187,9 +186,9 @@ func parseListObjectArgs(reqInfo *api.ReqInfo) (*layer.ListObjectsParamsCommon, 
 }
 
 func parseContinuationToken(queryValues url.Values) (string, error) {
+	// There is a tricky situation. If a continuation-token has been passed, it must not be empty.
 	if val, ok := queryValues["continuation-token"]; ok {
-		var objID oid.ID
-		if err := objID.DecodeString(val[0]); err != nil {
+		if len(val) == 0 || val[0] == "" {
 			return "", s3errors.GetAPIError(s3errors.ErrIncorrectContinuationToken)
 		}
 		return val[0], nil
@@ -207,11 +206,11 @@ func fillPrefixes(src []string, encode string) []CommonPrefix {
 	return dst
 }
 
-func fillContentsWithOwner(src []*data.ObjectInfo, encode string) ([]Object, error) {
+func fillContentsWithOwner(src []data.ObjectListResponseContent, encode string) ([]Object, error) {
 	return fillContents(src, encode, true)
 }
 
-func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) ([]Object, error) {
+func fillContents(src []data.ObjectListResponseContent, encode string, fetchOwner bool) ([]Object, error) {
 	var dst []Object
 	for _, obj := range src {
 		res := Object{
@@ -219,15 +218,6 @@ func fillContents(src []*data.ObjectInfo, encode string, fetchOwner bool) ([]Obj
 			Size:         obj.Size,
 			LastModified: obj.Created.UTC().Format(time.RFC3339),
 			ETag:         obj.HashSum,
-		}
-
-		if size, ok := obj.Headers[layer.AttributeDecryptedSize]; ok {
-			sz, err := strconv.ParseInt(size, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("parse decrypted size %s: %w", size, err)
-			}
-
-			res.Size = sz
 		}
 
 		if fetchOwner {

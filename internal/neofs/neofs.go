@@ -763,9 +763,9 @@ func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.
 	)
 
 	for {
-		items, cursor, err = x.pool.SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
+		items, cursor, err = x.SearchObjectsV2WithCursor(ctx, cid, filters, attributes, cursor, opts)
 		if err != nil {
-			return nil, fmt.Errorf("search objects: %w", err)
+			return nil, fmt.Errorf("search objects with cursor: %w", err)
 		}
 
 		resultItems = append(resultItems, items...)
@@ -776,4 +776,14 @@ func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.
 	}
 
 	return resultItems, nil
+}
+
+// SearchObjectsV2WithCursor implements neofs.NeoFS interface method.
+func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
+	items, cursor, err := x.pool.SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
+	if err != nil {
+		return nil, "", fmt.Errorf("search objects: %w", err)
+	}
+
+	return items, cursor, nil
 }
