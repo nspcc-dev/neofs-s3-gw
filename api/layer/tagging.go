@@ -171,6 +171,10 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 
 	lastObj, err := n.objectGet(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
 	if err != nil {
+		if isErrObjectAlreadyRemoved(err) {
+			return "", nil, nil
+		}
+
 		return "", nil, fmt.Errorf("get object: %w", err)
 	}
 
