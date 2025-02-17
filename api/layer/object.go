@@ -86,6 +86,13 @@ type (
 		PayloadSize       int64
 		PayloadChecksum   string
 	}
+
+	idSearchResult struct {
+		ID                oid.ID
+		FilePath          string
+		CreationEpoch     uint64
+		CreationTimestamp int64
+	}
 )
 
 const (

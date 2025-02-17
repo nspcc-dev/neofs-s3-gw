@@ -2,11 +2,13 @@ package layer
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -80,6 +83,14 @@ type (
 		Object                    string
 		VersionID                 string
 		IsBucketVersioningEnabled bool
+	}
+
+	// ShortInfoParams stores necessary info to get actual obj info in versioned container for non versioned request.
+	ShortInfoParams struct {
+		CID             cid.ID
+		Owner           user.ID
+		Object          string
+		FindNullVersion bool
 	}
 
 	// ObjectVersion stores object version info.
@@ -208,6 +219,7 @@ type (
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
 		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
+		GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error)
 
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
 		PutLockInfo(ctx context.Context, p *PutLockInfoParams) error
@@ -541,6 +553,90 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		zap.Stringer("oid", objInfo.ObjectInfo.ID))
 
 	return objInfo, nil
+}
+
+// GetIDForVersioningContainer returns actual oid.ID for object in versioned container.
+func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error) {
+	var (
+		filters             = make(object.SearchFilters, 0, 3)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+			object.FilterCreationEpoch,
+			object.AttributeTimestamp,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, p.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	filters.AddFilter(object.AttributeFilePath, p.Object, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	if !p.FindNullVersion {
+		filters.AddFilter(attrS3VersioningState, data.VersioningEnabled, object.MatchStringEqual)
+	}
+
+	ids, err := n.neoFS.SearchObjectsV2(ctx, p.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return oid.ID{}, fmt.Errorf("search objects: %w", err)
+	}
+
+	if len(ids) == 0 {
+		return oid.ID{}, ErrNodeNotFound
+	}
+
+	var searchResults = make([]idSearchResult, 0, len(ids))
+
+	for _, item := range ids {
+		if len(item.Attributes) != len(returningAttributes) {
+			return oid.ID{}, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		var psr = idSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[0],
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			if err != nil {
+				return oid.ID{}, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b idSearchResult) int {
+		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
+			return c
+		}
+
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	return searchResults[0].ID, nil
 }
 
 // CopyObject from one bucket into another bucket.

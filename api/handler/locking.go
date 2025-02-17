@@ -159,18 +159,19 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: bktInfo,
-			Object:  reqInfo.ObjectName,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  bktInfo.Owner,
+			CID:    bktInfo.CID,
+			Object: reqInfo.ObjectName,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
 			h.logAndSendError(w, "could not find object", reqInfo, err)
 			return
 		}
 
-		p.ObjVersion.VersionID = ei.ObjectInfo.VersionID()
+		p.ObjVersion.VersionID = ei.EncodeToString()
 	}
 
 	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
@@ -259,18 +260,19 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: bktInfo,
-			Object:  reqInfo.ObjectName,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  bktInfo.Owner,
+			CID:    bktInfo.CID,
+			Object: reqInfo.ObjectName,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
 			h.logAndSendError(w, "could not find object", reqInfo, err)
 			return
 		}
 
-		p.ObjVersion.VersionID = ei.ObjectInfo.VersionID()
+		p.ObjVersion.VersionID = ei.EncodeToString()
 	}
 
 	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
@@ -307,18 +309,19 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if settings.VersioningEnabled() && p.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: bktInfo,
-			Object:  reqInfo.ObjectName,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  bktInfo.Owner,
+			CID:    bktInfo.CID,
+			Object: reqInfo.ObjectName,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
 			h.logAndSendError(w, "could not find object", reqInfo, err)
 			return
 		}
 
-		p.VersionID = ei.ObjectInfo.VersionID()
+		p.VersionID = ei.EncodeToString()
 	}
 
 	lockInfo, err := h.obj.GetLockInfo(r.Context(), p)

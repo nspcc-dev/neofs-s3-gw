@@ -55,18 +55,19 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if settings.VersioningEnabled() && tagPrm.ObjectVersion.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: bktInfo,
-			Object:  reqInfo.ObjectName,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  bktInfo.Owner,
+			CID:    bktInfo.CID,
+			Object: reqInfo.ObjectName,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
 			h.logAndSendError(w, "could not find object", reqInfo, err)
 			return
 		}
 
-		tagPrm.ObjectVersion.VersionID = ei.ObjectInfo.VersionID()
+		tagPrm.ObjectVersion.VersionID = ei.EncodeToString()
 	}
 
 	if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
@@ -113,18 +114,19 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if settings.VersioningEnabled() && tagPrm.ObjectVersion.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: bktInfo,
-			Object:  reqInfo.ObjectName,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  bktInfo.Owner,
+			CID:    bktInfo.CID,
+			Object: reqInfo.ObjectName,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
 			h.logAndSendError(w, "could not find object", reqInfo, err)
 			return
 		}
 
-		tagPrm.ObjectVersion.VersionID = ei.ObjectInfo.VersionID()
+		tagPrm.ObjectVersion.VersionID = ei.EncodeToString()
 	}
 
 	versionID, tagSet, err := h.obj.GetObjectTagging(r.Context(), tagPrm)
@@ -163,18 +165,19 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if settings.VersioningEnabled() && p.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: bktInfo,
-			Object:  reqInfo.ObjectName,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  bktInfo.Owner,
+			CID:    bktInfo.CID,
+			Object: reqInfo.ObjectName,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
 			h.logAndSendError(w, "could not find object", reqInfo, err)
 			return
 		}
 
-		p.VersionID = ei.ObjectInfo.VersionID()
+		p.VersionID = ei.EncodeToString()
 	}
 
 	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
