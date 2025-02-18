@@ -690,7 +690,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 				}
 
 				for _, version := range versions {
-					if obj.Error = n.objectDelete(ctx, bkt, version.GetID()); obj.Error != nil {
+					if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
 						return obj
 					}
 				}
@@ -729,7 +729,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		for _, version := range versions {
-			if obj.Error = n.objectDelete(ctx, bkt, version.GetID()); obj.Error != nil {
+			if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
 				return obj
 			}
 		}
@@ -750,8 +750,8 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 
 	if obj.VersionID == "" {
 		for _, ver := range versions {
-			if obj.Error = n.objectDelete(ctx, bkt, ver.GetID()); obj.Error != nil {
-				n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", ver.GetID()))
+			if obj.Error = n.objectDelete(ctx, bkt, ver.ID); obj.Error != nil {
+				n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", ver.ID))
 				if isErrObjectAlreadyRemoved(obj.Error) {
 					obj.Error = nil
 					continue
@@ -762,8 +762,8 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 	} else {
 		for _, ver := range versions {
-			if ver.GetID().EncodeToString() == obj.VersionID {
-				if obj.Error = n.objectDelete(ctx, bkt, ver.GetID()); obj.Error != nil {
+			if ver.ID.EncodeToString() == obj.VersionID {
+				if obj.Error = n.objectDelete(ctx, bkt, ver.ID); obj.Error != nil {
 					return obj
 				}
 

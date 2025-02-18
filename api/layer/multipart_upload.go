@@ -960,7 +960,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	prm := PrmObjectCreate{
 		Container:    p.Info.Bkt.CID,
 		Creator:      p.Info.Bkt.Owner,
-		Filepath:     p.Info.Key,
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{

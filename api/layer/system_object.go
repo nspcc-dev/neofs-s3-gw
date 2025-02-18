@@ -60,7 +60,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		return err
 	}
 
-	objectToLock := objList[0].GetID()
+	objectToLock := objList[0].ID
 
 	if newLock.Retention != nil {
 		if lockInfo.IsRetentionSet() {
