@@ -866,23 +866,3 @@ func (n *layer) putDeleteMarker(ctx context.Context, bktInfo *data.BucketInfo, o
 
 	return extendedObjectInfo.ObjectInfo.ID, nil
 }
-
-func isDeleteMarkerObject(head object.Object) bool {
-	for _, attr := range head.Attributes() {
-		if attr.Key() == attrS3DeleteMarker {
-			return true
-		}
-	}
-
-	return false
-}
-
-func getS3VersioningState(head object.Object) string {
-	for _, attr := range head.Attributes() {
-		if attr.Key() == attrS3VersioningState {
-			return attr.Value()
-		}
-	}
-
-	return data.VersioningUnversioned
-}

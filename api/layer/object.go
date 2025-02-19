@@ -106,8 +106,6 @@ type (
 )
 
 const (
-	continuationToken = "<continuation-token>"
-
 	attrS3VersioningState = "S3-versioning-state"
 	attrS3DeleteMarker    = "S3-delete-marker"
 )
@@ -1160,38 +1158,6 @@ func tryDirectoryName(filePath string, prefix, delimiter string) string {
 	index := strings.Index(tail, delimiter)
 	if index >= 0 {
 		return prefix + tail[:index+1]
-	}
-
-	return ""
-}
-
-func convert(head object.Object) data.NodeVersion {
-	nv := data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			OID: head.GetID(),
-		},
-	}
-
-	for _, attr := range head.Attributes() {
-		switch attr.Key() {
-		case object.AttributeFilePath:
-			nv.BaseNodeVersion.FilePath = attr.Value()
-		case attrS3DeleteMarker:
-			nv.DeleteMarker = &data.DeleteMarkerInfo{
-				Created: time.Time{},
-				Owner:   *head.OwnerID(),
-			}
-		}
-	}
-
-	return nv
-}
-
-func filePathFromAttributes(head object.Object) string {
-	for _, attr := range head.Attributes() {
-		if attr.Key() == object.AttributeFilePath {
-			return attr.Value()
-		}
 	}
 
 	return ""
