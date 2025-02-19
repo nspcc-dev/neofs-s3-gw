@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
@@ -497,6 +498,55 @@ func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid
 	}
 
 	return oids, nil
+}
+
+// SearchObjectsV2 implements neofs.NeoFS interface method.
+func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, _ client.SearchObjectsOptions) ([]client.SearchResultItem, error) {
+	var oids []client.SearchResultItem
+
+	if len(filters) == 0 {
+		for _, obj := range t.objects {
+			if obj.GetContainerID() != cid {
+				continue
+			}
+
+			oids = append(oids, fillResultObject(obj, attributes))
+		}
+
+		return oids, nil
+	}
+
+	for _, obj := range t.objects {
+		if obj.GetContainerID() != cid {
+			continue
+		}
+
+		if checkFilters(obj, filters) {
+			oids = append(oids, fillResultObject(obj, attributes))
+		}
+	}
+
+	return oids, nil
+}
+
+func fillResultObject(obj *object.Object, attributes []string) client.SearchResultItem {
+	resultItem := client.SearchResultItem{
+		ID: obj.GetID(),
+	}
+
+	var attrMap = make(map[string]string, len(obj.Attributes()))
+	for _, attr := range obj.Attributes() {
+		attrMap[attr.Key()] = attr.Value()
+	}
+
+	resultItem.Attributes = make([]string, len(attributes))
+	for i, attrName := range attributes {
+		if v, ok := attrMap[attrName]; ok {
+			resultItem.Attributes[i] = v
+		}
+	}
+
+	return resultItem
 }
 
 func checkFilters(obj *object.Object, filters object.SearchFilters) bool {

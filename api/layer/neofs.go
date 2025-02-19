@@ -9,6 +9,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -278,4 +279,7 @@ type NeoFS interface {
 
 	// SearchObjects searches objects with corresponding filters.
 	SearchObjects(ctx context.Context, prm PrmObjectSearch) ([]oid.ID, error)
+
+	// SearchObjectsV2 searches objects with corresponding filters and return objectID with requested attributes.
+	SearchObjectsV2(context.Context, cid.ID, object.SearchFilters, []string, client.SearchObjectsOptions) ([]client.SearchResultItem, error)
 }

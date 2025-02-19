@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -350,11 +351,16 @@ func (n *layer) OwnerPublicKey(ctx context.Context) (*keys.PublicKey, error) {
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {
+	prm.BearerToken = bearerTokenFromContext(ctx, bktOwner)
+}
+
+func bearerTokenFromContext(ctx context.Context, bktOwner user.ID) *bearer.Token {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
 		if bktOwner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
-			prm.BearerToken = bd.Gate.BearerToken
+			return bd.Gate.BearerToken
 		}
 	}
+	return nil
 }
 
 // GetBucketInfo returns bucket info by name.

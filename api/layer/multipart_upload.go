@@ -22,6 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -1418,50 +1419,34 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 	var filters object.SearchFilters
 	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
 
-	var prmSearch = PrmObjectSearch{
-		Container: bucketInfo.CID,
-		Filters:   filters,
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, bucketInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
 
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, bucketInfo.Owner)
-
-	oids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	res, err := n.neoFS.SearchObjectsV2(ctx, bucketInfo.CID, filters, []string{
+		headerS3MultipartUpload,
+		headerS3MultipartNumber,
+		headerS3MultipartCreated,
+	}, opts)
 	if err != nil {
 		return 0, fmt.Errorf("search objects: %w", err)
 	}
 
-	if len(oids) == 0 {
+	if len(res) == 0 {
 		return 0, nil
 	}
 
-	var partNumber int64
+	slices.SortFunc(res, func(a, b client.SearchResultItem) int {
+		return cmp.Compare(a.Attributes[1], b.Attributes[1])
+	})
 
-	for _, id := range oids {
-		head, err := n.objectHead(ctx, bucketInfo, id)
-		if err != nil {
-			return 0, fmt.Errorf("object head: %w", err)
-		}
-		var nextPartNumber int64
-		for _, attr := range head.Attributes() {
-			switch attr.Key() {
-			case headerS3MultipartNumber:
-				nextPartNumber, err = strconv.ParseInt(attr.Value(), 10, 64)
-			case headerS3MultipartCreated:
-				_, err = strconv.ParseInt(attr.Value(), 10, 64)
-			default:
-				continue
-			}
-
-			if err != nil {
-				return 0, fmt.Errorf("parse header: %w", err)
-			}
-		}
-
-		if partNumber == 0 {
-			partNumber = nextPartNumber
-		} else {
-			partNumber = min(partNumber, nextPartNumber)
-		}
+	partNumber, err := strconv.ParseInt(res[0].Attributes[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse header: %w", err)
+	}
+	if _, err = strconv.ParseInt(res[0].Attributes[2], 10, 64); err != nil {
+		return 0, fmt.Errorf("parse header: %w", err)
 	}
 
 	return partNumber, nil

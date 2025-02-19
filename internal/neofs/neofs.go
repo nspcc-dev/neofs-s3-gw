@@ -752,3 +752,28 @@ func (x *NeoFS) SearchObjects(ctx context.Context, prm layer.PrmObjectSearch) ([
 
 	return oids, nil
 }
+
+// SearchObjectsV2 implements neofs.NeoFS interface method.
+func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, error) {
+	var (
+		resultItems []client.SearchResultItem
+		items       []client.SearchResultItem
+		cursor      string
+		err         error
+	)
+
+	for {
+		items, cursor, err = x.pool.SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
+		if err != nil {
+			return nil, fmt.Errorf("search objects: %w", err)
+		}
+
+		resultItems = append(resultItems, items...)
+
+		if cursor == "" {
+			break
+		}
+	}
+
+	return resultItems, nil
+}
