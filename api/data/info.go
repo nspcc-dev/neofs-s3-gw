@@ -65,6 +65,17 @@ type (
 		Headers        map[string]string
 	}
 
+	// ObjectListResponseContent holds response data for object listing.
+	ObjectListResponseContent struct {
+		ID      oid.ID
+		IsDir   bool
+		Size    int64
+		Owner   user.ID
+		HashSum string
+		Created time.Time
+		Name    string
+	}
+
 	// NotificationInfo store info to send s3 notification.
 	NotificationInfo struct {
 		Name    string

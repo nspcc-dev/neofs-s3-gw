@@ -22,6 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -144,13 +145,6 @@ type (
 		Owner       user.ID
 		OwnerPubKey keys.PublicKey
 		Created     time.Time
-	}
-
-	slotAttributes struct {
-		PartNumber int64
-		// in nanoseconds
-		CreatedAt int64
-		FilePath  string
 	}
 
 	uploadPartAsSlotParams struct {
@@ -966,7 +960,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	prm := PrmObjectCreate{
 		Container:    p.Info.Bkt.CID,
 		Creator:      p.Info.Bkt.Owner,
-		Filepath:     p.Info.Key,
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
@@ -1421,70 +1414,38 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	return &objInfo, nil
 }
 
-func (n *layer) getSlotAttributes(obj object.Object) (*slotAttributes, error) {
-	var (
-		attributes slotAttributes
-		err        error
-	)
-
-	for _, attr := range obj.Attributes() {
-		switch attr.Key() {
-		case headerS3MultipartNumber:
-			attributes.PartNumber, err = strconv.ParseInt(attr.Value(), 10, 64)
-		case headerS3MultipartCreated:
-			attributes.CreatedAt, err = strconv.ParseInt(attr.Value(), 10, 64)
-		case object.AttributeFilePath:
-			attributes.FilePath = attr.Value()
-		default:
-			continue
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("parse header: %w", err)
-		}
-	}
-
-	return &attributes, nil
-}
-
 func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, bucketInfo *data.BucketInfo) (int64, error) {
 	var filters object.SearchFilters
 	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
 
-	var prmSearch = PrmObjectSearch{
-		Container: bucketInfo.CID,
-		Filters:   filters,
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, bucketInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
 
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, bucketInfo.Owner)
-
-	oids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	res, err := n.neoFS.SearchObjectsV2(ctx, bucketInfo.CID, filters, []string{
+		headerS3MultipartUpload,
+		headerS3MultipartNumber,
+		headerS3MultipartCreated,
+	}, opts)
 	if err != nil {
 		return 0, fmt.Errorf("search objects: %w", err)
 	}
 
-	if len(oids) == 0 {
+	if len(res) == 0 {
 		return 0, nil
 	}
 
-	var partNumber int64
+	slices.SortFunc(res, func(a, b client.SearchResultItem) int {
+		return cmp.Compare(a.Attributes[1], b.Attributes[1])
+	})
 
-	for _, id := range oids {
-		head, err := n.objectHead(ctx, bucketInfo, id)
-		if err != nil {
-			return 0, fmt.Errorf("object head: %w", err)
-		}
-
-		attributes, err := n.getSlotAttributes(*head)
-		if err != nil {
-			return 0, fmt.Errorf("get slot attributes: %w", err)
-		}
-
-		if partNumber == 0 {
-			partNumber = attributes.PartNumber
-		} else {
-			partNumber = min(partNumber, attributes.PartNumber)
-		}
+	partNumber, err := strconv.ParseInt(res[0].Attributes[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse header: %w", err)
+	}
+	if _, err = strconv.ParseInt(res[0].Attributes[2], 10, 64); err != nil {
+		return 0, fmt.Errorf("parse header: %w", err)
 	}
 
 	return partNumber, nil

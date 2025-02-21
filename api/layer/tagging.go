@@ -2,18 +2,21 @@ package layer
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	errorsStd "errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	"go.uber.org/zap"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type GetObjectTaggingParams struct {
@@ -31,6 +34,13 @@ type PutObjectTaggingParams struct {
 
 	// NodeVersion can be nil. If not nil we save one request to tree service.
 	NodeVersion *data.NodeVersion // optional
+}
+
+type taggingSearchResult struct {
+	ID                oid.ID
+	FilePath          string
+	CreationEpoch     uint64
+	CreationTimestamp int64
 }
 
 const (
@@ -80,20 +90,29 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		}
 	}
 
-	prmSearch := PrmObjectSearch{
-		Container: p.ObjectVersion.BktInfo.CID,
-		Filters:   make(object.SearchFilters, 0, 3),
+	var (
+		filters             = make(object.SearchFilters, 0, 4)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+			object.FilterCreationEpoch,
+			object.AttributeTimestamp,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
 
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, p.ObjectVersion.BktInfo.Owner)
-	prmSearch.Filters.AddFilter(object.AttributeFilePath, p.ObjectVersion.ObjectName, object.MatchStringEqual)
-	prmSearch.Filters.AddFilter(attributeTagsMetaObject, attributeTagsMetaObjectValue, object.MatchStringEqual)
-	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	filters.AddFilter(object.AttributeFilePath, p.ObjectVersion.ObjectName, object.MatchStringEqual)
+	filters.AddFilter(attributeTagsMetaObject, attributeTagsMetaObjectValue, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.ObjectVersion.VersionID != "" {
-		prmSearch.Filters.AddFilter(AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
+		filters.AddFilter(AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
 	}
 
-	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, p.ObjectVersion.BktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
 			return "", nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -102,33 +121,65 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		return "", nil, fmt.Errorf("search object version: %w", err)
 	}
 
-	if len(ids) == 0 {
+	if len(searchResultItems) == 0 {
 		return "", nil, nil
 	}
 
-	var (
-		objects = make([]*object.Object, 0, len(ids))
-	)
+	var searchResults = make([]taggingSearchResult, 0, len(searchResultItems))
 
-	for i := range ids {
-		obj, err := n.objectGet(ctx, p.ObjectVersion.BktInfo, ids[i])
-		if err != nil {
-			n.log.Warn("couldn't obj object",
-				zap.Stringer("oid", &ids[i]),
-				zap.Stringer("cid", p.ObjectVersion.BktInfo.CID),
-				zap.Error(err))
-
-			return "", nil, fmt.Errorf("couldn't obj object: %w", err)
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return "", nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
 		}
 
-		objects = append(objects, obj)
+		var psr = taggingSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[0],
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			if err != nil {
+				return "", nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return "", nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
 	}
 
-	slices.SortFunc(objects, sortObjectsFunc)
+	sortFunc := func(a, b taggingSearchResult) int {
+		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
+			return c
+		}
+
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	lastObj, err := n.objectGet(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
+	if err != nil {
+		if isErrObjectAlreadyRemoved(err) {
+			return "", nil, nil
+		}
+
+		return "", nil, fmt.Errorf("get object: %w", err)
+	}
 
 	var (
-		lastObj = objects[0]
-		tags    = make(map[string]string)
+		tags = make(map[string]string)
 	)
 
 	if err = json.Unmarshal(lastObj.Payload(), &tags); err != nil {
@@ -139,20 +190,20 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 }
 
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
-	prmSearch := PrmObjectSearch{
-		Container: p.BktInfo.CID,
-		Filters:   make(object.SearchFilters, 0, 3),
-	}
-
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, p.BktInfo.Owner)
-	prmSearch.Filters.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
-	prmSearch.Filters.AddFilter(attributeTagsMetaObject, "true", object.MatchStringEqual)
-	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	fs := make(object.SearchFilters, 0, 4)
+	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
+	fs.AddFilter(attributeTagsMetaObject, "true", object.MatchStringEqual)
+	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.VersionID != "" {
-		prmSearch.Filters.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+		fs.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
 	}
 
-	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
 	if err != nil {
 		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
 			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -161,12 +212,12 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 		return fmt.Errorf("search object version: %w", err)
 	}
 
-	if len(ids) == 0 {
+	if len(res) == 0 {
 		return nil
 	}
 
-	for _, id := range ids {
-		if err = n.objectDelete(ctx, p.BktInfo, id); err != nil {
+	for i := range res {
+		if err = n.objectDelete(ctx, p.BktInfo, res[i].ID); err != nil {
 			return fmt.Errorf("couldn't delete object: %w", err)
 		}
 	}

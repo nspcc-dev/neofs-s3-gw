@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -85,18 +86,29 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if settingsSrc.VersioningEnabled() && srcObjPrm.VersionID == "" {
-		headObjectPrm := &layer.HeadObjectParams{
-			BktInfo: srcObjPrm.BktInfo,
-			Object:  srcObject,
+		shortInfoParams := &layer.ShortInfoParams{
+			Owner:  srcObjPrm.BktInfo.Owner,
+			CID:    srcObjPrm.BktInfo.CID,
+			Object: srcObject,
 		}
 
-		ei, err := h.obj.GetExtendedObjectInfo(r.Context(), headObjectPrm)
+		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
 		if err != nil {
-			h.logAndSendError(w, "could not find object", reqInfo, err)
-			return
+			if !errors.Is(err, layer.ErrNodeNotFound) {
+				h.logAndSendError(w, "could not find object", reqInfo, err)
+				return
+			}
+
+			// CopyObject can copy object from versioned container, but it can contain only "null" versions.
+			// In this case we should find actual one.
+			shortInfoParams.FindNullVersion = true
+			if ei, err = h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams); err != nil {
+				h.logAndSendError(w, "could not find object", reqInfo, err)
+				return
+			}
 		}
 
-		srcObjPrm.VersionID = ei.ObjectInfo.VersionID()
+		srcObjPrm.VersionID = ei.EncodeToString()
 	}
 
 	dstBktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)

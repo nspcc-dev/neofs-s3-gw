@@ -11,7 +11,7 @@ require (
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.107.0
 	github.com/nspcc-dev/neofs-contract v0.20.0
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20250130151303-051c6238eaea
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.12.0.20250221080448-cff563372e13
 	github.com/nspcc-dev/tzhash v1.8.2
 	github.com/prometheus/client_golang v1.20.2
 	github.com/spf13/pflag v1.0.5

@@ -1,6 +1,8 @@
 package layer
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"encoding/xml"
 	errorsStd "errors"
@@ -12,10 +14,10 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"go.uber.org/zap"
 )
 
 const (
@@ -29,6 +31,16 @@ type PutLockInfoParams struct {
 	NewLock      *data.ObjectLock
 	CopiesNumber uint32
 	NodeVersion  *data.NodeVersion // optional
+}
+
+type locksSearchResult struct {
+	ID                 oid.ID
+	FilePath           string
+	CreationEpoch      uint64
+	CreationTimestamp  int64
+	ExpirationEpoch    uint64
+	IsComplianceMode   bool
+	RetentionUntilMode time.Time
 }
 
 func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err error) {
@@ -48,7 +60,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		return err
 	}
 
-	objectToLock := objList[0].GetID()
+	objectToLock := objList[0].ID
 
 	if newLock.Retention != nil {
 		if lockInfo.IsRetentionSet() {
@@ -97,82 +109,111 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 }
 
 func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo, objectName, version string) (*data.LockInfo, error) {
-	prmSearch := PrmObjectSearch{
-		Container: bkt.CID,
-		Filters:   make(object.SearchFilters, 0, 3),
+	var (
+		filters             = make(object.SearchFilters, 0, 3)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+			object.FilterCreationEpoch,
+			object.AttributeTimestamp,
+			object.AttributeExpirationEpoch,
+			AttributeComplianceMode,
+			AttributeRetentionUntilMode,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
 
-	n.prepareAuthParameters(ctx, &prmSearch.PrmAuth, bkt.Owner)
-	prmSearch.Filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
-	prmSearch.Filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
+	filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
 	if version != "" {
-		prmSearch.Filters.AddFilter(AttributeObjectVersion, version, object.MatchStringEqual)
+		filters.AddFilter(AttributeObjectVersion, version, object.MatchStringEqual)
 	}
 
-	ids, err := n.neoFS.SearchObjects(ctx, prmSearch)
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
 			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
-		return nil, fmt.Errorf("search object version: %w", err)
+		return nil, fmt.Errorf("search objects: %w", err)
 	}
 
-	if len(ids) == 0 {
-		return nil, nil
+	if len(searchResultItems) == 0 {
+		return nil, ErrNodeNotFound
 	}
 
-	var (
-		heads = make([]*object.Object, 0, len(ids))
-		lock  data.LockInfo
-	)
+	var searchResults = make([]locksSearchResult, 0, len(searchResultItems))
 
-	for i := range ids {
-		head, err := n.objectHead(ctx, bkt, ids[i])
-		if err != nil {
-			n.log.Warn("couldn't head object",
-				zap.Stringer("oid", &ids[i]),
-				zap.Stringer("cid", bkt.CID),
-				zap.Error(err))
-
-			return nil, fmt.Errorf("couldn't head object: %w", err)
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
 		}
 
-		heads = append(heads, head)
-	}
+		var psr = locksSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[0],
+		}
 
-	slices.SortFunc(heads, sortObjectsFunc)
-	slices.Reverse(heads)
-
-	for _, head := range heads {
-		var (
-			expEpoch       uint64
-			isCompliance   bool
-			retentionUntil time.Time
-		)
-
-		for _, attr := range head.Attributes() {
-			switch attr.Key() {
-			case object.AttributeExpirationEpoch:
-				expEpoch, err = strconv.ParseUint(attr.Value(), 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("parse expiration epoch: %w", err)
-				}
-			case AttributeComplianceMode:
-				isCompliance = attr.Value() == "true"
-			case AttributeRetentionUntilMode:
-				retentionUntil, err = time.Parse(time.RFC3339, attr.Value())
-				if err != nil {
-					return nil, fmt.Errorf("parse retention until attribute: %w", err)
-				}
+		if item.Attributes[1] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
 			}
 		}
 
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		if item.Attributes[3] != "" {
+			psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[3], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[3], err)
+			}
+		}
+
+		psr.IsComplianceMode = item.Attributes[4] == "true"
+
+		if item.Attributes[5] != "" {
+			psr.RetentionUntilMode, err = time.Parse(time.RFC3339, item.Attributes[5])
+			if err != nil {
+				return nil, fmt.Errorf("parse retention until attribute: %w", err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b locksSearchResult) int {
+		if c := cmp.Compare(a.CreationEpoch, b.CreationEpoch); c != 0 { // direct order.
+			return c
+		}
+
+		if c := cmp.Compare(a.CreationTimestamp, b.CreationTimestamp); c != 0 { // direct order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(a.ID[:], b.ID[:]) // direct order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	var lock data.LockInfo
+
+	for _, item := range searchResults {
 		// legal hold.
-		if expEpoch == math.MaxUint64 {
-			lock.SetLegalHold(head.GetID())
+		if item.ExpirationEpoch == math.MaxUint64 {
+			lock.SetLegalHold(item.ID)
 		} else {
-			lock.SetRetention(head.GetID(), retentionUntil.Format(time.RFC3339), isCompliance)
+			lock.SetRetention(item.ID, item.RetentionUntilMode.Format(time.RFC3339), item.IsComplianceMode)
 		}
 	}
 

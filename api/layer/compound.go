@@ -33,7 +33,10 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 
 	lockInfo, err = n.getLockDataFromObjects(ctx, objVersion.BktInfo, objVersion.ObjectName, objVersion.VersionID)
 	if err != nil {
-		return nil, nil, err
+		// lock info can be missed - OK. Despite it some tags above may appear, and we should return them.
+		if !errorsStd.Is(err, ErrNodeNotFound) {
+			return nil, nil, err
+		}
 	}
 
 	n.cache.PutTagging(owner, objectTaggingCacheKey(objVersion), tags)

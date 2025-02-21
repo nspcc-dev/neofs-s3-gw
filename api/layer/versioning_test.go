@@ -67,7 +67,7 @@ func (tc *testContext) deleteObject(objectName, versionID string, settings *data
 	}
 }
 
-func (tc *testContext) listObjectsV1() []*data.ObjectInfo {
+func (tc *testContext) listObjectsV1() []data.ObjectListResponseContent {
 	res, err := tc.layer.ListObjectsV1(tc.ctx, &ListObjectsParamsV1{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
 			BktInfo: tc.bktInfo,
@@ -78,7 +78,7 @@ func (tc *testContext) listObjectsV1() []*data.ObjectInfo {
 	return res.Objects
 }
 
-func (tc *testContext) listObjectsV2() []*data.ObjectInfo {
+func (tc *testContext) listObjectsV2() []data.ObjectListResponseContent {
 	res, err := tc.layer.ListObjectsV2(tc.ctx, &ListObjectsParamsV2{
 		ListObjectsParamsCommon: ListObjectsParamsCommon{
 			BktInfo: tc.bktInfo,
