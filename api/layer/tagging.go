@@ -5,7 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -111,7 +111,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, p.ObjectVersion.BktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
-		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			return "", nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
@@ -211,7 +211,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
 	if err != nil {
-		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
@@ -242,7 +242,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 
 	tags, err := n.treeService.GetBucketTagging(ctx, bktInfo)
 	if err != nil {
-		if errorsStd.Is(err, ErrNodeNotFound) {
+		if errors.Is(err, ErrNodeNotFound) {
 			return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
 		}
 
