@@ -525,12 +525,12 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.O
 
 // GetExtendedObjectInfo returns meta information and corresponding info from the tree service about the object.
 func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
-	var objInfo *data.ExtendedObjectInfo
+	var id oid.ID
 	var err error
 	var settings *data.BucketSettings
 
 	if len(p.VersionID) == 0 {
-		objInfo, err = n.headLastVersionIfNotDeleted(ctx, p.BktInfo, p.Object)
+		id, err = n.headLastVersionIfNotDeleted(ctx, p.BktInfo, p.Object)
 	} else {
 		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
 		if err != nil {
@@ -538,10 +538,22 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		}
 
 		p.IsBucketVersioningEnabled = settings.VersioningEnabled()
-		objInfo, err = n.headVersion(ctx, p.BktInfo, p)
+		id, err = n.headVersion(ctx, p.BktInfo, p)
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	meta, err := n.objectHead(ctx, p.BktInfo, id) // latest version.
+	if err != nil {
+		return nil, fmt.Errorf("get head failed: %w", err)
+	}
+
+	objInfo := objectInfoFromMeta(p.BktInfo, meta)
+
+	extObjInfo := &data.ExtendedObjectInfo{
+		ObjectInfo:  objInfo,
+		NodeVersion: &data.NodeVersion{},
 	}
 
 	reqInfo := api.GetReqInfo(ctx)
@@ -549,10 +561,10 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		zap.String("reqId", reqInfo.RequestID),
 		zap.String("bucket", p.BktInfo.Name),
 		zap.Stringer("cid", p.BktInfo.CID),
-		zap.String("object", objInfo.ObjectInfo.Name),
-		zap.Stringer("oid", objInfo.ObjectInfo.ID))
+		zap.String("object", objInfo.Name),
+		zap.Stringer("oid", objInfo.ID))
 
-	return objInfo, nil
+	return extObjInfo, nil
 }
 
 // GetIDForVersioningContainer returns actual oid.ID for object in versioned container.

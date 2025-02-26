@@ -69,6 +69,8 @@ func extractHeaders(headers map[string]string) (map[string]string, string, time.
 	)
 
 	delete(headers, object.AttributeFilePath)
+	delete(headers, objectNonceAttribute)
+
 	if contentType, ok := headers[object.AttributeContentType]; ok {
 		mimeType = contentType
 		delete(headers, object.AttributeContentType)

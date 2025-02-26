@@ -408,39 +408,22 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 	return multipartHeader, nil
 }
 
-func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (*data.ExtendedObjectInfo, error) {
+func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (oid.ID, error) {
 	owner := n.Owner(ctx)
-	if extObjInfo := n.cache.GetLastObject(owner, bkt.Name, objectName); extObjInfo != nil {
-		return extObjInfo, nil
-	}
 
 	heads, err := n.searchAllVersionsInNeoFS(ctx, bkt, owner, objectName, false)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
-		return nil, err
+		return oid.ID{}, err
 	}
 
 	if heads[0].IsDeleteMarker {
-		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+		return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 	}
 
-	meta, err := n.objectHead(ctx, bkt, heads[0].ID) // latest version.
-	if err != nil {
-		return nil, fmt.Errorf("get head failed: %w", err)
-	}
-
-	objInfo := objectInfoFromMeta(bkt, meta)
-
-	extObjInfo := &data.ExtendedObjectInfo{
-		ObjectInfo:  objInfo,
-		NodeVersion: &data.NodeVersion{},
-	}
-
-	n.cache.PutObjectWithName(owner, extObjInfo)
-
-	return extObjInfo, nil
+	return heads[0].ID, nil
 }
 
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
@@ -690,16 +673,15 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 	return maps.Values(uniq), nextCursor, nil
 }
 
-func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
-	var err error
+func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (oid.ID, error) {
 	var foundVersion *allVersionsSearchResult
 	if p.VersionID == data.UnversionedObjectVersionID {
 		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, p.Object, true)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+				return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 			}
-			return nil, err
+			return oid.ID{}, err
 		}
 
 		foundVersion = &versions[0]
@@ -707,9 +689,9 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, p.Object, false)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+				return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 			}
-			return nil, err
+			return oid.ID{}, err
 		}
 
 		if p.IsBucketVersioningEnabled {
@@ -726,33 +708,11 @@ func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadOb
 			}
 		}
 		if foundVersion == nil {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 	}
 
-	id := foundVersion.ID
-	owner := n.Owner(ctx)
-	if extObjInfo := n.cache.GetObject(owner, newAddress(bkt.CID, id)); extObjInfo != nil {
-		return extObjInfo, nil
-	}
-
-	meta, err := n.objectHead(ctx, bkt, id)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectNotFound) {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-		}
-		return nil, err
-	}
-	objInfo := objectInfoFromMeta(bkt, meta)
-
-	extObjInfo := &data.ExtendedObjectInfo{
-		ObjectInfo:  objInfo,
-		NodeVersion: &data.NodeVersion{},
-	}
-
-	n.cache.PutObject(owner, extObjInfo)
-
-	return extObjInfo, nil
+	return foundVersion.ID, nil
 }
 
 // objectDelete puts tombstone object into neofs.
