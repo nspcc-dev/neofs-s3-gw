@@ -256,7 +256,7 @@ type (
 		// Compound methods for optimizations
 
 		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in single tree service invocation.
-		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion, nodeVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error)
+		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
 	}
 )
 

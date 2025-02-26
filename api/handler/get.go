@@ -189,7 +189,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		t.VersionID = info.VersionID()
 	}
 
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
+	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
 	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return

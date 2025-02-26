@@ -8,7 +8,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 )
 
-func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectVersion, nodeVersion *data.NodeVersion) (map[string]string, *data.LockInfo, error) {
+func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectVersion) (map[string]string, *data.LockInfo, error) {
 	var err error
 	owner := n.Owner(ctx)
 
