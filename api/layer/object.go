@@ -408,24 +408,6 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 	return multipartHeader, nil
 }
 
-func (n *layer) headLastVersionIfNotDeleted(ctx context.Context, bkt *data.BucketInfo, objectName string) (oid.ID, error) {
-	owner := n.Owner(ctx)
-
-	heads, err := n.searchAllVersionsInNeoFS(ctx, bkt, owner, objectName, false)
-	if err != nil {
-		if errors.Is(err, ErrNodeNotFound) {
-			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-		}
-		return oid.ID{}, err
-	}
-
-	if heads[0].IsDeleteMarker {
-		return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-	}
-
-	return heads[0].ID, nil
-}
-
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
@@ -671,48 +653,6 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 	}
 
 	return maps.Values(uniq), nextCursor, nil
-}
-
-func (n *layer) headVersion(ctx context.Context, bkt *data.BucketInfo, p *HeadObjectParams) (oid.ID, error) {
-	var foundVersion *allVersionsSearchResult
-	if p.VersionID == data.UnversionedObjectVersionID {
-		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, p.Object, true)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-			return oid.ID{}, err
-		}
-
-		foundVersion = &versions[0]
-	} else {
-		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-			return oid.ID{}, err
-		}
-
-		if p.IsBucketVersioningEnabled {
-			for _, version := range versions {
-				if version.ID.EncodeToString() == p.VersionID {
-					foundVersion = &version
-					break
-				}
-			}
-		} else {
-			// If versioning is not enabled, user "should see" only last version of uploaded object.
-			if versions[0].ID.EncodeToString() == p.VersionID {
-				foundVersion = &versions[0]
-			}
-		}
-		if foundVersion == nil {
-			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-		}
-	}
-
-	return foundVersion.ID, nil
 }
 
 // objectDelete puts tombstone object into neofs.

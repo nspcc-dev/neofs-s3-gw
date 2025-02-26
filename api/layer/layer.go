@@ -525,23 +525,74 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.O
 
 // GetExtendedObjectInfo returns meta information and corresponding info from the tree service about the object.
 func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
-	var id oid.ID
-	var err error
-	var settings *data.BucketSettings
+	var (
+		id       oid.ID
+		err      error
+		settings *data.BucketSettings
+		owner    = n.Owner(ctx)
+	)
 
 	if len(p.VersionID) == 0 {
-		id, err = n.headLastVersionIfNotDeleted(ctx, p.BktInfo, p.Object)
+		heads, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			}
+
+			return nil, err
+		}
+
+		if heads[0].IsDeleteMarker {
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+		}
+
+		id = heads[0].ID
+	} else if p.VersionID == data.UnversionedObjectVersionID {
+		versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+
+			return nil, err
+		}
+
+		id = versions[0].ID
 	} else {
 		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
 		if err != nil {
 			return nil, fmt.Errorf("get bucket settings: %w", err)
 		}
 
-		p.IsBucketVersioningEnabled = settings.VersioningEnabled()
-		id, err = n.headVersion(ctx, p.BktInfo, p)
-	}
-	if err != nil {
-		return nil, err
+		versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+			return nil, err
+		}
+
+		var foundVersion *allVersionsSearchResult
+
+		if settings.VersioningEnabled() {
+			for _, version := range versions {
+				if version.ID.EncodeToString() == p.VersionID {
+					foundVersion = &version
+					break
+				}
+			}
+		} else {
+			// If versioning is not enabled, user "should see" only last version of uploaded object.
+			if versions[0].ID.EncodeToString() == p.VersionID {
+				foundVersion = &versions[0]
+			}
+		}
+
+		if foundVersion == nil {
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+		}
+
+		id = foundVersion.ID
 	}
 
 	meta, err := n.objectHead(ctx, p.BktInfo, id) // latest version.
