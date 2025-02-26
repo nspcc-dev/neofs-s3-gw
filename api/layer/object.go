@@ -24,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -471,7 +472,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	}
 
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	filters.AddFilter(attributeTagsMetaObject, "", object.MatchNotPresent)
+	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
 		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
@@ -579,7 +580,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 
 	filters.AddFilter(object.AttributeFilePath, prefix, object.MatchCommonPrefix)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	filters.AddFilter(attributeTagsMetaObject, "", object.MatchNotPresent)
+	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
 		filters.AddFilter(attrS3VersioningState, "", object.MatchNotPresent)

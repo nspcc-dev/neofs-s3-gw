@@ -12,6 +12,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -43,11 +44,6 @@ type taggingSearchResult struct {
 	CreationTimestamp int64
 }
 
-const (
-	attributeTagsMetaObject      = ".s3-tags-meta-object"
-	attributeTagsMetaObjectValue = "true"
-)
-
 func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) error {
 	payload, err := json.Marshal(p.TagSet)
 	if err != nil {
@@ -69,7 +65,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 		prm.Attributes[AttributeObjectVersion] = p.ObjectVersion.VersionID
 	}
 
-	prm.Attributes[attributeTagsMetaObject] = attributeTagsMetaObjectValue
+	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
 
 	if _, _, err = n.objectPutAndHash(ctx, prm, p.ObjectVersion.BktInfo); err != nil {
 		return fmt.Errorf("create tagging object: %w", err)
@@ -106,7 +102,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	}
 
 	filters.AddFilter(object.AttributeFilePath, p.ObjectVersion.ObjectName, object.MatchStringEqual)
-	filters.AddFilter(attributeTagsMetaObject, attributeTagsMetaObjectValue, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.ObjectVersion.VersionID != "" {
 		filters.AddFilter(AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
@@ -192,7 +188,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
 	fs := make(object.SearchFilters, 0, 4)
 	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
-	fs.AddFilter(attributeTagsMetaObject, "true", object.MatchStringEqual)
+	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.VersionID != "" {
 		fs.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -128,6 +129,7 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	}
 
 	filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeLock, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
 	if version != "" {
 		filters.AddFilter(AttributeObjectVersion, version, object.MatchStringEqual)
@@ -239,6 +241,8 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	if objectVersion != "" {
 		prm.Attributes[AttributeObjectVersion] = objectVersion
 	}
+
+	prm.Attributes[s3headers.MetaType] = s3headers.TypeLock
 
 	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
 	return id, err
