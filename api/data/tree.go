@@ -41,6 +41,13 @@ type ExtendedObjectInfo struct {
 	IsLatest    bool
 }
 
+// ComprehensiveObjectInfo represents metasearch result for object, with tags and lock data.
+type ComprehensiveObjectInfo struct {
+	ID       oid.ID
+	TagSet   map[string]string
+	LockInfo *LockInfo
+}
+
 func (e ExtendedObjectInfo) Version() string {
 	if e.NodeVersion.IsUnversioned {
 		return UnversionedObjectVersionID

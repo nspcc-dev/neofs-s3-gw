@@ -85,7 +85,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		t.VersionID = ""
 	}
 
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t, extendedInfo.NodeVersion)
+	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
 	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
 		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
@@ -113,7 +113,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), r.Header, extendedInfo, len(tagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, extendedInfo.ObjectInfo, len(tagSet), bktSettings.Unversioned())
 	w.WriteHeader(http.StatusOK)
 }
 
