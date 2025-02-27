@@ -574,6 +574,31 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	}, nil
 }
 
+// GetObject implements neofs.NeoFS interface method.
+func (x *NeoFS) GetObject(ctx context.Context, prm layer.GetObject) (*layer.ObjectPart, error) {
+	var (
+		prmGet client.PrmObjectGet
+	)
+
+	if prm.BearerToken != nil {
+		prmGet.WithBearerToken(*prm.BearerToken)
+	}
+
+	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
+	if err != nil {
+		if reason, ok := isErrAccessDenied(err); ok {
+			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+		}
+
+		return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
+	}
+
+	return &layer.ObjectPart{
+		Head:    &header,
+		Payload: payloadReader{res},
+	}, nil
+}
+
 // DeleteObject implements neofs.NeoFS interface method.
 func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) error {
 	var prmDelete client.PrmObjectDelete

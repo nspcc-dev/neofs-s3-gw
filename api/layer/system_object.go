@@ -240,6 +240,7 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 
 	if objectVersion != "" {
 		prm.Attributes[AttributeObjectVersion] = objectVersion
+		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
 	}
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeLock

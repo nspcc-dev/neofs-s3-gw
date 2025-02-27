@@ -198,6 +198,20 @@ type (
 		Error             error
 	}
 
+	// GetObjectWithPayloadReaderParams describes params for Client.GetObjectWithPayloadReader.
+	GetObjectWithPayloadReaderParams struct {
+		Owner   user.ID
+		BktInfo *data.BucketInfo
+		Object  oid.ID
+	}
+
+	// ObjectWithPayloadReader is a response for Client.GetObjectWithPayloadReader.
+	ObjectWithPayloadReader struct {
+		Head       *object.Object
+		Payload    io.ReadCloser
+		ObjectInfo *data.ObjectInfo
+	}
+
 	// Client provides S3 API client interface.
 	Client interface {
 		Initialize(ctx context.Context, c EventListener) error
@@ -217,8 +231,10 @@ type (
 		DeleteBucket(ctx context.Context, p *DeleteBucketParams) error
 
 		GetObject(ctx context.Context, p *GetObjectParams) error
+		GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWithPayloadReaderParams) (*ObjectWithPayloadReader, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
 		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
+		ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error)
 		GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error)
 
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
@@ -425,6 +441,27 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 	return n.containerList(ctx)
 }
 
+// GetObjectWithPayloadReader returns object head and payload Reader.
+func (n *layer) GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWithPayloadReaderParams) (*ObjectWithPayloadReader, error) {
+	var prm = GetObject{
+		Container: p.BktInfo.CID,
+		Object:    p.Object,
+	}
+
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.Owner)
+
+	op, err := n.neoFS.GetObject(ctx, prm)
+	if err != nil {
+		return nil, fmt.Errorf("get object: %w", err)
+	}
+
+	return &ObjectWithPayloadReader{
+		Head:       op.Head,
+		Payload:    op.Payload,
+		ObjectInfo: objectInfoFromMeta(p.BktInfo, op.Head),
+	}, nil
+}
+
 // GetObject from storage.
 func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var params getParams
@@ -616,6 +653,123 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		zap.Stringer("oid", objInfo.ID))
 
 	return extObjInfo, nil
+}
+
+func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error) {
+	var (
+		id          oid.ID
+		err         error
+		settings    *data.BucketSettings
+		owner       = n.Owner(ctx)
+		versions    []allVersionsSearchResult
+		tags, locks bool
+
+		tagSet   map[string]string
+		lockInfo *data.LockInfo
+	)
+
+	if len(p.VersionID) == 0 {
+		versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			}
+
+			return nil, err
+		}
+
+		if versions[0].IsDeleteMarker {
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+		}
+
+		id = versions[0].ID
+	} else if p.VersionID == data.UnversionedObjectVersionID {
+		versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+
+			return nil, err
+		}
+
+		id = versions[0].ID
+	} else {
+		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
+		if err != nil {
+			return nil, fmt.Errorf("get bucket settings: %w", err)
+		}
+
+		versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+			return nil, err
+		}
+
+		var foundVersion *allVersionsSearchResult
+
+		if settings.VersioningEnabled() {
+			for _, version := range versions {
+				if version.ID.EncodeToString() == p.VersionID {
+					foundVersion = &version
+					break
+				}
+			}
+		} else {
+			// If versioning is not enabled, user "should see" only last version of uploaded object.
+			if versions[0].ID.EncodeToString() == p.VersionID {
+				foundVersion = &versions[0]
+			}
+		}
+
+		if foundVersion == nil {
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+		}
+
+		id = foundVersion.ID
+	}
+
+	if tags {
+		tagPrm := &GetObjectTaggingParams{
+			ObjectVersion: &ObjectVersion{
+				BktInfo:    p.BktInfo,
+				ObjectName: p.Object,
+				VersionID:  p.VersionID,
+			},
+		}
+
+		_, tagSet, err = n.GetObjectTagging(ctx, tagPrm)
+		if err != nil {
+			if !errors.Is(err, ErrNodeNotFound) {
+				return nil, fmt.Errorf("get tags: %w", err)
+			}
+		}
+	}
+
+	if locks {
+		lockInfo, err = n.getLockDataFromObjects(ctx, p.BktInfo, p.Object, p.VersionID)
+		if err != nil {
+			if !errors.Is(err, ErrNodeNotFound) {
+				return nil, fmt.Errorf("get locks: %w", err)
+			}
+		}
+	}
+
+	reqInfo := api.GetReqInfo(ctx)
+	n.log.Debug("get object",
+		zap.String("reqId", reqInfo.RequestID),
+		zap.String("bucket", p.BktInfo.Name),
+		zap.Stringer("cid", p.BktInfo.CID),
+		zap.String("object", p.Object),
+		zap.Stringer("oid", id))
+
+	return &data.ComprehensiveObjectInfo{
+		ID:       id,
+		TagSet:   tagSet,
+		LockInfo: lockInfo,
+	}, nil
 }
 
 // GetIDForVersioningContainer returns actual oid.ID for object in versioned container.

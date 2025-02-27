@@ -113,7 +113,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), r.Header, extendedInfo, len(tagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, extendedInfo.ObjectInfo, len(tagSet), bktSettings.Unversioned())
 	w.WriteHeader(http.StatusOK)
 }
 

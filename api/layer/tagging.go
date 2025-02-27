@@ -63,6 +63,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 
 	if p.ObjectVersion.VersionID != "" {
 		prm.Attributes[AttributeObjectVersion] = p.ObjectVersion.VersionID
+		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
 	}
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
@@ -165,13 +166,22 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 
 	slices.SortFunc(searchResults, sortFunc)
 
-	lastObj, err := n.objectGet(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
+	tags, err := n.getObjectTagsByOID(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return p.ObjectVersion.VersionID, tags, nil
+}
+
+func (n *layer) getObjectTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID) (map[string]string, error) {
+	lastObj, err := n.objectGet(ctx, bktInfo, id)
 	if err != nil {
 		if isErrObjectAlreadyRemoved(err) {
-			return "", nil, nil
+			return nil, nil
 		}
 
-		return "", nil, fmt.Errorf("get object: %w", err)
+		return nil, fmt.Errorf("get object: %w", err)
 	}
 
 	var (
@@ -179,10 +189,10 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	)
 
 	if err = json.Unmarshal(lastObj.Payload(), &tags); err != nil {
-		return "", nil, fmt.Errorf("couldn't unmarshal last object: %w", err)
+		return nil, fmt.Errorf("couldn't unmarshal last object: %w", err)
 	}
 
-	return p.ObjectVersion.VersionID, tags, nil
+	return tags, nil
 }
 
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {

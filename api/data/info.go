@@ -63,6 +63,7 @@ type (
 		Owner          user.ID
 		OwnerPublicKey keys.PublicKey
 		Headers        map[string]string
+		Version        string
 	}
 
 	// ObjectListResponseContent holds response data for object listing.

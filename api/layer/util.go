@@ -92,6 +92,12 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 
 	objID, _ := meta.ID()
 	payloadChecksum, _ := meta.PayloadChecksum()
+
+	var versionID = data.UnversionedObjectVersionID
+	if _, ok := attributes[attrS3VersioningState]; ok {
+		versionID = objID.EncodeToString()
+	}
+
 	return &data.ObjectInfo{
 		ID:    objID,
 		CID:   bkt.CID,
@@ -106,6 +112,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		OwnerPublicKey: bkt.OwnerPublicKey,
 		Size:           int64(meta.PayloadSize()),
 		HashSum:        hex.EncodeToString(payloadChecksum.Value()),
+		Version:        versionID,
 	}
 }
 

@@ -514,6 +514,121 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	return searchResults, nil
 }
 
+func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, bool, bool, error) {
+	var (
+		filters             = make(object.SearchFilters, 0, 7)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+			object.FilterCreationEpoch,
+			object.AttributeTimestamp,
+			attrS3VersioningState,
+			object.FilterPayloadSize,
+			attrS3DeleteMarker,
+			s3headers.MetaType,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	if len(objectName) > 0 {
+		filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	} else {
+		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
+	}
+
+	if onlyUnversioned {
+		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+	}
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, false, false, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, false, false, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return nil, false, false, ErrNodeNotFound
+	}
+
+	var (
+		searchResults = make([]allVersionsSearchResult, 0, len(searchResultItems))
+		hasTags       bool
+		hasLocks      bool
+	)
+
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return nil, false, false, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		var psr = allVersionsSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[0],
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			if err != nil {
+				return nil, false, false, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return nil, false, false, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		switch item.Attributes[6] {
+		case s3headers.TypeTags:
+			hasTags = true
+			continue
+		case s3headers.TypeLock:
+			hasLocks = true
+			continue
+		default:
+		}
+
+		psr.IsVersioned = item.Attributes[3] == data.VersioningEnabled
+
+		if item.Attributes[4] != "" {
+			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[4], 10, 64)
+			if err != nil {
+				return nil, false, false, fmt.Errorf("invalid payload size %s: %w", item.Attributes[4], err)
+			}
+		}
+
+		psr.IsDeleteMarker = item.Attributes[5] != ""
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b allVersionsSearchResult) int {
+		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
+			return c
+		}
+
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	return searchResults, hasTags, hasLocks, nil
+}
+
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.

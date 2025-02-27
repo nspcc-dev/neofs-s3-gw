@@ -75,6 +75,18 @@ type PrmObjectRead struct {
 	PayloadRange [2]uint64
 }
 
+// GetObject groups parameters of NeoFS.ReadObject operation.
+type GetObject struct {
+	// Authentication parameters.
+	PrmAuth
+
+	// Container to read the object header from.
+	Container cid.ID
+
+	// ID of the object for which to read the header.
+	Object oid.ID
+}
+
 // ObjectPart represents partially read NeoFS object.
 type ObjectPart struct {
 	// Object header with optional in-memory payload part.
@@ -236,6 +248,9 @@ type NeoFS interface {
 	// It returns exactly one non-nil value. It returns any error encountered which
 	// prevented the object header from being read.
 	ReadObject(context.Context, PrmObjectRead) (*ObjectPart, error)
+
+	// GetObject returns object head and payload Reader.
+	GetObject(ctx context.Context, prm GetObject) (*ObjectPart, error)
 
 	// CreateObject creates and saves a parameterized object in the NeoFS container.
 	// It sets 'Timestamp' attribute to the current time.

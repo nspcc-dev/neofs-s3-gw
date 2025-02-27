@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -21,6 +22,10 @@ type conditionalArgs struct {
 	IfMatch           string
 	IfNoneMatch       string
 }
+
+const (
+	defaultBufferSize = 128 * 1024
+)
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
 	const prefix = "bytes="
@@ -77,8 +82,7 @@ func addSSECHeaders(responseHeader http.Header, requestHeader http.Header) {
 	responseHeader.Set(api.AmzServerSideEncryptionCustomerKeyMD5, requestHeader.Get(api.AmzServerSideEncryptionCustomerKeyMD5))
 }
 
-func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.ExtendedObjectInfo, tagSetLength int, isBucketUnversioned bool) {
-	info := extendedInfo.ObjectInfo
+func writeHeaders(h http.Header, requestHeader http.Header, info *data.ObjectInfo, tagSetLength int, isBucketUnversioned bool) {
 	if len(info.ContentType) > 0 && h.Get(api.ContentType) == "" {
 		h.Set(api.ContentType, info.ContentType)
 	}
@@ -95,7 +99,7 @@ func writeHeaders(h http.Header, requestHeader http.Header, extendedInfo *data.E
 	h.Set(api.AmzTaggingCount, strconv.Itoa(tagSetLength))
 
 	if !isBucketUnversioned {
-		h.Set(api.AmzVersionID, extendedInfo.Version())
+		h.Set(api.AmzVersionID, info.Version)
 	}
 
 	if cacheControl := info.Headers[api.CacheControl]; cacheControl != "" {
@@ -138,12 +142,24 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
+	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
-	info := extendedInfo.ObjectInfo
+
+	objectWithPayloadReader, err := h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
+		Owner:   bktInfo.Owner,
+		BktInfo: bktInfo,
+		Object:  comprehensiveObjectInfo.ID,
+	})
+
+	if err != nil {
+		h.logAndSendError(w, "could not get object meta", reqInfo, err)
+		return
+	}
+
+	info := objectWithPayloadReader.ObjectInfo
 
 	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
@@ -180,46 +196,52 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: info.Name,
-	}
-
-	if bktSettings.VersioningEnabled() {
-		t.VersionID = info.VersionID()
-	}
-
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
-	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
-		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
-		return
-	}
-
 	if layer.IsAuthenticatedRequest(r.Context()) {
 		overrideResponseHeaders(w.Header(), reqInfo.URL.Query())
 	}
 
-	if err = h.setLockingHeaders(bktInfo, lockInfo, w.Header()); err != nil {
+	if err = h.setLockingHeaders(bktInfo, comprehensiveObjectInfo.LockInfo, w.Header()); err != nil {
 		h.logAndSendError(w, "could not get locking info", reqInfo, err)
 		return
 	}
 
-	writeHeaders(w.Header(), r.Header, extendedInfo, len(tagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, info, len(comprehensiveObjectInfo.TagSet), bktSettings.Unversioned())
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	getParams := &layer.GetObjectParams{
-		ObjectInfo: info,
-		Writer:     w,
-		Range:      params,
-		BucketInfo: bktInfo,
-		Encryption: encryptionParams,
+	if params != nil || encryptionParams.Enabled() {
+		// unfortunately this reader is useless for us in this case, we have to re-read another one.
+		_ = objectWithPayloadReader.Payload.Close()
+
+		getParams := &layer.GetObjectParams{
+			ObjectInfo: info,
+			Writer:     w,
+			Range:      params,
+			BucketInfo: bktInfo,
+			Encryption: encryptionParams,
+		}
+		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+			h.logAndSendError(w, "could not get object", reqInfo, err)
+		}
+
+		return
 	}
-	if err = h.obj.GetObject(r.Context(), getParams); err != nil {
-		h.logAndSendError(w, "could not get object", reqInfo, err)
+
+	var bufferSize = min(info.Size, defaultBufferSize)
+	if bufferSize == 0 {
+		bufferSize = defaultBufferSize
+	}
+
+	buf := make([]byte, bufferSize)
+	if _, err = io.CopyBuffer(w, objectWithPayloadReader.Payload, buf); err != nil {
+		h.logAndSendError(w, "could write object output", reqInfo, err)
+	}
+
+	if err = objectWithPayloadReader.Payload.Close(); err != nil {
+		h.logAndSendError(w, "close output", reqInfo, err)
 	}
 }
 
