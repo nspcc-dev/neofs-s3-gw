@@ -8,13 +8,7 @@ import (
 )
 
 type TreeServiceMock struct {
-	settings   map[string]*data.BucketSettings
-	versions   map[string]map[string][]*data.NodeVersion
-	system     map[string]map[string]*data.BaseNodeVersion
-	locks      map[string]map[uint64]*data.LockInfo
-	tags       map[string]map[uint64]map[string]string
-	multiparts map[string]map[string][]*data.MultipartInfo
-	parts      map[string]map[int]*data.PartInfo
+	settings map[string]*data.BucketSettings
 }
 
 func (t *TreeServiceMock) GetBucketTagging(_ context.Context, _ *data.BucketInfo) (map[string]string, error) {
@@ -34,13 +28,7 @@ func (t *TreeServiceMock) DeleteBucketTagging(_ context.Context, _ *data.BucketI
 
 func NewTreeService() *TreeServiceMock {
 	return &TreeServiceMock{
-		settings:   make(map[string]*data.BucketSettings),
-		versions:   make(map[string]map[string][]*data.NodeVersion),
-		system:     make(map[string]map[string]*data.BaseNodeVersion),
-		locks:      make(map[string]map[uint64]*data.LockInfo),
-		tags:       make(map[string]map[uint64]map[string]string),
-		multiparts: make(map[string]map[string][]*data.MultipartInfo),
-		parts:      make(map[string]map[int]*data.PartInfo),
+		settings: make(map[string]*data.BucketSettings),
 	}
 }
 
