@@ -139,9 +139,5 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 		return oid.Address{}, fmt.Errorf("create object: %w", err)
 	}
 
-	var addr oid.Address
-	addr.SetObject(idObj)
-	addr.SetContainer(idCnr)
-
-	return addr, nil
+	return oid.NewAddress(idCnr, idObj), nil
 }

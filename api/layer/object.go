@@ -27,7 +27,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -110,13 +109,6 @@ const (
 	attrS3VersioningState = "S3-versioning-state"
 	attrS3DeleteMarker    = "S3-delete-marker"
 )
-
-func newAddress(cnr cid.ID, obj oid.ID) oid.Address {
-	var addr oid.Address
-	addr.SetContainer(cnr)
-	addr.SetObject(obj)
-	return addr
-}
 
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
@@ -779,7 +771,7 @@ func (n *layer) objectDelete(ctx context.Context, bktInfo *data.BucketInfo, idOb
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
-	n.cache.DeleteObject(newAddress(bktInfo.CID, idObj))
+	n.cache.DeleteObject(oid.NewAddress(bktInfo.CID, idObj))
 
 	err := n.neoFS.DeleteObject(ctx, prm)
 
@@ -1118,7 +1110,7 @@ func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *
 	}
 
 	owner := n.Owner(ctx)
-	if extInfo := n.cache.GetObject(owner, newAddress(bktInfo.CID, node.OID)); extInfo != nil {
+	if extInfo := n.cache.GetObject(owner, oid.NewAddress(bktInfo.CID, node.OID)); extInfo != nil {
 		return extInfo.ObjectInfo
 	}
 

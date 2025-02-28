@@ -1033,8 +1033,8 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 }
 
 func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
-	var cnrID cid.ID
-	if err := cnrID.DecodeString(name); err != nil {
+	cnrID, err := cid.DecodeString(name)
+	if err != nil {
 		if cnrID, err = n.resolver.ResolveCID(ctx, name); err != nil {
 			return cid.ID{}, err
 		}

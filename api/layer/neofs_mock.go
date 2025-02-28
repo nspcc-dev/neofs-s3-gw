@@ -82,8 +82,7 @@ func (t *TestNeoFS) AddObject(key string, obj *object.Object) {
 func (t *TestNeoFS) ContainerID(name string) (cid.ID, error) {
 	for id, cnr := range t.containers {
 		if cnr.Name() == name {
-			var cnrID cid.ID
-			return cnrID, cnrID.DecodeString(id)
+			return cid.DecodeString(id)
 		}
 	}
 	return cid.ID{}, fmt.Errorf("not found")
@@ -146,8 +145,8 @@ func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Containe
 func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, error) {
 	var res []cid.ID
 	for k := range t.containers {
-		var idCnr cid.ID
-		if err := idCnr.DecodeString(k); err != nil {
+		idCnr, err := cid.DecodeString(k)
+		if err != nil {
 			return nil, err
 		}
 		res = append(res, idCnr)
@@ -157,9 +156,7 @@ func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, erro
 }
 
 func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectPart, error) {
-	var addr oid.Address
-	addr.SetContainer(prm.Container)
-	addr.SetObject(prm.Object)
+	addr := oid.NewAddress(prm.Container, prm.Object)
 
 	sAddr := addr.EncodeToString()
 
@@ -327,7 +324,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 			)
 
 			for _, e := range prm.Multipart.Link.Objects() {
-				addr = newAddress(prm.Container, e.ObjectID())
+				addr = oid.NewAddress(prm.Container, e.ObjectID())
 				if partialObject, ok := t.objects[addr.EncodeToString()]; ok {
 					payload = append(payload, partialObject.Payload()...)
 				}
@@ -349,7 +346,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 			realHeaderObj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(payload)))
 
-			addr = newAddress(prm.Container, pid)
+			addr = oid.NewAddress(prm.Container, pid)
 			t.objects[addr.EncodeToString()] = realHeaderObj
 		}
 	}
@@ -372,7 +369,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 	objID := obj.GetID()
 
-	addr := newAddress(obj.GetContainerID(), objID)
+	addr := oid.NewAddress(obj.GetContainerID(), objID)
 	t.objects[addr.EncodeToString()] = obj
 	return objID, nil
 }
@@ -394,9 +391,7 @@ func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header
 }
 
 func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error {
-	var addr oid.Address
-	addr.SetContainer(prm.Container)
-	addr.SetObject(prm.Object)
+	addr := oid.NewAddress(prm.Container, prm.Object)
 
 	if obj, ok := t.objects[addr.EncodeToString()]; ok {
 		owner := getOwner(ctx)

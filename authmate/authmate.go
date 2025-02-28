@@ -304,8 +304,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) (*ObtainingResult, error) {
 	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig(a.log))
 
-	var addr oid.Address
-	if err := addr.DecodeString(options.SecretAddress); err != nil {
+	addr, err := oid.DecodeAddressString(options.SecretAddress)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse secret address: %w", err)
 	}
 

@@ -1061,8 +1061,8 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 		}
 
 		if len(resource.Version) != 0 {
-			var id oid.ID
-			if err := id.DecodeString(resource.Version); err != nil {
+			id, err := oid.DecodeString(resource.Version)
+			if err != nil {
 				return nil, fmt.Errorf("parse object version (oid): %w", err)
 			}
 

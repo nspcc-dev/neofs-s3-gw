@@ -266,7 +266,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	var (
 		splitPreviousID oid.ID
-		splitFirstID    oid.ID
 		multipartHash   = sha256.New()
 		tzHash          hash.Hash
 		creationTime    = TimeNow(ctx)
@@ -325,7 +324,8 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	splitPreviousID = lastPart.OID
 
-	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
+	splitFirstID, err := oid.DecodeString(multipartInfo.UploadID)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode multipart upload ID: %w", err)
 	}
 
@@ -823,9 +823,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	var encMultipartObjectSize uint64
 	var lastPartID int
 	var completedPartsHeader strings.Builder
-	var splitFirstID oid.ID
 
-	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
+	splitFirstID, err := oid.DecodeString(multipartInfo.UploadID)
+	if err != nil {
 		return nil, nil, fmt.Errorf("decode splitFirstID from UploadID :%w", err)
 	}
 
