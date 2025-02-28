@@ -29,7 +29,6 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	"github.com/nspcc-dev/tzhash/tz"
 	"golang.org/x/exp/maps"
 )
 
@@ -122,8 +121,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 		return cid.ID{}, err
 	}
 
-	var id cid.ID
-	id.SetSHA256(sha256.Sum256(b))
+	id := cid.NewFromMarshalledContainer(b)
 	t.containers[id.EncodeToString()] = &cnr
 
 	return id, nil
@@ -169,12 +167,12 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 	if !ok {
 		// trying to find linking object.
 		for _, o := range t.objects {
-			parentID, isSet := o.ParentID()
-			if !isSet {
+			parentID := o.GetParentID()
+			if parentID.IsZero() {
 				continue
 			}
 
-			if !parentID.Equals(prm.Object) {
+			if parentID != prm.Object {
 				continue
 			}
 
@@ -206,7 +204,7 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 	}
 
 	owner := getOwner(ctx)
-	if !obj.OwnerID().Equals(owner) {
+	if obj.Owner() != owner {
 		return nil, ErrAccessDenied
 	}
 
@@ -224,7 +222,7 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 }
 
 func (t *TestNeoFS) constructMupltipartObject(ctx context.Context, containerID cid.ID, linkingObject *object.Object) (*ObjectPart, error) {
-	if _, isSet := linkingObject.ParentID(); !isSet {
+	if linkingObject.GetParentID().IsZero() {
 		return nil, fmt.Errorf("linking object is invalid")
 	}
 
@@ -263,8 +261,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return oid.ID{}, err
 	}
-	var id oid.ID
-	id.SetSHA256(sha256.Sum256(b))
+	id := oid.NewFromObjectHeaderBinary(b)
 
 	attrs := make([]object.Attribute, 0)
 	creationTime := prm.CreationTime
@@ -299,7 +296,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	obj.SetPayloadSize(prm.PayloadSize)
 	obj.SetAttributes(attrs...)
 	obj.SetCreationEpoch(t.currentEpoch)
-	obj.SetOwnerID(&prm.Creator)
+	obj.SetOwner(prm.Creator)
 	t.currentEpoch++
 
 	if prm.Multipart != nil {
@@ -314,7 +311,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		if prm.Multipart.HeaderObject != nil {
 			obj.SetParent(prm.Multipart.HeaderObject)
 
-			if hid, isSet := prm.Multipart.HeaderObject.ID(); isSet {
+			if hid := prm.Multipart.HeaderObject.GetID(); !hid.IsZero() {
 				obj.SetParentID(hid)
 			}
 		}
@@ -336,8 +333,8 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 				}
 			}
 
-			pid, isSet := prm.Multipart.HeaderObject.ID()
-			if !isSet {
+			pid := prm.Multipart.HeaderObject.GetID()
+			if id.IsZero() {
 				return oid.ID{}, errors.New("HeaderObject id is not set")
 			}
 
@@ -347,12 +344,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 			realHeaderObj.SetPayloadSize(uint64(len(payload)))
 			realHeaderObj.SetAttributes(attrs...)
 			realHeaderObj.SetCreationEpoch(t.currentEpoch)
-			realHeaderObj.SetOwnerID(&prm.Creator)
+			realHeaderObj.SetOwner(prm.Creator)
 			realHeaderObj.SetPayload(payload)
 
-			var h checksum.Checksum
-			checksum.Calculate(&h, checksum.SHA256, payload)
-			realHeaderObj.SetPayloadChecksum(h)
+			realHeaderObj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(payload)))
 
 			addr = newAddress(prm.Container, pid)
 			t.objects[addr.EncodeToString()] = realHeaderObj
@@ -372,15 +367,12 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		}
 		obj.SetPayload(all)
 		obj.SetPayloadSize(uint64(len(all)))
-		var hash checksum.Checksum
-		checksum.Calculate(&hash, checksum.SHA256, all)
-		obj.SetPayloadChecksum(hash)
+		obj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(all)))
 	}
 
-	cnrID, _ := obj.ContainerID()
-	objID, _ := obj.ID()
+	objID := obj.GetID()
 
-	addr := newAddress(cnrID, objID)
+	addr := newAddress(obj.GetContainerID(), objID)
 	t.objects[addr.EncodeToString()] = obj
 	return objID, nil
 }
@@ -388,20 +380,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
 	header.SetCreationEpoch(t.currentEpoch)
 
-	var cs checksum.Checksum
-
-	var csBytes [sha256.Size]byte
-	copy(csBytes[:], metaChecksum.Sum(nil))
-
-	cs.SetSHA256(csBytes)
-	header.SetPayloadChecksum(cs)
+	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
 
 	if homomorphicChecksum != nil {
-		var csHomoBytes [tz.Size]byte
-		copy(csHomoBytes[:], homomorphicChecksum.Sum(nil))
-
-		cs.SetTillichZemor(csHomoBytes)
-		header.SetPayloadHomomorphicHash(cs)
+		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
 	}
 
 	header.SetPayloadSize(payloadLength)
@@ -418,7 +400,7 @@ func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error
 
 	if obj, ok := t.objects[addr.EncodeToString()]; ok {
 		owner := getOwner(ctx)
-		if !obj.OwnerID().Equals(owner) {
+		if obj.Owner() != owner {
 			return ErrAccessDenied
 		}
 
@@ -445,10 +427,8 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 	result := make([]oid.ID, 0, len(t.objects))
 
 	for _, val := range t.objects {
-		objCnrID, _ := val.ContainerID()
-		objObjID, _ := val.ID()
-		if cnrID.Equals(objCnrID) {
-			result = append(result, objObjID)
+		if cnrID == val.GetContainerID() {
+			result = append(result, val.GetID())
 		}
 	}
 
@@ -456,12 +436,12 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 }
 
 func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Container) error {
-	cnrID, ok := table.CID()
-	if !ok {
+	cnrID := table.GetCID()
+	if cnrID.IsZero() {
 		return errors.New("invalid cid")
 	}
 
-	if _, ok = t.containers[cnrID.EncodeToString()]; !ok {
+	if _, ok := t.containers[cnrID.EncodeToString()]; !ok {
 		return errors.New("not found")
 	}
 

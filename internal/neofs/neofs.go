@@ -293,7 +293,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 	var obj object.Object
 	obj.SetContainerID(prm.Container)
-	obj.SetOwnerID(&prm.Creator)
+	obj.SetOwner(prm.Creator)
 	obj.SetAttributes(attrs...)
 	obj.SetPayloadSize(prm.PayloadSize)
 
@@ -309,7 +309,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		if prm.Multipart.HeaderObject != nil {
 			obj.SetParent(prm.Multipart.HeaderObject)
 
-			if id, isSet := prm.Multipart.HeaderObject.ID(); isSet {
+			if id := prm.Multipart.HeaderObject.GetID(); !id.IsZero() {
 				obj.SetParentID(id)
 			}
 		}
@@ -447,20 +447,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
 	header.SetCreationEpoch(x.epochGetter.CurrentEpoch())
 
-	var cs checksum.Checksum
-
-	var csBytes [sha256.Size]byte
-	copy(csBytes[:], metaChecksum.Sum(nil))
-
-	cs.SetSHA256(csBytes)
-	header.SetPayloadChecksum(cs)
+	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
 
 	if homomorphicChecksum != nil {
-		var csHomoBytes [tz.Size]byte
-		copy(csHomoBytes[:], homomorphicChecksum.Sum(nil))
-
-		cs.SetTillichZemor(csHomoBytes)
-		header.SetPayloadHomomorphicHash(cs)
+		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
 	}
 
 	header.SetPayloadSize(payloadLength)

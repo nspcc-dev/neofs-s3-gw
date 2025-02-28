@@ -114,8 +114,7 @@ func (tc *testContext) checkListObjects(ids ...oid.ID) {
 
 func (tc *testContext) getObjectByID(objID oid.ID) *object.Object {
 	for _, obj := range tc.testNeoFS.Objects() {
-		id, _ := obj.ID()
-		if id.Equals(objID) {
+		if obj.GetID() == objID {
 			return obj
 		}
 	}

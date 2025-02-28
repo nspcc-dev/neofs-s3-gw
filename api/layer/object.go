@@ -370,7 +370,7 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 	var headerObject object.Object
 	headerObject.SetContainerID(p.BktInfo.CID)
 	headerObject.SetType(object.TypeRegular)
-	headerObject.SetOwnerID(&owner)
+	headerObject.SetOwner(owner)
 
 	currentVersion := version.Current()
 	headerObject.SetVersion(&currentVersion)

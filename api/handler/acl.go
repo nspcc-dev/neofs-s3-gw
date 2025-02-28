@@ -1001,7 +1001,7 @@ func tryServiceRecord(record eacl.Record) *ServiceRecord {
 	resourceFilter := record.Filters()[0]
 	recordsFilter := record.Filters()[1]
 	if resourceFilter.From() != eacl.HeaderFromService || recordsFilter.From() != eacl.HeaderFromService ||
-		resourceFilter.Matcher() != eacl.MatchUnknown || recordsFilter.Matcher() != eacl.MatchUnknown ||
+		resourceFilter.Matcher() != eacl.MatchUnspecified || recordsFilter.Matcher() != eacl.MatchUnspecified ||
 		resourceFilter.Key() != serviceRecordResourceKey || recordsFilter.Key() != serviceRecordGroupLengthKey {
 		return nil
 	}
@@ -1499,7 +1499,7 @@ func effectToAction(effect string) eacl.Action {
 	case "Deny":
 		return eacl.ActionDeny
 	}
-	return eacl.ActionUnknown
+	return eacl.ActionUnspecified
 }
 
 func actionToEffect(action eacl.Action) string {
@@ -1863,7 +1863,7 @@ func isValidOwnerPreferred(r *http.Request) bool {
 	return cannedACL == cannedACLBucketOwnerFullControl
 }
 
-func updateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) []eacl.Record {
+func updateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) eacl.Table {
 	var (
 		rowID = -1
 	)
@@ -1893,7 +1893,7 @@ func updateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) []eacl
 		records = append(records, *newRecord)
 	}
 
-	return records
+	return eacl.ConstructTable(records)
 }
 
 func isBucketOwnerObjectWriter(table *eacl.Table) bool {

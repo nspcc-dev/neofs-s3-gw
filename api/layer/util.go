@@ -90,7 +90,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 	attributes := userHeaders(meta.Attributes())
 	customHeaders, mimeType, creation := extractHeaders(attributes)
 
-	objID, _ := meta.ID()
+	objID := meta.GetID()
 	payloadChecksum, _ := meta.PayloadChecksum()
 
 	var versionID = data.UnversionedObjectVersionID
@@ -108,7 +108,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		Created:        creation,
 		ContentType:    mimeType,
 		Headers:        customHeaders,
-		Owner:          *meta.OwnerID(),
+		Owner:          meta.Owner(),
 		OwnerPublicKey: bkt.OwnerPublicKey,
 		Size:           int64(meta.PayloadSize()),
 		HashSum:        hex.EncodeToString(payloadChecksum.Value()),
@@ -144,8 +144,7 @@ func filepathFromObject(o *object.Object) string {
 			return attr.Value()
 		}
 	}
-	objID, _ := o.ID()
-	return objID.EncodeToString()
+	return o.GetID().EncodeToString()
 }
 
 // NameFromString splits name into a base file name and a directory path.

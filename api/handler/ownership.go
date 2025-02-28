@@ -90,12 +90,7 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	var newEACL eacl.Table
-
-	newRecords := updateBucketOwnership(bucketACL.EACL.Records(), rec)
-	for _, record := range newRecords {
-		newEACL.AddRecord(&record)
-	}
+	newEACL := updateBucketOwnership(bucketACL.EACL.Records(), rec)
 
 	p := layer.PutBucketACLParams{
 		BktInfo:      bktInfo,
@@ -188,12 +183,7 @@ func (h *handler) DeleteBucketOwnershipControlsHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	var newEACL eacl.Table
-
-	newRecords := updateBucketOwnership(bucketACL.EACL.Records(), nil)
-	for _, record := range newRecords {
-		newEACL.AddRecord(&record)
-	}
+	newEACL := updateBucketOwnership(bucketACL.EACL.Records(), nil)
 
 	p := layer.PutBucketACLParams{
 		BktInfo:      bktInfo,

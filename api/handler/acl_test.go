@@ -37,8 +37,7 @@ func TestTableToAst(t *testing.T) {
 	b := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, b)
 	require.NoError(t, err)
-	var id oid.ID
-	id.SetSHA256(sha256.Sum256(b))
+	id := oid.NewFromObjectHeaderBinary(b)
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)

@@ -900,7 +900,7 @@ func handleError(msg string, err error) error {
 func getBearer(ctx context.Context, bktInfo *data.BucketInfo) []byte {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil {
 		if bd.Gate.BearerToken != nil {
-			if bktInfo.Owner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
+			if bktInfo.Owner == bd.Gate.BearerToken.ResolveIssuer() {
 				return bd.Gate.BearerToken.Marshal()
 			}
 		}

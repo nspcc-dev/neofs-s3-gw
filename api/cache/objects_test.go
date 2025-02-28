@@ -21,12 +21,10 @@ func getTestConfig() *Config {
 
 func TestCache(t *testing.T) {
 	obj := objecttest.Object()
-	objID, _ := obj.ID()
-	cnrID, _ := obj.ContainerID()
 
 	var addr oid.Address
-	addr.SetContainer(cnrID)
-	addr.SetObject(objID)
+	addr.SetContainer(obj.GetContainerID())
+	addr.SetObject(obj.GetID())
 
 	extObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo: &data.ObjectInfo{
