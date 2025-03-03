@@ -152,7 +152,7 @@ type (
 )
 
 func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner user.ID, ownerPubKey keys.PublicKey) (cid.ID, error) {
-	if !opts.ID.Equals(cid.ID{}) {
+	if !opts.ID.IsZero() {
 		return opts.ID, a.neoFS.ContainerExists(ctx, opts.ID)
 	}
 
@@ -304,8 +304,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) (*ObtainingResult, error) {
 	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig(a.log))
 
-	var addr oid.Address
-	if err := addr.DecodeString(options.SecretAddress); err != nil {
+	addr, err := oid.DecodeAddressString(options.SecretAddress)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
@@ -360,12 +360,9 @@ func restrictedRecords() (records []*eacl.Record) {
 func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*bearer.Token, error) {
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
-	var ownerID user.ID
-	ownerID.SetScriptHash(gateKey.GetScriptHash())
-
 	var bearerToken bearer.Token
 	bearerToken.SetEACLTable(*table)
-	bearerToken.ForUser(ownerID)
+	bearerToken.ForUser(user.NewFromScriptHash(gateKey.GetScriptHash()))
 	bearerToken.SetExp(lifetime.Exp)
 	bearerToken.SetIat(lifetime.Iat)
 	bearerToken.SetNbf(lifetime.Iat)

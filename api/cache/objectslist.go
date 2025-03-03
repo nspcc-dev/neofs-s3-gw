@@ -98,7 +98,7 @@ func (l *ObjectsListCache) CleanCacheEntriesContainingObject(objectName string, 
 				zap.String("expected", fmt.Sprintf("%T", k)))
 			continue
 		}
-		if cnr.Equals(k.cid) && strings.HasPrefix(objectName, k.prefix) {
+		if cnr == k.cid && strings.HasPrefix(objectName, k.prefix) {
 			l.cache.Remove(k)
 		}
 	}

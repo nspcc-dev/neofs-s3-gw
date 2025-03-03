@@ -132,8 +132,8 @@ func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 }
 
 func (a *authHeader) getAddress() (oid.Address, error) {
-	var addr oid.Address
-	if err := addr.DecodeString(strings.ReplaceAll(a.AccessKeyID, "0", "/")); err != nil {
+	addr, err := oid.DecodeAddressString(strings.ReplaceAll(a.AccessKeyID, "0", "/"))
+	if err != nil {
 		return addr, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 	return addr, nil
@@ -271,8 +271,8 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
 	}
 
-	var addr oid.Address
-	if err = addr.DecodeString(strings.ReplaceAll(submatches["access_key_id"], "0", "/")); err != nil {
+	addr, err := oid.DecodeAddressString(strings.ReplaceAll(submatches["access_key_id"], "0", "/"))
+	if err != nil {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 

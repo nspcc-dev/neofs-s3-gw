@@ -141,11 +141,7 @@ func (o *ObjectInfo) NiceName() string { return o.Bucket + "/" + o.Name }
 
 // Address returns object address.
 func (o *ObjectInfo) Address() oid.Address {
-	var addr oid.Address
-	addr.SetContainer(o.CID)
-	addr.SetObject(o.ID)
-
-	return addr
+	return oid.NewAddress(o.CID, o.ID)
 }
 
 func (b BucketSettings) Unversioned() bool {

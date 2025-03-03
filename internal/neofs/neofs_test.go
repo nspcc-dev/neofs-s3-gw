@@ -260,7 +260,7 @@ func TestObjectNonce(t *testing.T) {
 		require.NoError(t, err)
 
 		obj.SetContainerID(cnrID)
-		obj.SetOwnerID(&uid)
+		obj.SetOwner(uid)
 		obj.SetPayloadSize(uint64(len(payload)))
 		obj.SetPayload(payload)
 

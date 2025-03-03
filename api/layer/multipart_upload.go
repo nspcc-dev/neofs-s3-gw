@@ -266,7 +266,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	var (
 		splitPreviousID oid.ID
-		splitFirstID    oid.ID
 		multipartHash   = sha256.New()
 		tzHash          hash.Hash
 		creationTime    = TimeNow(ctx)
@@ -325,7 +324,8 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 
 	splitPreviousID = lastPart.OID
 
-	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
+	splitFirstID, err := oid.DecodeString(multipartInfo.UploadID)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode multipart upload ID: %w", err)
 	}
 
@@ -486,7 +486,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	var hashlessHeaderObject object.Object
 	hashlessHeaderObject.SetContainerID(bktInfo.CID)
 	hashlessHeaderObject.SetType(object.TypeRegular)
-	hashlessHeaderObject.SetOwnerID(&bktInfo.Owner)
+	hashlessHeaderObject.SetOwner(bktInfo.Owner)
 	hashlessHeaderObject.SetAttributes(attrs...)
 	hashlessHeaderObject.SetCreationEpoch(n.neoFS.CurrentEpoch())
 
@@ -823,9 +823,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	var encMultipartObjectSize uint64
 	var lastPartID int
 	var completedPartsHeader strings.Builder
-	var splitFirstID oid.ID
 
-	if err = splitFirstID.DecodeString(multipartInfo.UploadID); err != nil {
+	splitFirstID, err := oid.DecodeString(multipartInfo.UploadID)
+	if err != nil {
 		return nil, nil, fmt.Errorf("decode splitFirstID from UploadID :%w", err)
 	}
 
@@ -1006,7 +1006,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return nil, nil, err
 	}
 
-	headerObjectID, _ := header.ID()
+	headerObjectID := header.GetID()
 
 	// the "big object" is not presented in system, but we have to put correct info about it and its version.
 

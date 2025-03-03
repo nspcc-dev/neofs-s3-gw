@@ -365,9 +365,9 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 // OwnerPublicKey returns owner public key from BearerToken (context).
 func (n *layer) OwnerPublicKey(ctx context.Context) (*keys.PublicKey, error) {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		if len(bd.Gate.BearerToken.SigningKeyBytes()) > 0 {
+		if sig, ok := bd.Gate.BearerToken.Signature(); ok {
 			var pk keys.PublicKey
-			if err := pk.DecodeBytes(bd.Gate.BearerToken.SigningKeyBytes()); err != nil {
+			if err := pk.DecodeBytes(sig.PublicKeyBytes()); err != nil {
 				return nil, fmt.Errorf("pub key decode: %w", err)
 			}
 
@@ -384,7 +384,7 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwne
 
 func bearerTokenFromContext(ctx context.Context, bktOwner user.ID) *bearer.Token {
 	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		if bktOwner.Equals(bd.Gate.BearerToken.ResolveIssuer()) {
+		if bktOwner == bd.Gate.BearerToken.ResolveIssuer() {
 			return bd.Gate.BearerToken
 		}
 	}
@@ -1033,8 +1033,8 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 }
 
 func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
-	var cnrID cid.ID
-	if err := cnrID.DecodeString(name); err != nil {
+	cnrID, err := cid.DecodeString(name)
+	if err != nil {
 		if cnrID, err = n.resolver.ResolveCID(ctx, name); err != nil {
 			return cid.ID{}, err
 		}
