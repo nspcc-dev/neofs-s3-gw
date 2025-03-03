@@ -809,16 +809,6 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 func (n *layer) multipartObjectPut(ctx context.Context, prm PrmObjectCreate, bktInfo *data.BucketInfo) (oid.ID, error) {
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, bktInfo.Owner)
 
-	if prm.Multipart != nil && prm.Payload != nil {
-		var writers = make([]io.Writer, len(prm.Multipart.MultipartHashes))
-		for i, h := range prm.Multipart.MultipartHashes {
-			writers[i] = h
-		}
-
-		w := io.MultiWriter(writers...)
-		prm.Payload = io.TeeReader(prm.Payload, w)
-	}
-
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {
 		return oid.ID{}, err
@@ -873,8 +863,9 @@ func generateContinuationToken(filePath string) string {
 
 	cursorBuf := bytes.NewBuffer(nil)
 	cursorBuf.Write([]byte(object.AttributeFilePath))
-	cursorBuf.WriteByte(0xFF)
+	cursorBuf.WriteByte(0x00)
 	cursorBuf.Write([]byte(filePath))
+	cursorBuf.WriteByte(0x00)
 	cursorBuf.Write(id[:])
 
 	return base64.StdEncoding.EncodeToString(cursorBuf.Bytes())
@@ -886,7 +877,7 @@ func extractFilePath(continuationToken string) (string, error) {
 		return "", err
 	}
 
-	parts := bytes.SplitN(nextMarker, []byte{0xFF}, 2)
+	parts := bytes.SplitN(nextMarker, []byte{0x00}, 2)
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid marker, expected 2 parts, got %d", len(parts))
 	}

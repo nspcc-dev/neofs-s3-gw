@@ -152,7 +152,6 @@ func (n *TreeNode) FileName() (string, bool) {
 
 func newMultipartInfo(node NodeResponse) (*data.MultipartInfo, error) {
 	multipartInfo := &data.MultipartInfo{
-		ID:   node.GetNodeId(),
 		Meta: make(map[string]string, len(node.GetMeta())),
 	}
 

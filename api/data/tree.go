@@ -76,9 +76,7 @@ type ObjectTaggingInfo struct {
 
 // MultipartInfo is multipart upload information.
 type MultipartInfo struct {
-	// ID is node id in tree service.
-	// It's ignored when creating a new multipart upload.
-	ID           uint64
+	ID           oid.ID
 	Key          string
 	UploadID     string
 	Owner        user.ID
@@ -138,7 +136,16 @@ type PartInfo struct {
 	// HomoHash contains internal state of the [hash.Hash] to calculate whole object homomorphic payload hash.
 	HomoHash []byte
 	// Elements contain [oid.ID] and size for each element for the current part.
-	Elements []LinkObjectPayload
+	Elements []ElementInfo
+}
+
+// ElementInfo represents small element in "big object" chain.
+type ElementInfo struct {
+	ID         oid.ID
+	ElementID  int
+	Attributes map[string]string
+	Size       int64
+	TotalSize  int64
 }
 
 // ToHeaderString form short part representation to use in S3-Completed-Parts header.
