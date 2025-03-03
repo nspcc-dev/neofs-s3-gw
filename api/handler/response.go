@@ -57,6 +57,13 @@ type Bucket struct {
 
 // AccessControlPolicy contains ACL.
 type AccessControlPolicy struct {
+	XMLName           xml.Name `xml:"AccessControlPolicy" json:"-"`
+	Owner             Owner
+	AccessControlList []*Grant `xml:"AccessControlList>Grant"`
+}
+
+// AccessControlPolicyResponse is used for gate response and contains xmlns definition.
+type AccessControlPolicyResponse struct {
 	XMLName           xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ AccessControlPolicy" json:"-"`
 	Owner             Owner
 	AccessControlList []*Grant `xml:"AccessControlList>Grant"`
@@ -251,14 +258,14 @@ type ListObjectsVersionsResponse struct {
 
 // VersioningConfiguration contains VersioningConfiguration XML representation.
 type VersioningConfiguration struct {
-	XMLName   xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ VersioningConfiguration"`
+	XMLName   xml.Name `xml:"VersioningConfiguration"`
 	Status    string   `xml:"Status,omitempty"`
 	MfaDelete string   `xml:"MfaDelete,omitempty"`
 }
 
 // Tagging contains tag set.
 type Tagging struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Tagging"`
+	XMLName xml.Name `xml:"Tagging"`
 	TagSet  []Tag    `xml:"TagSet>Tag"`
 }
 

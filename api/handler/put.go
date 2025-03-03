@@ -177,7 +177,7 @@ const (
 )
 
 type createBucketParams struct {
-	XMLName            xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CreateBucketConfiguration" json:"-"`
+	XMLName            xml.Name `xml:"CreateBucketConfiguration" json:"-"`
 	LocationConstraint string
 }
 
