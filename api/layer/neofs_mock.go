@@ -218,6 +218,18 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 	}, nil
 }
 
+func (t *TestNeoFS) GetObject(ctx context.Context, prm GetObject) (*ObjectPart, error) {
+	var prmObjectRead = PrmObjectRead{
+		PrmAuth:     prm.PrmAuth,
+		Container:   prm.Container,
+		Object:      prm.Object,
+		WithHeader:  true,
+		WithPayload: true,
+	}
+
+	return t.ReadObject(ctx, prmObjectRead)
+}
+
 func (t *TestNeoFS) constructMupltipartObject(ctx context.Context, containerID cid.ID, linkingObject *object.Object) (*ObjectPart, error) {
 	if linkingObject.GetParentID().IsZero() {
 		return nil, fmt.Errorf("linking object is invalid")
@@ -339,7 +351,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 			realHeaderObj.SetContainerID(prm.Container)
 			realHeaderObj.SetID(pid)
 			realHeaderObj.SetPayloadSize(uint64(len(payload)))
-			realHeaderObj.SetAttributes(attrs...)
+			realHeaderObj.SetAttributes(prm.Multipart.HeaderObject.Attributes()...)
 			realHeaderObj.SetCreationEpoch(t.currentEpoch)
 			realHeaderObj.SetOwner(prm.Creator)
 			realHeaderObj.SetPayload(payload)
