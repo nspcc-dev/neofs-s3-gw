@@ -31,6 +31,9 @@ func init() {
 	prometheus.MustRegister(versionInfo)
 	prometheus.MustRegister(statsMetrics)
 	prometheus.MustRegister(httpRequestsDuration)
+
+	// Expose current version information
+	versionInfo.WithLabelValues(version.Version).Set(1.0)
 }
 
 func collectNetworkMetrics(ch chan<- prometheus.Metric) {
@@ -59,9 +62,6 @@ func (s *stats) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (s *stats) Collect(ch chan<- prometheus.Metric) {
-	// Expose current version information
-	versionInfo.WithLabelValues(version.Version).Set(1.0)
-
 	// connect collectors
 	collectHTTPMetrics(ch)
 	collectNetworkMetrics(ch)
