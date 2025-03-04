@@ -108,7 +108,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neo-go'
-          version: 'tags/v0.106.3'
+          version: 'tags/v0.108.1'
           file: 'neo-go-linux-amd64'
           target: 's3-tests/neo-go'
 
