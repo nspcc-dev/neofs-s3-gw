@@ -58,7 +58,6 @@ func (g *PeriodicGetter) update(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			tm.Stop()
 			return
 		case <-tm.C:
 			ni, err := g.netGetter.NetworkInfo(ctx, client.PrmNetworkInfo{})

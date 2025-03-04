@@ -43,7 +43,6 @@ func (m *maxClients) Handle(f http.HandlerFunc) http.HandlerFunc {
 		}
 
 		deadline := time.NewTimer(m.timeout)
-		defer deadline.Stop()
 
 		select {
 		case m.pool <- struct{}{}:
