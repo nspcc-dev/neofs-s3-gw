@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - GetBucketLifecycle operation now partially supported. It always returns NoSuchLifecycleConfiguration error (#1049)
+- Minimal required Go is 1.23 now (#979)
 
 ### Fixed
 
