@@ -13,6 +13,13 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
+- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13` (#1092)
+- `github.com/nspcc-dev/neo-go` dependency to `v0.108.1` (#1092)
+- `google.golang.org/grpc` dependency to `v1.70.0` (#1092)
+- `google.golang.org/protobuf` dependency to `v1.36.5` (#1092)
+- `github.com/stretchr/testify` dependency to `v1.10.0` (#1092)
+- `golang.org/x/sync` to `v0.11.0` (#1092)
+- `golang.org/x/exp` to `v0.0.0-20250210185358-939b2ce775ac` (#1092)
 
 ### Removed
 
