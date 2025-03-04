@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/xml"
 	"io"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -87,6 +88,8 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
+	h.log.Debug("PutObjectTagging", zap.Strings("tags", slices.Collect(maps.Keys(tagSet))))
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -141,6 +144,7 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 	if err = api.EncodeToResponse(w, encodeTagging(tagSet)); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
+	h.log.Debug("GutObjectTagging", zap.Strings("tags", slices.Collect(maps.Keys(tagSet))))
 }
 
 func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
