@@ -68,7 +68,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neofs-node'
-          version: 'tags/v0.43.0'
+          version: 'tags/v0.45.0'
           file: 'neofs-cli-linux-amd64'
           target: 's3-tests/neofs-cli'
 
@@ -76,7 +76,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neofs-node'
-          version: 'tags/v0.43.0'
+          version: 'tags/v0.45.0'
           file: 'neofs-adm-linux-amd64'
           target: 's3-tests/neofs-adm'
 
@@ -84,7 +84,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neofs-node'
-          version: 'tags/v0.43.0'
+          version: 'tags/v0.45.0'
           file: 'neofs-ir-linux-amd64'
           target: 's3-tests/neofs-ir'
 
@@ -92,7 +92,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neofs-node'
-          version: 'tags/v0.43.0'
+          version: 'tags/v0.45.0'
           file: 'neofs-lens-linux-amd64'
           target: 's3-tests/neofs-lens'
 
@@ -100,7 +100,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neofs-node'
-          version: 'tags/v0.43.0'
+          version: 'tags/v0.45.0'
           file: 'neofs-node-linux-amd64'
           target: 's3-tests/neofs-node'
 
@@ -108,7 +108,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@1.1.1
         with:
           repo: 'nspcc-dev/neo-go'
-          version: 'tags/v0.106.3'
+          version: 'tags/v0.108.1'
           file: 'neo-go-linux-amd64'
           target: 's3-tests/neo-go'
 
@@ -204,7 +204,7 @@ jobs:
           source virtualenv/bin/activate
           pip3 install --upgrade pip
           pip3 install -r requirements.txt
-          echo "export PYTHONPATH=$PYTHONPATH:$(realpath .):$(realpath .)/neofs-testcases/pytest_tests/lib:$(realpath .)/neofs-testcases/neofs-testlib" >> virtualenv/bin/activate 
+          echo "export PYTHONPATH=$PYTHONPATH:$(realpath .):$(realpath .)/neofs-testcases/pytest_tests/lib:$(realpath .)/neofs-testcases/neofs-testlib:$(realpath .)/neofs-testcases" >> virtualenv/bin/activate 
         working-directory: s3-tests
 
       - name: Fix OpenSSL ripemd160
