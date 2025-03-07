@@ -2,7 +2,7 @@ package layer
 
 import (
 	"context"
-	errorsStd "errors"
+	"errors"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
@@ -25,7 +25,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 
 	_, tags, err = n.GetObjectTagging(ctx, &p)
 	if err != nil {
-		if errorsStd.Is(err, ErrNodeNotFound) {
+		if errors.Is(err, ErrNodeNotFound) {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 		return nil, nil, err
@@ -34,7 +34,7 @@ func (n *layer) GetObjectTaggingAndLock(ctx context.Context, objVersion *ObjectV
 	lockInfo, err = n.getLockDataFromObjects(ctx, objVersion.BktInfo, objVersion.ObjectName, objVersion.VersionID)
 	if err != nil {
 		// lock info can be missed - OK. Despite it some tags above may appear, and we should return them.
-		if !errorsStd.Is(err, ErrNodeNotFound) {
+		if !errors.Is(err, ErrNodeNotFound) {
 			return nil, nil, err
 		}
 	}

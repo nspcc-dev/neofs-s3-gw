@@ -47,23 +47,6 @@ type TreeService interface {
 	GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
 	PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
 	DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
-
-	CreateMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, info *data.MultipartInfo) (uint64, error)
-	DeleteMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) error
-	GetMultipartUploadsByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix string) ([]*data.MultipartInfo, error)
-	GetMultipartUpload(ctx context.Context, bktInfo *data.BucketInfo, objectName, uploadID string) (*data.MultipartInfo, error)
-
-	// AddPart puts a node to a system tree as a child of appropriate multipart upload
-	// and returns objectID of a previous part which must be deleted in NeoFS.
-	//
-	// If object id to remove is not found returns ErrNoNodeToRemove error.
-	AddPart(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, info *data.PartInfo) (oldObjIDToDelete oid.ID, err error)
-	GetParts(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64) ([]*data.PartInfo, error)
-	// GetPartByNumber returns the part by number. If part was uploaded few times the newest one will be returned.
-	// Return errors:
-	//   - [ErrPartListIsEmpty] if there is no parts in the upload id.
-	GetPartByNumber(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, number int) (*data.PartInfo, error)
-	GetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, multipartNodeID uint64, partID int) ([]*data.PartInfo, error)
 }
 
 var (

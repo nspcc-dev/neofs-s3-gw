@@ -3,21 +3,21 @@ module github.com/nspcc-dev/neofs-s3-gw
 go 1.23
 
 require (
-	github.com/aws/aws-sdk-go v1.55.5
+	github.com/aws/aws-sdk-go v1.55.6
 	github.com/bluele/gcache v0.0.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/minio/sio v0.4.1
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.108.1
-	github.com/nspcc-dev/neofs-contract v0.20.0
+	github.com/nspcc-dev/neofs-contract v0.21.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.13
 	github.com/nspcc-dev/tzhash v1.8.2
 	github.com/prometheus/client_golang v1.20.2
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
-	github.com/urfave/cli/v2 v2.27.4
+	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.31.0
 	golang.org/x/sync v0.11.0
@@ -53,7 +53,7 @@ require (
 	//github.com/aws/aws-sdk-go-v2 v1.16.7 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect

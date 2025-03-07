@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 	"io"
 
@@ -51,7 +51,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 	}
 
 	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, p.BktInfo, objID)
-	objIDToDeleteNotFound := errorsStd.Is(err, ErrNoNodeToRemove)
+	objIDToDeleteNotFound := errors.Is(err, ErrNoNodeToRemove)
 	if err != nil && !objIDToDeleteNotFound {
 		return err
 	}
@@ -73,7 +73,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
 	cors, err := n.getCORS(ctx, bktInfo)
 	if err != nil {
-		if errorsStd.Is(err, ErrNodeNotFound) {
+		if errors.Is(err, ErrNodeNotFound) {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
 		}
 		return nil, err
@@ -84,7 +84,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
 	objID, err := n.treeService.DeleteBucketCORS(ctx, bktInfo)
-	objIDNotFound := errorsStd.Is(err, ErrNoNodeToRemove)
+	objIDNotFound := errors.Is(err, ErrNoNodeToRemove)
 	if err != nil && !objIDNotFound {
 		return err
 	}

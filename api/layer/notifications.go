@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -40,7 +40,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 	}
 
 	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo, objID)
-	objIDToDeleteNotFound := errorsStd.Is(err, ErrNoNodeToRemove)
+	objIDToDeleteNotFound := errors.Is(err, ErrNoNodeToRemove)
 	if err != nil && !objIDToDeleteNotFound {
 		return err
 	}
@@ -66,7 +66,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 	}
 
 	objID, err := n.treeService.GetNotificationConfigurationNode(ctx, bktInfo)
-	objIDNotFound := errorsStd.Is(err, ErrNodeNotFound)
+	objIDNotFound := errors.Is(err, ErrNodeNotFound)
 	if err != nil && !objIDNotFound {
 		return nil, err
 	}

@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 	"io"
 
@@ -90,7 +90,7 @@ func (p Params) HMAC() ([]byte, []byte, error) {
 
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
-		return nil, nil, errorsStd.New("failed to init create salt")
+		return nil, nil, errors.New("failed to init create salt")
 	}
 
 	mac.Write(salt)
@@ -100,7 +100,7 @@ func (p Params) HMAC() ([]byte, []byte, error) {
 // MatchObjectEncryption checks if encryption params are valid for provided object.
 func (p Params) MatchObjectEncryption(encInfo ObjectEncryption) error {
 	if p.Enabled() != encInfo.Enabled {
-		return errorsStd.New("invalid encryption view")
+		return errors.New("invalid encryption view")
 	}
 
 	if !encInfo.Enabled {
@@ -121,7 +121,7 @@ func (p Params) MatchObjectEncryption(encInfo ObjectEncryption) error {
 	mac.Write(hmacSalt)
 	expectedHmacKey := mac.Sum(nil)
 	if !bytes.Equal(expectedHmacKey, hmacKey) {
-		return errorsStd.New("mismatched hmac key")
+		return errors.New("mismatched hmac key")
 	}
 
 	return nil
@@ -171,7 +171,7 @@ func NewDecrypter(p Params, encryptedObjectSize uint64, r *Range) (*Decrypter, e
 
 func newDecrypter(p Params, parts []encryptedPart, r *Range) (*Decrypter, error) {
 	if !p.Enabled() {
-		return nil, errorsStd.New("couldn't create decrypter with disabled encryption")
+		return nil, errors.New("couldn't create decrypter with disabled encryption")
 	}
 
 	if r != nil && r.Start > r.End {
@@ -316,7 +316,7 @@ func (d *Decrypter) SetReader(r io.Reader) error {
 
 func (d *Decrypter) initNextDecReader() error {
 	if d.reader == nil {
-		return errorsStd.New("reader isn't set")
+		return errors.New("reader isn't set")
 	}
 
 	r, err := sio.DecryptReader(io.LimitReader(d.reader, int64(d.encPartRangeLen)),

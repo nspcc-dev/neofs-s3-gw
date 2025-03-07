@@ -5,7 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/xml"
-	errorsStd "errors"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -48,7 +48,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	newLock := p.NewLock
 
 	lockInfo, err := n.getLockDataFromObjects(ctx, p.ObjVersion.BktInfo, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
-	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+	if err != nil && !errors.Is(err, ErrNodeNotFound) {
 		return err
 	}
 
@@ -137,7 +137,7 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
-		if errorsStd.Is(err, apistatus.ErrObjectAccessDenied) {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
@@ -256,7 +256,7 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 	}
 
 	lockInfo, err := n.getLockDataFromObjects(ctx, objVersion.BktInfo, objVersion.ObjectName, objVersion.VersionID)
-	if err != nil && !errorsStd.Is(err, ErrNodeNotFound) {
+	if err != nil && !errors.Is(err, ErrNodeNotFound) {
 		return nil, err
 	}
 	if lockInfo == nil {
@@ -277,7 +277,7 @@ func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSCo
 	}
 
 	objID, err := n.treeService.GetBucketCORS(ctx, bkt)
-	objIDNotFound := errorsStd.Is(err, ErrNodeNotFound)
+	objIDNotFound := errors.Is(err, ErrNodeNotFound)
 	if err != nil && !objIDNotFound {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo)
 	if err != nil {
-		if !errorsStd.Is(err, ErrNodeNotFound) {
+		if !errors.Is(err, ErrNodeNotFound) {
 			return nil, err
 		}
 		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}

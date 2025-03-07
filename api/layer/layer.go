@@ -20,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
@@ -791,6 +792,7 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 
 	filters.AddFilter(object.AttributeFilePath, p.Object, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if !p.FindNullVersion {
 		filters.AddFilter(attrS3VersioningState, data.VersioningEnabled, object.MatchStringEqual)
