@@ -7,21 +7,40 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- GetBucketLifecycle operation now partially supported. It always returns NoSuchLifecycleConfiguration error (#1049)
-- Minimal required Go is 1.23 now (#979)
 
 ### Fixed
 
 ### Updated
-- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13` (#1092)
+
+### Removed
+
+## [0.35.0] - 2025-03-07
+
+This is a hybrid version for test purposes only, it no longer uses
+experimental tree extension of NeoFS for object operations, but it still needs
+it for some bucket-level operations. A number of other improvements went in as
+well, this version offers adequate performance using pure native NeoFS APIs.
+
+### Changed
+- GetBucketLifecycle operation now partially supported. It always returns NoSuchLifecycleConfiguration error (#1049)
+- Minimal required Go is 1.23 now (#979, #1092)
+- Object operations no longer use tree service (#1050, #1066, #1067, #1068)
+- Gateway uses SearchV2 now for internal purposes (#1082)
+- Optimized GetObject (#1085)
+
+### Fixed
+- CopyObject with enabled versioning (#1075)
+- Missing version metric on application start (#1089)
+- CompleteMultipartUpload incompatibility with some clients (#1077)
+
+### Updated
+- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13` (#1073, #1088, #1092)
 - `github.com/nspcc-dev/neo-go` dependency to `v0.108.1` (#1092)
 - `google.golang.org/grpc` dependency to `v1.70.0` (#1092)
 - `google.golang.org/protobuf` dependency to `v1.36.5` (#1092)
 - `github.com/stretchr/testify` dependency to `v1.10.0` (#1092)
 - `golang.org/x/sync` to `v0.11.0` (#1092)
 - `golang.org/x/exp` to `v0.0.0-20250210185358-939b2ce775ac` (#1092)
-
-### Removed
 
 ## [0.34.1] - 2025-01-27
 
@@ -707,4 +726,5 @@ releases.
 [0.33.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.32.0...v0.33.0
 [0.34.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.33.0...v0.34.0
 [0.34.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.0...v0.34.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.1...master
+[0.35.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.1...v0.35.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.35.0...master
