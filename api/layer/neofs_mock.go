@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,7 +30,6 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	"golang.org/x/exp/maps"
 )
 
 type TestNeoFS struct {
@@ -542,7 +542,7 @@ func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, fil
 		}
 	}
 
-	objects := maps.Values(t.objects)
+	objects := slices.Collect(maps.Values(t.objects))
 	slices.SortFunc(objects, func(a, b *object.Object) int {
 		var (
 			aPath string

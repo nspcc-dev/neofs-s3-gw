@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"maps"
 	"mime"
 	"net/url"
 	"path/filepath"
@@ -32,7 +33,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 )
 
 type (
@@ -759,7 +759,7 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 		}
 	}
 
-	return maps.Values(uniq), nextCursor, nil
+	return slices.Collect(maps.Values(uniq)), nextCursor, nil
 }
 
 // objectDelete puts tombstone object into neofs.
