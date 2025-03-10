@@ -48,9 +48,8 @@ const (
 	uploadMinSize       = 5 * 1048576    // 5MB
 	uploadMaxSize       = 5 * 1073741824 // 5GB
 
-	headerS3MultipartUpload  = "S3MultipartUpload"
-	headerS3MultipartNumber  = "S3MultipartNumber"
-	headerS3MultipartCreated = "S3MultipartCreated"
+	headerS3MultipartUpload = "S3MultipartUpload"
+	headerS3MultipartNumber = "S3MultipartNumber"
 )
 
 const (
@@ -2036,7 +2035,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 
 	params.attributes[headerS3MultipartUpload] = params.multipartInfo.UploadID
 	params.attributes[headerS3MultipartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
-	params.attributes[headerS3MultipartCreated] = strconv.FormatInt(time.Now().UnixNano(), 10)
 	params.attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
 	params.attributes[s3headers.IsArbitrary] = "true"
 	params.attributes[s3headers.ElementID] = "0"
@@ -2096,7 +2094,6 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 	res, err := n.neoFS.SearchObjectsV2(ctx, bucketInfo.CID, filters, []string{
 		headerS3MultipartUpload,
 		headerS3MultipartNumber,
-		headerS3MultipartCreated,
 	}, opts)
 	if err != nil {
 		return 0, fmt.Errorf("search objects: %w", err)
@@ -2112,9 +2109,6 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 
 	partNumber, err := strconv.ParseInt(res[0].Attributes[1], 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("parse header: %w", err)
-	}
-	if _, err = strconv.ParseInt(res[0].Attributes[2], 10, 64); err != nil {
 		return 0, fmt.Errorf("parse header: %w", err)
 	}
 
