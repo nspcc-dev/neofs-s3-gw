@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/minio/sio"
-	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
@@ -60,7 +59,6 @@ const (
 	metaKeyCurrentPathHash = "partHash"
 
 	metaKeyMultipartOwner        = "owner"
-	metaKeyMultipartOwnerPubKey  = "ownerPubKey"
 	metaKeyMultipartCreated      = "created"
 	metaKeyMultipartCopiesNumber = "copiesNumber"
 	metaKeyMultipartMeta         = "meta"
@@ -142,7 +140,6 @@ type (
 	ListPartsInfo struct {
 		Parts                []*Part
 		Owner                user.ID
-		OwnerPubKey          keys.PublicKey
 		NextPartNumberMarker int
 		IsTruncated          bool
 	}
@@ -155,12 +152,11 @@ type (
 		NextUploadIDMarker string
 	}
 	UploadInfo struct {
-		IsDir       bool
-		Key         string
-		UploadID    string
-		Owner       user.ID
-		OwnerPubKey keys.PublicKey
-		Created     time.Time
+		IsDir    bool
+		Key      string
+		UploadID string
+		Owner    user.ID
+		Created  time.Time
 	}
 
 	uploadPartAsSlotParams struct {
@@ -182,15 +178,9 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 		metaSize += len(p.Data.TagSet)
 	}
 
-	ownerPubKey, err := n.OwnerPublicKey(ctx)
-	if err != nil {
-		return "", fmt.Errorf("owner pub key: %w", err)
-	}
-
 	info := &data.MultipartInfo{
 		Key:          p.Info.Key,
 		Owner:        n.Owner(ctx),
-		OwnerPubKey:  *ownerPubKey,
 		Created:      TimeNow(ctx),
 		Meta:         make(map[string]string, metaSize),
 		CopiesNumber: p.CopiesNumber,
@@ -715,7 +705,6 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 		payloadMap = map[string]string{
 			s3headers.ObjectKey:          info.Key,
 			metaKeyMultipartOwner:        info.Owner.EncodeToString(),
-			metaKeyMultipartOwnerPubKey:  info.OwnerPubKey.StringCompressed(),
 			metaKeyMultipartCreated:      strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 			metaKeyMultipartCopiesNumber: strconv.FormatUint(uint64(info.CopiesNumber), 10),
 		}
@@ -893,13 +882,7 @@ func (n *layer) parseMultipartInfoObject(uploadID string, obj *object.Object) (d
 		}
 	}
 
-	pk, err := keys.NewPublicKeyFromString(payloadMap[metaKeyMultipartOwnerPubKey])
-	if err != nil {
-		return data.MultipartInfo{}, fmt.Errorf("decode multipart owner pub key: %w", err)
-	}
-
 	multipartInfo.Key = payloadMap[s3headers.ObjectKey]
-	multipartInfo.OwnerPubKey = *pk
 
 	if mpMeta, ok := payloadMap[metaKeyMultipartMeta]; ok {
 		js, err := base64.StdEncoding.DecodeString(mpMeta)
@@ -1805,7 +1788,6 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	}
 
 	res.Owner = multipartInfo.Owner
-	res.OwnerPubKey = multipartInfo.OwnerPubKey
 
 	parts, err := n.multipartGetPartsList(ctx, p.Info.Bkt, p.Info.UploadID)
 	if err != nil {
@@ -1923,12 +1905,11 @@ func uploadInfoFromMultipartInfo(uploadInfo *data.MultipartInfo, prefix, delimit
 	}
 
 	return &UploadInfo{
-		IsDir:       isDir,
-		Key:         key,
-		UploadID:    uploadInfo.UploadID,
-		Owner:       uploadInfo.Owner,
-		OwnerPubKey: uploadInfo.OwnerPubKey,
-		Created:     uploadInfo.Created,
+		IsDir:    isDir,
+		Key:      key,
+		UploadID: uploadInfo.UploadID,
+		Owner:    uploadInfo.Owner,
+		Created:  uploadInfo.Created,
 	}
 }
 
