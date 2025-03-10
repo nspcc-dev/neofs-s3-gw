@@ -115,10 +115,9 @@ type (
 	}
 
 	Part struct {
-		ETag         string
-		LastModified string
-		PartNumber   int
-		Size         int64
+		ETag       string
+		PartNumber int
+		Size       int64
 	}
 
 	ListMultipartUploadsParams struct {
@@ -1050,7 +1049,6 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			s3headers.ElementID,
 			s3headers.TotalSize,
 			AttributeDecryptedSize,
-			object.AttributeTimestamp,
 		}
 	)
 
@@ -1102,8 +1100,6 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			}
 		}
 
-		element.Attributes[object.AttributeTimestamp] = item.Attributes[6]
-
 		if _, ok := partElementMap[number]; !ok {
 			partElementMap[number] = make([]data.ElementInfo, 0)
 		}
@@ -1120,16 +1116,10 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 
 		lastElement := elements[len(elements)-1]
 
-		creationTimestamp, err := strconv.ParseInt(lastElement.Attributes[object.AttributeTimestamp], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid creation timestamp %s: %w", lastElement.Attributes[object.AttributeTimestamp], err)
-		}
-
 		partInfo := Part{
-			PartNumber:   partNumber,
-			Size:         lastElement.TotalSize,
-			ETag:         lastElement.Attributes[metaKeyCurrentPathHash],
-			LastModified: time.Unix(creationTimestamp, 0).UTC().Format(time.RFC3339),
+			PartNumber: partNumber,
+			Size:       lastElement.TotalSize,
+			ETag:       lastElement.Attributes[metaKeyCurrentPathHash],
 		}
 
 		parts = append(parts, &partInfo)
