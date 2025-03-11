@@ -423,6 +423,7 @@ func newAppMetrics(logger *zap.Logger, provider GateMetricsCollector, enabled bo
 	return &appMetrics{
 		logger:   logger,
 		provider: provider,
+		enabled:  enabled,
 	}
 }
 
