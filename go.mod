@@ -14,7 +14,7 @@ require (
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.13
 	github.com/nspcc-dev/tzhash v1.8.2
 	github.com/prometheus/client_golang v1.21.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.6
