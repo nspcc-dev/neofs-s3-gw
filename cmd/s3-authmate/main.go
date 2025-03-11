@@ -38,8 +38,7 @@ const (
 	poolStreamTimeout      = 10 * time.Second
 
 	// a month.
-	defaultLifetime          = 30 * 24 * time.Hour
-	defaultPresignedLifetime = 12 * time.Hour
+	defaultLifetime = 30 * 24 * time.Hour
 )
 
 type PoolConfig struct {
