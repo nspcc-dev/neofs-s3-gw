@@ -47,20 +47,6 @@ const (
 	UploadMaxPartNumber = 10000
 	uploadMinSize       = 5 * 1048576    // 5MB
 	uploadMaxSize       = 5 * 1073741824 // 5GB
-
-	headerS3MultipartUpload = "S3MultipartUpload"
-	headerS3MultipartNumber = "S3MultipartNumber"
-)
-
-const (
-	metaKeyMultipartHash   = "multipartHash"
-	metaKeyHomoHash        = "homoHash"
-	metaKeyCurrentPathHash = "partHash"
-
-	metaKeyMultipartOwner        = "owner"
-	metaKeyMultipartCreated      = "created"
-	metaKeyMultipartCopiesNumber = "copiesNumber"
-	metaKeyMultipartMeta         = "meta"
 )
 
 type (
@@ -486,11 +472,11 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	}
 
 	attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
-	attributes[headerS3MultipartNumber] = "0"
+	attributes[s3headers.MultipartPartNumber] = "0"
 	attributes[s3headers.ElementID] = "0"
 	attributes[s3headers.TotalSize] = "0"
-	attributes[metaKeyMultipartHash] = hex.EncodeToString(stateBytes)
-	attributes[metaKeyHomoHash] = ""
+	attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
+	attributes[s3headers.MultipartHomoHash] = ""
 
 	if tzHash != nil {
 		binaryMarshaler = tzHash.(encoding.BinaryMarshaler)
@@ -500,7 +486,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 			return nil, fmt.Errorf("marshalBinary: %w", err)
 		}
 
-		attributes[metaKeyHomoHash] = hex.EncodeToString(stateBytes)
+		attributes[s3headers.MultipartHomoHash] = hex.EncodeToString(stateBytes)
 	}
 
 	prm := PrmObjectCreate{
@@ -566,12 +552,12 @@ func (n *layer) multipartGetZeroPart(ctx context.Context, bktInfo *data.BucketIn
 		OID: zeroID,
 	}
 
-	if partInfo.MultipartHash, err = hex.DecodeString(attrs[metaKeyMultipartHash]); err != nil {
-		return nil, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, attrs[metaKeyMultipartHash], err)
+	if partInfo.MultipartHash, err = hex.DecodeString(attrs[s3headers.MultipartHash]); err != nil {
+		return nil, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, attrs[s3headers.MultipartHash], err)
 	}
 
-	if partInfo.HomoHash, err = hex.DecodeString(attrs[metaKeyHomoHash]); err != nil {
-		return nil, fmt.Errorf("convert multipart %s homoHash %s: %w", uploadID, attrs[metaKeyHomoHash], err)
+	if partInfo.HomoHash, err = hex.DecodeString(attrs[s3headers.MultipartHomoHash]); err != nil {
+		return nil, fmt.Errorf("convert multipart %s homoHash %s: %w", uploadID, attrs[s3headers.MultipartHomoHash], err)
 	}
 
 	return &partInfo, nil
@@ -591,15 +577,15 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			headerS3MultipartUpload,
-			metaKeyMultipartHash,
-			metaKeyHomoHash,
+			s3headers.MultipartUpload,
+			s3headers.MultipartHash,
+			s3headers.MultipartHomoHash,
 			s3headers.ElementID,
 		}
 	)
 
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(headerS3MultipartNumber, strconv.Itoa(number), object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(number), object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
@@ -621,8 +607,8 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		e := data.ElementInfo{
 			ID: item.ID,
 			Attributes: map[string]string{
-				metaKeyMultipartHash: item.Attributes[1],
-				metaKeyHomoHash:      item.Attributes[2],
+				s3headers.MultipartHash:     item.Attributes[1],
+				s3headers.MultipartHomoHash: item.Attributes[2],
 			},
 		}
 
@@ -643,12 +629,12 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		multipartHash, homoHash []byte
 	)
 
-	if multipartHash, err = hex.DecodeString(lastElement.Attributes[metaKeyMultipartHash]); err != nil {
-		return nil, fmt.Errorf("convert %s:%s multipartHash %s: %w", uploadID, lastElement.ID.String(), lastElement.Attributes[metaKeyMultipartHash], err)
+	if multipartHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHash]); err != nil {
+		return nil, fmt.Errorf("convert %s:%s multipartHash %s: %w", uploadID, lastElement.ID.String(), lastElement.Attributes[s3headers.MultipartHash], err)
 	}
 
-	if homoHash, err = hex.DecodeString(lastElement.Attributes[metaKeyHomoHash]); err != nil {
-		return nil, fmt.Errorf("convert %s:%s homoHash %s: %w", uploadID, lastElement.ID.String(), lastElement.Attributes[metaKeyHomoHash], err)
+	if homoHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHomoHash]); err != nil {
+		return nil, fmt.Errorf("convert %s:%s homoHash %s: %w", uploadID, lastElement.ID.String(), lastElement.Attributes[s3headers.MultipartHomoHash], err)
 	}
 
 	partInfo := data.PartInfo{
@@ -676,17 +662,17 @@ func convertElementsToPartInfo(uploadID string, number int, elements []data.Elem
 			Number:   number,
 			OID:      lastElement.ID,
 			Size:     lastElement.TotalSize,
-			ETag:     lastElement.Attributes[metaKeyCurrentPathHash],
+			ETag:     lastElement.Attributes[s3headers.MultipartPartHash],
 			Elements: elements,
 		}
 	)
 
-	if partInfo.MultipartHash, err = hex.DecodeString(lastElement.Attributes[metaKeyMultipartHash]); err != nil {
-		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, lastElement.Attributes[metaKeyMultipartHash], err)
+	if partInfo.MultipartHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHash]); err != nil {
+		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, lastElement.Attributes[s3headers.MultipartHash], err)
 	}
 
-	if partInfo.HomoHash, err = hex.DecodeString(lastElement.Attributes[metaKeyHomoHash]); err != nil {
-		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHomoHash %s: %w", uploadID, lastElement.Attributes[metaKeyHomoHash], err)
+	if partInfo.HomoHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHomoHash]); err != nil {
+		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHomoHash %s: %w", uploadID, lastElement.Attributes[s3headers.MultipartHomoHash], err)
 	}
 
 	if v, ok := lastElement.Attributes[s3headers.IsArbitrary]; ok && v == "true" {
@@ -701,10 +687,10 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 		attributes = make(map[string]string, 3)
 
 		payloadMap = map[string]string{
-			s3headers.ObjectKey:          info.Key,
-			metaKeyMultipartOwner:        info.Owner.EncodeToString(),
-			metaKeyMultipartCreated:      strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
-			metaKeyMultipartCopiesNumber: strconv.FormatUint(uint64(info.CopiesNumber), 10),
+			s3headers.ObjectKey:             info.Key,
+			s3headers.MultipartOwner:        info.Owner.EncodeToString(),
+			s3headers.MultipartCreated:      strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
+			s3headers.MultipartCopiesNumber: strconv.FormatUint(uint64(info.CopiesNumber), 10),
 		}
 	)
 
@@ -714,7 +700,7 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 			return fmt.Errorf("meta marshaling: %w", err)
 		}
 
-		payloadMap[metaKeyMultipartMeta] = base64.StdEncoding.EncodeToString(objectAttributes)
+		payloadMap[s3headers.MultipartMeta] = base64.StdEncoding.EncodeToString(objectAttributes)
 	}
 
 	payload, err := json.Marshal(payloadMap)
@@ -722,7 +708,7 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 		return fmt.Errorf("meta marshaling: %w", err)
 	}
 
-	attributes[headerS3MultipartUpload] = info.UploadID
+	attributes[s3headers.MultipartUpload] = info.UploadID
 	attributes[s3headers.ObjectKey] = info.Key
 	attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartInfo
 
@@ -750,12 +736,12 @@ func (n *layer) getMultipartInfoObject(ctx context.Context, bktInfo *data.Bucket
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			headerS3MultipartUpload,
+			s3headers.MultipartUpload,
 			object.AttributeTimestamp,
 		}
 	)
 
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.ObjectKey, objectName, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartInfo, object.MatchStringEqual)
 
@@ -800,7 +786,7 @@ func (n *layer) getMultipartInfoByPrefix(ctx context.Context, bktInfo *data.Buck
 		returningAttributes = []string{
 			s3headers.MetaMultipartType,
 			object.AttributeTimestamp,
-			headerS3MultipartUpload,
+			s3headers.MultipartUpload,
 		}
 	)
 
@@ -864,15 +850,15 @@ func (n *layer) parseMultipartInfoObject(uploadID string, obj *object.Object) (d
 		return data.MultipartInfo{}, fmt.Errorf("unmarshal multipart %s payload: %w", uploadID, err)
 	}
 
-	if err := multipartInfo.Owner.DecodeString(payloadMap[metaKeyMultipartOwner]); err != nil {
-		return data.MultipartInfo{}, fmt.Errorf("unmarshal multipart %s owner %s : %w", uploadID, payloadMap[metaKeyMultipartOwner], err)
+	if err := multipartInfo.Owner.DecodeString(payloadMap[s3headers.MultipartOwner]); err != nil {
+		return data.MultipartInfo{}, fmt.Errorf("unmarshal multipart %s owner %s : %w", uploadID, payloadMap[s3headers.MultipartOwner], err)
 	}
 
-	if utcMilli, err := strconv.ParseInt(payloadMap[metaKeyMultipartCreated], 10, 64); err == nil {
+	if utcMilli, err := strconv.ParseInt(payloadMap[s3headers.MultipartCreated], 10, 64); err == nil {
 		multipartInfo.Created = time.UnixMilli(utcMilli)
 	}
 
-	if copies, err := strconv.ParseUint(payloadMap[metaKeyMultipartCopiesNumber], 10, 64); err == nil {
+	if copies, err := strconv.ParseUint(payloadMap[s3headers.MultipartCopiesNumber], 10, 64); err == nil {
 		if copies <= math.MaxUint32 {
 			multipartInfo.CopiesNumber = uint32(copies)
 		} else {
@@ -882,7 +868,7 @@ func (n *layer) parseMultipartInfoObject(uploadID string, obj *object.Object) (d
 
 	multipartInfo.Key = payloadMap[s3headers.ObjectKey]
 
-	if mpMeta, ok := payloadMap[metaKeyMultipartMeta]; ok {
+	if mpMeta, ok := payloadMap[s3headers.MultipartMeta]; ok {
 		js, err := base64.StdEncoding.DecodeString(mpMeta)
 		if err != nil {
 			return data.MultipartInfo{}, fmt.Errorf("base64decode multipart meta %s : %w", uploadID, err)
@@ -906,12 +892,12 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			headerS3MultipartUpload,
-			headerS3MultipartNumber,
+			s3headers.MultipartUpload,
+			s3headers.MultipartPartNumber,
 		}
 	)
 
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
@@ -954,8 +940,8 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 			element.Attributes[attr.Key()] = attr.Value()
 		}
 
-		if number, err = strconv.Atoi(element.Attributes[headerS3MultipartNumber]); err != nil {
-			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[headerS3MultipartNumber], err)
+		if number, err = strconv.Atoi(element.Attributes[s3headers.MultipartPartNumber]); err != nil {
+			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[s3headers.MultipartPartNumber], err)
 		}
 
 		if element.ElementID, err = strconv.Atoi(element.Attributes[s3headers.ElementID]); err != nil {
@@ -1002,11 +988,11 @@ func (n *layer) multipartMetaGetOIDsForAbort(ctx context.Context, bktInfo *data.
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			headerS3MultipartUpload,
+			s3headers.MultipartUpload,
 		}
 	)
 
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
@@ -1042,16 +1028,16 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			headerS3MultipartUpload,
-			headerS3MultipartNumber,
-			metaKeyCurrentPathHash,
+			s3headers.MultipartUpload,
+			s3headers.MultipartPartNumber,
+			s3headers.MultipartPartHash,
 			s3headers.ElementID,
 			s3headers.TotalSize,
 			AttributeDecryptedSize,
 		}
 	)
 
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
@@ -1082,7 +1068,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, item.Attributes[1], err)
 		}
 
-		element.Attributes[metaKeyCurrentPathHash] = item.Attributes[2]
+		element.Attributes[s3headers.MultipartPartHash] = item.Attributes[2]
 
 		if element.ElementID, err = strconv.Atoi(item.Attributes[3]); err != nil {
 			return nil, fmt.Errorf("convert multipart %s elementID %s: %w", uploadID, item.Attributes[3], err)
@@ -1118,7 +1104,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 		partInfo := Part{
 			PartNumber: partNumber,
 			Size:       lastElement.TotalSize,
-			ETag:       lastElement.Attributes[metaKeyCurrentPathHash],
+			ETag:       lastElement.Attributes[s3headers.MultipartPartHash],
 		}
 
 		parts = append(parts, &partInfo)
@@ -1133,13 +1119,13 @@ func (n *layer) multipartMetaGetPartsAfter(ctx context.Context, bktInfo *data.Bu
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			headerS3MultipartUpload,
+			s3headers.MultipartUpload,
 		}
 	)
 
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
-	filters.AddFilter(headerS3MultipartNumber, strconv.Itoa(partID), object.MatchNumGT)
+	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(partID), object.MatchNumGT)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
@@ -1177,8 +1163,8 @@ func (n *layer) multipartMetaGetPartsAfter(ctx context.Context, bktInfo *data.Bu
 			element.Attributes[attr.Key()] = attr.Value()
 		}
 
-		if number, err = strconv.Atoi(element.Attributes[headerS3MultipartNumber]); err != nil {
-			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[headerS3MultipartNumber], err)
+		if number, err = strconv.Atoi(element.Attributes[s3headers.MultipartPartNumber]); err != nil {
+			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[s3headers.MultipartPartNumber], err)
 		}
 
 		if element.ElementID, err = strconv.Atoi(element.Attributes[s3headers.ElementID]); err != nil {
@@ -1912,8 +1898,8 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 	)
 
 	prm.Attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
-	prm.Attributes[headerS3MultipartUpload] = p.Info.UploadID
-	prm.Attributes[headerS3MultipartNumber] = strconv.Itoa(p.PartNumber)
+	prm.Attributes[s3headers.MultipartUpload] = p.Info.UploadID
+	prm.Attributes[s3headers.MultipartPartNumber] = strconv.Itoa(p.PartNumber)
 
 	// slice part manually. Simultaneously considering the part is a single object for user.
 	for {
@@ -1951,10 +1937,10 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 			if err != nil {
 				return id, fmt.Errorf("marshalBinary: %w", err)
 			}
-			prm.Attributes[metaKeyMultipartHash] = hex.EncodeToString(stateBytes)
-			prm.Attributes[metaKeyHomoHash] = ""
+			prm.Attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
+			prm.Attributes[s3headers.MultipartHomoHash] = ""
 			prm.Attributes[s3headers.TotalSize] = strconv.Itoa(totalBytes)
-			prm.Attributes[metaKeyCurrentPathHash] = hex.EncodeToString(prm.Multipart.MultipartHashes[1].Sum(nil))
+			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes[1].Sum(nil))
 
 			// todo: (@smallhive) replace with object and avoid indexes.
 			if len(prm.Multipart.MultipartHashes) == 3 {
@@ -1965,7 +1951,7 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 					return id, fmt.Errorf("marshalBinary: %w", err)
 				}
 
-				prm.Attributes[metaKeyHomoHash] = hex.EncodeToString(stateBytes)
+				prm.Attributes[s3headers.MultipartHomoHash] = hex.EncodeToString(stateBytes)
 			}
 
 			id, err = n.multipartObjectPut(ctx, prm, bktInfo)
@@ -2019,8 +2005,8 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 		return nil, fmt.Errorf("marshalBinary: %w", err)
 	}
 
-	params.attributes[metaKeyMultipartHash] = hex.EncodeToString(mpHashBytes)
-	params.attributes[metaKeyHomoHash] = ""
+	params.attributes[s3headers.MultipartHash] = hex.EncodeToString(mpHashBytes)
+	params.attributes[s3headers.MultipartHomoHash] = ""
 
 	if params.tzHash != nil {
 		binaryMarshaler = params.tzHash.(encoding.BinaryMarshaler)
@@ -2030,11 +2016,11 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 			return nil, fmt.Errorf("marshalBinary: %w", err)
 		}
 
-		params.attributes[metaKeyHomoHash] = hex.EncodeToString(homoHashBytes)
+		params.attributes[s3headers.MultipartHomoHash] = hex.EncodeToString(homoHashBytes)
 	}
 
-	params.attributes[headerS3MultipartUpload] = params.multipartInfo.UploadID
-	params.attributes[headerS3MultipartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
+	params.attributes[s3headers.MultipartUpload] = params.multipartInfo.UploadID
+	params.attributes[s3headers.MultipartPartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
 	params.attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
 	params.attributes[s3headers.IsArbitrary] = "true"
 	params.attributes[s3headers.ElementID] = "0"
@@ -2082,7 +2068,7 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 
 func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, bucketInfo *data.BucketInfo) (int64, error) {
 	var filters object.SearchFilters
-	filters.AddFilter(headerS3MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 	filters.AddFilter(s3headers.IsArbitrary, "true", object.MatchStringEqual)
 
@@ -2092,8 +2078,8 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 	}
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bucketInfo.CID, filters, []string{
-		headerS3MultipartUpload,
-		headerS3MultipartNumber,
+		s3headers.MultipartUpload,
+		s3headers.MultipartPartNumber,
 	}, opts)
 	if err != nil {
 		return 0, fmt.Errorf("search objects: %w", err)

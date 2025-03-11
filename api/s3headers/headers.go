@@ -6,6 +6,25 @@ const (
 	TotalSize   = "totalSize"
 
 	ObjectKey = "mpObjectKey"
+
+	// MultipartUpload contains multipart upload ID.
+	MultipartUpload = "s3mpUpload"
+	// MultipartPartNumber contains part number in MultipartUpload.
+	MultipartPartNumber = "s3mpPartNumber"
+	// MultipartHash contains hash.Hash state to calculate final object hash.
+	MultipartHash = "s3mpHash"
+	// MultipartHomoHash contains hash.Hash state to calculate final object homo hash.
+	MultipartHomoHash = "s3mpHomoHash"
+	// MultipartPartHash contains hash for MultipartPartNumber.
+	MultipartPartHash = "s3mpPartHash"
+	// MultipartOwner contains object owner for uploading object.
+	MultipartOwner = "s3mpOwner"
+	// MultipartCopiesNumber contains CopiesNumber setting for uploading object.
+	MultipartCopiesNumber = "s3mpCopiesNumber"
+	// MultipartMeta contains original object attributes.
+	MultipartMeta = "s3mpMeta"
+	// MultipartCreated contains final object creation date.
+	MultipartCreated = "s3mpCreated"
 )
 
 const (
