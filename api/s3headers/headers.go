@@ -1,11 +1,18 @@
 package s3headers
 
 const (
-	ElementID   = "elementId"
-	IsArbitrary = "isArbitrary"
-	TotalSize   = "totalSize"
+	// MultipartElementID is number of manual sliced part element.
+	MultipartElementID = "s3mpElementId"
+	// MultipartIsArbitraryPart describes multipart which has been uploaded in not the subsequent order.
+	MultipartIsArbitraryPart = "s3mpIsArbitrary"
+	// MultipartTotalSize describes payload size for all manually sliced elements for part.
+	// Size of the last element in chain is a whole part size.
+	MultipartTotalSize = "s3mpTotalSize"
 
-	ObjectKey = "mpObjectKey"
+	// MultipartObjectKey contains object key for multipart object.
+	// It is important to store it separately with object.AttributeFilePath attribute during multipart upload.
+	// Multipart uploading object shouldn't be available for user until CompleteMultipartUpload.
+	MultipartObjectKey = "s3mpObjectKey"
 
 	// MultipartUpload contains multipart upload ID.
 	MultipartUpload = "s3mpUpload"
