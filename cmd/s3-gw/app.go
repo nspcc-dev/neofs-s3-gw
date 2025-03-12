@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,6 +17,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
+	"github.com/nspcc-dev/neo-go/pkg/util"
+	rpcNNS "github.com/nspcc-dev/neofs-contract/rpc/nns"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -114,20 +119,33 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
-	// If slicer is disabled, we should use "static" getter, which doesn't make periodic requests to the NeoFS.
-	var epochGetter neofs.EpochGetter = ni
+	var (
+		rpcHTTPEndpoints = v.GetStringSlice(cfgRPCEndpoints)
+		wsEndpoints      = make([]string, len(rpcHTTPEndpoints))
+		netMapContract   util.Uint160
+	)
 
-	if neofsCfg.IsSlicerEnabled {
-		epochUpdateInterval := v.GetDuration(cfgEpochUpdateInterval)
-
-		if epochUpdateInterval == 0 {
-			epochUpdateInterval = time.Duration(int64(ni.EpochDuration())/2*ni.MsPerBlock()) * time.Millisecond
+	for i, endpoint := range rpcHTTPEndpoints {
+		wsEndpoints[i], err = httpToWS(endpoint)
+		if err != nil {
+			log.logger.Fatal("endpoint conversion failed", zap.Error(err), zap.String("enpoint", endpoint))
 		}
 
-		epochGetter = neofs.NewPeriodicGetter(ctx, ni.CurrentEpoch(), epochUpdateInterval, conns, log.logger)
+		if !netMapContract.Equals(util.Uint160{}) {
+			continue
+		}
+
+		netMapContract, err = resolveNetmapContractAddr(ctx, endpoint)
+		if err != nil {
+			log.logger.Warn("resolve netmap contract", zap.Error(err), zap.String("endpoint", endpoint))
+			continue
+		}
 	}
 
-	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochGetter)
+	epochListener := neofs.NewEpochListener(wsEndpoints, log.logger, netMapContract)
+	epochListener.ListenNotifications(ctx)
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochListener)
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
@@ -150,6 +168,32 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	app.init(ctx, anonSigner, neoFS)
 
 	return app
+}
+
+func resolveNetmapContractAddr(ctx context.Context, endpoint string) (util.Uint160, error) {
+	var (
+		opt            rpcclient.Options
+		netMapContract util.Uint160
+	)
+
+	cl, err := rpcclient.New(ctx, endpoint, opt)
+	if err != nil {
+		return netMapContract, fmt.Errorf("couldn't create http rpc client: %w", err)
+	}
+
+	defer cl.Close()
+
+	nnsReader, err := rpcNNS.NewInferredReader(cl, invoker.New(cl, nil))
+	if err != nil {
+		return netMapContract, fmt.Errorf("couldn't create inferred reader: %w", err)
+	}
+
+	netMapContract, err = nnsReader.ResolveFSContract(rpcNNS.NameNetmap)
+	if err != nil {
+		return netMapContract, fmt.Errorf("resolve via reader: %w", err)
+	}
+
+	return netMapContract, nil
 }
 
 func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
@@ -784,4 +828,22 @@ func readRegionMap(filePath string) (map[string]string, error) {
 	}
 
 	return regionMap, nil
+}
+
+func httpToWS(endpoint string) (string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("url parse: %w", err)
+	}
+
+	if u.Scheme == "http" {
+		u.Scheme = "ws"
+	}
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	}
+
+	u.Path = "/ws"
+
+	return u.String(), nil
 }
