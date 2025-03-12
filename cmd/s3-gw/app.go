@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -499,7 +500,7 @@ func (a *App) Serve(ctx context.Context) {
 		go func(i int) {
 			a.log.Info("starting server", zap.String("address", a.servers[i].Address()))
 
-			if err := srv.Serve(a.servers[i].Listener()); err != nil && err != http.ErrServerClosed {
+			if err := srv.Serve(a.servers[i].Listener()); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				a.log.Fatal("listen and serve", zap.Error(err))
 			}
 		}(i)
