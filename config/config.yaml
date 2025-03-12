@@ -144,8 +144,6 @@ neofs:
   # Number of the object copies to consider PUT to NeoFS successful.
   # `0` means that object will be processed according to the container's placement policy
   set_copies_number: 0
-  # Timeout between retrieving actual epoch from NeoFS. Actual only if slicer.enabled = true.
-  epoch_update_interval: 2m
 
 # List of allowed AccessKeyID prefixes
 # If the parameter is omitted, S3 GW will accept all AccessKeyIDs

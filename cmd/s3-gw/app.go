@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -114,20 +115,28 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
-	// If slicer is disabled, we should use "static" getter, which doesn't make periodic requests to the NeoFS.
-	var epochGetter neofs.EpochGetter = ni
+	var (
+		rpcHTTPEndpoints = v.GetStringSlice(cfgRPCEndpoints)
+		wsEndpoints      = make([]string, len(rpcHTTPEndpoints))
+	)
 
-	if neofsCfg.IsSlicerEnabled {
-		epochUpdateInterval := v.GetDuration(cfgEpochUpdateInterval)
-
-		if epochUpdateInterval == 0 {
-			epochUpdateInterval = time.Duration(int64(ni.EpochDuration())/2*ni.MsPerBlock()) * time.Millisecond
+	for i, endpoint := range rpcHTTPEndpoints {
+		wsEnd, err := httpToWS(endpoint)
+		if err != nil {
+			log.logger.Fatal("endpoint conversion failed", zap.Error(err))
 		}
 
-		epochGetter = neofs.NewPeriodicGetter(ctx, ni.CurrentEpoch(), epochUpdateInterval, conns, log.logger)
+		wsEndpoints[i] = wsEnd
 	}
 
-	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochGetter)
+	epochListener := neofs.NewEpochListener(wsEndpoints, log.logger)
+	if err = epochListener.Init(ctx); err != nil {
+		log.logger.Fatal("couldn't initialize epoch listener", zap.Error(err))
+	}
+
+	epochListener.ListenNotifications(ctx)
+
+	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochListener)
 
 	// prepare auth center
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
@@ -784,4 +793,22 @@ func readRegionMap(filePath string) (map[string]string, error) {
 	}
 
 	return regionMap, nil
+}
+
+func httpToWS(endpoint string) (string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("url parse: %w", err)
+	}
+
+	if u.Scheme == "http" {
+		u.Scheme = "ws"
+	}
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	}
+
+	u.Path = "/ws"
+
+	return u.String(), nil
 }
