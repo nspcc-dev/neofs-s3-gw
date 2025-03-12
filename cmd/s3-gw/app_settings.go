@@ -129,9 +129,6 @@ const ( // Settings.
 	// Maximum number of objects to be deleted per request limit by this value.
 	cfgMaxObjectToDeletePerRequest = "s3.max_object_to_delete_per_request"
 
-	//  Timeout between retrieving actual epoch from NeoFS. Actual only if slicer.enabled = true.
-	cfgEpochUpdateInterval = "neofs.epoch_update_interval"
-
 	// List of allowed AccessKeyID prefixes.
 	cfgAllowedAccessKeyIDPrefixes = "allowed_access_key_id_prefixes"
 
