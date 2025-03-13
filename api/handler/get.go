@@ -142,7 +142,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p, bktSettings.VersioningEnabled())
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
@@ -187,12 +193,6 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if params, err = fetchRangeHeader(r.Header, uint64(fullSize)); err != nil {
 		h.logAndSendError(w, "could not parse range header", reqInfo, err)
-		return
-	}
-
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 

@@ -234,7 +234,7 @@ type (
 		GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWithPayloadReaderParams) (*ObjectWithPayloadReader, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
 		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
-		ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error)
+		ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams, bucketVersioningEnabled bool) (*data.ComprehensiveObjectInfo, error)
 		GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error)
 
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
@@ -655,62 +655,45 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 	return extObjInfo, nil
 }
 
-func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error) {
+func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams, bucketVersioningEnabled bool) (*data.ComprehensiveObjectInfo, error) {
 	var (
 		id          oid.ID
 		err         error
-		settings    *data.BucketSettings
 		owner       = n.Owner(ctx)
 		versions    []allVersionsSearchResult
 		tags, locks bool
 
-		tagSet   map[string]string
-		lockInfo *data.LockInfo
+		tagSet         map[string]string
+		lockInfo       *data.LockInfo
+		isEmptyVersion = len(p.VersionID) == 0
+		isNullVersion  = p.VersionID == data.UnversionedObjectVersionID
 	)
 
-	if len(p.VersionID) == 0 {
-		versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
+	versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, isNullVersion)
+	if err != nil {
+		if errors.Is(err, ErrNodeNotFound) {
+			if isEmptyVersion {
 				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 			}
 
-			return nil, err
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 
+		return nil, err
+	}
+
+	if isEmptyVersion {
 		if versions[0].IsDeleteMarker {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 
 		id = versions[0].ID
 	} else if p.VersionID == data.UnversionedObjectVersionID {
-		versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-
-			return nil, err
-		}
-
 		id = versions[0].ID
 	} else {
-		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
-		if err != nil {
-			return nil, fmt.Errorf("get bucket settings: %w", err)
-		}
-
-		versions, tags, locks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-			return nil, err
-		}
-
 		var foundVersion *allVersionsSearchResult
 
-		if settings.VersioningEnabled() {
+		if bucketVersioningEnabled {
 			for _, version := range versions {
 				if version.ID.EncodeToString() == p.VersionID {
 					foundVersion = &version
