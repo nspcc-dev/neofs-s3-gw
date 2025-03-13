@@ -620,6 +620,72 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	return searchResults, hasTags, hasLocks, nil
 }
 
+func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) (bool, bool, error) {
+	var (
+		filters             = make(object.SearchFilters, 0, 4)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+			s3headers.MetaType,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	if len(objectName) > 0 {
+		filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	} else {
+		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
+	}
+
+	if onlyUnversioned {
+		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+	}
+	filters.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return false, false, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return false, false, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return false, false, nil
+	}
+
+	var (
+		hasTags  bool
+		hasLocks bool
+	)
+
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return false, false, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		switch item.Attributes[1] {
+		case s3headers.TypeTags:
+			hasTags = true
+		case s3headers.TypeLock:
+			hasLocks = true
+		default:
+		}
+
+		// we already got maximum information.
+		if hasTags && hasLocks {
+			break
+		}
+	}
+
+	return hasTags, hasLocks, nil
+}
+
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
