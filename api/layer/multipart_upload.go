@@ -338,11 +338,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		currentPartHash = sha256.New()
 	)
 
-	objHashes := []hash.Hash{multipartHash, currentPartHash}
-	if tzHash != nil {
-		objHashes = append(objHashes, tzHash)
-	}
-
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
@@ -350,7 +345,11 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		CreationTime: creationTime,
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
-			MultipartHashes: objHashes,
+			MultipartHashes: &MultipartHashes{
+				Hash:     multipartHash,
+				HomoHash: tzHash,
+				PartHash: currentPartHash,
+			},
 		},
 	}
 
@@ -1922,13 +1921,11 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 				prm.Multipart.HomoHash.Write((chunk)[:nBts])
 			}
 
-			for _, h := range prm.Multipart.MultipartHashes {
-				if _, err = h.Write((chunk)[:nBts]); err != nil {
-					return id, fmt.Errorf("hash payload write: %w", err)
-				}
+			if err = prm.Multipart.MultipartHashes.WritePayload((chunk)[:nBts]); err != nil {
+				return id, fmt.Errorf("hash payload write: %w", err)
 			}
 
-			binaryMarshaler := prm.Multipart.MultipartHashes[0].(encoding.BinaryMarshaler)
+			binaryMarshaler := prm.Multipart.MultipartHashes.Hash.(encoding.BinaryMarshaler)
 			stateBytes, err = binaryMarshaler.MarshalBinary()
 			if err != nil {
 				return id, fmt.Errorf("marshalBinary: %w", err)
@@ -1936,11 +1933,10 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 			prm.Attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
 			prm.Attributes[s3headers.MultipartHomoHash] = ""
 			prm.Attributes[s3headers.MultipartTotalSize] = strconv.Itoa(totalBytes)
-			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes[1].Sum(nil))
+			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes.PartHash.Sum(nil))
 
-			// todo: (@smallhive) replace with object and avoid indexes.
-			if len(prm.Multipart.MultipartHashes) == 3 {
-				binaryMarshaler = prm.Multipart.MultipartHashes[2].(encoding.BinaryMarshaler)
+			if prm.Multipart.MultipartHashes.HomoHash != nil {
+				binaryMarshaler = prm.Multipart.MultipartHashes.HomoHash.(encoding.BinaryMarshaler)
 				stateBytes, err = binaryMarshaler.MarshalBinary()
 
 				if err != nil {
