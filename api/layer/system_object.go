@@ -31,7 +31,6 @@ type PutLockInfoParams struct {
 	ObjVersion   *ObjectVersion
 	NewLock      *data.ObjectLock
 	CopiesNumber uint32
-	NodeVersion  *data.NodeVersion // optional
 }
 
 type locksSearchResult struct {

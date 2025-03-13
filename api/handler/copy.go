@@ -187,7 +187,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 				ObjectName: srcObject,
 				VersionID:  srcObjInfo.VersionID(),
 			},
-			NodeVersion: extendedSrcObjInfo.NodeVersion,
 		}
 
 		if !settingsSrc.VersioningEnabled() {
@@ -290,7 +289,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 				VersionID:  dstObjInfo.VersionID(),
 			},
 			TagSet:       tagSet,
-			NodeVersion:  extendedDstObjInfo.NodeVersion,
 			CopiesNumber: h.cfg.CopiesNumber,
 		}
 		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {

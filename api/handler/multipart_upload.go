@@ -434,7 +434,6 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 				VersionID:  objInfo.VersionID(),
 			},
 			TagSet:       uploadData.TagSet,
-			NodeVersion:  extendedObjInfo.NodeVersion,
 			CopiesNumber: h.cfg.CopiesNumber,
 		}
 		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {

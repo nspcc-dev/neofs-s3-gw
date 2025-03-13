@@ -96,10 +96,9 @@ type (
 
 	// ObjectVersion stores object version info.
 	ObjectVersion struct {
-		BktInfo               *data.BucketInfo
-		ObjectName            string
-		VersionID             string
-		NoErrorOnDeleteMarker bool
+		BktInfo    *data.BucketInfo
+		ObjectName string
+		VersionID  string
 	}
 
 	// Resolver allows to map container ID by container name.

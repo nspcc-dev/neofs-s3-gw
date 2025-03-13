@@ -79,7 +79,6 @@ func TestObjectCacheType(t *testing.T) {
 		NodeVersion: &data.NodeVersion{
 			BaseNodeVersion: data.BaseNodeVersion{
 				FilePath: "obj",
-				Size:     50,
 			},
 			IsUnversioned: true,
 		},

@@ -376,7 +376,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	partInfo := &data.PartInfo{
-		Key:      p.Info.Key,
 		UploadID: p.Info.UploadID,
 		Number:   p.PartNumber,
 		OID:      id,
@@ -519,7 +518,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		zap.Int("part number", 0), zap.String("object", p.Key), zap.Stringer("oid", id))
 
 	partInfo := &data.PartInfo{
-		Key: p.Key,
 		// UploadID equals zero part ID intentionally.
 		UploadID: id.String(),
 		Number:   0,
@@ -657,7 +655,6 @@ func convertElementsToPartInfo(uploadID string, number int, elements []data.Elem
 		lastElement = elements[len(elements)-1]
 
 		partInfo = data.PartInfo{
-			Key:      lastElement.Attributes[s3headers.MultipartObjectKey],
 			UploadID: uploadID,
 			Number:   number,
 			OID:      lastElement.ID,
@@ -1625,7 +1622,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	newVersion := &data.NodeVersion{
 		BaseNodeVersion: data.BaseNodeVersion{
 			FilePath: p.Info.Key,
-			Size:     multipartObjetSize,
 			OID:      headerObjectID,
 			ETag:     hex.EncodeToString(multipartHash.Sum(nil)),
 		},
@@ -2042,7 +2038,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	}
 
 	partInfo := &data.PartInfo{
-		Key:      params.uploadPartParams.Info.Key,
 		UploadID: params.uploadPartParams.Info.UploadID,
 		Number:   params.uploadPartParams.PartNumber,
 		OID:      id,
