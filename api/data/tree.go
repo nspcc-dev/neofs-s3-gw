@@ -15,7 +15,10 @@ const (
 
 // NodeVersion represent node from tree service.
 type NodeVersion struct {
-	BaseNodeVersion
+	OID           oid.ID
+	Timestamp     uint64
+	ETag          string
+	FilePath      string
 	DeleteMarker  *DeleteMarkerInfo
 	IsUnversioned bool
 }
@@ -50,15 +53,6 @@ func (e ExtendedObjectInfo) Version() string {
 	}
 
 	return e.ObjectInfo.ID.EncodeToString()
-}
-
-// BaseNodeVersion is minimal node info from tree service.
-// Basically used for "system" object.
-type BaseNodeVersion struct {
-	OID       oid.ID
-	Timestamp uint64
-	ETag      string
-	FilePath  string
 }
 
 // MultipartInfo is multipart upload information.

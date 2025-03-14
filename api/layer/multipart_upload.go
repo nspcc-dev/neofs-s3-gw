@@ -1619,11 +1619,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	// the "big object" is not presented in system, but we have to put correct info about it and its version.
 
 	newVersion := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			FilePath: p.Info.Key,
-			OID:      headerObjectID,
-			ETag:     hex.EncodeToString(multipartHash.Sum(nil)),
-		},
+		FilePath:      p.Info.Key,
+		OID:           headerObjectID,
+		ETag:          hex.EncodeToString(multipartHash.Sum(nil)),
 		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 

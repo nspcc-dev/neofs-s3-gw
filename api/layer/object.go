@@ -224,9 +224,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	newVersion := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			FilePath: p.Object,
-		},
+		FilePath:      p.Object,
 		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 
@@ -1066,10 +1064,8 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 			oi.IsDeleteMarker = true
 		} else {
 			nv := data.NodeVersion{
-				BaseNodeVersion: data.BaseNodeVersion{
-					OID:      ver.ID,
-					FilePath: prefix,
-				},
+				OID:      ver.ID,
+				FilePath: prefix,
 			}
 
 			nv.IsUnversioned = !ver.IsVersioned
@@ -1082,12 +1078,10 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 		eoi := &data.ExtendedObjectInfo{
 			ObjectInfo: oi,
 			NodeVersion: &data.NodeVersion{
-				BaseNodeVersion: data.BaseNodeVersion{
-					OID:       oi.ID,
-					Timestamp: uint64(oi.Created.Unix()),
-					ETag:      "",
-					FilePath:  oi.Name,
-				},
+				OID:           oi.ID,
+				Timestamp:     uint64(oi.Created.Unix()),
+				ETag:          "",
+				FilePath:      oi.Name,
 				IsUnversioned: !ver.IsVersioned,
 			},
 		}

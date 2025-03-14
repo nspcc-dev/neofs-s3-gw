@@ -30,9 +30,7 @@ func TestCache(t *testing.T) {
 			CID: addr.Container(),
 		},
 		NodeVersion: &data.NodeVersion{
-			BaseNodeVersion: data.BaseNodeVersion{
-				FilePath: "obj",
-			},
+			FilePath:      "obj",
 			IsUnversioned: true,
 		},
 		IsLatest: true,
