@@ -15,22 +15,12 @@ const (
 
 // NodeVersion represent node from tree service.
 type NodeVersion struct {
-	OID           oid.ID
-	Timestamp     uint64
-	ETag          string
-	FilePath      string
-	DeleteMarker  *DeleteMarkerInfo
-	IsUnversioned bool
-}
-
-func (v NodeVersion) IsDeleteMarker() bool {
-	return v.DeleteMarker != nil
-}
-
-// DeleteMarkerInfo is used to save object info if node in the tree service is delete marker.
-// We need this information because the "delete marker" object is no longer stored in NeoFS.
-type DeleteMarkerInfo struct {
-	Created time.Time
+	OID            oid.ID
+	Timestamp      uint64
+	ETag           string
+	FilePath       string
+	IsDeleteMarker bool
+	IsUnversioned  bool
 }
 
 // ExtendedObjectInfo contains additional node info to be able to sort versions by timestamp.

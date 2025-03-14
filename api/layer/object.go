@@ -1078,18 +1078,13 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 		eoi := &data.ExtendedObjectInfo{
 			ObjectInfo: oi,
 			NodeVersion: &data.NodeVersion{
-				OID:           oi.ID,
-				Timestamp:     uint64(oi.Created.Unix()),
-				ETag:          "",
-				FilePath:      oi.Name,
-				IsUnversioned: !ver.IsVersioned,
+				OID:            oi.ID,
+				Timestamp:      uint64(oi.Created.Unix()),
+				ETag:           "",
+				FilePath:       oi.Name,
+				IsUnversioned:  !ver.IsVersioned,
+				IsDeleteMarker: oi.IsDeleteMarker,
 			},
-		}
-
-		if oi.IsDeleteMarker {
-			eoi.NodeVersion.DeleteMarker = &data.DeleteMarkerInfo{
-				Created: oi.Created,
-			}
 		}
 
 		objVersions, ok := versions[oi.Name]
@@ -1182,7 +1177,7 @@ func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, deli
 		ID:             node.OID, // to use it as continuation token
 		CID:            bktInfo.CID,
 		IsDir:          true,
-		IsDeleteMarker: node.IsDeleteMarker(),
+		IsDeleteMarker: node.IsDeleteMarker,
 		Bucket:         bktInfo.Name,
 		Name:           dirName,
 	}

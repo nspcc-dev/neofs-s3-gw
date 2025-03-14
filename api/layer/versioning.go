@@ -83,7 +83,7 @@ func triageVersions(objVersions []*data.ExtendedObjectInfo) ([]*data.ExtendedObj
 	var resDelMarkVersions []*data.ExtendedObjectInfo
 
 	for _, version := range objVersions {
-		if version.NodeVersion.IsDeleteMarker() {
+		if version.NodeVersion.IsDeleteMarker {
 			resDelMarkVersions = append(resDelMarkVersions, version)
 		} else {
 			resVersion = append(resVersion, version)
