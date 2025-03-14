@@ -21,17 +21,6 @@ const (
 	VersioningSuspended   = "Suspended"
 )
 
-const (
-	// BucketACLEnabled means ACLs are enabled.
-	BucketACLEnabled BucketACLState = iota
-
-	// BucketACLBucketOwnerEnforced mean ACLs are disabled. Any additional objects ACL raises AccessControlListNotSupported error.
-	BucketACLBucketOwnerEnforced
-
-	// BucketACLBucketOwnerPreferred mean ACLs enabled. New object must be uploaded with `bucket-owner-full-control` canned ACL.
-	BucketACLBucketOwnerPreferred
-)
-
 type (
 	// BucketACLState is bucket ACL state.
 	BucketACLState uint32

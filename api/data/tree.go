@@ -1,12 +1,10 @@
 package data
 
 import (
-	"fmt"
+	"cmp"
 	"strconv"
-	"strings"
 	"time"
 
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
@@ -17,20 +15,12 @@ const (
 
 // NodeVersion represent node from tree service.
 type NodeVersion struct {
-	BaseNodeVersion
-	DeleteMarker  *DeleteMarkerInfo
-	IsUnversioned bool
-}
-
-func (v NodeVersion) IsDeleteMarker() bool {
-	return v.DeleteMarker != nil
-}
-
-// DeleteMarkerInfo is used to save object info if node in the tree service is delete marker.
-// We need this information because the "delete marker" object is no longer stored in NeoFS.
-type DeleteMarkerInfo struct {
-	Created time.Time
-	Owner   user.ID
+	OID            oid.ID
+	Timestamp      uint64
+	ETag           string
+	FilePath       string
+	IsDeleteMarker bool
+	IsUnversioned  bool
 }
 
 // ExtendedObjectInfo contains additional node info to be able to sort versions by timestamp.
@@ -55,24 +45,6 @@ func (e ExtendedObjectInfo) Version() string {
 	return e.ObjectInfo.ID.EncodeToString()
 }
 
-// BaseNodeVersion is minimal node info from tree service.
-// Basically used for "system" object.
-type BaseNodeVersion struct {
-	ID        uint64
-	ParenID   uint64
-	OID       oid.ID
-	Timestamp uint64
-	Size      int64
-	ETag      string
-	FilePath  string
-}
-
-type ObjectTaggingInfo struct {
-	CnrID     cid.ID
-	ObjName   string
-	VersionID string
-}
-
 // MultipartInfo is multipart upload information.
 type MultipartInfo struct {
 	ID           oid.ID
@@ -84,41 +56,8 @@ type MultipartInfo struct {
 	CopiesNumber uint32
 }
 
-// LinkObjectPayload contains part info of the complex object.
-// This data will be used for linking object construction.
-type LinkObjectPayload struct {
-	OID  oid.ID
-	Size uint32
-}
-
-// Marshal converts LinkObjectPayload to string.
-func (e *LinkObjectPayload) Marshal() string {
-	return fmt.Sprintf("%s:%d", e.OID.String(), e.Size)
-}
-
-// Unmarshal converts string to LinkObjectPayload.
-func (e *LinkObjectPayload) Unmarshal(value string) error {
-	parts := strings.Split(value, ":")
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid format: %s", value)
-	}
-
-	if err := e.OID.DecodeString(parts[0]); err != nil {
-		return fmt.Errorf("invalid id: %w", err)
-	}
-
-	size, err := strconv.ParseUint(parts[1], 10, 32)
-	if err != nil {
-		return fmt.Errorf("invalid size: %w", err)
-	}
-
-	e.Size = uint32(size)
-	return nil
-}
-
 // PartInfo is upload information about part.
 type PartInfo struct {
-	Key      string
 	UploadID string
 	Number   int
 	OID      oid.ID
@@ -126,8 +65,6 @@ type PartInfo struct {
 	ETag     string
 	// Creation time from the client.
 	Created time.Time
-	// Server creation time.
-	ServerCreated time.Time
 
 	// MultipartHash contains internal state of the [hash.Hash] to calculate whole object payload hash.
 	MultipartHash []byte
@@ -153,27 +90,11 @@ func (p *PartInfo) ToHeaderString() string {
 
 // SortPartInfo sorts PartInfo for Number ASC, ServerCreated ASC.
 func SortPartInfo(a, b *PartInfo) int {
-	if a.Number < b.Number {
-		return -1
-	}
-
-	if a.Number == b.Number {
-		if a.ServerCreated.Before(b.ServerCreated) {
-			return -1
-		}
-
-		if a.ServerCreated.Equal(b.ServerCreated) {
-			return 0
-		}
-	}
-
-	return 1
+	return cmp.Compare(a.Number, b.Number)
 }
 
 // LockInfo is lock information to create appropriate tree node.
 type LockInfo struct {
-	id uint64
-
 	legalHoldOID oid.ID
 	setLegalHold bool
 
@@ -183,21 +104,9 @@ type LockInfo struct {
 	isCompliance bool
 }
 
-func NewLockInfo(id uint64) *LockInfo {
-	return &LockInfo{id: id}
-}
-
-func (l LockInfo) ID() uint64 {
-	return l.id
-}
-
 func (l *LockInfo) SetLegalHold(objID oid.ID) {
 	l.legalHoldOID = objID
 	l.setLegalHold = true
-}
-
-func (l *LockInfo) ResetLegalHold() {
-	l.setLegalHold = false
 }
 
 func (l LockInfo) LegalHold() oid.ID {

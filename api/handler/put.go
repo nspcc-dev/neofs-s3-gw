@@ -319,7 +319,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 				VersionID:  objInfo.VersionID(),
 			},
 			TagSet:       tagSet,
-			NodeVersion:  extendedObjInfo.NodeVersion,
 			CopiesNumber: h.cfg.CopiesNumber,
 		}
 
@@ -546,7 +545,6 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
 			},
-			NodeVersion:  extendedObjInfo.NodeVersion,
 			CopiesNumber: h.cfg.CopiesNumber,
 		}
 

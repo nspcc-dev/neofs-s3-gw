@@ -224,10 +224,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	newVersion := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			FilePath: p.Object,
-			Size:     p.Size,
-		},
+		FilePath:      p.Object,
 		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 
@@ -1001,10 +998,8 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 			oi.IsDeleteMarker = true
 		} else {
 			nv := data.NodeVersion{
-				BaseNodeVersion: data.BaseNodeVersion{
-					OID:      ver.ID,
-					FilePath: prefix,
-				},
+				OID:      ver.ID,
+				FilePath: prefix,
 			}
 
 			nv.IsUnversioned = !ver.IsVersioned
@@ -1017,24 +1012,13 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 		eoi := &data.ExtendedObjectInfo{
 			ObjectInfo: oi,
 			NodeVersion: &data.NodeVersion{
-				BaseNodeVersion: data.BaseNodeVersion{
-					ID:        0,
-					ParenID:   0,
-					OID:       oi.ID,
-					Timestamp: uint64(oi.Created.Unix()),
-					Size:      0,
-					ETag:      "",
-					FilePath:  oi.Name,
-				},
-				IsUnversioned: !ver.IsVersioned,
+				OID:            oi.ID,
+				Timestamp:      uint64(oi.Created.Unix()),
+				ETag:           "",
+				FilePath:       oi.Name,
+				IsUnversioned:  !ver.IsVersioned,
+				IsDeleteMarker: oi.IsDeleteMarker,
 			},
-		}
-
-		if oi.IsDeleteMarker {
-			eoi.NodeVersion.DeleteMarker = &data.DeleteMarkerInfo{
-				Created: oi.Created,
-				Owner:   bkt.Owner,
-			}
 		}
 
 		objVersions, ok := versions[oi.Name]
@@ -1127,7 +1111,7 @@ func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, deli
 		ID:             node.OID, // to use it as continuation token
 		CID:            bktInfo.CID,
 		IsDir:          true,
-		IsDeleteMarker: node.IsDeleteMarker(),
+		IsDeleteMarker: node.IsDeleteMarker,
 		Bucket:         bktInfo.Name,
 		Name:           dirName,
 	}

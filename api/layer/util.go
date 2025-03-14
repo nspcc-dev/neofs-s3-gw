@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -48,9 +46,6 @@ type (
 		VersionIDMarker     string
 	}
 )
-
-// PathSeparator is a path components separator string.
-const PathSeparator = string(os.PathSeparator)
 
 func userHeaders(attrs []object.Attribute) map[string]string {
 	result := make(map[string]string, len(attrs))
@@ -145,12 +140,6 @@ func filepathFromObject(o *object.Object) string {
 		}
 	}
 	return o.GetID().EncodeToString()
-}
-
-// NameFromString splits name into a base file name and a directory path.
-func NameFromString(name string) (string, string) {
-	ind := strings.LastIndex(name, PathSeparator)
-	return name[ind+1:], name[:ind+1]
 }
 
 // GetBoxData  extracts accessbox.Box from context.

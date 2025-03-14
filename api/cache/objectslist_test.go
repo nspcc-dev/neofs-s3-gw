@@ -30,7 +30,7 @@ func TestObjectsListCache(t *testing.T) {
 	)
 
 	for range listSize {
-		versions = append(versions, &data.NodeVersion{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}})
+		versions = append(versions, &data.NodeVersion{OID: oidtest.ID()})
 	}
 
 	t.Run("lifetime", func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestObjectsListCache(t *testing.T) {
 func TestCleanCacheEntriesChangedWithPutObject(t *testing.T) {
 	var (
 		id       = cidtest.ID()
-		versions = []*data.NodeVersion{{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}}}
+		versions = []*data.NodeVersion{{OID: oidtest.ID()}}
 		keys     []ObjectsListKey
 	)
 

@@ -50,10 +50,8 @@ func newTestInfo(obj oid.ID, bkt *data.BucketInfo, name string, isDir bool) *dat
 
 func newTestNodeVersion(id oid.ID, name string) *data.NodeVersion {
 	return &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			OID:      id,
-			FilePath: name,
-		},
+		OID:      id,
+		FilePath: name,
 	}
 }
 
