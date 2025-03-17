@@ -219,7 +219,7 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = h.obj.PutBucketTagging(r.Context(), bktInfo, tagSet); err != nil {
+	if err = h.obj.PutBucketTagging(r.Context(), bktInfo, tagSet, h.cfg.CopiesNumber); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}

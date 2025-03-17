@@ -160,7 +160,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 
 	slices.SortFunc(searchResults, sortFunc)
 
-	tags, err := n.getObjectTagsByOID(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
+	tags, err := n.getTagsByOID(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -168,7 +168,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	return p.ObjectVersion.VersionID, tags, nil
 }
 
-func (n *layer) getObjectTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID) (map[string]string, error) {
+func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID) (map[string]string, error) {
 	lastObj, err := n.objectGet(ctx, bktInfo, id)
 	if err != nil {
 		if isErrObjectAlreadyRemoved(err) {
@@ -228,23 +228,86 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 }
 
 func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
-	owner := n.Owner(ctx)
+	var (
+		err   error
+		owner = n.Owner(ctx)
 
-	if tags := n.cache.GetTagging(owner, bucketTaggingCacheKey(bktInfo.CID)); tags != nil {
-		return tags, nil
-	}
-
-	tags, err := n.treeService.GetBucketTagging(ctx, bktInfo)
-	if err != nil {
-		if errors.Is(err, ErrNodeNotFound) {
-			return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
+		filters             = make(object.SearchFilters, 0, 2)
+		returningAttributes = []string{
+			s3headers.MetaType,
+			object.FilterCreationEpoch,
+			object.AttributeTimestamp,
 		}
 
-		return nil, err
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
 
-	if len(tags) == 0 {
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeBucketTags, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
 		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
+	}
+
+	var searchResults = make([]taggingSearchResult, 0, len(searchResultItems))
+
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		var psr = taggingSearchResult{
+			ID: item.ID,
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b taggingSearchResult) int {
+		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
+			return c
+		}
+
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	tags, err := n.getTagsByOID(ctx, bktInfo, searchResults[0].ID)
+	if err != nil {
+		return nil, err
 	}
 
 	n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
@@ -252,9 +315,26 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 	return tags, nil
 }
 
-func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	if err := n.treeService.PutBucketTagging(ctx, bktInfo, tagSet); err != nil {
-		return err
+func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string, copiesNumber uint32) error {
+	payload, err := json.Marshal(tagSet)
+	if err != nil {
+		return fmt.Errorf("could not marshal tag set: %w", err)
+	}
+
+	prm := PrmObjectCreate{
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		CreationTime: TimeNow(ctx),
+		CopiesNumber: copiesNumber,
+		Attributes: map[string]string{
+			s3headers.MetaType: s3headers.TypeBucketTags,
+		},
+		Payload:     bytes.NewBuffer(payload),
+		PayloadSize: uint64(len(payload)),
+	}
+
+	if _, _, err = n.objectPutAndHash(ctx, prm, bktInfo); err != nil {
+		return fmt.Errorf("create bucket tagging object: %w", err)
 	}
 
 	n.cache.PutTagging(n.Owner(ctx), bucketTaggingCacheKey(bktInfo.CID), tagSet)
@@ -263,9 +343,36 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 }
 
 func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
+	fs := make(object.SearchFilters, 0, 1)
+	fs.AddFilter(s3headers.MetaType, s3headers.TypeBucketTags, object.MatchStringEqual)
+
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, fs, nil, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(res) == 0 {
+		return nil
+	}
+
+	for i := range res {
+		if err = n.objectDelete(ctx, bktInfo, res[i].ID); err != nil {
+			return fmt.Errorf("couldn't delete bucket tags object: %w", err)
+		}
+	}
+
 	n.cache.DeleteTagging(bucketTaggingCacheKey(bktInfo.CID))
 
-	return n.treeService.DeleteBucketTagging(ctx, bktInfo)
+	return nil
 }
 
 func objectTaggingCacheKey(p *ObjectVersion) string {
