@@ -28,6 +28,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -102,6 +103,12 @@ type (
 		PayloadSize       int64
 		IsDeleteMarker    bool
 		IsVersioned       bool
+	}
+
+	baseSearchResult struct {
+		ID                oid.ID
+		CreationEpoch     uint64
+		CreationTimestamp int64
 	}
 )
 
@@ -1210,4 +1217,82 @@ func tryDirectoryName(filePath string, prefix, delimiter string) string {
 	}
 
 	return ""
+}
+
+func (n *layer) searchBucketMetaObjects(ctx context.Context, containerID cid.ID, objType string) (oid.ID, error) {
+	var (
+		opts                client.SearchObjectsOptions
+		owner               = n.Owner(ctx)
+		filters             = make(object.SearchFilters, 0, 2)
+		returningAttributes = []string{
+			s3headers.MetaType,
+			object.FilterCreationEpoch,
+			object.AttributeTimestamp,
+		}
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, containerID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return oid.ID{}, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return oid.ID{}, nil
+	}
+
+	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
+
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return oid.ID{}, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		var psr = baseSearchResult{
+			ID: item.ID,
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			if err != nil {
+				return oid.ID{}, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		if item.Attributes[2] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			if err != nil {
+				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b baseSearchResult) int {
+		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
+			return c
+		}
+
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	return searchResults[0].ID, nil
 }
