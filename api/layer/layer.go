@@ -241,7 +241,7 @@ type (
 		PutLockInfo(ctx context.Context, p *PutLockInfoParams) error
 
 		GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
-		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
+		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string, copiesNumber uint32) error
 		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams) (string, map[string]string, error)

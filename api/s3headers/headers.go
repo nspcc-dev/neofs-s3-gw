@@ -38,8 +38,9 @@ const (
 	// MetaType is a header name to identify meta containers for objects.
 	MetaType = "s3MetaType"
 
-	TypeLock = "lock"
-	TypeTags = "tags"
+	TypeLock       = "lock"
+	TypeTags       = "tags"
+	TypeBucketTags = "bucketTags"
 )
 
 const (

@@ -43,10 +43,6 @@ type TreeService interface {
 	//
 	// If object id to remove is not found returns ErrNoNodeToRemove error.
 	DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error)
-
-	GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
-	PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
-	DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 }
 
 var (

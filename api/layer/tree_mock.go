@@ -16,7 +16,7 @@ func (t *TreeServiceMock) GetBucketTagging(_ context.Context, _ *data.BucketInfo
 	panic("implement me")
 }
 
-func (t *TreeServiceMock) PutBucketTagging(_ context.Context, _ *data.BucketInfo, _ map[string]string) error {
+func (t *TreeServiceMock) PutBucketTagging(_ context.Context, _ *data.BucketInfo, _ map[string]string, _ uint32) error {
 	// TODO implement me
 	panic("implement me")
 }

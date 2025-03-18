@@ -59,8 +59,6 @@ const (
 	// systemTree -- ID of a tree with system objects
 	// i.e. bucket settings with versioning and lock configuration, cors, notifications.
 	systemTree = "system"
-
-	userDefinedTagPrefix = "User-Tag-"
 )
 
 // NewTreeClient creates instance of TreeClient using provided address and create grpc connection.
@@ -239,59 +237,6 @@ func (c *TreeClient) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketI
 	return oid.ID{}, layer.ErrNoNodeToRemove
 }
 
-func (c *TreeClient) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
-	node, err := c.getSystemNodeWithAllAttributes(ctx, bktInfo, []string{bucketTaggingFilename})
-	if err != nil {
-		return nil, err
-	}
-
-	tags := make(map[string]string)
-
-	for key, val := range node.Meta {
-		if strings.HasPrefix(key, userDefinedTagPrefix) {
-			tags[strings.TrimPrefix(key, userDefinedTagPrefix)] = val
-		}
-	}
-
-	return tags, nil
-}
-
-func (c *TreeClient) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{bucketTaggingFilename}, []string{})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
-	if err != nil && !isErrNotFound {
-		return fmt.Errorf("couldn't get node: %w", err)
-	}
-
-	treeTagSet := make(map[string]string)
-	treeTagSet[fileNameKV] = bucketTaggingFilename
-
-	for key, val := range tagSet {
-		treeTagSet[userDefinedTagPrefix+key] = val
-	}
-
-	if isErrNotFound {
-		_, err = c.addNode(ctx, bktInfo, systemTree, 0, treeTagSet)
-	} else {
-		err = c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, treeTagSet)
-	}
-
-	return err
-}
-
-func (c *TreeClient) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{bucketTaggingFilename}, nil)
-	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
-		return err
-	}
-
-	if node != nil {
-		return c.removeNode(ctx, bktInfo, systemTree, node.ID)
-	}
-
-	return nil
-}
-
 func (c *TreeClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
@@ -312,10 +257,6 @@ func metaFromSettings(settings *data.BucketSettings) map[string]string {
 
 func (c *TreeClient) getSystemNode(ctx context.Context, bktInfo *data.BucketInfo, path, meta []string) (*TreeNode, error) {
 	return c.getNode(ctx, bktInfo, systemTree, path, meta, false)
-}
-
-func (c *TreeClient) getSystemNodeWithAllAttributes(ctx context.Context, bktInfo *data.BucketInfo, path []string) (*TreeNode, error) {
-	return c.getNode(ctx, bktInfo, systemTree, path, []string{}, true)
 }
 
 func (c *TreeClient) getNode(ctx context.Context, bktInfo *data.BucketInfo, treeID string, path, meta []string, allAttrs bool) (*TreeNode, error) {
