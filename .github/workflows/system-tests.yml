@@ -37,6 +37,6 @@ jobs:
       neofs_testcases_commit: 'master'
       neofs_s3_gw_commit: ${{ github.event.inputs.neofs_s3_gw_ref }}
       tests_path: 'pytest_tests/tests/s3'
-      tests_parallel_level: 1
+      tests_parallel_level: 3
       os: '[{runner: "ubuntu-latest", binary: "linux-amd64"}, {runner: "macos-14", binary: "darwin-arm64"}]'
     secrets: inherit
