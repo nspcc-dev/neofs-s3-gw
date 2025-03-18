@@ -5,6 +5,7 @@ go 1.23
 require (
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/bluele/gcache v0.0.2
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/minio/sio v0.4.1
