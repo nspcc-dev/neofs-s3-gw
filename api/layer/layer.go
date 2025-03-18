@@ -132,8 +132,9 @@ type (
 
 	// PutSettingsParams stores object copy request parameters.
 	PutSettingsParams struct {
-		BktInfo  *data.BucketInfo
-		Settings *data.BucketSettings
+		BktInfo      *data.BucketInfo
+		Settings     *data.BucketSettings
+		CopiesNumber uint32
 	}
 
 	// PutCORSParams stores PutCORS request parameters.

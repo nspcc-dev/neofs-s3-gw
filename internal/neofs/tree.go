@@ -2,7 +2,6 @@ package neofs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -45,14 +44,9 @@ type (
 )
 
 const (
-	versioningKV        = "Versioning"
-	lockConfigurationKV = "LockConfiguration"
-	oidKV               = "OID"
-	fileNameKV          = "FileName"
-	sizeKV              = "Size"
-
-	settingsFileName = "bucket-settings"
-	corsFilename     = "bucket-cors"
+	oidKV      = "OID"
+	fileNameKV = "FileName"
+	sizeKV     = "Size"
 
 	// systemTree -- ID of a tree with system objects
 	// i.e. bucket settings with versioning and lock configuration, cors, notifications.
@@ -124,60 +118,12 @@ func (n *TreeNode) FileName() (string, bool) {
 	return value, ok
 }
 
-func (c *TreeClient) GetSettingsNode(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	keysToReturn := []string{versioningKV, lockConfigurationKV}
-	node, err := c.getSystemNode(ctx, bktInfo, []string{settingsFileName}, keysToReturn)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get node: %w", err)
-	}
-
-	settings := &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	if versioningValue, ok := node.Get(versioningKV); ok {
-		settings.Versioning = versioningValue
-	}
-
-	if lockConfigurationValue, ok := node.Get(lockConfigurationKV); ok {
-		if settings.LockConfiguration, err = parseLockConfiguration(lockConfigurationValue); err != nil {
-			return nil, fmt.Errorf("settings node: invalid lock configuration: %w", err)
-		}
-	}
-
-	return settings, nil
-}
-
-func (c *TreeClient) PutSettingsNode(ctx context.Context, bktInfo *data.BucketInfo, settings *data.BucketSettings) error {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{settingsFileName}, []string{})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
-	if err != nil && !isErrNotFound {
-		return fmt.Errorf("couldn't get node: %w", err)
-	}
-
-	meta := metaFromSettings(settings)
-
-	if isErrNotFound {
-		_, err = c.addNode(ctx, bktInfo, systemTree, 0, meta)
-		return err
-	}
-
-	return c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
-}
-
 func (c *TreeClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
 	}
 
 	return nil
-}
-
-func metaFromSettings(settings *data.BucketSettings) map[string]string {
-	results := make(map[string]string, 3)
-
-	results[fileNameKV] = settingsFileName
-	results[versioningKV] = settings.Versioning
-	results[lockConfigurationKV] = encodeLockConfiguration(settings.LockConfiguration)
-
-	return results
 }
 
 func (c *TreeClient) getSystemNode(ctx context.Context, bktInfo *data.BucketInfo, path, meta []string) (*TreeNode, error) {
@@ -321,60 +267,4 @@ func metaToKV(meta map[string]string) []*tree.KeyValue {
 	}
 
 	return result
-}
-
-func parseLockConfiguration(value string) (*data.ObjectLockConfiguration, error) {
-	result := &data.ObjectLockConfiguration{}
-	if len(value) == 0 {
-		return result, nil
-	}
-
-	lockValues := strings.Split(value, ",")
-	result.ObjectLockEnabled = lockValues[0]
-
-	if len(lockValues) == 1 {
-		return result, nil
-	}
-
-	if len(lockValues) != 4 {
-		return nil, fmt.Errorf("invalid lock configuration: %s", value)
-	}
-
-	var err error
-	var days, years int64
-
-	if len(lockValues[1]) > 0 {
-		if days, err = strconv.ParseInt(lockValues[1], 10, 64); err != nil {
-			return nil, fmt.Errorf("invalid lock configuration: %s", value)
-		}
-	}
-
-	if len(lockValues[3]) > 0 {
-		if years, err = strconv.ParseInt(lockValues[3], 10, 64); err != nil {
-			return nil, fmt.Errorf("invalid lock configuration: %s", value)
-		}
-	}
-
-	result.Rule = &data.ObjectLockRule{
-		DefaultRetention: &data.DefaultRetention{
-			Days:  days,
-			Mode:  lockValues[2],
-			Years: years,
-		},
-	}
-
-	return result, nil
-}
-
-func encodeLockConfiguration(conf *data.ObjectLockConfiguration) string {
-	if conf == nil {
-		return ""
-	}
-
-	if conf.Rule == nil || conf.Rule.DefaultRetention == nil {
-		return conf.ObjectLockEnabled
-	}
-
-	defaults := conf.Rule.DefaultRetention
-	return fmt.Sprintf("%s,%d,%s,%d", conf.ObjectLockEnabled, defaults.Days, defaults.Mode, defaults.Years)
 }

@@ -68,8 +68,9 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 	newSettings.LockConfiguration = lockingConf
 
 	sp := &layer.PutSettingsParams{
-		BktInfo:  bktInfo,
-		Settings: &newSettings,
+		BktInfo:      bktInfo,
+		Settings:     &newSettings,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
 	if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {

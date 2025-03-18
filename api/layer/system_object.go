@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -279,22 +280,68 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
-	settings, err := n.treeService.GetSettingsNode(ctx, bktInfo)
+	var (
+		err      error
+		settings = data.BucketSettings{Versioning: data.VersioningUnversioned}
+	)
+
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketSettings)
 	if err != nil {
-		if !errors.Is(err, ErrNodeNotFound) {
-			return nil, err
-		}
-		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
+		return nil, fmt.Errorf("search: %w", err)
 	}
 
-	n.cache.PutSettings(owner, bktInfo, settings)
+	if id.IsZero() {
+		return &settings, nil
+	}
 
-	return settings, nil
+	settingsObj, err := n.objectGet(ctx, bktInfo, id)
+	if err != nil {
+		return nil, fmt.Errorf("get bucket settings object: %w", err)
+	}
+
+	var (
+		olc data.ObjectLockConfiguration
+	)
+
+	if err = olc.Decode(string(settingsObj.Payload())); err != nil {
+		return nil, fmt.Errorf("decode bucket settings: %w", err)
+	}
+
+	for _, attr := range settingsObj.Attributes() {
+		if attr.Key() == s3headers.BucketSettingsVersioning {
+			settings.Versioning = attr.Value()
+			break
+		}
+	}
+
+	settings.LockConfiguration = &olc
+
+	n.cache.PutSettings(owner, bktInfo, &settings)
+
+	return &settings, nil
 }
 
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	if err := n.treeService.PutSettingsNode(ctx, p.BktInfo, p.Settings); err != nil {
-		return fmt.Errorf("failed to get settings node: %w", err)
+	var payload string
+	if p.Settings.LockConfiguration != nil {
+		payload = p.Settings.LockConfiguration.Encode()
+	}
+
+	prm := PrmObjectCreate{
+		Container:    p.BktInfo.CID,
+		Creator:      p.BktInfo.Owner,
+		CreationTime: TimeNow(ctx),
+		CopiesNumber: p.CopiesNumber,
+		Attributes: map[string]string{
+			s3headers.MetaType:                 s3headers.TypeBucketSettings,
+			s3headers.BucketSettingsVersioning: p.Settings.Versioning,
+		},
+		Payload:     strings.NewReader(payload),
+		PayloadSize: uint64(len(payload)),
+	}
+
+	if _, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
+		return fmt.Errorf("create bucket settings object: %w", err)
 	}
 
 	n.cache.PutSettings(n.Owner(ctx), p.BktInfo, p.Settings)

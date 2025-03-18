@@ -41,8 +41,9 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 	newSettings.Versioning = configuration.Status
 
 	p := &layer.PutSettingsParams{
-		BktInfo:  bktInfo,
-		Settings: &newSettings,
+		BktInfo:      bktInfo,
+		Settings:     &newSettings,
+		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
 	if p.Settings.VersioningSuspended() && bktInfo.ObjectLockEnabled {

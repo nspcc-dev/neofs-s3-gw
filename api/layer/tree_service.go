@@ -1,21 +1,11 @@
 package layer
 
 import (
-	"context"
 	"errors"
-
-	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 )
 
 // TreeService provide interface to interact with tree service using s3 data models.
 type TreeService interface {
-	// PutSettingsNode update or create new settings node in tree service.
-	PutSettingsNode(ctx context.Context, bktInfo *data.BucketInfo, settings *data.BucketSettings) error
-
-	// GetSettingsNode retrieves the settings node from the tree service and form data.BucketSettings.
-	//
-	// If tree node is not found returns ErrNodeNotFound error.
-	GetSettingsNode(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
 }
 
 var (

@@ -81,17 +81,17 @@ func TestLockConfigurationEncoding(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			lockConfiguration, err := parseLockConfiguration(tc.encoded)
+			var lockConfiguration data.ObjectLockConfiguration
+			err := lockConfiguration.Decode(tc.encoded)
 			if tc.error {
 				require.Error(t, err)
 				return
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tc.expected, *lockConfiguration)
+			require.Equal(t, tc.expected, lockConfiguration)
 
-			encoded := encodeLockConfiguration(lockConfiguration)
-			require.Equal(t, tc.expectedEncoded, encoded)
+			require.Equal(t, tc.expectedEncoded, lockConfiguration.Encode())
 		})
 	}
 }

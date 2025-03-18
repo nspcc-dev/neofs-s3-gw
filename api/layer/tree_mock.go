@@ -7,7 +7,6 @@ import (
 )
 
 type TreeServiceMock struct {
-	settings map[string]*data.BucketSettings
 }
 
 func (t *TreeServiceMock) GetBucketTagging(_ context.Context, _ *data.BucketInfo) (map[string]string, error) {
@@ -26,21 +25,5 @@ func (t *TreeServiceMock) DeleteBucketTagging(_ context.Context, _ *data.BucketI
 }
 
 func NewTreeService() *TreeServiceMock {
-	return &TreeServiceMock{
-		settings: make(map[string]*data.BucketSettings),
-	}
-}
-
-func (t *TreeServiceMock) PutSettingsNode(_ context.Context, bktInfo *data.BucketInfo, settings *data.BucketSettings) error {
-	t.settings[bktInfo.CID.EncodeToString()] = settings
-	return nil
-}
-
-func (t *TreeServiceMock) GetSettingsNode(_ context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	settings, ok := t.settings[bktInfo.CID.EncodeToString()]
-	if !ok {
-		return nil, ErrNodeNotFound
-	}
-
-	return settings, nil
+	return &TreeServiceMock{}
 }

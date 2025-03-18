@@ -810,8 +810,9 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	if p.ObjectLockEnabled {
 		sp := &layer.PutSettingsParams{
-			BktInfo:  bktInfo,
-			Settings: &data.BucketSettings{Versioning: data.VersioningEnabled},
+			BktInfo:      bktInfo,
+			Settings:     &data.BucketSettings{Versioning: data.VersioningEnabled},
+			CopiesNumber: h.cfg.CopiesNumber,
 		}
 		if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
 			h.logAndSendError(w, "couldn't enable bucket versioning", reqInfo, err,
