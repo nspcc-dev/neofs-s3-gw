@@ -224,10 +224,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	newVersion := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			FilePath: p.Object,
-			Size:     p.Size,
-		},
+		FilePath:      p.Object,
 		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 
@@ -621,6 +618,72 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	return searchResults, hasTags, hasLocks, nil
 }
 
+func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) (bool, bool, error) {
+	var (
+		filters             = make(object.SearchFilters, 0, 4)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+			s3headers.MetaType,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	if len(objectName) > 0 {
+		filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	} else {
+		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
+	}
+
+	if onlyUnversioned {
+		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+	}
+	filters.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return false, false, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return false, false, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return false, false, nil
+	}
+
+	var (
+		hasTags  bool
+		hasLocks bool
+	)
+
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return false, false, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		switch item.Attributes[1] {
+		case s3headers.TypeTags:
+			hasTags = true
+		case s3headers.TypeLock:
+			hasLocks = true
+		default:
+		}
+
+		// we already got maximum information.
+		if hasTags && hasLocks {
+			break
+		}
+	}
+
+	return hasTags, hasLocks, nil
+}
+
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
@@ -1001,10 +1064,8 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 			oi.IsDeleteMarker = true
 		} else {
 			nv := data.NodeVersion{
-				BaseNodeVersion: data.BaseNodeVersion{
-					OID:      ver.ID,
-					FilePath: prefix,
-				},
+				OID:      ver.ID,
+				FilePath: prefix,
 			}
 
 			nv.IsUnversioned = !ver.IsVersioned
@@ -1017,24 +1078,13 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 		eoi := &data.ExtendedObjectInfo{
 			ObjectInfo: oi,
 			NodeVersion: &data.NodeVersion{
-				BaseNodeVersion: data.BaseNodeVersion{
-					ID:        0,
-					ParenID:   0,
-					OID:       oi.ID,
-					Timestamp: uint64(oi.Created.Unix()),
-					Size:      0,
-					ETag:      "",
-					FilePath:  oi.Name,
-				},
-				IsUnversioned: !ver.IsVersioned,
+				OID:            oi.ID,
+				Timestamp:      uint64(oi.Created.Unix()),
+				ETag:           "",
+				FilePath:       oi.Name,
+				IsUnversioned:  !ver.IsVersioned,
+				IsDeleteMarker: oi.IsDeleteMarker,
 			},
-		}
-
-		if oi.IsDeleteMarker {
-			eoi.NodeVersion.DeleteMarker = &data.DeleteMarkerInfo{
-				Created: oi.Created,
-				Owner:   bkt.Owner,
-			}
 		}
 
 		objVersions, ok := versions[oi.Name]
@@ -1127,7 +1177,7 @@ func tryDirectory(bktInfo *data.BucketInfo, node *data.NodeVersion, prefix, deli
 		ID:             node.OID, // to use it as continuation token
 		CID:            bktInfo.CID,
 		IsDir:          true,
-		IsDeleteMarker: node.IsDeleteMarker(),
+		IsDeleteMarker: node.IsDeleteMarker,
 		Bucket:         bktInfo.Name,
 		Name:           dirName,
 	}

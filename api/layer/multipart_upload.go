@@ -338,11 +338,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		currentPartHash = sha256.New()
 	)
 
-	objHashes := []hash.Hash{multipartHash, currentPartHash}
-	if tzHash != nil {
-		objHashes = append(objHashes, tzHash)
-	}
-
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
@@ -350,7 +345,11 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		CreationTime: creationTime,
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
-			MultipartHashes: objHashes,
+			MultipartHashes: &MultipartHashes{
+				Hash:     multipartHash,
+				HomoHash: tzHash,
+				PartHash: currentPartHash,
+			},
 		},
 	}
 
@@ -376,7 +375,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 
 	partInfo := &data.PartInfo{
-		Key:      p.Info.Key,
 		UploadID: p.Info.UploadID,
 		Number:   p.PartNumber,
 		OID:      id,
@@ -519,7 +517,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		zap.Int("part number", 0), zap.String("object", p.Key), zap.Stringer("oid", id))
 
 	partInfo := &data.PartInfo{
-		Key: p.Key,
 		// UploadID equals zero part ID intentionally.
 		UploadID: id.String(),
 		Number:   0,
@@ -657,7 +654,6 @@ func convertElementsToPartInfo(uploadID string, number int, elements []data.Elem
 		lastElement = elements[len(elements)-1]
 
 		partInfo = data.PartInfo{
-			Key:      lastElement.Attributes[s3headers.MultipartObjectKey],
 			UploadID: uploadID,
 			Number:   number,
 			OID:      lastElement.ID,
@@ -1623,12 +1619,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	// the "big object" is not presented in system, but we have to put correct info about it and its version.
 
 	newVersion := &data.NodeVersion{
-		BaseNodeVersion: data.BaseNodeVersion{
-			FilePath: p.Info.Key,
-			Size:     multipartObjetSize,
-			OID:      headerObjectID,
-			ETag:     hex.EncodeToString(multipartHash.Sum(nil)),
-		},
+		FilePath:      p.Info.Key,
+		OID:           headerObjectID,
+		ETag:          hex.EncodeToString(multipartHash.Sum(nil)),
 		IsUnversioned: !bktSettings.VersioningEnabled(),
 	}
 
@@ -1926,13 +1919,11 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 				prm.Multipart.HomoHash.Write((chunk)[:nBts])
 			}
 
-			for _, h := range prm.Multipart.MultipartHashes {
-				if _, err = h.Write((chunk)[:nBts]); err != nil {
-					return id, fmt.Errorf("hash payload write: %w", err)
-				}
+			if err = prm.Multipart.MultipartHashes.WritePayload((chunk)[:nBts]); err != nil {
+				return id, fmt.Errorf("hash payload write: %w", err)
 			}
 
-			binaryMarshaler := prm.Multipart.MultipartHashes[0].(encoding.BinaryMarshaler)
+			binaryMarshaler := prm.Multipart.MultipartHashes.Hash.(encoding.BinaryMarshaler)
 			stateBytes, err = binaryMarshaler.MarshalBinary()
 			if err != nil {
 				return id, fmt.Errorf("marshalBinary: %w", err)
@@ -1940,11 +1931,10 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 			prm.Attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
 			prm.Attributes[s3headers.MultipartHomoHash] = ""
 			prm.Attributes[s3headers.MultipartTotalSize] = strconv.Itoa(totalBytes)
-			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes[1].Sum(nil))
+			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes.PartHash.Sum(nil))
 
-			// todo: (@smallhive) replace with object and avoid indexes.
-			if len(prm.Multipart.MultipartHashes) == 3 {
-				binaryMarshaler = prm.Multipart.MultipartHashes[2].(encoding.BinaryMarshaler)
+			if prm.Multipart.MultipartHashes.HomoHash != nil {
+				binaryMarshaler = prm.Multipart.MultipartHashes.HomoHash.(encoding.BinaryMarshaler)
 				stateBytes, err = binaryMarshaler.MarshalBinary()
 
 				if err != nil {
@@ -2042,7 +2032,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	}
 
 	partInfo := &data.PartInfo{
-		Key:      params.uploadPartParams.Info.Key,
 		UploadID: params.uploadPartParams.Info.UploadID,
 		Number:   params.uploadPartParams.PartNumber,
 		OID:      id,

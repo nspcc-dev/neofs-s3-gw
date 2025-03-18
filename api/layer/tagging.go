@@ -22,9 +22,6 @@ import (
 
 type GetObjectTaggingParams struct {
 	ObjectVersion *ObjectVersion
-
-	// NodeVersion can be nil. If not nil we save one request to tree service.
-	NodeVersion *data.NodeVersion // optional
 }
 
 type PutObjectTaggingParams struct {
@@ -32,9 +29,6 @@ type PutObjectTaggingParams struct {
 	TagSet        map[string]string
 
 	CopiesNumber uint32
-
-	// NodeVersion can be nil. If not nil we save one request to tree service.
-	NodeVersion *data.NodeVersion // optional
 }
 
 type taggingSearchResult struct {

@@ -3,6 +3,7 @@ package layer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"time"
@@ -132,10 +133,20 @@ type PrmObjectCreate struct {
 	Multipart *Multipart
 }
 
+// MultipartHashes describe hash collection for multipart uploads.
+type MultipartHashes struct {
+	// Hash contains hash for the payload of the whole "big" multipart uploaded object.
+	Hash hash.Hash
+	// HomoHash contains homo hash (if enabled) for the payload of the whole "big" multipart uploaded object.
+	HomoHash hash.Hash
+	// PartHash contains hash for separate part in multipart upload.
+	PartHash hash.Hash
+}
+
 // Multipart contains info for local object slicing inside s3-gate during multipart upload operation.
 type Multipart struct {
 	// MultipartHashes contains hashes for the multipart object payload calculation (optional).
-	MultipartHashes []hash.Hash
+	MultipartHashes *MultipartHashes
 	// SplitPreviousID contains [oid.ID] of previous object in chain (optional).
 	SplitPreviousID *oid.ID
 	// SplitFirstID contains [oid.ID] of the first object in chain (The first object has nil here).
@@ -300,4 +311,19 @@ type NeoFS interface {
 
 	// SearchObjectsV2WithCursor searches objects with corresponding filters and return objectID with requested attributes. It uses cursor to start from required point.
 	SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error)
+}
+
+// WritePayload writes bts to each available hash.
+func (h *MultipartHashes) WritePayload(bts []byte) error {
+	for _, hash := range []hash.Hash{h.Hash, h.HomoHash, h.PartHash} {
+		if hash == nil {
+			continue
+		}
+
+		if _, err := hash.Write(bts); err != nil {
+			return fmt.Errorf("write hash: %w", err)
+		}
+	}
+
+	return nil
 }

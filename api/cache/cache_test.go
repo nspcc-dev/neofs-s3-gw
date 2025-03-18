@@ -77,10 +77,7 @@ func TestObjectCacheType(t *testing.T) {
 			CID: addr.Container(),
 		},
 		NodeVersion: &data.NodeVersion{
-			BaseNodeVersion: data.BaseNodeVersion{
-				FilePath: "obj",
-				Size:     50,
-			},
+			FilePath:      "obj",
 			IsUnversioned: true,
 		},
 		IsLatest: true,
@@ -103,7 +100,7 @@ func TestObjectsListCacheType(t *testing.T) {
 
 	cnrID := cidtest.ID()
 	key := ObjectsListKey{cid: cnrID, prefix: "obj"}
-	versions := []*data.NodeVersion{{BaseNodeVersion: data.BaseNodeVersion{OID: oidtest.ID()}}}
+	versions := []*data.NodeVersion{{OID: oidtest.ID()}}
 
 	err := cache.PutVersions(key, versions)
 	require.NoError(t, err)
