@@ -231,81 +231,18 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 	var (
 		err   error
 		owner = n.Owner(ctx)
-
-		filters             = make(object.SearchFilters, 0, 2)
-		returningAttributes = []string{
-			s3headers.MetaType,
-			object.FilterCreationEpoch,
-			object.AttributeTimestamp,
-		}
-
-		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
-
-	filters.AddFilter(s3headers.MetaType, s3headers.TypeBucketTags, object.MatchStringEqual)
-	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketTags)
 	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return nil, fmt.Errorf("search object version: %w", err)
+		return nil, fmt.Errorf("search: %w", err)
 	}
 
-	if len(searchResultItems) == 0 {
+	if id.IsZero() {
 		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
 	}
 
-	var searchResults = make([]taggingSearchResult, 0, len(searchResultItems))
-
-	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
-		var psr = taggingSearchResult{
-			ID: item.ID,
-		}
-
-		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
-			}
-		}
-
-		searchResults = append(searchResults, psr)
-	}
-
-	sortFunc := func(a, b taggingSearchResult) int {
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
-			return c
-		}
-
-		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
-			return c
-		}
-
-		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
-	}
-
-	slices.SortFunc(searchResults, sortFunc)
-
-	tags, err := n.getTagsByOID(ctx, bktInfo, searchResults[0].ID)
+	tags, err := n.getTagsByOID(ctx, bktInfo, id)
 	if err != nil {
 		return nil, err
 	}
