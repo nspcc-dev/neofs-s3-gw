@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"errors"
 	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"go.uber.org/zap"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 )
 
 type PutBucketNotificationConfigurationParams struct {
@@ -29,29 +28,15 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
 		Payload:      bytes.NewReader(confXML),
-		Filepath:     p.BktInfo.NotificationConfigurationObjectName(),
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
+		Attributes: map[string]string{
+			s3headers.MetaType: s3headers.TypeBucketNotifConfig,
+		},
 	}
 
-	objID, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
-	if err != nil {
+	if _, _, err = n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
 		return err
-	}
-
-	objIDToDelete, err := n.treeService.PutNotificationConfigurationNode(ctx, p.BktInfo, objID)
-	objIDToDeleteNotFound := errors.Is(err, ErrNoNodeToRemove)
-	if err != nil && !objIDToDeleteNotFound {
-		return err
-	}
-
-	if !objIDToDeleteNotFound {
-		if err = n.objectDelete(ctx, p.BktInfo, objIDToDelete); err != nil {
-			n.log.Error("couldn't delete notification configuration object", zap.Error(err),
-				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
-				zap.String("bucket name", p.BktInfo.Name),
-				zap.String("objID", objIDToDelete.EncodeToString()))
-		}
 	}
 
 	n.cache.PutNotificationConfiguration(n.Owner(ctx), p.BktInfo, p.Configuration)
@@ -60,31 +45,30 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 }
 
 func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
-	owner := n.Owner(ctx)
-	if conf := n.cache.GetNotificationConfiguration(owner, bktInfo); conf != nil {
-		return conf, nil
+	var (
+		err  error
+		conf data.NotificationConfiguration
+	)
+
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketNotifConfig)
+	if err != nil {
+		return nil, fmt.Errorf("search: %w", err)
 	}
 
-	objID, err := n.treeService.GetNotificationConfigurationNode(ctx, bktInfo)
-	objIDNotFound := errors.Is(err, ErrNodeNotFound)
-	if err != nil && !objIDNotFound {
+	if id.IsZero() {
+		return &conf, nil
+	}
+
+	obj, err := n.objectGet(ctx, bktInfo, id)
+	if err != nil {
 		return nil, err
 	}
 
-	conf := &data.NotificationConfiguration{}
-
-	if !objIDNotFound {
-		obj, err := n.objectGet(ctx, bktInfo, objID)
-		if err != nil {
-			return nil, err
-		}
-
-		if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
-			return nil, fmt.Errorf("unmarshal notify configuration: %w", err)
-		}
+	if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
+		return nil, fmt.Errorf("unmarshal notify configuration: %w", err)
 	}
 
-	n.cache.PutNotificationConfiguration(owner, bktInfo, conf)
+	n.cache.PutNotificationConfiguration(n.Owner(ctx), bktInfo, &conf)
 
-	return conf, nil
+	return &conf, nil
 }

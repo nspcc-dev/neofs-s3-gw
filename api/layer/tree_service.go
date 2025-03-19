@@ -18,17 +18,6 @@ type TreeService interface {
 	// If tree node is not found returns ErrNodeNotFound error.
 	GetSettingsNode(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
 
-	// GetNotificationConfigurationNode gets an object id that corresponds to object with bucket CORS.
-	//
-	// If tree node is not found returns ErrNodeNotFound error.
-	GetNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error)
-
-	// PutNotificationConfigurationNode puts a node to a system tree
-	// and returns objectID of a previous notif config which must be deleted in NeoFS.
-	//
-	// If object id to remove is not found returns ErrNoNodeToRemove error.
-	PutNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error)
-
 	// GetBucketCORS gets an object id that corresponds to object with bucket CORS.
 	//
 	// If object id is not found returns ErrNodeNotFound error.

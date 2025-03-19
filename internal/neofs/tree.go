@@ -51,10 +51,8 @@ const (
 	fileNameKV          = "FileName"
 	sizeKV              = "Size"
 
-	settingsFileName      = "bucket-settings"
-	notifConfFileName     = "bucket-notifications"
-	corsFilename          = "bucket-cors"
-	bucketTaggingFilename = "bucket-tagging"
+	settingsFileName = "bucket-settings"
+	corsFilename     = "bucket-cors"
 
 	// systemTree -- ID of a tree with system objects
 	// i.e. bucket settings with versioning and lock configuration, cors, notifications.
@@ -162,36 +160,6 @@ func (c *TreeClient) PutSettingsNode(ctx context.Context, bktInfo *data.BucketIn
 	}
 
 	return c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
-}
-
-func (c *TreeClient) GetNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{notifConfFileName}, []string{oidKV})
-	if err != nil {
-		return oid.ID{}, err
-	}
-
-	return node.ObjID, nil
-}
-
-func (c *TreeClient) PutNotificationConfigurationNode(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error) {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{notifConfFileName}, []string{oidKV})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
-	if err != nil && !isErrNotFound {
-		return oid.ID{}, fmt.Errorf("couldn't get node: %w", err)
-	}
-
-	meta := make(map[string]string)
-	meta[fileNameKV] = notifConfFileName
-	meta[oidKV] = objID.EncodeToString()
-
-	if isErrNotFound {
-		if _, err = c.addNode(ctx, bktInfo, systemTree, 0, meta); err != nil {
-			return oid.ID{}, err
-		}
-		return oid.ID{}, layer.ErrNoNodeToRemove
-	}
-
-	return node.ObjID, c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
 }
 
 func (c *TreeClient) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
