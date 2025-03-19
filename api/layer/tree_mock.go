@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type TreeServiceMock struct {
@@ -44,16 +43,4 @@ func (t *TreeServiceMock) GetSettingsNode(_ context.Context, bktInfo *data.Bucke
 	}
 
 	return settings, nil
-}
-
-func (t *TreeServiceMock) GetBucketCORS(_ context.Context, _ *data.BucketInfo) (oid.ID, error) {
-	panic("implement me")
-}
-
-func (t *TreeServiceMock) PutBucketCORS(_ context.Context, _ *data.BucketInfo, _ oid.ID) (oid.ID, error) {
-	panic("implement me")
-}
-
-func (t *TreeServiceMock) DeleteBucketCORS(_ context.Context, _ *data.BucketInfo) (oid.ID, error) {
-	panic("implement me")
 }

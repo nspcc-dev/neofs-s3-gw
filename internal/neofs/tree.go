@@ -162,49 +162,6 @@ func (c *TreeClient) PutSettingsNode(ctx context.Context, bktInfo *data.BucketIn
 	return c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
 }
 
-func (c *TreeClient) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{corsFilename}, []string{oidKV})
-	if err != nil {
-		return oid.ID{}, err
-	}
-
-	return node.ObjID, nil
-}
-
-func (c *TreeClient) PutBucketCORS(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (oid.ID, error) {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{corsFilename}, []string{oidKV})
-	isErrNotFound := errors.Is(err, layer.ErrNodeNotFound)
-	if err != nil && !isErrNotFound {
-		return oid.ID{}, fmt.Errorf("couldn't get node: %w", err)
-	}
-
-	meta := make(map[string]string)
-	meta[fileNameKV] = corsFilename
-	meta[oidKV] = objID.EncodeToString()
-
-	if isErrNotFound {
-		if _, err = c.addNode(ctx, bktInfo, systemTree, 0, meta); err != nil {
-			return oid.ID{}, err
-		}
-		return oid.ID{}, layer.ErrNoNodeToRemove
-	}
-
-	return node.ObjID, c.moveNode(ctx, bktInfo, systemTree, node.ID, 0, meta)
-}
-
-func (c *TreeClient) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (oid.ID, error) {
-	node, err := c.getSystemNode(ctx, bktInfo, []string{corsFilename}, []string{oidKV})
-	if err != nil && !errors.Is(err, layer.ErrNodeNotFound) {
-		return oid.ID{}, err
-	}
-
-	if node != nil {
-		return node.ObjID, c.removeNode(ctx, bktInfo, systemTree, node.ID)
-	}
-
-	return oid.ID{}, layer.ErrNoNodeToRemove
-}
-
 func (c *TreeClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
@@ -351,31 +308,6 @@ func (c *TreeClient) moveNode(ctx context.Context, bktInfo *data.BucketInfo, tre
 
 	if _, err := c.service.Move(ctx, request); err != nil {
 		return handleError("failed to move node", err)
-	}
-
-	return nil
-}
-
-func (c *TreeClient) removeNode(ctx context.Context, bktInfo *data.BucketInfo, treeID string, nodeID uint64) error {
-	request := &tree.RemoveRequest{
-		Body: &tree.RemoveRequest_Body{
-			ContainerId: bktInfo.CID[:],
-			TreeId:      treeID,
-			NodeId:      nodeID,
-			BearerToken: getBearer(ctx, bktInfo),
-		},
-	}
-	if err := c.signRequest(request.Body, func(key, sign []byte) {
-		request.Signature = &tree.Signature{
-			Key:  key,
-			Sign: sign,
-		}
-	}); err != nil {
-		return err
-	}
-
-	if _, err := c.service.Remove(ctx, request); err != nil {
-		return handleError("failed to remove node", err)
 	}
 
 	return nil
