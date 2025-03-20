@@ -27,7 +27,7 @@ PKG_VERSION ?= $(shell echo $(VERSION) | sed "s/^v//" | \
 # Make all binaries
 all: $(BINS)
 
-$(BINS): sync-tree $(BINDIR) dep
+$(BINS): $(BINDIR) dep
 	@echo "⇒ Build $@"
 	CGO_ENABLED=0 \
 	go build -v -trimpath \
@@ -37,10 +37,6 @@ $(BINS): sync-tree $(BINDIR) dep
 $(BINDIR):
 	@echo "⇒ Ensure dir: $@"
 	@mkdir -p $@
-
-# Synchronize tree service
-sync-tree:
-	@./syncTree.sh
 
 # Pull go dependencies
 dep:

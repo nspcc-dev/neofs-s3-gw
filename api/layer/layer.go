@@ -56,7 +56,6 @@ type (
 		resolver    Resolver
 		ncontroller EventListener
 		cache       *Cache
-		treeService TreeService
 		buffers     *sync.Pool
 	}
 
@@ -66,7 +65,6 @@ type (
 		GateKey      *keys.PrivateKey
 		Anonymous    user.ID
 		Resolver     Resolver
-		TreeService  TreeService
 	}
 
 	// GetObjectParams stores object get request parameters.
@@ -294,6 +292,17 @@ var (
 	errPubKeyNotExists = errors.New("pub key not exists")
 )
 
+var (
+	// ErrNodeNotFound is returned from Tree service in case of not found error.
+	ErrNodeNotFound = errors.New("not found")
+
+	// ErrNodeAccessDenied is returned from Tree service in case of access denied error.
+	ErrNodeAccessDenied = errors.New("access denied")
+
+	// ErrPartListIsEmpty is returned if no parts available for the upload.
+	ErrPartListIsEmpty = errors.New("part list is empty")
+)
+
 func (t *VersionedObject) String() string {
 	return t.Name + ":" + t.VersionID
 }
@@ -312,13 +321,12 @@ func NewLayer(log *zap.Logger, neoFS NeoFS, config *Config) Client {
 	}
 
 	return &layer{
-		neoFS:       neoFS,
-		log:         log,
-		anonymous:   config.Anonymous,
-		resolver:    config.Resolver,
-		cache:       NewCache(config.Caches),
-		treeService: config.TreeService,
-		buffers:     &buffers,
+		neoFS:     neoFS,
+		log:       log,
+		anonymous: config.Anonymous,
+		resolver:  config.Resolver,
+		cache:     NewCache(config.Caches),
+		buffers:   &buffers,
 	}
 }
 

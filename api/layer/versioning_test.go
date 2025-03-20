@@ -167,10 +167,9 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	owner := signer.UserID()
 
 	layerCfg := &Config{
-		Caches:      config,
-		GateKey:     key,
-		Anonymous:   anonSigner.UserID(),
-		TreeService: NewTreeService(),
+		Caches:    config,
+		GateKey:   key,
+		Anonymous: anonSigner.UserID(),
 	}
 
 	return &testContext{

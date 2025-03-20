@@ -87,11 +87,10 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	testResolver := &contResolver{layer: tp}
 
 	layerCfg := &layer.Config{
-		Caches:      layer.DefaultCachesConfigs(zap.NewExample()),
-		GateKey:     key,
-		Anonymous:   anonSigner.UserID(),
-		Resolver:    testResolver,
-		TreeService: layer.NewTreeService(),
+		Caches:    layer.DefaultCachesConfigs(zap.NewExample()),
+		GateKey:   key,
+		Anonymous: anonSigner.UserID(),
+		Resolver:  testResolver,
 	}
 
 	var pp netmap.PlacementPolicy

@@ -14,6 +14,7 @@ This document outlines major changes between releases.
 
 ### Removed
 - neofs.epoch_update_interval option (#1094)
+- tree option (#1070)
 
 ## [0.35.0] - 2025-03-07
 

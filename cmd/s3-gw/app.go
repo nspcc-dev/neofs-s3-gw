@@ -205,19 +205,12 @@ func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.Neo
 func (a *App) initLayer(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
 	a.initResolver(ctx)
 
-	treeServiceEndpoint := a.cfg.GetString(cfgTreeServiceEndpoint)
-	treeService, err := neofs.NewTreeClient(ctx, treeServiceEndpoint, a.gateKey)
-	if err != nil {
-		a.log.Fatal("failed to create tree service", zap.Error(err))
-	}
-	a.log.Info("init tree service", zap.String("endpoint", treeServiceEndpoint))
-
+	var err error
 	layerCfg := &layer.Config{
-		Caches:      getCacheOptions(a.cfg, a.log),
-		GateKey:     a.gateKey,
-		Anonymous:   anonSigner.UserID(),
-		Resolver:    a.resolverContainer,
-		TreeService: treeService,
+		Caches:    getCacheOptions(a.cfg, a.log),
+		GateKey:   a.gateKey,
+		Anonymous: anonSigner.UserID(),
+		Resolver:  a.resolverContainer,
 	}
 
 	// prepare object layer
