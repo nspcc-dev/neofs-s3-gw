@@ -42,6 +42,7 @@ const (
 	TypeTags              = "tags"
 	TypeBucketTags        = "bucketTags"
 	TypeBucketNotifConfig = "bucketNotifConf"
+	TypeBucketCORS        = "bucketCORS"
 )
 
 const (

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"math"
@@ -267,38 +266,6 @@ func (n *layer) GetLockInfo(ctx context.Context, objVersion *ObjectVersion) (*da
 	}
 
 	return lockInfo, nil
-}
-
-func (n *layer) getCORS(ctx context.Context, bkt *data.BucketInfo) (*data.CORSConfiguration, error) {
-	owner := n.Owner(ctx)
-	if cors := n.cache.GetCORS(owner, bkt); cors != nil {
-		return cors, nil
-	}
-
-	objID, err := n.treeService.GetBucketCORS(ctx, bkt)
-	objIDNotFound := errors.Is(err, ErrNodeNotFound)
-	if err != nil && !objIDNotFound {
-		return nil, err
-	}
-
-	if objIDNotFound {
-		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
-	}
-
-	obj, err := n.objectGet(ctx, bkt, objID)
-	if err != nil {
-		return nil, err
-	}
-
-	cors := &data.CORSConfiguration{}
-
-	if err = xml.Unmarshal(obj.Payload(), &cors); err != nil {
-		return nil, fmt.Errorf("unmarshal cors: %w", err)
-	}
-
-	n.cache.PutCORS(owner, bkt, cors)
-
-	return cors, nil
 }
 
 func lockObjectKey(objVersion *ObjectVersion) string {

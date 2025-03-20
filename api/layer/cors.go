@@ -10,7 +10,10 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"go.uber.org/zap"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	"github.com/nspcc-dev/neofs-sdk-go/client"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 )
 
 const wildcard = "*"
@@ -39,30 +42,17 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 	prm := PrmObjectCreate{
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
-		Payload:      &buf,
-		Filepath:     p.BktInfo.CORSObjectName(),
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
+		Attributes: map[string]string{
+			s3headers.MetaType: s3headers.TypeBucketCORS,
+		},
+		Payload:     &buf,
+		PayloadSize: uint64(buf.Len()),
 	}
 
-	objID, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
-	if err != nil {
-		return fmt.Errorf("put system object: %w", err)
-	}
-
-	objIDToDelete, err := n.treeService.PutBucketCORS(ctx, p.BktInfo, objID)
-	objIDToDeleteNotFound := errors.Is(err, ErrNoNodeToRemove)
-	if err != nil && !objIDToDeleteNotFound {
-		return err
-	}
-
-	if !objIDToDeleteNotFound {
-		if err = n.objectDelete(ctx, p.BktInfo, objIDToDelete); err != nil {
-			n.log.Error("couldn't delete cors object", zap.Error(err),
-				zap.String("cnrID", p.BktInfo.CID.EncodeToString()),
-				zap.String("bucket name", p.BktInfo.Name),
-				zap.String("objID", objIDToDelete.EncodeToString()))
-		}
+	if _, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
+		return fmt.Errorf("create bucket CORS object: %w", err)
 	}
 
 	n.cache.PutCORS(n.Owner(ctx), p.BktInfo, cors)
@@ -71,26 +61,66 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 }
 
 func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
-	cors, err := n.getCORS(ctx, bktInfo)
+	var (
+		err   error
+		owner = n.Owner(ctx)
+	)
+
+	if cors := n.cache.GetCORS(owner, bktInfo); cors != nil {
+		return cors, nil
+	}
+
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketCORS)
 	if err != nil {
-		if errors.Is(err, ErrNodeNotFound) {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
-		}
+		return nil, fmt.Errorf("search: %w", err)
+	}
+
+	if id.IsZero() {
+		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
+	}
+
+	obj, err := n.objectGet(ctx, bktInfo, id)
+	if err != nil {
 		return nil, err
 	}
+
+	cors := &data.CORSConfiguration{}
+
+	if err = xml.Unmarshal(obj.Payload(), &cors); err != nil {
+		return nil, fmt.Errorf("unmarshal cors: %w", err)
+	}
+
+	n.cache.PutCORS(owner, bktInfo, cors)
 
 	return cors, nil
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
-	objID, err := n.treeService.DeleteBucketCORS(ctx, bktInfo)
-	objIDNotFound := errors.Is(err, ErrNoNodeToRemove)
-	if err != nil && !objIDNotFound {
-		return err
+	fs := make(object.SearchFilters, 0, 2)
+	fs.AddFilter(s3headers.MetaType, s3headers.TypeBucketCORS, object.MatchStringEqual)
+	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
 	}
-	if !objIDNotFound {
-		if err = n.objectDelete(ctx, bktInfo, objID); err != nil {
-			return err
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, fs, nil, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(res) == 0 {
+		return nil
+	}
+
+	for i := range res {
+		if err = n.objectDelete(ctx, bktInfo, res[i].ID); err != nil {
+			return fmt.Errorf("couldn't delete bucket CORS object: %w", err)
 		}
 	}
 
