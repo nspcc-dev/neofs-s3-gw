@@ -4,7 +4,6 @@
 REPO ?= $(shell go list -m)
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 | sed 's/^v//' 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 GO_VERSION ?= 1.23
-LINT_VERSION ?= 1.59.0
 BINDIR = bin
 
 # Binaries to build
@@ -15,7 +14,7 @@ BINS = $(addprefix $(BINDIR)/, $(CMDS))
 REPO_BASENAME = $(shell basename `go list -m`)
 HUB_IMAGE ?= "nspccdev/$(REPO_BASENAME)"
 
-.PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format image image-push dirty-image lint docker/lint version clean protoc
+.PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format image image-push dirty-image version clean protoc
 
 # .deb package versioning
 OS_RELEASE = $(shell lsb_release -cs)
@@ -57,7 +56,7 @@ docker/%:
 		  -u `stat -c "%u:%g" .` \
 		  --env HOME=/src \
 		  golang:$(GO_VERSION) make $*,\
-	  	@echo "supported docker targets: all $(BINS) lint")
+		@echo "supported docker targets: all $(BINS)")
 
 # Run tests
 test:
@@ -98,17 +97,13 @@ dirty-image:
 		-f .docker/Dockerfile.dirty \
 		-t $(HUB_IMAGE)-dirty:$(VERSION) .
 
-# Run linters
-lint:
-	@golangci-lint --timeout=5m run
+# Fetch linter configuration.
+.golangci.yml:
+	wget -O $@ https://github.com/nspcc-dev/.github/raw/master/.golangci.yml
 
-# Run linters in Docker
-docker/lint:
-	docker run --rm -it \
-	-v `pwd`:/src \
-	-u `stat -c "%u:%g" .` \
-	--env HOME=/src \
-	golangci/golangci-lint:v$(LINT_VERSION) bash -c 'cd /src/ && make lint'
+# Run linters
+lint: .golangci.yml
+	@golangci-lint --timeout=5m run
 
 # Show current version
 version:
