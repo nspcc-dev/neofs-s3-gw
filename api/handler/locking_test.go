@@ -369,6 +369,7 @@ func TestGetBucketLockConfigurationHandler(t *testing.T) {
 				Mode: complianceMode,
 			},
 		},
+		ObjectLockEnabled: enabledValue,
 	}
 	bktLockEnabledWithOldConfig := "bucket-lock-enabled-old-conf"
 	createTestBucketWithLock(hc, bktLockEnabledWithOldConfig, oldConfig)

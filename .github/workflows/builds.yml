@@ -56,9 +56,6 @@ jobs:
           cache: true
           go-version: '1.24'
 
-      - name: Get tree-service client
-        run: make sync-tree
-
       - name: Build
         run: make
         env:
@@ -90,9 +87,6 @@ jobs:
         with:
           ref: ${{ github.event.inputs.ref }}
           fetch-depth: 0
-
-      - name: Get tree-service client
-        run: make sync-tree
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

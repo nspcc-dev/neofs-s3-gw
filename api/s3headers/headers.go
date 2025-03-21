@@ -43,6 +43,7 @@ const (
 	TypeBucketTags        = "bucketTags"
 	TypeBucketNotifConfig = "bucketNotifConf"
 	TypeBucketCORS        = "bucketCORS"
+	TypeBucketSettings    = "bucketSettings"
 )
 
 const (
@@ -51,4 +52,9 @@ const (
 
 	TypeMultipartInfo = "info"
 	TypeMultipartPart = "part"
+)
+
+const (
+	// BucketSettingsVersioning contains versioning setting for bucket.
+	BucketSettingsVersioning = "s3bsVersioning"
 )

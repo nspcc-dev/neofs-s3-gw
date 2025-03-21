@@ -50,7 +50,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		conf data.NotificationConfiguration
 	)
 
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketNotifConfig)
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}

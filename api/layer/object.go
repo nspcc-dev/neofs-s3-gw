@@ -28,7 +28,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -1219,7 +1218,7 @@ func tryDirectoryName(filePath string, prefix, delimiter string) string {
 	return ""
 }
 
-func (n *layer) searchBucketMetaObjects(ctx context.Context, containerID cid.ID, objType string) (oid.ID, error) {
+func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.BucketInfo, objType string) (oid.ID, error) {
 	var (
 		opts                client.SearchObjectsOptions
 		owner               = n.Owner(ctx)
@@ -1231,14 +1230,14 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, containerID cid.ID,
 		}
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil && bt.Issuer() == bktInfo.Owner {
 		opts.WithBearerToken(*bt)
 	}
 
 	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, containerID, filters, returningAttributes, opts)
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)

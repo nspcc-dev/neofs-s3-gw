@@ -44,10 +44,6 @@ listen_domains:
 logger:
   level: debug
 
-# Endpoint of the tree service. Must be provided. Can be one of the node address (from the `peers` section).
-tree:
-  service: node1.neofs:8080
-
 # RPC endpoint and order of resolving of bucket names
 fschain:
   endpoints:
