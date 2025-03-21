@@ -285,7 +285,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		settings = data.BucketSettings{Versioning: data.VersioningUnversioned}
 	)
 
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketSettings)
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}

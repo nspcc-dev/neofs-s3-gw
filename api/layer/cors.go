@@ -70,7 +70,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 		return cors, nil
 	}
 
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo.CID, s3headers.TypeBucketCORS)
+	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketCORS)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
