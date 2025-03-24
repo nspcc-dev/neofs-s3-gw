@@ -624,7 +624,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	return searchResults, hasTags, hasLocks, nil
 }
 
-func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) (bool, bool, error) {
+func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName, objectVersion string) (bool, bool, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
@@ -645,9 +645,9 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
 	}
 
-	if onlyUnversioned {
-		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
-	}
+	filters.AddFilter(attrS3VersioningState, data.VersioningEnabled, object.MatchStringEqual)
+	filters.AddFilter(AttributeObjectVersion, objectVersion, object.MatchStringEqual)
+
 	filters.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)

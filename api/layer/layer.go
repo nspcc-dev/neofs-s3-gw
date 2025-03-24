@@ -699,6 +699,10 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		}
 
 		id = versions[0].ID
+
+		if p.IsBucketVersioningEnabled {
+			p.VersionID = id.String()
+		}
 	} else {
 		if err = id.DecodeString(p.VersionID); err != nil {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
@@ -714,7 +718,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 			return nil, fmt.Errorf("head version %s: %w", p.VersionID, err)
 		}
 
-		hasTags, hasLocks, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, owner, p.Object, isEmptyVersion)
+		hasTags, hasLocks, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID)
 		if err != nil {
 			return nil, err
 		}
