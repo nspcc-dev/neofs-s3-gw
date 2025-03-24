@@ -22,3 +22,5 @@ coverage.html
 
 # debhelpers
 **/.debhelper
+
+.golangci.yml
