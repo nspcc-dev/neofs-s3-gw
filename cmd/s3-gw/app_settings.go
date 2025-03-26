@@ -35,8 +35,9 @@ const (
 
 const ( // Settings.
 	// Logger.
-	cfgLoggerLevel    = "logger.level"
-	cfgLoggerEncoding = "logger.encoding"
+	cfgLoggerLevel     = "logger.level"
+	cfgLoggerEncoding  = "logger.encoding"
+	cfgLoggerTimestamp = "logger.timestamp"
 
 	// Wallet.
 	cfgWalletPath       = "wallet.path"
@@ -410,7 +411,7 @@ func newLogger(v *viper.Viper) *Logger {
 	c.Level = zap.NewAtomicLevelAt(lvl)
 	c.Encoding = encoding
 	c.Sampling = nil
-	if term.IsTerminal(int(os.Stdout.Fd())) {
+	if (term.IsTerminal(int(os.Stdout.Fd())) && !v.GetBool(cfgLoggerTimestamp)) || v.GetBool(cfgLoggerTimestamp) {
 		c.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	} else {
 		c.EncoderConfig.EncodeTime = func(_ time.Time, _ zapcore.PrimitiveArrayEncoder) {}
