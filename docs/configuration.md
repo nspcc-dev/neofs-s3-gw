@@ -317,11 +317,13 @@ server:
 ```yaml
 logger:
   level: debug
+  encoding: console
 ```
 
-| Parameter | Type     | SIGHUP reload | Default value | Description                                                                                        |
-|-----------|----------|---------------|---------------|----------------------------------------------------------------------------------------------------|
-| `level`   | `string` | yes           | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. |
+| Parameter  | Type     | SIGHUP reload | Default value | Description                                                                                        |
+|------------|----------|---------------|---------------|----------------------------------------------------------------------------------------------------|
+| `level`    | `string` | yes           | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. |
+| `encoding` | `string` |               | `console`     | Encoding type.<br/>Possible values:  `console`, `json`.                                            |
 
 ### `tree` section
 
