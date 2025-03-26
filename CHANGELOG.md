@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- AWS SDK migrated to V2 (#1028)
 
 ### Fixed
 

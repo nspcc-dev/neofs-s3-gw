@@ -9,12 +9,13 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	v4amz "github.com/aws/aws-sdk-go/aws/signer/v4"
+	v4amz "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -61,6 +62,7 @@ type (
 		Date         string
 		IsPresigned  bool
 		Expiration   time.Duration
+		PayloadHash  string
 	}
 )
 
@@ -83,6 +85,10 @@ const (
 	ContentEncodingChunked    = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
 
 	timeFormatISO8601 = "20060102T150405Z"
+
+	// emptyStringSHA256 is a SHA256 of an empty string.
+	emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+	UnsignedPayload   = "UNSIGNED-PAYLOAD"
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -108,7 +114,7 @@ func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *ca
 	}
 }
 
-func (c *center) parseAuthHeader(header string) (*authHeader, error) {
+func (c *center) parseAuthHeader(header, amzContentSha256Header string) (*authHeader, error) {
 	submatches := c.reg.GetSubmatches(header)
 	if len(submatches) != authHeaderPartsNum {
 		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
@@ -128,6 +134,7 @@ func (c *center) parseAuthHeader(header string) (*authHeader, error) {
 		SignatureV4:  submatches["v4_signature"],
 		SignedFields: signedFields,
 		Date:         submatches["date"],
+		PayloadHash:  amzContentSha256Header,
 	}, nil
 }
 
@@ -161,6 +168,11 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			SignedFields: queryValues[AmzSignedHeaders],
 			Date:         creds[1],
 			IsPresigned:  true,
+			PayloadHash:  r.Header.Get(AmzContentSha256),
+		}
+
+		if authHdr.PayloadHash == "" {
+			authHdr.PayloadHash = UnsignedPayload
 		}
 		authHdr.Expiration, err = time.ParseDuration(queryValues.Get(AmzExpires) + "s")
 		if err != nil {
@@ -180,7 +192,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			}
 			return nil, ErrNoAuthorizationHeader
 		}
-		authHdr, err = c.parseAuthHeader(authHeaderField[0])
+		authHdr, err = c.parseAuthHeader(authHeaderField[0], r.Header.Get(AmzContentSha256))
 		if err != nil {
 			return nil, err
 		}
@@ -220,8 +232,13 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			return nil, fmt.Errorf("DecodeString: %w", err)
 		}
 
-		awsCreds := credentials.NewStaticCredentials(authHdr.AccessKeyID, box.Gate.AccessKey, "")
-		streamSigner := v4.NewChunkSigner(authHdr.Region, authHdr.Service, sig, signatureDateTime, awsCreds)
+		appCreds := credentials.NewStaticCredentialsProvider(authHdr.AccessKeyID, box.Gate.AccessKey, "")
+		value, err := appCreds.Retrieve(r.Context())
+		if err != nil {
+			return nil, fmt.Errorf("get credentials: %w", err)
+		}
+
+		streamSigner := v4.NewChunkSigner(authHdr.Region, authHdr.Service, sig, signatureDateTime, value)
 		r.Body = v4.NewChunkedReader(r.Body, streamSigner)
 	}
 
@@ -314,25 +331,58 @@ func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 }
 
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
-	awsCreds := credentials.NewStaticCredentials(authHeader.AccessKeyID, box.Gate.AccessKey, "")
-	signer := v4amz.NewSigner(awsCreds)
-	signer.DisableURIPathEscaping = true
+	credProvider := credentials.NewStaticCredentialsProvider(authHeader.AccessKeyID, box.Gate.AccessKey, "")
+	awsCreds, err := credProvider.Retrieve(request.Context())
+	if err != nil {
+		return fmt.Errorf("get credentials: %w", err)
+	}
+
+	signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
+		signer.DisableURIPathEscaping = true
+	})
+
+	if authHeader.PayloadHash == "" {
+		authHeader.PayloadHash = emptyStringSHA256
+	}
+
+	var hasContentLength bool
+	for _, h := range authHeader.SignedFields {
+		if strings.ToLower(h) == "content-length" {
+			hasContentLength = true
+			break
+		}
+	}
+
+	// Final content length is unknown, request.ContentLength == -1.
+	if !hasContentLength {
+		request.ContentLength = 0
+	}
 
 	var signature string
 	if authHeader.IsPresigned {
-		now := time.Now()
+		var (
+			now       = time.Now()
+			signedURI string
+		)
 		if signatureDateTime.Add(authHeader.Expiration).Before(now) {
 			return s3errors.GetAPIError(s3errors.ErrExpiredPresignRequest)
 		}
 		if now.Before(signatureDateTime) {
 			return s3errors.GetAPIError(s3errors.ErrBadRequest)
 		}
-		if _, err := signer.Presign(request, nil, authHeader.Service, authHeader.Region, authHeader.Expiration, signatureDateTime); err != nil {
+
+		signedURI, _, err = signer.PresignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime)
+		if err != nil {
 			return fmt.Errorf("failed to pre-sign temporary HTTP request: %w", err)
 		}
-		signature = request.URL.Query().Get(AmzSignature)
+
+		u, err := url.ParseRequestURI(signedURI)
+		if err != nil {
+			return fmt.Errorf("parse signed uri: %w", err)
+		}
+		signature = u.Query().Get(AmzSignature)
 	} else {
-		if _, err := signer.Sign(request, nil, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
+		if err = signer.SignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
 			return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
 		}
 		signature = c.reg.GetSubmatches(request.Header.Get(AuthorizationHdr))["v4_signature"]

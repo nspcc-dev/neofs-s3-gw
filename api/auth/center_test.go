@@ -2,6 +2,8 @@ package auth
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -12,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	v4aws "github.com/aws/aws-sdk-go/aws/signer/v4"
+	v4amz "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
@@ -54,7 +56,7 @@ func TestAuthHeaderParse(t *testing.T) {
 			expected: nil,
 		},
 	} {
-		authHeader, err := center.parseAuthHeader(tc.header)
+		authHeader, err := center.parseAuthHeader(tc.header, "")
 		require.Equal(t, tc.err, err, tc.header)
 		require.Equal(t, tc.expected, authHeader, tc.header)
 	}
@@ -118,7 +120,9 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 	}
 
 	chunkOneBody := append([]byte("10000;chunk-signature=ad80c730a21e5b8d04586a2213dd63b9a0e99e0e2307b0ade35a65485a288648\n"), chunkOnePayload...)
-	awsCreds := credentials.NewStaticCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "")
+	appCreds := credentials.NewStaticCredentialsProvider("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "")
+	awsCreds, err := appCreds.Retrieve(context.Background())
+	require.NoError(t, err)
 
 	ts, err := time.Parse(timeFormatISO8601, "20130524T000000Z")
 	require.NoError(t, err)
@@ -354,6 +358,7 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	t.Skipf("Only for manual launch")
 
 	ts := time.Now()
+	ctx := context.Background()
 
 	host := "http://localhost:19080"
 	bucketName := "heh1701422026"
@@ -376,15 +381,22 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	req.Header.Set("content-encoding", "aws-chunked")
 	req.Header.Set("x-amz-decoded-content-length", strconv.Itoa(totalPayloadLength))
 
-	awsCreds := credentials.NewStaticCredentials(
+	appCreds := credentials.NewStaticCredentialsProvider(
 		"6cpBf2jzHdD2MJHsjwLuVYYDAPJcfsJ5oufJWnHhrSBQ0FPjWXxmLmvKDAyhr1SEwnfKLJq3twKzuWG7f24qfyWcD", // access_key_id
 		"79488f248493cb5175ea079a12a3e08015021d9c710a064017e1da6a2b0ae111",                          // secret_access_key
 		"")
 
-	signer := v4aws.NewSigner(awsCreds)
+	awsCreds, err := appCreds.Retrieve(ctx)
+	require.NoError(t, err)
 
-	signer.DisableURIPathEscaping = true
-	_, err = signer.Sign(req, nil, "s3", "us-east-1", ts)
+	signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
+		signer.DisableURIPathEscaping = true
+	})
+
+	h := sha256.New()
+	h.Write(payload)
+
+	err = signer.SignHTTP(ctx, awsCreds, req, hex.EncodeToString(h.Sum(nil)), "s3", "us-east-1", ts)
 	require.NoError(t, err)
 
 	reg := NewRegexpMatcher(authorizationFieldRegexp)

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 const (
@@ -19,14 +19,14 @@ type ChunkSigner struct {
 	region  string
 	service string
 
-	credentials credentialValueProvider
+	credentials aws.Credentials
 
 	prevSig  []byte
 	seedDate time.Time
 }
 
 // NewChunkSigner creates a SigV4 signer used to sign Event Stream encoded messages.
-func NewChunkSigner(region, service string, seedSignature []byte, seedDate time.Time, credentials *credentials.Credentials) *ChunkSigner {
+func NewChunkSigner(region, service string, seedSignature []byte, seedDate time.Time, credentials aws.Credentials) *ChunkSigner {
 	return &ChunkSigner{
 		region:      region,
 		service:     service,
@@ -47,12 +47,7 @@ func (s *ChunkSigner) GetSignatureByHash(payloadHash hash.Hash) ([]byte, error) 
 }
 
 func (s *ChunkSigner) getSignature(payloadHash []byte) ([]byte, error) {
-	credValue, err := s.credentials.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	sigKey := deriveSigningKey(s.region, s.service, credValue.SecretAccessKey, s.seedDate)
+	sigKey := deriveSigningKey(s.region, s.service, s.credentials.SecretAccessKey, s.seedDate)
 
 	keyPath := buildSigningScope(s.region, s.service, s.seedDate)
 
