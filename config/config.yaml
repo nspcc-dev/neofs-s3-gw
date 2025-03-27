@@ -43,6 +43,8 @@ listen_domains:
 
 logger:
   level: debug
+  encoding: console
+  timestamp: false
 
 # RPC endpoint and order of resolving of bucket names
 fschain:

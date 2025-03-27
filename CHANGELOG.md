@@ -5,6 +5,8 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- `logger.encoding` config option (#1100)
+- `logger.timestamp` config option (#1100)
 
 ### Changed
 

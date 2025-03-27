@@ -317,11 +317,15 @@ server:
 ```yaml
 logger:
   level: debug
+  encoding: console
+  timestamp: true
 ```
 
-| Parameter | Type     | SIGHUP reload | Default value | Description                                                                                        |
-|-----------|----------|---------------|---------------|----------------------------------------------------------------------------------------------------|
-| `level`   | `string` | yes           | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. |
+| Parameter   | Type     | SIGHUP reload | Default value | Description                                                                                         |
+|-------------|----------|---------------|---------------|-----------------------------------------------------------------------------------------------------|
+| `level`     | `string` | yes           | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`.  |
+| `encoding`  | `string` |               | `console`     | Encoding type.<br/>Possible values:  `console`, `json`.                                             |
+| `timestamp` | `bool`   |               | `false`       | Flag to enable timestamps. If the parameter is not set, they will be enabled when you run with tty. |
 
 ### `tree` section
 

@@ -35,7 +35,9 @@ const (
 
 const ( // Settings.
 	// Logger.
-	cfgLoggerLevel = "logger.level"
+	cfgLoggerLevel     = "logger.level"
+	cfgLoggerEncoding  = "logger.encoding"
+	cfgLoggerTimestamp = "logger.timestamp"
 
 	// Wallet.
 	cfgWalletPath       = "wallet.path"
@@ -242,6 +244,7 @@ func newSettings() *viper.Viper {
 
 	// logger:
 	v.SetDefault(cfgLoggerLevel, "debug")
+	v.SetDefault(cfgLoggerEncoding, "console")
 
 	// pool:
 	v.SetDefault(cfgPoolErrorThreshold, defaultPoolErrorThreshold)
@@ -399,11 +402,16 @@ func newLogger(v *viper.Viper) *Logger {
 		panic(err)
 	}
 
+	encoding, err := getEncoding(v)
+	if err != nil {
+		panic(err)
+	}
+
 	c := zap.NewProductionConfig()
 	c.Level = zap.NewAtomicLevelAt(lvl)
-	c.Encoding = "console"
+	c.Encoding = encoding
 	c.Sampling = nil
-	if term.IsTerminal(int(os.Stdout.Fd())) {
+	if (term.IsTerminal(int(os.Stdout.Fd())) && !v.GetBool(cfgLoggerTimestamp)) || v.GetBool(cfgLoggerTimestamp) {
 		c.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	} else {
 		c.EncoderConfig.EncodeTime = func(_ time.Time, _ zapcore.PrimitiveArrayEncoder) {}
@@ -439,4 +447,14 @@ func getLogLevel(v *viper.Viper) (zapcore.Level, error) {
 		})
 	}
 	return lvl, nil
+}
+
+func getEncoding(v *viper.Viper) (string, error) {
+	val := v.GetString(cfgLoggerEncoding)
+
+	if val != "console" && val != "json" {
+		return "", fmt.Errorf("invalid encoding value: %s", val)
+	}
+
+	return val, nil
 }
