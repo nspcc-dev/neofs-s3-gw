@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"slices"
@@ -318,7 +320,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 		payload := bytes.NewBuffer(nil)
 		_, err = io.CopyBuffer(payload, chunkedReader, chunk)
 
-		require.ErrorIs(t, err, v4.ErrNoChunksSeparator)
+		require.ErrorIs(t, err, v4.ErrInvalidChunkSignature)
 	})
 
 	t.Run("err chunk header too long", func(t *testing.T) {
@@ -458,4 +460,48 @@ func chunkSlice(payload []byte, chunkSize int) [][]byte {
 	}
 
 	return result
+}
+
+func TestAwsEncodedChunkReaderWithTrailer(t *testing.T) {
+	chunk1 := "2000\r\n" + strings.Repeat("a", 8192) + "\r\n"
+	chunk2 := "2000\r\n" + strings.Repeat("a", 8192) + "\r\n"
+	chunk3 := "400\r\n" + strings.Repeat("a", 1024) + "\r\n"
+	chunk4 := "0\r\n"
+
+	var (
+		objectPayload = strings.Repeat("a", 17408)
+		writer        = crc32.NewIEEE()
+		checksumType  = "x-amz-checksum-crc32"
+	)
+
+	_, err := writer.Write([]byte(objectPayload))
+	require.NoError(t, err)
+
+	var (
+		checksum              = writer.Sum(nil)
+		base64EncodedChecksum = base64.StdEncoding.EncodeToString(checksum)
+		trailer               = checksumType + ":" + base64EncodedChecksum + "\n\r\n\r\n\r\n"
+		requestPayload        = chunk1 + chunk2 + chunk3 + chunk4 + trailer
+	)
+
+	t.Run("correct signature", func(t *testing.T) {
+		buf := bytes.NewBuffer(nil)
+
+		_, err = buf.Write([]byte(requestPayload))
+		require.NoError(t, err)
+
+		chunkedReader, err := v4.NewChunkedReaderWithTrail(io.NopCloser(buf), checksumType)
+		require.NoError(t, err)
+
+		defer func() {
+			_ = chunkedReader.Close()
+		}()
+
+		chunk := make([]byte, 4096)
+		payload2 := bytes.NewBuffer(nil)
+		_, err = io.CopyBuffer(payload2, chunkedReader, chunk)
+		require.NoError(t, err)
+
+		require.Equal(t, []byte(objectPayload), payload2.Bytes())
+	})
 }

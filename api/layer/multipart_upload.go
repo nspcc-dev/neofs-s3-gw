@@ -356,7 +356,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		isReturnToPool bool
 	)
 
-	if p.Size > n.neoFS.MaxObjectSize()/2 {
+	if p.Size > n.neoFS.MaxObjectSize()/2 || p.Size == -1 {
 		chunk = n.buffers.Get().(*[]byte)
 		isReturnToPool = true
 	} else {

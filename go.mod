@@ -9,6 +9,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
+	github.com/minio/crc64nvme v1.0.1
 	github.com/minio/sio v0.4.1
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.108.1
@@ -36,6 +37,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20240830112754-291b000d1f3b // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.3 // indirect
