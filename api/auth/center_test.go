@@ -214,7 +214,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 		payload := bytes.NewBuffer(nil)
 		_, err = io.CopyBuffer(payload, chunkedReader, chunk)
 
-		require.ErrorIs(t, err, v4.ErrMissingSeparator)
+		require.ErrorIs(t, err, v4.ErrInvalidByteInChunkLength)
 	})
 
 	t.Run("err missing equality byte", func(t *testing.T) {
