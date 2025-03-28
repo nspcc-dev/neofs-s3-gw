@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -1689,6 +1690,8 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		}
 	}
 
+	records = append(records, getAllowRecordForBucketSettings())
+
 	for _, op := range fullOps {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
@@ -1703,6 +1706,19 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 func isValidGrant(grant *Grant) bool {
 	return (grant.Permission == awsPermFullControl || grant.Permission == awsPermRead || grant.Permission == awsPermWrite) &&
 		(grant.Grantee.Type == granteeCanonicalUser || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI == allUsersGroup))
+}
+
+func getAllowRecordForBucketSettings() eacl.Record {
+	var (
+		filter = eacl.ConstructFilter(eacl.HeaderFromObject, s3headers.MetaType, eacl.MatchStringEqual, s3headers.TypeBucketSettings)
+
+		record = eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationSearch,
+			[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
+			filter,
+		)
+	)
+
+	return record
 }
 
 func getAllowRecordWithUser(op eacl.Operation, acc user.ID) *eacl.Record {
