@@ -24,12 +24,22 @@ var (
 	// ErrInvalidChunkSignature appears if passed chunk signature differs from calculated.
 	ErrInvalidChunkSignature = errors.New("invalid chunk signature")
 
-	// ErrMissingSeparator appears if chunk header doesn't contain ';' separator.
-	ErrMissingSeparator = errors.New("missing header separator")
-
 	// ErrNoChunksSeparator appears if chunks not properly separated between each other.
 	// They should be divided with \r\n bytes.
 	ErrNoChunksSeparator = errors.New("no chunk separator")
+
+	// ErrInvalidByteInChunkLength appears if chunk header has invalid encoding.
+	ErrInvalidByteInChunkLength = errors.New("invalid byte in chunk length")
+)
+
+type readerState int
+
+const (
+	readChunkHeader readerState = iota
+	readChunkPayload
+	verifyChunkSignature
+	readChunkCRLF
+	exit
 )
 
 // NewChunkedReader returns a new chunkedReader that translates the data read from r
@@ -41,6 +51,8 @@ func NewChunkedReader(r io.ReadCloser, streamSigner *ChunkSigner) io.ReadCloser 
 		// bufio.Reader can't be closed, thus left link to the original reader to close it later.
 		origReader:   r,
 		streamSigner: streamSigner,
+		chunkHash:    sha256.New(),
+		nextState:    readChunkHeader,
 	}
 }
 
@@ -51,9 +63,9 @@ type chunkedReader struct {
 	origReader     io.ReadCloser
 	n              uint64 // unread bytes in chunk
 	err            error
-	buf            [2]byte
-	checkEnd       bool // whether need to check for \r\n chunk footer
 	streamSigner   *ChunkSigner
+	nextState      readerState
+	lastChunk      bool
 }
 
 // Close implements [io.ReadCloser].
@@ -63,41 +75,31 @@ func (cr *chunkedReader) Close() (err error) {
 
 func (cr *chunkedReader) beginChunk() {
 	// chunk-size CRLF
-	var line, chunkSignature []byte
-	line, chunkSignature, cr.err = readChunkLine(cr.r)
-	if cr.err != nil {
-		return
-	}
-	cr.n, cr.err = parseHexUint(line)
+	var line []byte
+	line, cr.err = readChunkLine(cr.r)
 	if cr.err != nil {
 		return
 	}
 
-	if err := cr.validatePreviousChunkData(); err != nil {
-		cr.err = err
+	hexSize, signaturePart := removeChunkExtension(line)
+
+	cr.n, cr.err = parseHexUint(hexSize)
+	if cr.err != nil {
 		return
 	}
 
-	// creating instance here to avoid validating non-existent chunk in the first validatePreviousChunkData call.
-	if cr.chunkHash == nil {
-		cr.chunkHash = sha256.New()
-	} else {
-		cr.chunkHash.Reset()
+	if signaturePart != nil {
+		cr.chunkSignature = string(signaturePart)
 	}
 
-	cr.chunkSignature = string(chunkSignature)
+	cr.chunkHash.Reset()
 
 	if cr.n == 0 {
-		if err := cr.validatePreviousChunkData(); err != nil {
-			cr.err = err
-			return
-		}
-
 		cr.err = io.EOF
 	}
 }
 
-func (cr *chunkedReader) validatePreviousChunkData() error {
+func (cr *chunkedReader) validateChunkData() error {
 	if cr.chunkHash != nil {
 		calculatedSignature, err := cr.streamSigner.GetSignatureByHash(cr.chunkHash)
 		if err != nil {
@@ -112,82 +114,91 @@ func (cr *chunkedReader) validatePreviousChunkData() error {
 	return nil
 }
 
-func (cr *chunkedReader) chunkHeaderAvailable() bool {
-	n := cr.r.Buffered()
-	if n > 0 {
-		peek, _ := cr.r.Peek(n)
-		return bytes.IndexByte(peek, '\n') >= 0
-	}
-	return false
-}
-
 // Read gets data from reader. Implements [io.ReadCloser].
 func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
-	for cr.err == nil {
-		if cr.checkEnd {
-			if n > 0 && cr.r.Buffered() < 2 {
-				// We have some data. Return early (per the io.Reader
-				// contract) instead of potentially blocking while
-				// reading more.
-				break
-			}
-			if _, cr.err = io.ReadFull(cr.r, cr.buf[:2]); cr.err == nil {
-				if string(cr.buf[:]) != "\r\n" {
-					cr.err = ErrNoChunksSeparator
-					break
-				}
-			} else {
-				if errors.Is(cr.err, io.EOF) {
-					cr.err = io.ErrUnexpectedEOF
-				}
-				break
-			}
-			cr.checkEnd = false
-		}
-		if cr.n == 0 {
-			if n > 0 && !cr.chunkHeaderAvailable() {
-				// We've read enough. Don't potentially block
-				// reading a new chunk header.
-				break
-			}
+	for {
+		switch cr.nextState {
+		case readChunkHeader:
 			cr.beginChunk()
-			continue
-		}
-		if len(b) == 0 {
-			break
-		}
-		rbuf := b
-		if uint64(len(rbuf)) > cr.n {
-			rbuf = rbuf[:cr.n]
-		}
-		var n0 int
-		n0, cr.err = cr.r.Read(rbuf)
-		n += n0
-		b = b[n0:]
-		cr.n -= uint64(n0)
-		// Hashing chunk data to calculate the signature.
-		// rbuf may contain payload and empty bytes, taking only payload.
-		if _, err = cr.chunkHash.Write(rbuf[:n0]); err != nil {
-			cr.err = err
-			break
-		}
 
-		// If we're at the end of a chunk, read the next two
-		// bytes to verify they are "\r\n".
-		if cr.n == 0 && cr.err == nil {
-			cr.checkEnd = true
-		} else if errors.Is(cr.err, io.EOF) {
-			cr.err = io.ErrUnexpectedEOF
+			if cr.n == 0 && errors.Is(cr.err, io.EOF) {
+				cr.nextState = readChunkCRLF
+				cr.lastChunk = true
+				continue
+			}
+
+			if cr.err != nil {
+				return 0, cr.err
+			}
+			cr.nextState = readChunkPayload
+		case readChunkPayload:
+			// The incoming buffer is fulfilled.
+			if len(b) == 0 {
+				return n, nil
+			}
+
+			rbuf := b
+			if uint64(len(rbuf)) > cr.n {
+				rbuf = rbuf[:cr.n]
+			}
+			var n0 int
+			n0, cr.err = cr.r.Read(rbuf)
+			n += n0
+			b = b[n0:]
+			cr.n -= uint64(n0)
+			// Hashing chunk data to calculate the signature.
+			// rbuf may contain payload and empty bytes, taking only payload.
+			if _, err = cr.chunkHash.Write(rbuf[:n0]); err != nil {
+				return 0, err
+			}
+			// If we're at the end of a chunk.
+			if cr.n == 0 {
+				cr.nextState = readChunkCRLF
+			}
+		case readChunkCRLF:
+			cr.err = readCRLF(cr.r)
+			if cr.err != nil {
+				return 0, cr.err
+			}
+			cr.nextState = verifyChunkSignature
+		case verifyChunkSignature:
+			if err = cr.validateChunkData(); err != nil {
+				return 0, err
+			}
+
+			if cr.lastChunk {
+				cr.nextState = exit
+			} else {
+				cr.nextState = readChunkHeader
+			}
+		case exit:
+			return n, io.EOF
 		}
 	}
-	return n, cr.err
+}
+
+func readCRLF(reader io.Reader) error {
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(reader, buf[:2]); err != nil {
+		if errors.Is(err, io.EOF) {
+			return io.ErrUnexpectedEOF
+		}
+
+		return err
+	}
+
+	if string(buf[:]) != "\r\n" {
+		return ErrNoChunksSeparator
+	}
+
+	return nil
 }
 
 // Read a line of bytes (up to \n) from b.
 // Give up if the line exceeds maxLineLength.
 // The returned bytes are owned by the bufio.Reader
 // so they are only valid until the next bufio read.
-func readChunkLine(b *bufio.Reader) ([]byte, []byte, error) {
+func readChunkLine(b *bufio.Reader) ([]byte, error) {
 	p, err := b.ReadSlice('\n')
 	if err != nil {
 		// We always know when EOF is coming.
@@ -197,27 +208,13 @@ func readChunkLine(b *bufio.Reader) ([]byte, []byte, error) {
 		} else if errors.Is(err, bufio.ErrBufferFull) {
 			err = ErrLineTooLong
 		}
-		return nil, nil, err
+		return nil, err
 	}
 	if len(p) >= maxLineLength {
-		return nil, nil, ErrLineTooLong
+		return nil, ErrLineTooLong
 	}
 
-	var signaturePart []byte
-
-	p = trimTrailingWhitespace(p)
-	p, signaturePart, err = removeChunkExtension(p)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pos := bytes.IndexByte(signaturePart, '=')
-	if pos == -1 {
-		return nil, nil, errors.New("chunk header is malformed")
-	}
-
-	// even if '=' is the latest symbol, the new slice will be just empty
-	return p, signaturePart[pos+1:], nil
+	return p, nil
 }
 
 func trimTrailingWhitespace(b []byte) []byte {
@@ -231,8 +228,6 @@ func isASCIISpace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
-var semi = []byte(";")
-
 // removeChunkExtension removes any chunk-extension from p.
 // For example,
 //
@@ -240,17 +235,14 @@ var semi = []byte(";")
 //	"0;chunk-signature" => "0"
 //	"0;chunk-signature=val" => "0"
 //	`0;chunk-signature="quoted string"` => "0"
-func removeChunkExtension(p []byte) ([]byte, []byte, error) {
-	var (
-		chunkSignature []byte
-		found          bool
-	)
-	p, chunkSignature, found = bytes.Cut(p, semi)
-	if !found {
-		return nil, nil, ErrMissingSeparator
+func removeChunkExtension(p []byte) ([]byte, []byte) {
+	p = trimTrailingWhitespace(p)
+	pos := bytes.SplitN(p, []byte(";chunk-signature="), 2)
+	if len(pos) == 1 {
+		return pos[0], nil
 	}
 
-	return p, chunkSignature, nil
+	return pos[0], pos[1]
 }
 
 func parseHexUint(v []byte) (n uint64, err error) {
@@ -263,7 +255,7 @@ func parseHexUint(v []byte) (n uint64, err error) {
 		case 'A' <= b && b <= 'F':
 			b = b - 'A' + 10
 		default:
-			return 0, errors.New("invalid byte in chunk length")
+			return 0, ErrInvalidByteInChunkLength
 		}
 		if i == 16 {
 			return 0, errors.New("http chunk length too large")
