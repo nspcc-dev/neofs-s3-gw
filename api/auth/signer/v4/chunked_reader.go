@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -30,6 +31,8 @@ var (
 
 	// ErrInvalidByteInChunkLength appears if chunk header has invalid encoding.
 	ErrInvalidByteInChunkLength = errors.New("invalid byte in chunk length")
+
+	errInvalidChunkEncoding = errors.New("invalid chunk encoding")
 )
 
 type readerState int
@@ -40,6 +43,7 @@ const (
 	verifyChunkSignature
 	readChunkCRLF
 	exit
+	readTrailerChunk
 )
 
 // NewChunkedReader returns a new chunkedReader that translates the data read from r
@@ -56,16 +60,38 @@ func NewChunkedReader(r io.ReadCloser, streamSigner *ChunkSigner) io.ReadCloser 
 	}
 }
 
+// NewChunkedReaderWithTrail returns a new chunkedReader that translates the data read from r
+// out of HTTP "chunked" format before returning it. It uses trailing chunk to verify data consistency.
+// The chunkedReader returns io.EOF when the final 0-length chunk is read.
+func NewChunkedReaderWithTrail(r io.ReadCloser, amzTrailerHeader string) (io.ReadCloser, error) {
+	checksumAlgorithm, err := detectChecksumType(amzTrailerHeader)
+	if err != nil {
+		return nil, err
+	}
+
+	return &chunkedReader{
+		r: bufio.NewReader(r),
+		// bufio.Reader can't be closed, thus left link to the original reader to close it later.
+		origReader:        r,
+		chunkHash:         sha256.New(),
+		nextState:         readChunkHeader,
+		checkSumAlgorithm: checksumAlgorithm.String(),
+		checkSumWriter:    checksumWriter(checksumAlgorithm),
+	}, nil
+}
+
 type chunkedReader struct {
-	chunkHash      hash.Hash
-	chunkSignature string
-	r              *bufio.Reader
-	origReader     io.ReadCloser
-	n              uint64 // unread bytes in chunk
-	err            error
-	streamSigner   *ChunkSigner
-	nextState      readerState
-	lastChunk      bool
+	chunkHash         hash.Hash
+	chunkSignature    string
+	r                 *bufio.Reader
+	origReader        io.ReadCloser
+	n                 uint64 // unread bytes in chunk
+	err               error
+	streamSigner      *ChunkSigner
+	nextState         readerState
+	lastChunk         bool
+	checkSumAlgorithm string
+	checkSumWriter    hash.Hash
 }
 
 // Close implements [io.ReadCloser].
@@ -100,7 +126,7 @@ func (cr *chunkedReader) beginChunk() {
 }
 
 func (cr *chunkedReader) validateChunkData() error {
-	if cr.chunkHash != nil {
+	if cr.chunkHash != nil && cr.streamSigner != nil {
 		calculatedSignature, err := cr.streamSigner.GetSignatureByHash(cr.chunkHash)
 		if err != nil {
 			return fmt.Errorf("GetSignature: %w", err)
@@ -151,16 +177,34 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 			if _, err = cr.chunkHash.Write(rbuf[:n0]); err != nil {
 				return 0, err
 			}
+
+			if cr.checkSumWriter != nil {
+				cr.checkSumWriter.Write(rbuf[:n0])
+			}
+
 			// If we're at the end of a chunk.
 			if cr.n == 0 {
 				cr.nextState = readChunkCRLF
 			}
 		case readChunkCRLF:
-			cr.err = readCRLF(cr.r)
-			if cr.err != nil {
-				return 0, cr.err
+			err = peekCRLF(cr.r)
+			isTrailingChunk := cr.n == 0 && cr.lastChunk
+
+			if !isTrailingChunk {
+				cr.err = readCRLF(cr.r)
+			} else if err != nil && !errors.Is(err, errInvalidChunkEncoding) {
+				cr.err = err
+				return 0, errInvalidChunkEncoding
 			}
-			cr.nextState = verifyChunkSignature
+
+			// Unsigned streaming upload.
+			if cr.chunkSignature != "" {
+				cr.nextState = verifyChunkSignature
+			} else if cr.lastChunk {
+				cr.nextState = readTrailerChunk
+			} else {
+				cr.nextState = readChunkHeader
+			}
 		case verifyChunkSignature:
 			if err = cr.validateChunkData(); err != nil {
 				return 0, err
@@ -171,6 +215,25 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 			} else {
 				cr.nextState = readChunkHeader
 			}
+		case readTrailerChunk:
+			extractedCheckSumAlgorithm, extractedChecksum := parseChunkChecksum(cr.r)
+			if extractedCheckSumAlgorithm.String() != cr.checkSumAlgorithm {
+				cr.err = fmt.Errorf("request header and trailed chunk checksum algorithm mismatch. %s vs %s", extractedCheckSumAlgorithm.String(), cr.checkSumAlgorithm)
+				return 0, cr.err
+			}
+
+			base64Checksum := base64.StdEncoding.EncodeToString(cr.checkSumWriter.Sum(nil))
+			if string(extractedChecksum) != base64Checksum {
+				cr.err = errors.New("payload checksum does not match")
+				return 0, cr.err
+			}
+
+			// Reading remaining CRLF.
+			for range 2 {
+				cr.err = readCRLF(cr.r)
+			}
+
+			cr.nextState = exit
 		case exit:
 			return n, io.EOF
 		}
@@ -191,6 +254,24 @@ func readCRLF(reader io.Reader) error {
 		return ErrNoChunksSeparator
 	}
 
+	return nil
+}
+
+func peekCRLF(reader *bufio.Reader) error {
+	peeked, err := reader.Peek(2)
+	if err != nil {
+		return err
+	}
+	if err = checkCRLF(peeked); err != nil {
+		return err
+	}
+	return nil
+}
+
+func checkCRLF(buf []byte) error {
+	if string(buf[:]) != "\r\n" {
+		return errInvalidChunkEncoding
+	}
 	return nil
 }
 
@@ -264,4 +345,28 @@ func parseHexUint(v []byte) (n uint64, err error) {
 		n |= uint64(b)
 	}
 	return
+}
+
+func parseChunkChecksum(b *bufio.Reader) (checksumType, []byte) {
+	bytesRead, err := readChunkLine(b)
+	if err != nil {
+		return checksumNone, nil
+	}
+
+	parts := bytes.SplitN(bytesRead, []byte(":"), 2)
+	if len(parts) != 2 {
+		return checksumNone, nil
+	}
+
+	var (
+		checksumKey   = string(parts[0])
+		checksumValue = trimTrailingWhitespace(parts[1])
+	)
+
+	extractedAlgorithm, err := detectChecksumType(checksumKey)
+	if err != nil {
+		return checksumNone, nil
+	}
+
+	return extractedAlgorithm, checksumValue
 }

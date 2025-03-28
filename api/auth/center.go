@@ -72,18 +72,20 @@ const (
 	authHeaderPartsNum = 6
 	maxFormSizeMemory  = 50 * 1048576 // 50 MB
 
-	AmzAlgorithm              = "X-Amz-Algorithm"
-	AmzCredential             = "X-Amz-Credential"
-	AmzSignature              = "X-Amz-Signature"
-	AmzSignedHeaders          = "X-Amz-SignedHeaders"
-	AmzExpires                = "X-Amz-Expires"
-	AmzDate                   = "X-Amz-Date"
-	AmzContentSha256          = "X-Amz-Content-Sha256"
-	AuthorizationHdr          = "Authorization"
-	ContentTypeHdr            = "Content-Type"
-	ContentEncodingHdr        = "Content-Encoding"
-	ContentEncodingAwsChunked = "aws-chunked"
-	ContentEncodingChunked    = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
+	AmzAlgorithm                  = "X-Amz-Algorithm"
+	AmzCredential                 = "X-Amz-Credential"
+	AmzSignature                  = "X-Amz-Signature"
+	AmzSignedHeaders              = "X-Amz-SignedHeaders"
+	AmzExpires                    = "X-Amz-Expires"
+	AmzDate                       = "X-Amz-Date"
+	AmzContentSha256              = "X-Amz-Content-Sha256"
+	AuthorizationHdr              = "Authorization"
+	AmzTrailer                    = "x-amz-trailer"
+	ContentTypeHdr                = "Content-Type"
+	ContentEncodingHdr            = "Content-Encoding"
+	ContentEncodingAwsChunked     = "aws-chunked"
+	ContentEncodingChunked        = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
+	UnsignedPayloadMultipleChunks = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
 
 	timeFormatISO8601 = "20060102T150405Z"
 
@@ -192,6 +194,14 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			if strings.HasPrefix(r.Header.Get(ContentTypeHdr), "multipart/form-data") {
 				return c.checkFormData(r)
 			}
+
+			if r.Header.Get(AmzContentSha256) == UnsignedPayloadMultipleChunks {
+				r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, r.Header.Get(AmzTrailer))
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			return nil, ErrNoAuthorizationHeader
 		}
 		authHdr, err = c.parseAuthHeader(authHeaderField[0], r.Header.Get(AmzContentSha256))
@@ -226,22 +236,27 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		return nil, err
 	}
 
-	amzContent := r.Header.Get(AmzContentSha256)
+	if contentEncodingHdr := r.Header.Get(ContentEncodingHdr); contentEncodingHdr == ContentEncodingAwsChunked {
+		if amzContent := r.Header.Get(AmzContentSha256); amzContent == ContentEncodingChunked {
+			sig, err := hex.DecodeString(authHdr.SignatureV4)
+			if err != nil {
+				return nil, fmt.Errorf("decode auth header signature: %w", err)
+			}
 
-	if contentEncodingHdr := r.Header.Get(ContentEncodingHdr); contentEncodingHdr == ContentEncodingAwsChunked || amzContent == ContentEncodingChunked {
-		sig, err := hex.DecodeString(authHdr.SignatureV4)
-		if err != nil {
-			return nil, fmt.Errorf("DecodeString: %w", err)
+			appCreds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(authHdr.AccessKeyID, box.Gate.AccessKey, ""))
+			value, err := appCreds.Retrieve(r.Context())
+			if err != nil {
+				return nil, fmt.Errorf("retrieve aws credentials: %w", err)
+			}
+
+			chunkSigner := v4.NewChunkSigner(authHdr.Region, authHdr.Service, sig, signatureDateTime, value)
+			r.Body = v4.NewChunkedReader(r.Body, chunkSigner)
+		} else {
+			r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, clonedRequest.Header.Get(AmzTrailer))
+			if err != nil {
+				return nil, err
+			}
 		}
-
-		appCreds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(authHdr.AccessKeyID, box.Gate.AccessKey, ""))
-		value, err := appCreds.Retrieve(r.Context())
-		if err != nil {
-			return nil, fmt.Errorf("get credentials: %w", err)
-		}
-
-		streamSigner := v4.NewChunkSigner(authHdr.Region, authHdr.Service, sig, signatureDateTime, value)
-		r.Body = v4.NewChunkedReader(r.Body, streamSigner)
 	}
 
 	result := &Box{AccessBox: box}
