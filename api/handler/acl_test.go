@@ -1178,6 +1178,7 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
 	}
+	records = append(records, getAllowRecordForBucketSettings())
 	for _, op := range fullOps {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
