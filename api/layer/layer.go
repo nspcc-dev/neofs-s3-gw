@@ -773,6 +773,7 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 			object.AttributeFilePath,
 			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
+			attrS3DeleteMarker,
 		}
 
 		opts client.SearchObjectsOptions
@@ -803,14 +804,14 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 		return oid.ID{}, ErrNodeNotFound
 	}
 
-	var searchResults = make([]idSearchResult, 0, len(ids))
+	var searchResults = make([]versioningContainerIDSearchResult, 0, len(ids))
 
 	for _, item := range ids {
 		if len(item.Attributes) != len(returningAttributes) {
 			return oid.ID{}, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
 		}
 
-		var psr = idSearchResult{
+		var psr = versioningContainerIDSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
 		}
@@ -829,10 +830,12 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 			}
 		}
 
+		psr.IsDeleteMarker = item.Attributes[3] != ""
+
 		searchResults = append(searchResults, psr)
 	}
 
-	sortFunc := func(a, b idSearchResult) int {
+	sortFunc := func(a, b versioningContainerIDSearchResult) int {
 		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
 			return c
 		}
@@ -846,6 +849,10 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 	}
 
 	slices.SortFunc(searchResults, sortFunc)
+
+	if searchResults[0].IsDeleteMarker {
+		return oid.ID{}, ErrNodeNotFound
+	}
 
 	return searchResults[0].ID, nil
 }

@@ -87,11 +87,12 @@ type (
 		PayloadChecksum   string
 	}
 
-	idSearchResult struct {
+	versioningContainerIDSearchResult struct {
 		ID                oid.ID
 		FilePath          string
 		CreationEpoch     uint64
 		CreationTimestamp int64
+		IsDeleteMarker    bool
 	}
 
 	allVersionsSearchResult struct {
