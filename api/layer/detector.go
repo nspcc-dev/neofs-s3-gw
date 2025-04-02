@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"errors"
 	"io"
 	"net/http"
 )
@@ -45,7 +46,7 @@ func newDetector(reader io.Reader) *detector {
 
 func (d *detector) Detect() (string, error) {
 	n, err := d.Reader.Read(d.data)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		d.err = err
 		return "", err
 	}
