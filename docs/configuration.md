@@ -466,11 +466,13 @@ This value can be overridden with `X-Amz-Meta-Neofs-Copies-Number` header for `P
 ```yaml
 neofs:
   set_copies_number: 0
+  metadata_policy: ""
 ```
 
 | Parameter           | Type     | Default value | Description                                                                                                                                                               |
 |---------------------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `set_copies_number` | `uint32` | `0`           | Number of the object copies to consider PUT to NeoFS successful. <br/>Default value `0` means that object will be processed according to the container's placement policy |
+| `metadata_policy`   | `string` | ``            | An experimental bucket metadata policy setting with `strict`, `optimistic` and unset values.                                                                              |
 
 # `s3` section
 

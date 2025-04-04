@@ -142,6 +142,8 @@ neofs:
   # Number of the object copies to consider PUT to NeoFS successful.
   # `0` means that object will be processed according to the container's placement policy
   set_copies_number: 0
+  # An experimental bucket metadata policy setting with "strict", "optimistic" and unset values.
+  metadata_policy: ""
 
 # List of allowed AccessKeyID prefixes
 # If the parameter is omitted, S3 GW will accept all AccessKeyIDs
