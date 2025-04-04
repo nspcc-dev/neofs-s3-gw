@@ -112,11 +112,6 @@ type (
 	}
 )
 
-const (
-	attrS3VersioningState = "S3-versioning-state"
-	attrS3DeleteMarker    = "S3-delete-marker"
-)
-
 // objectHead returns all object's headers.
 func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
 	prm := PrmObjectRead{
@@ -237,7 +232,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 
 	r := p.Reader
 	if p.Encryption.Enabled() {
-		p.Header[AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		p.Header[s3headers.AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
 		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
 			return nil, fmt.Errorf("add encryption header: %w", err)
 		}
@@ -281,7 +276,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	if bktSettings.VersioningEnabled() {
-		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
+		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
@@ -351,7 +346,7 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 	)
 
 	if p.Encryption.Enabled() {
-		p.Header[AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		p.Header[s3headers.AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
 		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
 			return nil, fmt.Errorf("add encryption header: %w", err)
 		}
@@ -391,7 +386,7 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 	}
 
 	if versioningEnabled {
-		attributes = append(attributes, *object.NewAttribute(attrS3VersioningState, data.VersioningEnabled))
+		attributes = append(attributes, *object.NewAttribute(s3headers.AttributeVersioningState, data.VersioningEnabled))
 	}
 
 	headerObject.SetAttributes(attributes...)
@@ -414,9 +409,9 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 			object.AttributeFilePath,
 			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
-			attrS3VersioningState,
+			s3headers.AttributeVersioningState,
 			object.FilterPayloadSize,
-			attrS3DeleteMarker,
+			s3headers.AttributeDeleteMarker,
 		}
 
 		opts client.SearchObjectsOptions
@@ -436,7 +431,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
-		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -517,9 +512,9 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 			object.AttributeFilePath,
 			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
-			attrS3VersioningState,
+			s3headers.AttributeVersioningState,
 			object.FilterPayloadSize,
-			attrS3DeleteMarker,
+			s3headers.AttributeDeleteMarker,
 			s3headers.MetaType,
 		}
 
@@ -537,7 +532,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	}
 
 	if onlyUnversioned {
-		filters.AddFilter(attrS3VersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -646,8 +641,8 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
 	}
 
-	filters.AddFilter(attrS3VersioningState, data.VersioningEnabled, object.MatchStringEqual)
-	filters.AddFilter(AttributeObjectVersion, objectVersion, object.MatchStringEqual)
+	filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningEnabled, object.MatchStringEqual)
+	filters.AddFilter(s3headers.AttributeObjectVersion, objectVersion, object.MatchStringEqual)
 
 	filters.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
 
@@ -701,8 +696,8 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 			object.AttributeFilePath,
 			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
-			attrS3DeleteMarker,
-			AttributeDecryptedSize,
+			s3headers.AttributeDeleteMarker,
+			s3headers.AttributeDecryptedSize,
 			object.FilterPayloadSize,
 			object.FilterPayloadChecksum,
 		}
@@ -725,7 +720,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
-		filters.AddFilter(attrS3VersioningState, "", object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, nextCursor, err := n.neoFS.SearchObjectsV2WithCursor(ctx, bkt.CID, filters, returningAttributes, cursor, opts)
@@ -1108,7 +1103,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 
 func IsSystemHeader(key string) bool {
 	_, ok := api.SystemMetadata[key]
-	return ok || strings.HasPrefix(key, api.NeoFSSystemMetadataPrefix)
+	return ok || strings.HasPrefix(key, s3headers.NeoFSSystemMetadataPrefix)
 }
 
 func shouldSkip(result prefixSearchResult, p allObjectParams, existed map[string]struct{}) bool {
