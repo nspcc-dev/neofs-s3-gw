@@ -57,4 +57,19 @@ const (
 const (
 	// BucketSettingsVersioning contains versioning setting for bucket.
 	BucketSettingsVersioning = "s3bsVersioning"
+
+	AttributeComplianceMode     = ".s3-compliance-mode"
+	AttributeRetentionUntilMode = ".s3-retention-until"
+	AttributeObjectVersion      = ".s3-object-version"
+	AttributeObjectNonce        = "__NEOFS__NONCE"
+
+	NeoFSSystemMetadataPrefix = "S3-"
+
+	AttributeEncryptionAlgorithm = NeoFSSystemMetadataPrefix + "Algorithm"
+	AttributeDecryptedSize       = NeoFSSystemMetadataPrefix + "Decrypted-Size"
+	AttributeHMACSalt            = NeoFSSystemMetadataPrefix + "HMAC-Salt"
+	AttributeHMACKey             = NeoFSSystemMetadataPrefix + "HMAC-Key"
+	AttributeVersioningState     = NeoFSSystemMetadataPrefix + "versioning-state"
+	AttributeDeleteMarker        = NeoFSSystemMetadataPrefix + "delete-marker"
+	UploadCompletedParts         = NeoFSSystemMetadataPrefix + "Completed-Parts"
 )

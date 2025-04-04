@@ -21,12 +21,6 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
-const (
-	AttributeComplianceMode     = ".s3-compliance-mode"
-	AttributeRetentionUntilMode = ".s3-retention-until"
-	AttributeObjectVersion      = ".s3-object-version"
-)
-
 type PutLockInfoParams struct {
 	ObjVersion   *ObjectVersion
 	NewLock      *data.ObjectLock
@@ -116,8 +110,8 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 			object.AttributeExpirationEpoch,
-			AttributeComplianceMode,
-			AttributeRetentionUntilMode,
+			s3headers.AttributeComplianceMode,
+			s3headers.AttributeRetentionUntilMode,
 		}
 
 		opts client.SearchObjectsOptions
@@ -131,7 +125,7 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeLock, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
 	if version != "" {
-		filters.AddFilter(AttributeObjectVersion, version, object.MatchStringEqual)
+		filters.AddFilter(s3headers.AttributeObjectVersion, version, object.MatchStringEqual)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -238,8 +232,8 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	}
 
 	if objectVersion != "" {
-		prm.Attributes[AttributeObjectVersion] = objectVersion
-		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
+		prm.Attributes[s3headers.AttributeObjectVersion] = objectVersion
+		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 	}
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeLock
@@ -361,10 +355,10 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
 
-		result[AttributeRetentionUntilMode] = lock.Retention.Until.UTC().Format(time.RFC3339)
+		result[s3headers.AttributeRetentionUntilMode] = lock.Retention.Until.UTC().Format(time.RFC3339)
 
 		if lock.Retention.IsCompliance {
-			result[AttributeComplianceMode] = "true"
+			result[s3headers.AttributeComplianceMode] = "true"
 		}
 	}
 

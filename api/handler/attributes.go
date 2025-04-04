@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"go.uber.org/zap"
 )
 
@@ -206,7 +207,7 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 }
 
 func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectParts, error) {
-	completedParts, ok := info.Headers[layer.UploadCompletedParts]
+	completedParts, ok := info.Headers[s3headers.UploadCompletedParts]
 	if !ok {
 		return nil, nil
 	}
