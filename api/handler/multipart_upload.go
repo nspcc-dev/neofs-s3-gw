@@ -235,6 +235,12 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	contentLength, err := contentLengthFromRequest(r)
+	if err != nil {
+		h.logAndSendError(w, "content length parse failed", reqInfo, err)
+		return
+	}
+
 	p := &layer.UploadPartParams{
 		Info: &layer.UploadInfoParams{
 			UploadID: uploadID,
@@ -242,7 +248,7 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 			Key:      reqInfo.ObjectName,
 		},
 		PartNumber: partNumber,
-		Size:       r.ContentLength,
+		Size:       contentLength,
 		Reader:     r.Body,
 	}
 

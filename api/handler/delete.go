@@ -159,13 +159,6 @@ func isErrObjectLocked(err error) bool {
 func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
-	// Content-Md5 is required and should be set
-	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-	if _, ok := r.Header[api.ContentMD5]; !ok {
-		h.logAndSendError(w, "missing Content-MD5", reqInfo, s3errors.GetAPIError(s3errors.ErrMissingContentMD5))
-		return
-	}
-
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
