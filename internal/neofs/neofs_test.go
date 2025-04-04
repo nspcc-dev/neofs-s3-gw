@@ -15,6 +15,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
@@ -265,7 +266,7 @@ func TestObjectNonce(t *testing.T) {
 		obj.SetPayload(payload)
 
 		var (
-			attr  = object.NewAttribute(objectNonceAttribute, base64.StdEncoding.EncodeToString(nonce))
+			attr  = object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
 			attrs = []object.Attribute{*attrTS, *attr}
 		)
 

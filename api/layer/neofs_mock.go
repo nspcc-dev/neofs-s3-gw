@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
@@ -48,8 +49,7 @@ type searchedItem struct {
 }
 
 const (
-	objectNonceSize      = 8
-	objectNonceAttribute = "__NEOFS__NONCE"
+	objectNonceSize = 8
 )
 
 func NewTestNeoFS(signer neofscrypto.Signer) *TestNeoFS {
@@ -296,7 +296,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	if _, err := rand.Read(nonce); err != nil {
 		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
 	}
-	objectNonceAttr := object.NewAttribute(objectNonceAttribute, base64.StdEncoding.EncodeToString(nonce))
+	objectNonceAttr := object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
 	attrs = append(attrs, *objectNonceAttr)
 
 	obj := object.New()

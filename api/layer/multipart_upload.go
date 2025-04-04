@@ -36,8 +36,6 @@ import (
 )
 
 const (
-	UploadCompletedParts = "S3-Completed-Parts"
-
 	metaPrefix = "meta-"
 	aclPrefix  = "acl-"
 
@@ -261,7 +259,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ecnrypted reader: %w", err)
 		}
-		attributes[AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		attributes[s3headers.AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
 		payloadReader = r
 		p.Size = int64(encSize)
 	}
@@ -429,7 +427,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	)
 
 	if p.Encryption.Enabled() {
-		attributes[AttributeDecryptedSize] = "0"
+		attributes[s3headers.AttributeDecryptedSize] = "0"
 	}
 
 	if n.neoFS.IsHomomorphicHashingEnabled() {
@@ -446,9 +444,9 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	}
 
 	if encInfo.Enabled {
-		attrs = append(attrs, *object.NewAttribute(AttributeEncryptionAlgorithm, encInfo.Algorithm))
-		attrs = append(attrs, *object.NewAttribute(AttributeHMACKey, encInfo.HMACKey))
-		attrs = append(attrs, *object.NewAttribute(AttributeHMACSalt, encInfo.HMACSalt))
+		attrs = append(attrs, *object.NewAttribute(s3headers.AttributeEncryptionAlgorithm, encInfo.Algorithm))
+		attrs = append(attrs, *object.NewAttribute(s3headers.AttributeHMACKey, encInfo.HMACKey))
+		attrs = append(attrs, *object.NewAttribute(s3headers.AttributeHMACSalt, encInfo.HMACSalt))
 	}
 
 	var hashlessHeaderObject object.Object
@@ -948,10 +946,10 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 			return nil, fmt.Errorf("convert multipart %s MultipartTotalSize %s: %w", uploadID, element.Attributes[s3headers.MultipartTotalSize], err)
 		}
 
-		if decSize, ok := element.Attributes[AttributeDecryptedSize]; ok && decSize != "" {
+		if decSize, ok := element.Attributes[s3headers.AttributeDecryptedSize]; ok && decSize != "" {
 			element.TotalSize, err = strconv.ParseInt(decSize, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("convert multipart %s AttributeDecryptedSize %s: %w", uploadID, element.Attributes[AttributeDecryptedSize], err)
+				return nil, fmt.Errorf("convert multipart %s s3headers.AttributeDecryptedSize %s: %w", uploadID, element.Attributes[s3headers.AttributeDecryptedSize], err)
 			}
 		}
 
@@ -1029,7 +1027,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			s3headers.MultipartPartHash,
 			s3headers.MultipartElementID,
 			s3headers.MultipartTotalSize,
-			AttributeDecryptedSize,
+			s3headers.AttributeDecryptedSize,
 		}
 	)
 
@@ -1517,7 +1515,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	initMetadata := make(map[string]string, len(multipartInfo.Meta)+1)
-	initMetadata[UploadCompletedParts] = completedPartsHeader.String()
+	initMetadata[s3headers.UploadCompletedParts] = completedPartsHeader.String()
 
 	uploadData := &UploadData{
 		TagSet:     make(map[string]string),
@@ -1534,10 +1532,10 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	if encInfo.Enabled {
-		initMetadata[AttributeEncryptionAlgorithm] = encInfo.Algorithm
-		initMetadata[AttributeHMACKey] = encInfo.HMACKey
-		initMetadata[AttributeHMACSalt] = encInfo.HMACSalt
-		initMetadata[AttributeDecryptedSize] = strconv.FormatInt(multipartObjetSize, 10)
+		initMetadata[s3headers.AttributeEncryptionAlgorithm] = encInfo.Algorithm
+		initMetadata[s3headers.AttributeHMACKey] = encInfo.HMACKey
+		initMetadata[s3headers.AttributeHMACSalt] = encInfo.HMACSalt
+		initMetadata[s3headers.AttributeDecryptedSize] = strconv.FormatInt(multipartObjetSize, 10)
 		n.log.Debug("big object", zap.Int64("size", multipartObjetSize), zap.Uint64("enc_size", encMultipartObjectSize))
 
 		multipartObjetSize = int64(encMultipartObjectSize)

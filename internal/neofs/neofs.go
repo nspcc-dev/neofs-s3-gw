@@ -19,6 +19,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
@@ -61,8 +62,7 @@ type NeoFS struct {
 }
 
 const (
-	objectNonceSize      = 8
-	objectNonceAttribute = "__NEOFS__NONCE"
+	objectNonceSize = 8
 
 	containerMetaDataPolicyAttribute  = "__NEOFS__METAINFO_CONSISTENCY"
 	ContainerMetaDataPolicyStrict     = "strict"
@@ -289,7 +289,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	}
 
 	uniqAttributes[object.AttributeTimestamp] = strconv.FormatInt(creationTime.Unix(), 10)
-	uniqAttributes[objectNonceAttribute] = base64.StdEncoding.EncodeToString(nonce)
+	uniqAttributes[s3headers.AttributeObjectNonce] = base64.StdEncoding.EncodeToString(nonce)
 
 	if prm.Filepath != "" {
 		uniqAttributes[object.AttributeFilePath] = prm.Filepath

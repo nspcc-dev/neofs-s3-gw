@@ -56,8 +56,8 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 	}
 
 	if p.ObjectVersion.VersionID != "" {
-		prm.Attributes[AttributeObjectVersion] = p.ObjectVersion.VersionID
-		prm.Attributes[attrS3VersioningState] = data.VersioningEnabled
+		prm.Attributes[s3headers.AttributeObjectVersion] = p.ObjectVersion.VersionID
+		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 	}
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
@@ -100,7 +100,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.ObjectVersion.VersionID != "" {
-		filters.AddFilter(AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
+		filters.AddFilter(s3headers.AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, p.ObjectVersion.BktInfo.CID, filters, returningAttributes, opts)
@@ -195,7 +195,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.VersionID != "" {
-		fs.AddFilter(AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+		fs.AddFilter(s3headers.AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
 	}
 
 	var opts client.SearchObjectsOptions
