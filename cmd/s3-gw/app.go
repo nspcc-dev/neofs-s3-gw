@@ -114,9 +114,18 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	}
 
 	neofsCfg := neofs.Config{
-		MaxObjectSize:        int64(ni.MaxObjectSize()),
-		IsSlicerEnabled:      v.GetBool(cfgSlicerEnabled),
-		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
+		MaxObjectSize:           int64(ni.MaxObjectSize()),
+		IsSlicerEnabled:         v.GetBool(cfgSlicerEnabled),
+		IsHomomorphicEnabled:    !ni.HomomorphicHashingDisabled(),
+		ContainerMetadataPolicy: v.GetString(cfgContainerMetadataPolicy),
+	}
+
+	switch neofsCfg.ContainerMetadataPolicy {
+	case neofs.ContainerMetaDataPolicyOptimistic:
+	case neofs.ContainerMetaDataPolicyStrict:
+	case "":
+	default:
+		log.logger.Fatal("unsupported config value", zap.String("option", cfgContainerMetadataPolicy))
 	}
 
 	var (

@@ -126,6 +126,9 @@ const ( // Settings.
 	// Number of the object copies to consider PUT to NeoFS successful.
 	cfgSetCopiesNumber = "neofs.set_copies_number"
 
+	// cfgContainerMetadataPolicy is an experimental setting with "strict", "optimistic" and unset values.
+	cfgContainerMetadataPolicy = "neofs.metadata_policy"
+
 	// Maximum number of objects to be deleted per request limit by this value.
 	cfgMaxObjectToDeletePerRequest = "s3.max_object_to_delete_per_request"
 

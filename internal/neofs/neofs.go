@@ -42,9 +42,10 @@ import (
 
 // Config allows to configure some [NeoFS] parameters.
 type Config struct {
-	MaxObjectSize        int64
-	IsSlicerEnabled      bool
-	IsHomomorphicEnabled bool
+	MaxObjectSize           int64
+	IsSlicerEnabled         bool
+	IsHomomorphicEnabled    bool
+	ContainerMetadataPolicy string
 }
 
 // NeoFS represents virtual connection to the NeoFS network.
@@ -62,6 +63,10 @@ type NeoFS struct {
 const (
 	objectNonceSize      = 8
 	objectNonceAttribute = "__NEOFS__NONCE"
+
+	containerMetaDataPolicyAttribute  = "__NEOFS__METAINFO_CONSISTENCY"
+	ContainerMetaDataPolicyStrict     = "strict"
+	ContainerMetaDataPolicyOptimistic = "optimistic"
 )
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
@@ -172,6 +177,11 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	cnr.SetAttribute(layer.AttributeOwnerPublicKey, hex.EncodeToString(prm.CreatorPubKey.Bytes()))
+
+	if x.cfg.ContainerMetadataPolicy == ContainerMetaDataPolicyStrict ||
+		x.cfg.ContainerMetadataPolicy == ContainerMetaDataPolicyOptimistic {
+		cnr.SetAttribute(containerMetaDataPolicyAttribute, x.cfg.ContainerMetadataPolicy)
+	}
 
 	err := client.SyncContainerWithNetwork(ctx, &cnr, x.pool)
 	if err != nil {
