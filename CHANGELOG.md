@@ -5,8 +5,6 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- `logger.encoding` config option (#1100)
-- `logger.timestamp` config option (#1100)
 
 ### Changed
 
@@ -15,8 +13,37 @@ This document outlines major changes between releases.
 ### Updated
 
 ### Removed
+
+## [0.36.0] - 2025-04-04
+
+This release no longer uses the experimental tree service for any operations,
+so it can be used with any standard 0.45.0+ NeoFS node. Some fixes and
+configuration improvements are included as well.
+
+### Added
+- `logger.encoding` config option (#1100)
+- `logger.timestamp` config option (#1100)
+- Experimental `neofs.metadata_policy` config option (#1117)
+
+### Changed
+- Bucket settings storage scheme (#1104, #1106, #1109, #1107)
+
+### Fixed
+- Some missing metrics (#1098)
+- Locks and tags for versioned objects (#1110)
+- Inability to get object because of incorrect access rights (#1112)
+- Object copying in versioned buckets (#1114)
+
+### Updated
+- github.com/urfave/cli/v2 dependency to v2.27.6 (#1095)
+- github.com/prometheus/client_golang dependency to v1.21.1 (#1095)
+- github.com/spf13/pflag dependency to v1.0.6 (#1095)
+- google.golang.org/grpc dependency to v1.71.0 (#1095)
+
+### Removed
 - neofs.epoch_update_interval option (#1094)
 - tree option (#1070)
+- Some unused object attributes (#1097)
 
 ## [0.35.0] - 2025-03-07
 
@@ -731,4 +758,5 @@ releases.
 [0.34.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.33.0...v0.34.0
 [0.34.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.0...v0.34.1
 [0.35.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.1...v0.35.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.35.0...master
+[0.36.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.35.0...v0.36.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.0...master
