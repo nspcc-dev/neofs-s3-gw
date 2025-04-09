@@ -275,8 +275,7 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 }
 
 func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	owner := n.Owner(ctx)
-	if settings := n.cache.GetSettings(owner, bktInfo); settings != nil {
+	if settings := n.cache.GetSettings(bktInfo); settings != nil {
 		return settings, nil
 	}
 
@@ -291,6 +290,8 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 	}
 
 	if id.IsZero() {
+		n.cache.PutSettings(bktInfo, &settings)
+
 		return &settings, nil
 	}
 
@@ -316,7 +317,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	settings.LockConfiguration = &olc
 
-	n.cache.PutSettings(owner, bktInfo, &settings)
+	n.cache.PutSettings(bktInfo, &settings)
 
 	return &settings, nil
 }
@@ -344,7 +345,7 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("create bucket settings object: %w", err)
 	}
 
-	n.cache.PutSettings(n.Owner(ctx), p.BktInfo, p.Settings)
+	n.cache.PutSettings(p.BktInfo, p.Settings)
 
 	return nil
 }

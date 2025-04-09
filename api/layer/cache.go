@@ -187,24 +187,16 @@ func (c *Cache) PutLockInfo(owner user.ID, key string, lockInfo *data.LockInfo) 
 	}
 }
 
-func (c *Cache) GetSettings(owner user.ID, bktInfo *data.BucketInfo) *data.BucketSettings {
+func (c *Cache) GetSettings(bktInfo *data.BucketInfo) *data.BucketSettings {
 	key := bktInfo.Name + bktInfo.SettingsObjectName()
-
-	if !c.accessCache.Get(owner, key) {
-		return nil
-	}
 
 	return c.systemCache.GetSettings(key)
 }
 
-func (c *Cache) PutSettings(owner user.ID, bktInfo *data.BucketInfo, settings *data.BucketSettings) {
+func (c *Cache) PutSettings(bktInfo *data.BucketInfo, settings *data.BucketSettings) {
 	key := bktInfo.Name + bktInfo.SettingsObjectName()
 	if err := c.systemCache.PutSettings(key, settings); err != nil {
 		c.logger.Warn("couldn't cache bucket settings", zap.String("bucket", bktInfo.Name), zap.Error(err))
-	}
-
-	if err := c.accessCache.Put(owner, key); err != nil {
-		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
 	}
 }
 
