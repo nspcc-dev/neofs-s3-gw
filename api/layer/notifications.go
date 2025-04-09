@@ -45,6 +45,11 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 }
 
 func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
+	owner := n.Owner(ctx)
+	if conf := n.cache.GetNotificationConfiguration(owner, bktInfo); conf != nil {
+		return conf, nil
+	}
+
 	var (
 		err  error
 		conf data.NotificationConfiguration
