@@ -233,6 +233,10 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 		owner = n.Owner(ctx)
 	)
 
+	if tags := n.cache.GetTagging(owner, bucketTaggingCacheKey(bktInfo.CID)); tags != nil {
+		return tags, nil
+	}
+
 	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketTags)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)

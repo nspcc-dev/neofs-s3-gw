@@ -25,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/models"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
@@ -288,6 +289,11 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		_, err2 := io.Copy(io.Discard, r.Body)
 		err3 := r.Body.Close()
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			h.logAndSendError(w, "could not upload object", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied), zap.Error(err))
+			return
+		}
+
 		h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
 		return
 	}
