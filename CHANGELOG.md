@@ -14,6 +14,12 @@ This document outlines major changes between releases.
 
 ### Removed
 
+## [0.36.1] - 2025-04-09
+
+### Fixed
+- Performance regresssion relative to 0.35.0 caused by incorrect settings cache (#1121)
+- Incorrect 500 status code for unsuccessful object puts caused by missing access permissions (#1121)
+
 ## [0.36.0] - 2025-04-04
 
 This release no longer uses the experimental tree service for any operations,
@@ -759,4 +765,5 @@ releases.
 [0.34.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.0...v0.34.1
 [0.35.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.1...v0.35.0
 [0.36.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.35.0...v0.36.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.0...master
+[0.36.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.0...v0.36.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.1...master
