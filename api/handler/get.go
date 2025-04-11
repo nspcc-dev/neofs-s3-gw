@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"go.uber.org/zap"
 )
 
@@ -88,8 +89,8 @@ func writeHeaders(h http.Header, requestHeader http.Header, info *data.ObjectInf
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 
-	if len(info.Headers[layer.AttributeEncryptionAlgorithm]) > 0 {
-		h.Set(api.ContentLength, info.Headers[layer.AttributeDecryptedSize])
+	if len(info.Headers[s3headers.AttributeEncryptionAlgorithm]) > 0 {
+		h.Set(api.ContentLength, info.Headers[s3headers.AttributeDecryptedSize])
 		addSSECHeaders(h, requestHeader)
 	} else {
 		h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
@@ -186,7 +187,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	fullSize := info.Size
 	if encryptionParams.Enabled() {
-		if fullSize, err = strconv.ParseInt(info.Headers[layer.AttributeDecryptedSize], 10, 64); err != nil {
+		if fullSize, err = strconv.ParseInt(info.Headers[s3headers.AttributeDecryptedSize], 10, 64); err != nil {
 			h.logAndSendError(w, "invalid decrypted size header", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 			return
 		}

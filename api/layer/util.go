@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer/encryption"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 )
@@ -64,7 +65,7 @@ func extractHeaders(headers map[string]string) (map[string]string, string, time.
 	)
 
 	delete(headers, object.AttributeFilePath)
-	delete(headers, objectNonceAttribute)
+	delete(headers, s3headers.AttributeObjectNonce)
 
 	if contentType, ok := headers[object.AttributeContentType]; ok {
 		mimeType = contentType
@@ -89,7 +90,7 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 	payloadChecksum, _ := meta.PayloadChecksum()
 
 	var versionID = data.UnversionedObjectVersionID
-	if _, ok := attributes[attrS3VersioningState]; ok {
+	if _, ok := attributes[s3headers.AttributeVersioningState]; ok {
 		versionID = objID.EncodeToString()
 	}
 
@@ -112,23 +113,23 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 }
 
 func FormEncryptionInfo(headers map[string]string) encryption.ObjectEncryption {
-	algorithm := headers[AttributeEncryptionAlgorithm]
+	algorithm := headers[s3headers.AttributeEncryptionAlgorithm]
 	return encryption.ObjectEncryption{
 		Enabled:   len(algorithm) > 0,
 		Algorithm: algorithm,
-		HMACKey:   headers[AttributeHMACKey],
-		HMACSalt:  headers[AttributeHMACSalt],
+		HMACKey:   headers[s3headers.AttributeHMACKey],
+		HMACSalt:  headers[s3headers.AttributeHMACSalt],
 	}
 }
 
 func addEncryptionHeaders(meta map[string]string, enc encryption.Params) error {
-	meta[AttributeEncryptionAlgorithm] = AESEncryptionAlgorithm
+	meta[s3headers.AttributeEncryptionAlgorithm] = AESEncryptionAlgorithm
 	hmacKey, hmacSalt, err := enc.HMAC()
 	if err != nil {
 		return fmt.Errorf("get hmac: %w", err)
 	}
-	meta[AttributeHMACKey] = hex.EncodeToString(hmacKey)
-	meta[AttributeHMACSalt] = hex.EncodeToString(hmacSalt)
+	meta[s3headers.AttributeHMACKey] = hex.EncodeToString(hmacKey)
+	meta[s3headers.AttributeHMACSalt] = hex.EncodeToString(hmacSalt)
 
 	return nil
 }

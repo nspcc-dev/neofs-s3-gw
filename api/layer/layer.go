@@ -278,13 +278,8 @@ type (
 const (
 	tagPrefix = "S3-Tag-"
 
-	AESEncryptionAlgorithm       = "AES256"
-	AESKeySize                   = 32
-	AttributeEncryptionAlgorithm = api.NeoFSSystemMetadataPrefix + "Algorithm"
-	AttributeDecryptedSize       = api.NeoFSSystemMetadataPrefix + "Decrypted-Size"
-	AttributeHMACSalt            = api.NeoFSSystemMetadataPrefix + "HMAC-Salt"
-	AttributeHMACKey             = api.NeoFSSystemMetadataPrefix + "HMAC-Key"
-
+	AESEncryptionAlgorithm     = "AES256"
+	AESKeySize                 = 32
 	AttributeNeofsCopiesNumber = "neofs-copies-number" // such format to match X-Amz-Meta-Neofs-Copies-Number header
 )
 
@@ -536,12 +531,12 @@ func getDecrypter(p *GetObjectParams) (*encryption.Decrypter, error) {
 		encRange = &encryption.Range{Start: p.Range.Start, End: p.Range.End}
 	}
 
-	header := p.ObjectInfo.Headers[UploadCompletedParts]
+	header := p.ObjectInfo.Headers[s3headers.UploadCompletedParts]
 	if len(header) == 0 {
 		return encryption.NewDecrypter(p.Encryption, uint64(p.ObjectInfo.Size), encRange)
 	}
 
-	decryptedObjectSize, err := strconv.ParseUint(p.ObjectInfo.Headers[AttributeDecryptedSize], 10, 64)
+	decryptedObjectSize, err := strconv.ParseUint(p.ObjectInfo.Headers[s3headers.AttributeDecryptedSize], 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse decrypted size: %w", err)
 	}
@@ -773,7 +768,7 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 			object.AttributeFilePath,
 			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
-			attrS3DeleteMarker,
+			s3headers.AttributeDeleteMarker,
 		}
 
 		opts client.SearchObjectsOptions
@@ -788,7 +783,7 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if !p.FindNullVersion {
-		filters.AddFilter(attrS3VersioningState, data.VersioningEnabled, object.MatchStringEqual)
+		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningEnabled, object.MatchStringEqual)
 	}
 
 	ids, err := n.neoFS.SearchObjectsV2(ctx, p.CID, filters, returningAttributes, opts)
@@ -1072,7 +1067,7 @@ func (n *layer) putDeleteMarker(ctx context.Context, bktInfo *data.BucketInfo, o
 			Object:  objectName,
 			Reader:  bytes.NewReader(nil),
 			Header: map[string]string{
-				attrS3DeleteMarker: ts,
+				s3headers.AttributeDeleteMarker: ts,
 			},
 		}
 	)
