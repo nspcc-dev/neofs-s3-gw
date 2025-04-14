@@ -2,8 +2,12 @@ package auth
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"slices"
@@ -12,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	v4aws "github.com/aws/aws-sdk-go/aws/signer/v4"
+	v4amz "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
@@ -54,7 +58,7 @@ func TestAuthHeaderParse(t *testing.T) {
 			expected: nil,
 		},
 	} {
-		authHeader, err := center.parseAuthHeader(tc.header)
+		authHeader, err := center.parseAuthHeader(tc.header, "")
 		require.Equal(t, tc.err, err, tc.header)
 		require.Equal(t, tc.expected, authHeader, tc.header)
 	}
@@ -118,7 +122,9 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 	}
 
 	chunkOneBody := append([]byte("10000;chunk-signature=ad80c730a21e5b8d04586a2213dd63b9a0e99e0e2307b0ade35a65485a288648\n"), chunkOnePayload...)
-	awsCreds := credentials.NewStaticCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "")
+	appCreds := credentials.NewStaticCredentialsProvider("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "")
+	awsCreds, err := appCreds.Retrieve(context.Background())
+	require.NoError(t, err)
 
 	ts, err := time.Parse(timeFormatISO8601, "20130524T000000Z")
 	require.NoError(t, err)
@@ -210,7 +216,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 		payload := bytes.NewBuffer(nil)
 		_, err = io.CopyBuffer(payload, chunkedReader, chunk)
 
-		require.ErrorIs(t, err, v4.ErrMissingSeparator)
+		require.ErrorIs(t, err, v4.ErrInvalidByteInChunkLength)
 	})
 
 	t.Run("err missing equality byte", func(t *testing.T) {
@@ -314,7 +320,7 @@ func TestAwsEncodedChunkReader(t *testing.T) {
 		payload := bytes.NewBuffer(nil)
 		_, err = io.CopyBuffer(payload, chunkedReader, chunk)
 
-		require.ErrorIs(t, err, v4.ErrNoChunksSeparator)
+		require.ErrorIs(t, err, v4.ErrInvalidChunkSignature)
 	})
 
 	t.Run("err chunk header too long", func(t *testing.T) {
@@ -354,6 +360,7 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	t.Skipf("Only for manual launch")
 
 	ts := time.Now()
+	ctx := context.Background()
 
 	host := "http://localhost:19080"
 	bucketName := "heh1701422026"
@@ -376,15 +383,22 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	req.Header.Set("content-encoding", "aws-chunked")
 	req.Header.Set("x-amz-decoded-content-length", strconv.Itoa(totalPayloadLength))
 
-	awsCreds := credentials.NewStaticCredentials(
+	appCreds := credentials.NewStaticCredentialsProvider(
 		"6cpBf2jzHdD2MJHsjwLuVYYDAPJcfsJ5oufJWnHhrSBQ0FPjWXxmLmvKDAyhr1SEwnfKLJq3twKzuWG7f24qfyWcD", // access_key_id
 		"79488f248493cb5175ea079a12a3e08015021d9c710a064017e1da6a2b0ae111",                          // secret_access_key
 		"")
 
-	signer := v4aws.NewSigner(awsCreds)
+	awsCreds, err := appCreds.Retrieve(ctx)
+	require.NoError(t, err)
 
-	signer.DisableURIPathEscaping = true
-	_, err = signer.Sign(req, nil, "s3", "us-east-1", ts)
+	signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
+		signer.DisableURIPathEscaping = true
+	})
+
+	h := sha256.New()
+	h.Write(payload)
+
+	err = signer.SignHTTP(ctx, awsCreds, req, hex.EncodeToString(h.Sum(nil)), "s3", "us-east-1", ts)
 	require.NoError(t, err)
 
 	reg := NewRegexpMatcher(authorizationFieldRegexp)
@@ -446,4 +460,48 @@ func chunkSlice(payload []byte, chunkSize int) [][]byte {
 	}
 
 	return result
+}
+
+func TestAwsEncodedChunkReaderWithTrailer(t *testing.T) {
+	chunk1 := "2000\r\n" + strings.Repeat("a", 8192) + "\r\n"
+	chunk2 := "2000\r\n" + strings.Repeat("a", 8192) + "\r\n"
+	chunk3 := "400\r\n" + strings.Repeat("a", 1024) + "\r\n"
+	chunk4 := "0\r\n"
+
+	var (
+		objectPayload = strings.Repeat("a", 17408)
+		writer        = crc32.NewIEEE()
+		checksumType  = "x-amz-checksum-crc32"
+	)
+
+	_, err := writer.Write([]byte(objectPayload))
+	require.NoError(t, err)
+
+	var (
+		checksum              = writer.Sum(nil)
+		base64EncodedChecksum = base64.StdEncoding.EncodeToString(checksum)
+		trailer               = checksumType + ":" + base64EncodedChecksum + "\n\r\n\r\n\r\n"
+		requestPayload        = chunk1 + chunk2 + chunk3 + chunk4 + trailer
+	)
+
+	t.Run("correct signature", func(t *testing.T) {
+		buf := bytes.NewBuffer(nil)
+
+		_, err = buf.Write([]byte(requestPayload))
+		require.NoError(t, err)
+
+		chunkedReader, err := v4.NewChunkedReaderWithTrail(io.NopCloser(buf), checksumType)
+		require.NoError(t, err)
+
+		defer func() {
+			_ = chunkedReader.Close()
+		}()
+
+		chunk := make([]byte, 4096)
+		payload2 := bytes.NewBuffer(nil)
+		_, err = io.CopyBuffer(payload2, chunkedReader, chunk)
+		require.NoError(t, err)
+
+		require.Equal(t, []byte(objectPayload), payload2.Bytes())
+	})
 }

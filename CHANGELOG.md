@@ -5,8 +5,10 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- Support of `x-amz-content-sha256` header with `STREAMING-UNSIGNED-PAYLOAD-TRAILER` value (#1028)
 
 ### Changed
+- AWS SDK migrated to V2 (#1028)
 
 ### Fixed
 
