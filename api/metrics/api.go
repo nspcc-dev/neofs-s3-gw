@@ -69,7 +69,7 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	for api, value := range httpStatsMetric.currentS3Requests.Load() {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("neofs_s3", "requests", "current"),
+				prometheus.BuildFQName(namespace, "requests", "current"),
 				"Total number of running s3 requests in current NeoFS S3 Gate instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
@@ -81,7 +81,7 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	for api, value := range httpStatsMetric.totalS3Requests.Load() {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("neofs_s3", "requests", "total"),
+				prometheus.BuildFQName(namespace, "requests", "total"),
 				"Total number of s3 requests in current NeoFS S3 Gate instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
@@ -93,7 +93,7 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 	for api, value := range httpStatsMetric.totalS3Errors.Load() {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("neofs_s3", "errors", "total"),
+				prometheus.BuildFQName(namespace, "errors", "total"),
 				"Total number of s3 errors in current NeoFS S3 Gate instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,

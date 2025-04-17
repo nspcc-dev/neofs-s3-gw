@@ -9,10 +9,14 @@ type stats struct {
 	desc *prometheus.Desc
 }
 
+const (
+	namespace = "neofs_s3"
+)
+
 var (
 	versionInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: "neofs_s3",
+			Namespace: namespace,
 			Name:      "version",
 			Help:      "Version of current NeoFS S3 Gate instance",
 		},
@@ -23,7 +27,7 @@ var (
 	)
 
 	statsMetrics = &stats{
-		desc: prometheus.NewDesc("neofs_s3_stats", "Statistics exposed by NeoFS S3 Gate instance", nil, nil),
+		desc: prometheus.NewDesc(namespace+"_stats", "Statistics exposed by NeoFS S3 Gate instance", nil, nil),
 	}
 )
 
@@ -40,7 +44,7 @@ func collectNetworkMetrics(ch chan<- prometheus.Metric) {
 	// Network Sent/Received Bytes (Outbound)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("neofs_s3", "tx", "bytes_total"),
+			prometheus.BuildFQName(namespace, "tx", "bytes_total"),
 			"Total number of bytes sent by current NeoFS S3 Gate instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -49,7 +53,7 @@ func collectNetworkMetrics(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("neofs_s3", "rx", "bytes_total"),
+			prometheus.BuildFQName(namespace, "rx", "bytes_total"),
 			"Total number of bytes received by current NeoFS S3 Gate instance",
 			nil, nil),
 		prometheus.CounterValue,
