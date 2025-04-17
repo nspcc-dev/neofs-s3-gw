@@ -26,6 +26,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/api/handler"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/metrics"
 	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
@@ -34,7 +35,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
-	"github.com/nspcc-dev/neofs-sdk-go/stat"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -43,15 +43,14 @@ import (
 type (
 	// App is the main application structure.
 	App struct {
-		ctr      auth.Center
-		log      *zap.Logger
-		cfg      *viper.Viper
-		pool     *pool.Pool
-		poolStat *stat.PoolStat
-		gateKey  *keys.PrivateKey
-		nc       *notifications.Controller
-		obj      layer.Client
-		api      api.Handler
+		ctr     auth.Center
+		log     *zap.Logger
+		cfg     *viper.Viper
+		pool    *pool.Pool
+		gateKey *keys.PrivateKey
+		nc      *notifications.Controller
+		obj     layer.Client
+		api     api.Handler
 
 		servers []Server
 
@@ -96,7 +95,7 @@ type (
 )
 
 func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
-	conns, key, poolStat := getPool(ctx, log.logger, v)
+	conns, key := getPool(ctx, log.logger, v)
 
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
@@ -160,12 +159,11 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
 
 	app := &App{
-		ctr:      ctr,
-		log:      log.logger,
-		cfg:      v,
-		pool:     conns,
-		poolStat: poolStat,
-		gateKey:  key,
+		ctr:     ctr,
+		log:     log.logger,
+		cfg:     v,
+		pool:    conns,
+		gateKey: key,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
@@ -298,7 +296,7 @@ func (a *App) initAPI(ctx context.Context, anonSigner user.Signer, neoFS *neofs.
 }
 
 func (a *App) initMetrics() {
-	gateMetricsProvider := newGateMetrics(neofs.NewPoolStatistic(a.poolStat))
+	gateMetricsProvider := newGateMetrics()
 	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
@@ -330,8 +328,8 @@ func newMaxClients(cfg *viper.Viper) api.MaxClients {
 	return api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline)
 }
 
-func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey, *stat.PoolStat) {
-	poolStat := stat.NewPoolStatistic()
+func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey) {
+	poolStat := metrics.NewPoolMetrics()
 
 	var prm pool.InitParameters
 	prm.SetStatisticCallback(poolStat.OperationCallback)
@@ -389,7 +387,7 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("failed to dial connection pool", zap.Error(err))
 	}
 
-	return p, key, poolStat
+	return p, key
 }
 
 func newPlacementPolicy(defaultPolicy string, regionPolicyFilepath string, locations map[string]string) (*placementPolicy, error) {

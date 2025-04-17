@@ -35,7 +35,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object/slicer"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"github.com/nspcc-dev/neofs-sdk-go/stat"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 	"github.com/nspcc-dev/tzhash/tz"
@@ -724,21 +723,6 @@ func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, 
 // ContainerEACL implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) ContainerEACL(ctx context.Context, containerID cid.ID) (*eacl.Table, error) {
 	return x.neoFS.ContainerEACL(ctx, containerID)
-}
-
-// PoolStatistic is a mediator which implements authmate.NeoFS through pool.Pool.
-type PoolStatistic struct {
-	poolStat *stat.PoolStat
-}
-
-// NewPoolStatistic creates new PoolStatistic using provided pool.Pool.
-func NewPoolStatistic(poolStat *stat.PoolStat) *PoolStatistic {
-	return &PoolStatistic{poolStat: poolStat}
-}
-
-// Statistic implements interface method.
-func (x *PoolStatistic) Statistic() stat.Statistic {
-	return x.poolStat.Statistic()
 }
 
 // SearchObjects implements neofs.NeoFS interface method.
