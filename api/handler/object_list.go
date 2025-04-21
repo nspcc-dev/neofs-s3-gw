@@ -251,7 +251,7 @@ func (h *handler) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := encodeListObjectVersionsToResponse(info, p.BktInfo.Name)
+	response := encodeListObjectVersionsToResponse(info, p.BktInfo.Name, p.Prefix)
 	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
@@ -279,7 +279,7 @@ func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVers
 	return &res, nil
 }
 
-func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, bucketName string) *ListObjectsVersionsResponse {
+func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, bucketName, requestPrefix string) *ListObjectsVersionsResponse {
 	res := ListObjectsVersionsResponse{
 		Name:                bucketName,
 		IsTruncated:         info.IsTruncated,
@@ -287,6 +287,7 @@ func encodeListObjectVersionsToResponse(info *layer.ListObjectVersionsInfo, buck
 		NextKeyMarker:       info.NextKeyMarker,
 		NextVersionIDMarker: info.NextVersionIDMarker,
 		VersionIDMarker:     info.VersionIDMarker,
+		Prefix:              requestPrefix,
 	}
 
 	for _, prefix := range info.CommonPrefixes {

@@ -254,6 +254,7 @@ type ListObjectsVersionsResponse struct {
 	DeleteMarker        []DeleteMarkerEntry     `xml:"DeleteMarker"`
 	Version             []ObjectVersionResponse `xml:"Version"`
 	CommonPrefixes      []CommonPrefix          `xml:"CommonPrefixes"`
+	Prefix              string                  `xml:"Prefix"`
 }
 
 // VersioningConfiguration contains VersioningConfiguration XML representation.
