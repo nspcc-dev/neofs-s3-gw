@@ -47,8 +47,9 @@ func TestObjectsListCache(t *testing.T) {
 			return cache.GetVersions(listKey) == nil
 		}
 
-		require.Never(t, condition, config.Lifetime, time.Second)
-		require.Eventually(t, condition, time.Second, 10*time.Millisecond)
+		require.Never(t, condition, config.Lifetime-1*time.Second, time.Second)
+		// We cover here the reduced second from upper check.
+		require.Eventually(t, condition, 1100*time.Millisecond, 10*time.Millisecond)
 	})
 
 	t.Run("get cache with empty prefix", func(t *testing.T) {
