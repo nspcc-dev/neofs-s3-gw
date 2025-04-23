@@ -689,9 +689,9 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
-func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix, cursor string, maxKeys int, onlyUnversioned bool) ([]prefixSearchResult, string, error) {
+func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
 	var (
-		filters             = make(object.SearchFilters, 0, 4)
+		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
 			object.AttributeFilePath,
 			object.FilterCreationEpoch,
@@ -718,10 +718,6 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	filters.AddFilter(object.AttributeFilePath, prefix, object.MatchCommonPrefix)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
-
-	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
-	}
 
 	searchResultItems, nextCursor, err := n.neoFS.SearchObjectsV2WithCursor(ctx, bkt.CID, filters, returningAttributes, cursor, opts)
 	if err != nil {
@@ -805,8 +801,8 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	return searchResults, nextCursor, nil
 }
 
-func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix, cursor string, maxKeys int, onlyUnversioned bool) ([]prefixSearchResult, string, error) {
-	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, cursor, maxKeys, onlyUnversioned)
+func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
+	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, cursor, maxKeys)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -995,7 +991,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	var latestVersions []prefixSearchResult
 
 	if nodeVersions == nil {
-		latestVersions, next, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Bucket.Owner, p.Prefix, p.ContinuationToken, p.MaxKeys, false)
+		latestVersions, next, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Bucket.Owner, p.Prefix, p.ContinuationToken, p.MaxKeys)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, "", nil
