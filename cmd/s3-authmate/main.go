@@ -22,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/spf13/viper"
@@ -735,54 +734,21 @@ func resetBucketEACL() *cli.Command {
 				return cli.Exit(fmt.Sprintf("write resolved CID: %s", err), 5)
 			}
 
-			var (
-				newEACLTable eacl.Table
-				targetOwner  eacl.Target
-				records      []eacl.Record
-			)
-
-			newEACLTable.SetCID(containerID)
-			targetOwner.SetAccounts([]user.ID{or.BearerToken.Issuer()})
-
-			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-				records = append(records,
-					eacl.ConstructRecord(eacl.ActionAllow, op, []eacl.Target{targetOwner}),
-				)
-			}
-
-			for op := eacl.OperationGet; op <= eacl.OperationRangeHash; op++ {
-				record := eacl.ConstructRecord(eacl.ActionDeny, op,
-					[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
-				)
-
-				records = append(records, record)
-			}
-
 			oldEacl, err := neoFS.ContainerEACL(ctx, containerID)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("failed to obtain old neofs EACL: %s", err), 1)
 			}
 
-			if handler.IsBucketOwnerForced(oldEacl) {
-				records = append(records, *handler.BucketOwnerEnforcedRecord())
-			}
-
-			if handler.IsBucketOwnerPreferred(oldEacl) {
-				records = append(records, *handler.BucketOwnerPreferredRecord())
-			}
-
-			if handler.IsBucketOwnerPreferredAndRestricted(oldEacl) {
-				records = append(records, *handler.BucketOwnerPreferredAndRestrictedRecord())
-			}
-
-			newEACLTable.SetRecords(records)
+			// remove any bucket ownership record type.
+			updatedTable := handler.UpdateBucketOwnership(oldEacl.Records(), nil)
+			oldEacl.SetRecords(updatedTable.Records())
 
 			if applyFlag {
 				var tcancel context.CancelFunc
 				ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
 				defer tcancel()
 
-				if err = neoFS.SetContainerEACL(ctx, newEACLTable, or.SessionTokenForSetEACL); err != nil {
+				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenForSetEACL); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
 				}
 			} else {
@@ -790,7 +756,7 @@ func resetBucketEACL() *cli.Command {
 
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
-				if err = enc.Encode(newEACLTable.Records()); err != nil {
+				if err = enc.Encode(oldEacl.Records()); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to encode new neofs EACL records: %s", err), 1)
 				}
 

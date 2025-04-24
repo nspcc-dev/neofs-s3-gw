@@ -112,14 +112,14 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		Data: &layer.UploadData{},
 	}
 
-	eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
 	if containsACLHeaders(r) {
-		if IsBucketOwnerForced(eacl.EACL) {
+		if settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
@@ -139,7 +139,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		p.Data.ACLHeaders = formACLHeadersForMultipart(r.Header)
 	}
 
-	if IsBucketOwnerPreferredAndRestricted(eacl.EACL) {
+	if settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return

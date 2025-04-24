@@ -1182,7 +1182,6 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
-	records = append(records, *BucketOwnerEnforcedRecord())
 
 	actualTable, err := bucketACLToTable(acl)
 	require.NoError(t, err)
