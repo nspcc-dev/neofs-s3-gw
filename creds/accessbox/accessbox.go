@@ -2,6 +2,7 @@ package accessbox
 
 import (
 	"bytes"
+	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -16,7 +17,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
 )
@@ -324,7 +324,12 @@ func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey, hkdfSalt []byte) 
 		return nil, fmt.Errorf("derive key: %w", err)
 	}
 
-	return chacha20poly1305.NewX(key)
+	cipherBlock, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("aes instance: %w", err)
+	}
+
+	return cipher.NewGCM(cipherBlock)
 }
 
 func generateSecret() ([]byte, error) {
