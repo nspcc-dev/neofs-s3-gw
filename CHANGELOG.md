@@ -9,12 +9,17 @@ This document outlines major changes between releases.
 
 ### Changed
 - AWS SDK migrated to V2 (#1028)
+- Bucket ownership settings moved from EACL to bucket settings meta objects (#1120)
 
 ### Fixed
 
 ### Updated
 
 ### Removed
+
+## Upgrading from 0.36.1
+authmate tool "reset-bucket-acl" command was updated to clean redundant EACL records. These settings were moved to
+bucket settings object.
 
 ## [0.36.1] - 2025-04-09
 

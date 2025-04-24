@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 )
 
 type (
@@ -37,7 +37,6 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 	var (
 		reqInfo = api.GetReqInfo(r.Context())
 		params  putBucketOwnershipControlsParams
-		rec     *eacl.Record
 	)
 
 	defer func() {
@@ -54,21 +53,27 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	switch params.Rules[0].ObjectOwnership {
-	case amzBucketOwnerEnforced:
-		rec = BucketOwnerEnforcedRecord()
-	case amzBucketOwnerPreferred:
-		rec = BucketOwnerPreferredRecord()
-	case amzBucketOwnerObjectWriter:
-		rec = BucketACLObjectWriterRecord()
-	default:
-		h.logAndSendError(w, "invalid ownership", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
-		return
-	}
-
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
+		return
+	}
+
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
+	}
+
+	switch params.Rules[0].ObjectOwnership {
+	case amzBucketOwnerEnforced:
+		bktSettings.BucketOwner = data.BucketOwnerEnforced
+	case amzBucketOwnerPreferred:
+		bktSettings.BucketOwner = data.BucketOwnerPreferred
+	case amzBucketOwnerObjectWriter:
+		bktSettings.BucketOwner = data.BucketOwnerObjectWriter
+	default:
+		h.logAndSendError(w, "invalid ownership", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 		return
 	}
 
@@ -78,28 +83,13 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		}
 	}
 
-	token, err := getSessionTokenSetEACL(r.Context())
-	if err != nil {
-		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
-		return
+	sp := &layer.PutSettingsParams{
+		BktInfo:  bktInfo,
+		Settings: bktSettings,
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
-		return
-	}
-
-	newEACL := updateBucketOwnership(bucketACL.EACL.Records(), rec)
-
-	p := layer.PutBucketACLParams{
-		BktInfo:      bktInfo,
-		EACL:         &newEACL,
-		SessionToken: token,
-	}
-
-	if err = h.obj.PutBucketACL(r.Context(), &p); err != nil {
-		h.logAndSendError(w, "could not put bucket eacl", reqInfo, err)
+	if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
+		h.logAndSendError(w, "couldn't put bucket settings", reqInfo, err)
 		return
 	}
 
@@ -124,21 +114,21 @@ func (h *handler) GetBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		}
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	if IsBucketOwnerForced(bucketACL.EACL) {
+	if settings.BucketOwner == data.BucketOwnerEnforced {
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerEnforced}},
 		}
-	} else if IsBucketOwnerPreferred(bucketACL.EACL) {
+	} else if settings.BucketOwner == data.BucketOwnerPreferred {
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerPreferred}},
 		}
-	} else if isBucketOwnerObjectWriter(bucketACL.EACL) {
+	} else if settings.BucketOwner == data.BucketOwnerObjectWriter {
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerObjectWriter}},
 		}
@@ -171,28 +161,21 @@ func (h *handler) DeleteBucketOwnershipControlsHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	token, err := getSessionTokenSetEACL(r.Context())
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
-		return
+	settings.BucketOwner = data.BucketOwnerEnforced
+
+	p := layer.PutSettingsParams{
+		BktInfo:  bktInfo,
+		Settings: settings,
 	}
 
-	newEACL := updateBucketOwnership(bucketACL.EACL.Records(), nil)
-
-	p := layer.PutBucketACLParams{
-		BktInfo:      bktInfo,
-		EACL:         &newEACL,
-		SessionToken: token,
-	}
-
-	if err = h.obj.PutBucketACL(r.Context(), &p); err != nil {
-		h.logAndSendError(w, "could not put bucket eacl", reqInfo, err)
+	if err = h.obj.PutBucketSettings(r.Context(), &p); err != nil {
+		h.logAndSendError(w, "couldn't put bucket settings", reqInfo, err)
 		return
 	}
 

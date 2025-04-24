@@ -294,13 +294,13 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	if IsBucketOwnerForced(eacl.EACL) {
+	if settings.BucketOwner == data.BucketOwnerEnforced {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -425,13 +425,13 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
+	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
 	if err != nil {
-		h.logAndSendError(w, "could not get bucket eacl", reqInfo, err)
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
 	}
 
-	if IsBucketOwnerForced(eacl.EACL) {
+	if settings.BucketOwner == data.BucketOwnerEnforced {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -439,7 +439,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set(api.AmzACL, "")
 	}
 
-	if IsBucketOwnerPreferredAndRestricted(eacl.EACL) {
+	if settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -565,6 +565,41 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		h.logAndSendError(w, "could not translate policy to ast", reqInfo, err)
 		return
+	}
+
+	var index = -1
+
+	// This bucket setting is a part of ACL. It not useful For us inside EACL, therefore we remove it from the table.
+	for i, res := range astPolicy.Resources {
+		if res.Version == cannedACLBucketOwnerFullControl &&
+			len(res.Operations) == 1 &&
+			len(res.Operations[0].Users) == 0 &&
+			res.Operations[0].Users[0] == ownerPreferredAndRestrictedUserID {
+			index = i
+			break
+		}
+	}
+
+	if index >= 0 {
+		settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+		if err != nil {
+			h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+			return
+		}
+
+		settings.BucketOwner = data.BucketOwnerPreferredAndRestricted
+
+		p := layer.PutSettingsParams{
+			BktInfo:  bktInfo,
+			Settings: settings,
+		}
+
+		if err = h.obj.PutBucketSettings(r.Context(), &p); err != nil {
+			h.logAndSendError(w, "couldn't put bucket settings", reqInfo, err)
+			return
+		}
+
+		astPolicy.Resources = slices.Delete(astPolicy.Resources, index, index+1)
 	}
 
 	if _, err = h.updateBucketACL(r, astPolicy, bktInfo, token); err != nil {
@@ -1023,26 +1058,6 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 
 	for i := len(resource.Operations) - 1; i >= 0; i-- {
 		astOp := resource.Operations[i]
-
-		if len(astOp.Users) == 1 {
-			var markerRecord *eacl.Record
-
-			switch astOp.Users[0] {
-			case ownerEnforcedUserID:
-				markerRecord = BucketOwnerEnforcedRecord()
-			case ownerPreferredUserID:
-				markerRecord = BucketOwnerPreferredRecord()
-			case ownerObjectWriterUserID:
-				markerRecord = BucketACLObjectWriterRecord()
-			case ownerPreferredAndRestrictedUserID:
-				markerRecord = BucketOwnerPreferredAndRestrictedRecord()
-			}
-
-			if markerRecord != nil {
-				res = append(res, markerRecord)
-				return res, nil
-			}
-		}
 
 		record := eacl.ConstructRecord(astOp.Action, astOp.Op, []eacl.Target{})
 		if astOp.IsGroupGrantee() {
@@ -1696,8 +1711,6 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
 
-	records = append(records, *BucketOwnerEnforcedRecord())
-
 	table := eacl.ConstructTable(records)
 
 	return &table, nil
@@ -1737,20 +1750,6 @@ func getOthersRecord(op eacl.Operation, action eacl.Action) *eacl.Record {
 	return &record
 }
 
-// BucketOwnerEnforcedRecord generates special marker record for OwnerEnforced policy.
-func BucketOwnerEnforcedRecord() *eacl.Record {
-	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
-		[]eacl.Target{
-			eacl.NewTargetByAccounts([]user.ID{ownerEnforcedUserID}),
-		},
-		[]eacl.Filter{
-			eacl.ConstructFilter(eacl.HeaderFromRequest, amzBucketOwnerField, eacl.MatchStringNotEqual, amzBucketOwnerEnforced),
-		}...,
-	)
-
-	return &markerRecord
-}
-
 func isValidOwnerEnforced(r *http.Request) bool {
 	if cannedACL := r.Header.Get(api.AmzACL); cannedACL != "" {
 		switch cannedACL {
@@ -1766,120 +1765,12 @@ func isValidOwnerEnforced(r *http.Request) bool {
 	return true
 }
 
-// BucketACLObjectWriterRecord generates special marker record for OwnerWriter policy.
-func BucketACLObjectWriterRecord() *eacl.Record {
-	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
-		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{ownerObjectWriterUserID})},
-		[]eacl.Filter{
-			eacl.ConstructFilter(eacl.HeaderFromRequest, amzBucketOwnerField, eacl.MatchStringNotEqual, amzBucketOwnerObjectWriter),
-		}...,
-	)
-
-	return &markerRecord
-}
-
-// IsBucketOwnerForced checks special marker record for OwnerForced policy.
-func IsBucketOwnerForced(table *eacl.Table) bool {
-	if table == nil {
-		return false
-	}
-
-	for _, r := range table.Records() {
-		if r.Action() == eacl.ActionDeny && r.Operation() == eacl.OperationPut {
-			for _, f := range r.Filters() {
-				if f.Key() == amzBucketOwnerField &&
-					f.Value() == amzBucketOwnerEnforced &&
-					f.From() == eacl.HeaderFromRequest &&
-					f.Matcher() == eacl.MatchStringNotEqual {
-					if len(r.Targets()) == 1 && len(r.Targets()[0].Accounts()) == 1 {
-						return r.Targets()[0].Accounts()[0] == ownerEnforcedUserID
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-// BucketOwnerPreferredRecord generates special marker record for OwnerPreferred policy.
-func BucketOwnerPreferredRecord() *eacl.Record {
-	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
-		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{ownerPreferredUserID})},
-		[]eacl.Filter{
-			eacl.ConstructFilter(eacl.HeaderFromRequest, amzBucketOwnerField, eacl.MatchStringNotEqual, amzBucketOwnerPreferred),
-		}...,
-	)
-
-	return &markerRecord
-}
-
-// IsBucketOwnerPreferred checks special marker record for OwnerPreferred policy.
-func IsBucketOwnerPreferred(table *eacl.Table) bool {
-	if table == nil {
-		return false
-	}
-
-	for _, r := range table.Records() {
-		if r.Action() == eacl.ActionDeny && r.Operation() == eacl.OperationPut {
-			for _, f := range r.Filters() {
-				if f.Key() == amzBucketOwnerField &&
-					f.Value() == amzBucketOwnerPreferred &&
-					f.From() == eacl.HeaderFromRequest &&
-					f.Matcher() == eacl.MatchStringNotEqual {
-					if len(r.Targets()) == 1 && len(r.Targets()[0].Accounts()) == 1 {
-						return r.Targets()[0].Accounts()[0] == ownerPreferredUserID
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-// BucketOwnerPreferredRecord generates special marker record for OwnerPreferred policy and sets flag for bucket owner full control acl restriction.
-func BucketOwnerPreferredAndRestrictedRecord() *eacl.Record {
-	var markerRecord = eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationPut,
-		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{ownerPreferredAndRestrictedUserID})},
-		[]eacl.Filter{
-			eacl.ConstructFilter(eacl.HeaderFromObject, amzBucketOwnerField, eacl.MatchStringEqual, cannedACLBucketOwnerFullControl),
-		}...,
-	)
-
-	return &markerRecord
-}
-
-// IsBucketOwnerPreferredAndRestricted checks special marker record and check ALC bucket owner full control flag for OwnerPreferred policy.
-func IsBucketOwnerPreferredAndRestricted(table *eacl.Table) bool {
-	if table == nil {
-		return false
-	}
-
-	for _, r := range table.Records() {
-		if r.Action() == eacl.ActionDeny && r.Operation() == eacl.OperationPut {
-			for _, f := range r.Filters() {
-				if f.Key() == amzBucketOwnerField &&
-					f.Value() == cannedACLBucketOwnerFullControl &&
-					f.From() == eacl.HeaderFromObject &&
-					f.Matcher() == eacl.MatchStringEqual {
-					if len(r.Targets()) == 1 && len(r.Targets()[0].Accounts()) == 1 {
-						return r.Targets()[0].Accounts()[0] == ownerPreferredAndRestrictedUserID
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
-
 func isValidOwnerPreferred(r *http.Request) bool {
 	cannedACL := r.Header.Get(api.AmzACL)
 	return cannedACL == cannedACLBucketOwnerFullControl
 }
 
-func updateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) eacl.Table {
+func UpdateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) eacl.Table {
 	var (
 		rowID = -1
 	)
@@ -1910,27 +1801,4 @@ func updateBucketOwnership(records []eacl.Record, newRecord *eacl.Record) eacl.T
 	}
 
 	return eacl.ConstructTable(records)
-}
-
-func isBucketOwnerObjectWriter(table *eacl.Table) bool {
-	if table == nil {
-		return false
-	}
-
-	for _, r := range table.Records() {
-		if r.Action() == eacl.ActionDeny && r.Operation() == eacl.OperationPut {
-			for _, f := range r.Filters() {
-				if f.Key() == amzBucketOwnerField &&
-					f.Value() == amzBucketOwnerObjectWriter &&
-					f.From() == eacl.HeaderFromRequest &&
-					f.Matcher() == eacl.MatchStringNotEqual {
-					if len(r.Targets()) == 1 && len(r.Targets()[0].Accounts()) == 1 {
-						return r.Targets()[0].Accounts()[0] == ownerObjectWriterUserID
-					}
-				}
-			}
-		}
-	}
-
-	return false
 }

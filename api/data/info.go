@@ -21,7 +21,21 @@ const (
 	VersioningSuspended   = "Suspended"
 )
 
+const (
+	// BucketOwnerEnforced is a enforced state.
+	BucketOwnerEnforced = iota
+	// BucketOwnerPreferred is a preferred state.
+	BucketOwnerPreferred
+	// BucketOwnerPreferredAndRestricted is a preferred state with `bucket-owner-full-control` restriction applied.
+	BucketOwnerPreferredAndRestricted
+	// BucketOwnerObjectWriter is a object writer state.
+	BucketOwnerObjectWriter
+)
+
 type (
+	// BucketOwner is bucket onwer state.
+	BucketOwner int
+
 	// BucketACLState is bucket ACL state.
 	BucketACLState uint32
 
@@ -78,6 +92,7 @@ type (
 	BucketSettings struct {
 		Versioning        string                   `json:"versioning"`
 		LockConfiguration *ObjectLockConfiguration `json:"lock_configuration"`
+		BucketOwner       BucketOwner              `json:"bucket_owner"`
 	}
 
 	// CORSConfiguration stores CORS configuration of a request.
