@@ -307,6 +307,8 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetPayloadSize(prm.PayloadSize)
 
 	if prm.Multipart != nil {
+		obj.SetOwner(x.signer(ctx).UserID())
+
 		if prm.Multipart.SplitPreviousID != nil {
 			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
 		}
@@ -454,6 +456,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 // FinalizeObjectWithPayloadChecksums implements neofs.NeoFS interface method.
 func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
+	header.SetOwner(x.signer(ctx).UserID())
 	header.SetCreationEpoch(x.epochGetter.CurrentEpoch())
 
 	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
