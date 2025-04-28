@@ -163,6 +163,10 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 	cnr.SetCreationTime(creationTime)
 
+	if !x.IsHomomorphicHashingEnabled() {
+		cnr.DisableHomomorphicHashing()
+	}
+
 	if prm.Name != "" {
 		var d container.Domain
 		d.SetName(prm.Name)
