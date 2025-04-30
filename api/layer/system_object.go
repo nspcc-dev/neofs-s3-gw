@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -275,7 +275,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	var (
 		err      error
-		settings = data.BucketSettings{Versioning: data.VersioningUnversioned}
+		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
 	)
 
 	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings)
@@ -284,9 +284,9 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 	}
 
 	if id.IsZero() {
-		n.cache.PutSettings(bktInfo, &settings)
+		n.cache.PutSettings(bktInfo, settings)
 
-		return &settings, nil
+		return settings, nil
 	}
 
 	settingsObj, err := n.objectGet(ctx, bktInfo, id)
@@ -294,32 +294,64 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return nil, fmt.Errorf("get bucket settings object: %w", err)
 	}
 
-	var (
-		olc data.ObjectLockConfiguration
-	)
-
-	if err = olc.Decode(string(settingsObj.Payload())); err != nil {
-		return nil, fmt.Errorf("decode bucket settings: %w", err)
+	// Took the latest version of the settings file. If you need any migrations,
+	// they should be done inside decodeBucketSettings.
+	settings, err = decodeBucketSettings(settingsObj)
+	if err != nil {
+		return nil, fmt.Errorf("decode bucket settings object: %w", err)
 	}
 
+	n.cache.PutSettings(bktInfo, settings)
+
+	return settings, nil
+}
+
+// decodeBucketSettings decodes and migrates (if required) buket settings file.
+func decodeBucketSettings(settingsObj *object.Object) (*data.BucketSettings, error) {
+	if settingsObj == nil {
+		return nil, fmt.Errorf("bucket settings object is nil")
+	}
+
+	var (
+		settingsVersion string
+		settings        = data.BucketSettings{Versioning: data.VersioningUnversioned}
+		versioning      string
+	)
+
 	for _, attr := range settingsObj.Attributes() {
-		if attr.Key() == s3headers.BucketSettingsVersioning {
-			settings.Versioning = attr.Value()
-			break
+		switch attr.Key() {
+		case s3headers.BucketSettingsObjectVersion:
+			settingsVersion = attr.Value()
+		case s3headers.BucketSettingsVersioning:
+			versioning = attr.Value()
+		default:
+			continue
 		}
 	}
 
-	settings.LockConfiguration = &olc
+	switch settingsVersion {
+	case data.BucketSettingsV1:
+		if err := json.Unmarshal(settingsObj.Payload(), &settings); err != nil {
+			return nil, fmt.Errorf("decode bucket settings: %w", err)
+		}
+	default:
+		var olc data.ObjectLockConfiguration
+		if err := olc.Decode(string(settingsObj.Payload())); err != nil {
+			return nil, fmt.Errorf("decode bucket settings: %w", err)
+		}
 
-	n.cache.PutSettings(bktInfo, &settings)
+		settings.LockConfiguration = &olc
+		settings.Versioning = versioning
+	}
 
 	return &settings, nil
 }
 
+// PutBucketSettings stores bucket settings. We should save the latest file version only.
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	var payload string
-	if p.Settings.LockConfiguration != nil {
-		payload = p.Settings.LockConfiguration.Encode()
+	payload, err := json.Marshal(p.Settings)
+	if err != nil {
+		return fmt.Errorf("marshal bucket settings: %w", err)
 	}
 
 	prm := PrmObjectCreate{
@@ -328,14 +360,14 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
 		Attributes: map[string]string{
-			s3headers.MetaType:                 s3headers.TypeBucketSettings,
-			s3headers.BucketSettingsVersioning: p.Settings.Versioning,
+			s3headers.MetaType:                    s3headers.TypeBucketSettings,
+			s3headers.BucketSettingsObjectVersion: data.BucketSettingsV1,
 		},
-		Payload:     strings.NewReader(payload),
+		Payload:     bytes.NewReader(payload),
 		PayloadSize: uint64(len(payload)),
 	}
 
-	if _, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
+	if _, _, err = n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
 		return fmt.Errorf("create bucket settings object: %w", err)
 	}
 
