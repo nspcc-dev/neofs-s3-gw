@@ -57,6 +57,8 @@ const (
 const (
 	// BucketSettingsVersioning contains versioning setting for bucket.
 	BucketSettingsVersioning = "s3bsVersioning"
+	// BucketSettingsVersioning contains version of bucket settings file.
+	BucketSettingsObjectVersion = "s3bsObjVersion"
 
 	AttributeComplianceMode     = ".s3-compliance-mode"
 	AttributeRetentionUntilMode = ".s3-retention-until"

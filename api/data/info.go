@@ -19,6 +19,9 @@ const (
 	VersioningUnversioned = "Unversioned"
 	VersioningEnabled     = "Enabled"
 	VersioningSuspended   = "Suspended"
+
+	// BucketSettingsV1 describes v1 version identifier for the bucket settings file.
+	BucketSettingsV1 = "1"
 )
 
 const (
