@@ -4,9 +4,9 @@ Each uploaded object includes a set of attributes.
 
 ## Common Attributes
 
-### `S3-versioning-state`
+### `S3-Meta-VersioningState`
 
-If bucket versioning is enabled, each uploaded object will have the attribute `S3-versioning-state: Enabled`.
+If bucket versioning is enabled, each uploaded object will have the attribute `S3-Meta-VersioningState: Enabled`.
 > It means storing multiple versions of an object within the same bucket. Each version can be retrieved from the
 > versioning container. If you attempt to retrieve an object by name without specifying a version,
 > the latest uploaded version will be returned.
@@ -36,7 +36,7 @@ A NeoFS SDK attribute containing the UNIX timestamp of object creation.
 
 A NeoFS SDK attribute representing the object name. This is used by end-users to interact with the gateway.
 
-### `S3-delete-marker`
+### `S3-Meta-DeleteMarker`
 
 Contains the server timestamp of object removal for versioned container. It is used for special object called
 `delete marker`.
@@ -52,36 +52,39 @@ More details in the [AWS Documentation](https://docs.aws.amazon.com/AmazonS3/lat
 
 ### Multipart Info Object
 
-This object is required for listing multipart uploads. [AWS Documentation](https://docs.aws.amazon.com/cli/latest/reference/s3api/list-multipart-uploads.html)
+This object is required for listing multipart
+uploads. [AWS Documentation](https://docs.aws.amazon.com/cli/latest/reference/s3api/list-multipart-uploads.html)
 
 Includes the following attributes:
 
-- `s3MetaMultipartType: info`
-- `s3mpObjectKey`
-- `s3mpUpload`
-- `s3mpMeta`, contains base64 encoded map with: `s3mpObjectKey`, `s3mpOwner`, `s3mpCreated`, `s3mpCopiesNumber`
+- `S3-MP-Type: info`
+- `S3-MP-ObjectKey`
+- `S3-MP-Upload`
+- `S3-MP-Meta`, contains base64 encoded map with: `S3-MP-ObjectKey`, `S3-MP-Owner`, `S3-MP-Created`,
+  `S3-MP-CopiesNumber`
 
 ### Multipart Part Object
 
-This object is required for listing part for multipart upload. [AWS Documentation](https://docs.aws.amazon.com/cli/latest/reference/s3api/list-multipart-uploads.html)
-It also required to complete multipart upload. 
+This object is required for listing part for multipart
+upload. [AWS Documentation](https://docs.aws.amazon.com/cli/latest/reference/s3api/list-multipart-uploads.html)
+It also required to complete multipart upload.
 
 Includes the following attributes:
 
-- `s3MetaMultipartType: part`
-- `s3mpPartNumber`
-- `s3mpElementId`
-- `s3mpTotalSize`
-- `s3mpHash`
-- `s3mpHomoHash`
-- `s3mpIsArbitrary`
-- `s3mpUpload`
+- `S3-MP-Type: part`
+- `S3-MP-PartNumber`
+- `S3-MP-ElementId`
+- `S3-MP-TotalSize`
+- `S3-MP-Hash`
+- `S3-MP-HomoHash`
+- `S3-MP-IsArbitrary`
+- `S3-MP-Upload`
 
 ---
 
 The following attributes are used in the context of multipart upload logic.
 
-### `s3MetaMultipartType`
+### `S3-MP-Type`
 
 Indicates the type of object within a multipart upload.
 
@@ -90,31 +93,31 @@ Indicates the type of object within a multipart upload.
 - `info` – Stores multipart upload metadata
 - `part` – Stores information about an individual part
 
-### `s3mpPartNumber`
+### `S3-MP-PartNumber`
 
 Stores the part number for multipart uploads.  
 Note: Per [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html), the first valid
 part number is `1`.  
 An internal part `0` exist but is hidden from users.
 
-### `s3mpElementId`
+### `S3-MP-ElementId`
 
 Since each part can be up to 5 GB (and NeoFS atomic max object size smaller), this attribute tracks internal slices that
 form a full part.
 
-### `s3mpTotalSize`
+### `S3-MP-TotalSize`
 
 Describes the total size of all sliced elements that comprise a part.
 
-### `s3mpHash`
+### `S3-MP-Hash`
 
 Stores the intermediate hash state used to compute the final object hash.
 
-### `s3mpHomoHash`
+### `S3-MP-HomoHash`
 
 Stores the intermediate state for computing a homomorphic hash, if enabled.
 
-### `s3mpIsArbitrary`
+### `S3-MP-IsArbitrary`
 
 Indicates whether a part was uploaded out of sequence.
 
@@ -125,48 +128,52 @@ Indicates whether a part was uploaded out of sequence.
 **Example:**
 
 - Upload part 1
-- Upload part 3 → This will be marked with `s3mpIsArbitrary: true` because part 2 is missing.
+- Upload part 3 → This will be marked with `S3-MP-IsArbitrary: true` because part 2 is missing.
 
-### `s3mpObjectKey`
+### `S3-MP-ObjectKey`
 
 Represents the object key for the multipart upload.  
 This is stored separately from the `object.AttributeFilePath` attribute and ensures that multipart-uploaded object
 remain inaccessible
 to users until `CompleteMultipartUpload` is called.
 
-### `s3mpUpload`
+### `S3-MP-Upload`
 
 Stores the multipart upload ID.
 
-### `s3mpPartHash`
+### `S3-MP-PartHash`
 
 Stores the hash of the entire part (including slices).
 
-### `s3mpOwner`
+### `S3-MP-Owner`
 
 Stores the owner of the uploading object.
 
-### `s3mpCopiesNumber`
+### `S3-MP-CopiesNumber`
 
 Indicates the CopiesNumber setting for the object.
 
-### `s3mpMeta`
+### `S3-MP-Meta`
 
 Contains the original object's attributes.
 
-### `s3mpCreated`
+### `S3-MP-Created`
 
 Contains the final creation timestamp of the object.
 
-### `s3bsVersioning`
+### `S3-BucketSettings-Versioning`
 
 Indicates whether bucket versioning is enabled.
 
-### `.s3-object-version`
+### `S3-BucketSettings-ObjVersion`
+
+Specifies the version of the bucket settings object's file structure
+
+### `S3-ObjectVersion`
 
 If bucket versioning is enabled, this attribute indicates which version the object belongs to.
 
-### `.s3-compliance-mode`
+### `S3-BucketSettings-ComplianceMode`
 
 Indicates whether the object is under a compliance-mode retention lock.
 
@@ -174,7 +181,7 @@ Indicates whether the object is under a compliance-mode retention lock.
 
 - `true`
 
-### `.s3-retention-until`
+### `S3-BucketSettings-RetentionUntil`
 
 Contains the retention expiration timestamp in `time.RFC3339` format.
 
@@ -200,7 +207,7 @@ Contains info about all multipart parts for object. It is stored in the final ob
 
 ---
 
-### `s3MetaType`
+### `S3-MetaType`
 
 Describes special metadata types used for S3 features.
 
@@ -225,9 +232,9 @@ Stores lock data for an object.
 
 **Attributes:**
 
-- `s3MetaType: lock`
-- `.s3-object-version`
-- `S3-versioning-state`
+- `S3-MetaType: lock`
+- `S3-ObjectVersion`
+- `S3-Meta-VersioningState`
 
 ### Tags Object
 
@@ -235,9 +242,9 @@ Stores tag data for an object.
 
 **Attributes:**
 
-- `s3MetaType: tags`
-- `.s3-object-version`
-- `S3-versioning-state`
+- `S3-MetaType: tags`
+- `S3-ObjectVersion`
+- `S3-Meta-VersioningState`
 
 ### Bucket Tags Object
 
@@ -245,7 +252,7 @@ Stores tag data for a bucket.
 
 **Attributes:**
 
-- `s3MetaType: bucketTags`
+- `S3-MetaType: bucketTags`
 
 ### Bucket Notifications Object
 
@@ -253,7 +260,7 @@ Stores bucket notification configuration.
 
 **Attributes:**
 
-- `s3MetaType: bucketNotifConf`
+- `S3-MetaType: bucketNotifConf`
 
 The object payload contains the configuration data.
 
@@ -266,7 +273,7 @@ Stores bucket CORS configuration.
 
 **Attributes:**
 
-- `s3MetaType: bucketCORS`
+- `S3-MetaType: bucketCORS`
 
 The object payload contains the configuration data in XML format.
 [Format](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManageCorsUsing.html)
@@ -277,8 +284,9 @@ Stores settings configuration for a bucket.
 
 **Attributes:**
 
-- `s3MetaType: bucketSettings`
-- `s3bsVersioning`
+- `S3-MetaType: bucketSettings`
+- `S3-BucketSettings-Versioning`
+- `S3-ObjectVersion`
 
 The object payload contains the settings data.
 
