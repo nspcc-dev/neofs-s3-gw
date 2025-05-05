@@ -137,8 +137,6 @@ For now there are some limitations:
 
 ## Multipart
 
-Should be supported soon.
-
 |    | Method                  | Comments |
 |----|-------------------------|----------|
 | 🟢 | AbortMultipartUpload    |          |
