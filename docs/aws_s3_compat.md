@@ -39,7 +39,7 @@ Reference:
       
 ## ACL
 
-For now there are some limitations:
+There are some limitations:
 * [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) supports only one `Principal` per `Statement`. 
 Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"` (base58 encoded address of desired user).
 ```json
@@ -114,6 +114,9 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
     "Grants": []
 }
 ```
+Given that ACLs are disabled by default now and users are expected to use
+alternative mechanisms to manage access improving ACL support is not
+a priority.
 
 |    | Method       | Comments        |
 |----|--------------|-----------------|
@@ -174,7 +177,7 @@ See also `GetObject` and other method parameters.
 | 🟢 | HeadBucket           |           |
 | 🟢 | ListBuckets          |           |
 | 🔵 | PutPublicAccessBlock |           |
-| 🔵 | GetPublicAccessBlock |           |
+| 🔵 | GetPublicAccessBlock | Related to ACL management, not a priority. |
 
 * `CreateBucket` method allows you to select a placement policy using the `LocationConstraint` parameter in the AWS CLI. The policy name should be passed as a value.
   * Policies mapping can be defined via:
