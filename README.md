@@ -22,13 +22,17 @@ Minimalistic S3 gateway setup needs:
    NeoFS nodes with weighted load balancing).
  * a wallet used to fetch key and communicate with NeoFS nodes
    Passed via `--wallet` parameter or `S3_GW_WALLET_PATH` environment variable.
+ * an RPC (blockchain JSON-RPC) address passed via `-r` parameter or `S3_GW_FSCHAIN_ENDPOINTS` environment variable.
+ * a `listen_address` parameter, if address `localhost:8080` is occupied already.
 
 These two commands are functionally equivalent, they run the gate with one
 backend node, some keys and otherwise default settings:
 ```
-$ neofs-s3-gw -p 192.168.130.72:8080 --wallet wallet.json
+$ neofs-s3-gw -r http://192.168.130.72:30333 -p 192.168.130.72:8080 --listen_address=0.0.0.0:19080 --wallet wallet.json
 
 $ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 \
+  S3_GW_FSCHAIN_ENDPOINTS=http://192.168.130.72:30333 \
+  S3_GW_SERVER_0_ADDRESS=0.0.0.0:19080 \
   S3_GW_WALLET=wallet.json \
   neofs-s3-gw
 ```
