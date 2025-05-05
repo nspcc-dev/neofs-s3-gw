@@ -165,7 +165,7 @@ See also `GetObject` and other method parameters.
 |    | Method             | Comments                 |
 |----|--------------------|--------------------------|
 | 🟢 | ListObjectVersions | ListBucketObjectVersions |
-| 🔵 | RestoreObject      |                          |
+| 🔵 | RestoreObject      | Related to lifecycles and tiering. |
 
 ## Bucket
 
@@ -204,6 +204,8 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 
 ## Analytics
 
+Requires a separate entity to generate/upload data daily.
+
 |    | Method                             | Comments |
 |----|------------------------------------|----------|
 | 🔵 | DeleteBucketAnalyticsConfiguration |          |
@@ -231,6 +233,8 @@ Methods below are related to AWS SSE-S3 and SSE-KMS encryption. S3 gateway suppo
 
 ## Inventory
 
+Requires a separate entity to generate/upload data regularly.
+
 |    | Method                             | Comments |
 |----|------------------------------------|----------|
 | 🔵 | DeleteBucketInventoryConfiguration |          |
@@ -239,6 +243,9 @@ Methods below are related to AWS SSE-S3 and SSE-KMS encryption. S3 gateway suppo
 | 🔵 | PutBucketInventoryConfiguration    |          |
      
 ## Lifecycle
+
+In general requires a separate entity to manage uploaded objects. Without it
+can be only partially supported.
 
 |    | Method                          | Comments                                             |
 |----|---------------------------------|------------------------------------------------------|
@@ -364,6 +371,8 @@ policy.json:
 | 🟢 | PutBucketTagging    |          |
 
 ## Tiering
+
+Tightly related to lifecycle support.
 
 |    | Method                                      | Comments |
 |----|---------------------------------------------|----------|
