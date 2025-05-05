@@ -156,7 +156,7 @@ Contains the final creation timestamp of the object.
 
 Indicates whether bucket versioning is enabled.
 
-### `S3-BucketSettings-ObjVersion`
+### `S3-BucketSettings-MetaVersion`
 
 Specifies the version of the bucket settings object's file structure
 

@@ -63,8 +63,8 @@ const (
 	BucketSettingsVersioning    = bucketSettingsPrefix + "Versioning"
 	AttributeComplianceMode     = bucketSettingsPrefix + "ComplianceMode"
 	AttributeRetentionUntilMode = bucketSettingsPrefix + "RetentionUntil"
-	// BucketSettingsVersioning contains version of bucket settings file.
-	BucketSettingsObjectVersion = bucketSettingsPrefix + "ObjVersion"
+	// BucketSettingsMetaVersion contains version of bucket settings file.
+	BucketSettingsMetaVersion = bucketSettingsPrefix + "MetaVersion"
 
 	AttributeObjectVersion = attributePrefix + "ObjectVersion"
 	AttributeObjectNonce   = "__NEOFS__NONCE"
