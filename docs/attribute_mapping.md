@@ -57,7 +57,7 @@ uploads. [AWS Documentation](https://docs.aws.amazon.com/cli/latest/reference/s3
 
 Includes the following attributes:
 
-- `S3-MP-Type: info`
+- `S3-MetaType: multipartInfo`
 - `S3-MP-ObjectKey`
 - `S3-MP-Upload`
 - `S3-MP-Meta`, contains base64 encoded map with: `S3-MP-ObjectKey`, `S3-MP-Owner`, `S3-MP-Created`,
@@ -71,7 +71,7 @@ It also required to complete multipart upload.
 
 Includes the following attributes:
 
-- `S3-MP-Type: part`
+- `S3-MetaType: multipartPart`
 - `S3-MP-PartNumber`
 - `S3-MP-ElementId`
 - `S3-MP-TotalSize`
@@ -83,15 +83,6 @@ Includes the following attributes:
 ---
 
 The following attributes are used in the context of multipart upload logic.
-
-### `S3-MP-Type`
-
-Indicates the type of object within a multipart upload.
-
-**Possible values:**
-
-- `info` – Stores multipart upload metadata
-- `part` – Stores information about an individual part
 
 ### `S3-MP-PartNumber`
 
@@ -165,7 +156,7 @@ Contains the final creation timestamp of the object.
 
 Indicates whether bucket versioning is enabled.
 
-### `S3-BucketSettings-ObjVersion`
+### `S3-BucketSettings-MetaVersion`
 
 Specifies the version of the bucket settings object's file structure
 
@@ -219,6 +210,8 @@ Describes special metadata types used for S3 features.
 - `bucketNotifConf` – Stores bucket notification configuration
 - `bucketCORS` – Stores bucket CORS configuration
 - `bucketSettings` – Stores bucket settings
+- `multipartInfo` – Stores multipart upload metadata
+- `multipartPart` – Stores information about an individual part
 
 ---
 

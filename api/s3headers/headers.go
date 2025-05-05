@@ -52,15 +52,8 @@ const (
 	TypeBucketNotifConfig = "bucketNotifConf"
 	TypeBucketCORS        = "bucketCORS"
 	TypeBucketSettings    = "bucketSettings"
-)
-
-const (
-	// MetaMultipartType is a header name to identify multipart meta for objects.
-	// Result: S3-MP-Type.
-	MetaMultipartType = multipartPrefix + "Type"
-
-	TypeMultipartInfo = "info"
-	TypeMultipartPart = "part"
+	TypeMultipartInfo     = "multipartInfo"
+	TypeMultipartPart     = "multipartPart"
 )
 
 const (
@@ -70,8 +63,8 @@ const (
 	BucketSettingsVersioning    = bucketSettingsPrefix + "Versioning"
 	AttributeComplianceMode     = bucketSettingsPrefix + "ComplianceMode"
 	AttributeRetentionUntilMode = bucketSettingsPrefix + "RetentionUntil"
-	// BucketSettingsVersioning contains version of bucket settings file.
-	BucketSettingsObjectVersion = bucketSettingsPrefix + "ObjVersion"
+	// BucketSettingsMetaVersion contains version of bucket settings file.
+	BucketSettingsMetaVersion = bucketSettingsPrefix + "MetaVersion"
 
 	AttributeObjectVersion = attributePrefix + "ObjectVersion"
 	AttributeObjectNonce   = "__NEOFS__NONCE"

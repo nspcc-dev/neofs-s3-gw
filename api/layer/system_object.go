@@ -320,7 +320,7 @@ func decodeBucketSettings(settingsObj *object.Object) (*data.BucketSettings, err
 
 	for _, attr := range settingsObj.Attributes() {
 		switch attr.Key() {
-		case s3headers.BucketSettingsObjectVersion:
+		case s3headers.BucketSettingsMetaVersion:
 			settingsVersion = attr.Value()
 		case s3headers.BucketSettingsVersioning:
 			versioning = attr.Value()
@@ -360,8 +360,8 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
 		Attributes: map[string]string{
-			s3headers.MetaType:                    s3headers.TypeBucketSettings,
-			s3headers.BucketSettingsObjectVersion: data.BucketSettingsV1,
+			s3headers.MetaType:                  s3headers.TypeBucketSettings,
+			s3headers.BucketSettingsMetaVersion: data.BucketSettingsV1,
 		},
 		Payload:     bytes.NewReader(payload),
 		PayloadSize: uint64(len(payload)),
