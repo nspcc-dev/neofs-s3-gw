@@ -257,12 +257,16 @@ can be only partially supported.
 
 ## Logging
 
+Doesn't make much sense in non-AWS case.
+
 |    | Method           | Comments |
 |----|------------------|----------|
 | 🔵 | GetBucketLogging |          |
 | 🔵 | PutBucketLogging |          |
 
 ## Metrics
+
+Doesn't make much sense in non-AWS case.
 
 |    | Method                           | Comments |
 |----|----------------------------------|----------|
@@ -272,6 +276,9 @@ can be only partially supported.
 | 🔵 | PutBucketMetricsConfiguration    |          |
 
 ## Notifications
+
+Can't be exactly the same as in AWS. AMQP/NATS/etc can be supported, but it's
+not exactly the gateway job. It also requires metadata synchronization.
 
 |    | Method                             | Comments      |
 |----|------------------------------------|---------------|
@@ -319,7 +326,7 @@ Pay attention to the fact that object owner in NeoFS is bucket owner in any case
 | 🔵 | GetBucketReplication    |                             |
 | 🟢 | PostPolicyBucket        | Upload file using POST form |
 | 🟡 | PutBucketPolicy         | See ACL limitations         |
-| 🔵 | PutBucketReplication    |                             |
+| 🔵 | PutBucketReplication    | Hardly applicable to NeoFS  |
 
 You may set requiring the `bucket-owner-full-control` canned ACL for Amazon S3 PUT operations ([bucket owner preferred](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ensure-object-ownership.html#ensure-object-ownership-bucket-policy)):
 ```shell
