@@ -467,7 +467,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		return nil, fmt.Errorf("marshalBinary: %w", err)
 	}
 
-	attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
+	attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	attributes[s3headers.MultipartPartNumber] = "0"
 	attributes[s3headers.MultipartElementID] = "0"
 	attributes[s3headers.MultipartTotalSize] = "0"
@@ -581,7 +581,7 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(number), object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
@@ -704,7 +704,7 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 
 	attributes[s3headers.MultipartUpload] = info.UploadID
 	attributes[s3headers.MultipartObjectKey] = info.Key
-	attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartInfo
+	attributes[s3headers.MetaType] = s3headers.TypeMultipartInfo
 
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
@@ -737,7 +737,7 @@ func (n *layer) getMultipartInfoObject(ctx context.Context, bktInfo *data.Bucket
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MultipartObjectKey, objectName, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartInfo, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartInfo, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
@@ -778,7 +778,7 @@ func (n *layer) getMultipartInfoByPrefix(ctx context.Context, bktInfo *data.Buck
 		opts    client.SearchObjectsOptions
 
 		returningAttributes = []string{
-			s3headers.MetaMultipartType,
+			s3headers.MetaType,
 			object.AttributeTimestamp,
 			s3headers.MultipartUpload,
 		}
@@ -794,7 +794,7 @@ func (n *layer) getMultipartInfoByPrefix(ctx context.Context, bktInfo *data.Buck
 
 	opts.SetCount(uint32(maxKeys))
 
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartInfo, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartInfo, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MultipartObjectKey, prefix, object.MatchCommonPrefix)
 
 	res, nextCursor, err := n.neoFS.SearchObjectsV2WithCursor(ctx, bktInfo.CID, filters, returningAttributes, cursor, opts)
@@ -892,7 +892,7 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 	)
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
@@ -987,7 +987,7 @@ func (n *layer) multipartMetaGetOIDsForAbort(ctx context.Context, bktInfo *data.
 	)
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
@@ -1032,7 +1032,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 	)
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
@@ -1118,7 +1118,7 @@ func (n *layer) multipartMetaGetPartsAfter(ctx context.Context, bktInfo *data.Bu
 	)
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(partID), object.MatchNumGT)
 
 	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
@@ -1888,7 +1888,7 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 		stateBytes []byte
 	)
 
-	prm.Attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
+	prm.Attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	prm.Attributes[s3headers.MultipartUpload] = p.Info.UploadID
 	prm.Attributes[s3headers.MultipartPartNumber] = strconv.Itoa(p.PartNumber)
 
@@ -2009,7 +2009,7 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 
 	params.attributes[s3headers.MultipartUpload] = params.multipartInfo.UploadID
 	params.attributes[s3headers.MultipartPartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
-	params.attributes[s3headers.MetaMultipartType] = s3headers.TypeMultipartPart
+	params.attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	params.attributes[s3headers.MultipartIsArbitraryPart] = "true"
 	params.attributes[s3headers.MultipartElementID] = "0"
 	params.attributes[s3headers.MultipartTotalSize] = strconv.FormatInt(params.decSize, 10)
@@ -2056,7 +2056,7 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, bucketInfo *data.BucketInfo) (int64, error) {
 	var filters object.SearchFilters
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaMultipartType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MultipartIsArbitraryPart, "true", object.MatchStringEqual)
 
 	var opts client.SearchObjectsOptions
