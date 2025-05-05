@@ -15,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -31,7 +30,7 @@ type PrmContainerCreate struct {
 	CreatorPubKey keys.PublicKey
 
 	// Container placement policy.
-	Policy netmap.PlacementPolicy
+	Policy PlacementPolicy
 
 	// Name for the container.
 	Name string

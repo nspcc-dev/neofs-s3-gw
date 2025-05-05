@@ -825,20 +825,32 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
-	prm.Policy = h.cfg.Policy.Default()
+	prm.Policy = layer.PlacementPolicy{
+		Version:     layer.PlacementPolicyV1,
+		Placement:   h.cfg.Policy.Default(),
+		Consistency: h.cfg.ContainerMetadataPolicy,
+	}
 
 	if locationConstraint == "" {
 		return
 	}
 
 	if policy, ok := h.cfg.Policy.Get(locationConstraint); ok {
-		prm.Policy = policy
+		prm.Policy = layer.PlacementPolicy{
+			Version:     layer.PlacementPolicyV1,
+			Placement:   policy,
+			Consistency: h.cfg.ContainerMetadataPolicy,
+		}
 		prm.LocationConstraint = locationConstraint
 	}
 
 	for _, placementPolicy := range userPolicies {
 		if placementPolicy.LocationConstraint == locationConstraint {
-			prm.Policy = placementPolicy.Policy
+			prm.Policy = layer.PlacementPolicy{
+				Version:     layer.PlacementPolicyV1,
+				Placement:   placementPolicy.Policy,
+				Consistency: h.cfg.ContainerMetadataPolicy,
+			}
 			prm.LocationConstraint = locationConstraint
 			return
 		}

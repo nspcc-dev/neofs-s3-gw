@@ -158,7 +158,7 @@ type (
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
 		Name                     string
-		Policy                   netmap.PlacementPolicy
+		Policy                   PlacementPolicy
 		EACL                     *eacl.Table
 		SessionContainerCreation *session.Container
 		SessionEACL              *session.Container
@@ -209,6 +209,12 @@ type (
 		Head       *object.Object
 		Payload    io.ReadCloser
 		ObjectInfo *data.ObjectInfo
+	}
+
+	PlacementPolicy struct {
+		Version     int
+		Placement   netmap.PlacementPolicy
+		Consistency string
 	}
 
 	// Client provides S3 API client interface.
@@ -281,6 +287,8 @@ const (
 	AESEncryptionAlgorithm     = "AES256"
 	AESKeySize                 = 32
 	AttributeNeofsCopiesNumber = "neofs-copies-number" // such format to match X-Amz-Meta-Neofs-Copies-Number header
+
+	PlacementPolicyV1 = 1
 )
 
 var (

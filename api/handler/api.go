@@ -35,6 +35,7 @@ type (
 		NotificatorEnabled      bool
 		CopiesNumber            uint32
 		MaxDeletePerRequest     int
+		ContainerMetadataPolicy string
 	}
 
 	PlacementPolicy interface {
@@ -46,7 +47,7 @@ type (
 	PlacementPolicyProvider interface {
 		// GetPlacementPolicy get policy by name.
 		// Returns [models.ErrNotFound] if policy not found.
-		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error)
+		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error)
 	}
 
 	// ACLStateProvider get bucket ACL state.

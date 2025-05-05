@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neofs-sdk-go/netmap"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 )
 
 type (
@@ -14,7 +14,7 @@ type (
 	}
 
 	servicePolicyProvider interface {
-		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error)
+		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error)
 	}
 )
 
@@ -25,7 +25,7 @@ func newStoragePolicyService(provider servicePolicyProvider) *storagePolicyServi
 	}
 }
 
-func (s *storagePolicyService) GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error) {
+func (s *storagePolicyService) GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

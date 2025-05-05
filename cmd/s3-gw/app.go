@@ -800,6 +800,16 @@ func (a *App) initHandler() {
 		cfg.MaxDeletePerRequest = defaultMaxObjectDeletePerRequest
 	}
 
+	cfg.ContainerMetadataPolicy = a.cfg.GetString(cfgContainerMetadataPolicy)
+
+	switch cfg.ContainerMetadataPolicy {
+	case neofs.ContainerMetaDataPolicyOptimistic:
+	case neofs.ContainerMetaDataPolicyStrict:
+	case "":
+	default:
+		a.log.Fatal("unsupported config value", zap.String("option", cfgContainerMetadataPolicy))
+	}
+
 	var err error
 	a.api, err = handler.New(a.log, a.obj, a.nc, cfg)
 	if err != nil {
