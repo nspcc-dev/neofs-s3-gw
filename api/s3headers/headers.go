@@ -1,42 +1,50 @@
 package s3headers
 
 const (
+	attributePrefix = "S3-"
+)
+
+const (
+	multipartPrefix = attributePrefix + "MP-"
+
 	// MultipartElementID is number of manual sliced part element.
-	MultipartElementID = "s3mpElementId"
+	// Result: S3-MP-ElementId.
+	MultipartElementID = multipartPrefix + "ElementId"
 	// MultipartIsArbitraryPart describes multipart which has been uploaded in not the subsequent order.
-	MultipartIsArbitraryPart = "s3mpIsArbitrary"
+	MultipartIsArbitraryPart = multipartPrefix + "IsArbitrary"
 	// MultipartTotalSize describes payload size for all manually sliced elements for part.
 	// Size of the last element in chain is a whole part size.
-	MultipartTotalSize = "s3mpTotalSize"
+	MultipartTotalSize = multipartPrefix + "TotalSize"
 
 	// MultipartObjectKey contains object key for multipart object.
 	// It is important to store it separately with object.AttributeFilePath attribute during multipart upload.
 	// Multipart uploading object shouldn't be available for user until CompleteMultipartUpload.
-	MultipartObjectKey = "s3mpObjectKey"
+	MultipartObjectKey = multipartPrefix + "ObjectKey"
 
 	// MultipartUpload contains multipart upload ID.
-	MultipartUpload = "s3mpUpload"
+	MultipartUpload = multipartPrefix + "Upload"
 	// MultipartPartNumber contains part number in MultipartUpload.
-	MultipartPartNumber = "s3mpPartNumber"
+	MultipartPartNumber = multipartPrefix + "PartNumber"
 	// MultipartHash contains hash.Hash state to calculate final object hash.
-	MultipartHash = "s3mpHash"
+	MultipartHash = multipartPrefix + "Hash"
 	// MultipartHomoHash contains hash.Hash state to calculate final object homo hash.
-	MultipartHomoHash = "s3mpHomoHash"
+	MultipartHomoHash = multipartPrefix + "HomoHash"
 	// MultipartPartHash contains hash for MultipartPartNumber.
-	MultipartPartHash = "s3mpPartHash"
+	MultipartPartHash = multipartPrefix + "PartHash"
 	// MultipartOwner contains object owner for uploading object.
-	MultipartOwner = "s3mpOwner"
+	MultipartOwner = multipartPrefix + "Owner"
 	// MultipartCopiesNumber contains CopiesNumber setting for uploading object.
-	MultipartCopiesNumber = "s3mpCopiesNumber"
+	MultipartCopiesNumber = multipartPrefix + "CopiesNumber"
 	// MultipartMeta contains original object attributes.
-	MultipartMeta = "s3mpMeta"
+	MultipartMeta = multipartPrefix + "Meta"
 	// MultipartCreated contains final object creation date.
-	MultipartCreated = "s3mpCreated"
+	MultipartCreated = multipartPrefix + "Created"
 )
 
 const (
 	// MetaType is a header name to identify meta containers for objects.
-	MetaType = "s3MetaType"
+	// Result: S3-MetaType.
+	MetaType = attributePrefix + "MetaType"
 
 	TypeLock              = "lock"
 	TypeTags              = "tags"
@@ -48,30 +56,33 @@ const (
 
 const (
 	// MetaMultipartType is a header name to identify multipart meta for objects.
-	MetaMultipartType = "s3MetaMultipartType"
+	// Result: S3-MP-Type.
+	MetaMultipartType = multipartPrefix + "Type"
 
 	TypeMultipartInfo = "info"
 	TypeMultipartPart = "part"
 )
 
 const (
+	bucketSettingsPrefix = attributePrefix + "BucketSettings-"
+
 	// BucketSettingsVersioning contains versioning setting for bucket.
-	BucketSettingsVersioning = "s3bsVersioning"
+	BucketSettingsVersioning    = bucketSettingsPrefix + "Versioning"
+	AttributeComplianceMode     = bucketSettingsPrefix + "ComplianceMode"
+	AttributeRetentionUntilMode = bucketSettingsPrefix + "RetentionUntil"
 	// BucketSettingsVersioning contains version of bucket settings file.
-	BucketSettingsObjectVersion = "s3bsObjVersion"
+	BucketSettingsObjectVersion = bucketSettingsPrefix + "ObjVersion"
 
-	AttributeComplianceMode     = ".s3-compliance-mode"
-	AttributeRetentionUntilMode = ".s3-retention-until"
-	AttributeObjectVersion      = ".s3-object-version"
-	AttributeObjectNonce        = "__NEOFS__NONCE"
+	AttributeObjectVersion = attributePrefix + "ObjectVersion"
+	AttributeObjectNonce   = "__NEOFS__NONCE"
 
-	NeoFSSystemMetadataPrefix = "S3-"
-
+	NeoFSSystemMetadataPrefix = attributePrefix + "Meta-"
+	// Result: S3-Meta-Algorithm.
 	AttributeEncryptionAlgorithm = NeoFSSystemMetadataPrefix + "Algorithm"
 	AttributeDecryptedSize       = NeoFSSystemMetadataPrefix + "Decrypted-Size"
 	AttributeHMACSalt            = NeoFSSystemMetadataPrefix + "HMAC-Salt"
 	AttributeHMACKey             = NeoFSSystemMetadataPrefix + "HMAC-Key"
-	AttributeVersioningState     = NeoFSSystemMetadataPrefix + "versioning-state"
-	AttributeDeleteMarker        = NeoFSSystemMetadataPrefix + "delete-marker"
+	AttributeVersioningState     = NeoFSSystemMetadataPrefix + "VersioningState"
+	AttributeDeleteMarker        = NeoFSSystemMetadataPrefix + "DeleteMarker"
 	UploadCompletedParts         = NeoFSSystemMetadataPrefix + "Completed-Parts"
 )
