@@ -153,7 +153,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 
 	var cnr container.Container
 	cnr.Init()
-	cnr.SetPlacementPolicy(prm.Policy)
+	cnr.SetPlacementPolicy(prm.Policy.Placement)
 	cnr.SetOwner(prm.Creator)
 	cnr.SetBasicACL(prm.BasicACL)
 
@@ -181,9 +181,9 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 
 	cnr.SetAttribute(layer.AttributeOwnerPublicKey, hex.EncodeToString(prm.CreatorPubKey.Bytes()))
 
-	if x.cfg.ContainerMetadataPolicy == ContainerMetaDataPolicyStrict ||
-		x.cfg.ContainerMetadataPolicy == ContainerMetaDataPolicyOptimistic {
-		cnr.SetAttribute(containerMetaDataPolicyAttribute, x.cfg.ContainerMetadataPolicy)
+	if prm.Policy.Consistency == ContainerMetaDataPolicyStrict ||
+		prm.Policy.Consistency == ContainerMetaDataPolicyOptimistic {
+		cnr.SetAttribute(containerMetaDataPolicyAttribute, prm.Policy.Consistency)
 	}
 
 	err := client.SyncContainerWithNetwork(ctx, &cnr, x.pool)
@@ -688,7 +688,7 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 
 	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
 		Creator:       prm.Owner,
-		Policy:        prm.Policy,
+		Policy:        layer.PlacementPolicy{Placement: prm.Policy, Version: layer.PlacementPolicyV1},
 		Name:          prm.FriendlyName,
 		BasicACL:      basicACL,
 		CreatorPubKey: prm.CreatorPubKey,

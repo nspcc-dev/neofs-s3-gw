@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	rpcNNS "github.com/nspcc-dev/neofs-contract/rpc/nns"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/models"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 )
@@ -80,7 +82,7 @@ func resolveContract(cl *rpcclient.Client, inv *invoker.Invoker, contractName st
 	return contractHash, nil
 }
 
-func (p *storagePolicyProvider) GetPlacementPolicy(userAddr util.Uint160, policyName string) (*netmap.PlacementPolicy, error) {
+func (p *storagePolicyProvider) GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error) {
 	payload, err := unwrap.Bytes(
 		p.invoker().Call(p.contractHash, "resolvePolicy", userAddr, policyName),
 	)
@@ -93,12 +95,28 @@ func (p *storagePolicyProvider) GetPlacementPolicy(userAddr util.Uint160, policy
 		return nil, fmt.Errorf("get system storage policy: %w", err)
 	}
 
-	var pp netmap.PlacementPolicy
-	if err = pp.UnmarshalJSON(payload); err != nil {
+	var (
+		policy layer.PlacementPolicy
+		pp     netmap.PlacementPolicy
+	)
+
+	if err = json.Unmarshal(payload, &policy); err != nil {
 		return nil, fmt.Errorf("unmarshal placement policy: %w", err)
 	}
 
-	return &pp, nil
+	switch policy.Version {
+	case layer.PlacementPolicyV1:
+		return &policy, nil
+	default:
+		if err = pp.UnmarshalJSON(payload); err != nil {
+			return nil, fmt.Errorf("unmarshal placement policy: %w", err)
+		}
+
+		policy.Placement = pp
+		policy.Version = layer.PlacementPolicyV1
+	}
+
+	return &policy, nil
 }
 
 func (p *storagePolicyProvider) index() int {
@@ -133,6 +151,6 @@ func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) 
 	return cl, nil
 }
 
-func (p *noOpStoragePolicyProvider) GetPlacementPolicy(_ util.Uint160, _ string) (*netmap.PlacementPolicy, error) {
+func (p *noOpStoragePolicyProvider) GetPlacementPolicy(_ util.Uint160, _ string) (*layer.PlacementPolicy, error) {
 	return nil, models.ErrNotFound
 }

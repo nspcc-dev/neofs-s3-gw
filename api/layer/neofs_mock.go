@@ -92,7 +92,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	var cnr container.Container
 	cnr.Init()
 	cnr.SetOwner(prm.Creator)
-	cnr.SetPlacementPolicy(prm.Policy)
+	cnr.SetPlacementPolicy(prm.Policy.Placement)
 	cnr.SetBasicACL(prm.BasicACL)
 
 	creationTime := prm.CreationTime
