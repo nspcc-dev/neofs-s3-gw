@@ -220,6 +220,8 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 
 ## Encryption
 
+Methods below are related to AWS SSE-S3 and SSE-KMS encryption. S3 gateway supports SSE-C only for now.
+
 |    | Method                 | Comments |
 |----|------------------------|----------|
 | 🔵 | DeleteBucketEncryption |          |
