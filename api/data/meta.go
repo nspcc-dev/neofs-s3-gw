@@ -13,7 +13,7 @@ const (
 	UnversionedObjectVersionID = "null"
 )
 
-// NodeVersion represent node from tree service.
+// NodeVersion represent basic object metadata.
 type NodeVersion struct {
 	OID            oid.ID
 	Timestamp      uint64
@@ -93,7 +93,7 @@ func SortPartInfo(a, b *PartInfo) int {
 	return cmp.Compare(a.Number, b.Number)
 }
 
-// LockInfo is lock information to create appropriate tree node.
+// LockInfo is lock information for a particular object.
 type LockInfo struct {
 	legalHoldOID oid.ID
 	setLegalHold bool
