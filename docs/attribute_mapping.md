@@ -227,7 +227,8 @@ These objects are used to implement specific S3 features.
 
 ### Lock Object
 
-Stores lock data for an object.
+Stores lock data for an object. It has a standard NeoFS LOCK type and standard
+contents for NeoFS lock objects.
 
 **Attributes:**
 
@@ -237,7 +238,8 @@ Stores lock data for an object.
 
 ### Tags Object
 
-Stores tag data for an object.
+Stores tag data for an object. Contents is a JSON object with string keys and
+values repsenting tags.
 
 **Attributes:**
 
@@ -247,7 +249,8 @@ Stores tag data for an object.
 
 ### Bucket Tags Object
 
-Stores tag data for a bucket.
+Stores tag data for a bucket. Contents is a JSON object with string keys and
+values repsenting tags.
 
 **Attributes:**
 
