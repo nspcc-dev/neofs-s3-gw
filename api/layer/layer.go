@@ -581,44 +581,30 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		owner    = n.Owner(ctx)
 	)
 
-	if len(p.VersionID) == 0 {
-		heads, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID == data.UnversionedObjectVersionID)
+	if err != nil {
+		if errors.Is(err, ErrNodeNotFound) {
+			if len(p.VersionID) == 0 {
+				err = s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			} else {
+				err = s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 			}
-
-			return nil, err
 		}
+		return nil, err
+	}
 
-		if heads[0].IsDeleteMarker {
+	if len(p.VersionID) == 0 {
+		if versions[0].IsDeleteMarker {
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 		}
 
-		id = heads[0].ID
+		id = versions[0].ID
 	} else if p.VersionID == data.UnversionedObjectVersionID {
-		versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-
-			return nil, err
-		}
-
 		id = versions[0].ID
 	} else {
 		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
 		if err != nil {
 			return nil, fmt.Errorf("get bucket settings: %w", err)
-		}
-
-		versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-			return nil, err
 		}
 
 		var foundVersion *allVersionsSearchResult
