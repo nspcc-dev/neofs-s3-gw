@@ -876,75 +876,35 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Exte
 }
 
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if settings.VersioningEnabled() {
-		if len(obj.VersionID) > 0 {
-			var deleteOID oid.ID
+	// Specific version ID passed, drop it.
+	if len(obj.VersionID) > 0 && obj.VersionID != data.UnversionedObjectVersionID {
+		// Simple single ID deletion.
+		var deleteOID oid.ID
 
-			if obj.VersionID == data.UnversionedObjectVersionID {
-				versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, true)
-				if err != nil {
-					obj.Error = fmt.Errorf("search versions: %w", err)
-					if errors.Is(err, ErrNodeNotFound) {
-						obj.Error = nil
-					}
+		if err := deleteOID.DecodeString(obj.VersionID); err != nil {
+			obj.Error = fmt.Errorf("decode version: %w", err)
+			return obj
+		}
 
-					return obj
-				}
-
-				if len(versions) == 0 {
-					obj.Error = nil
-					return obj
-				}
-
-				for _, version := range versions {
-					if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
-						return obj
-					}
-				}
-			} else {
-				if err := deleteOID.DecodeString(obj.VersionID); err != nil {
-					obj.Error = fmt.Errorf("decode version: %w", err)
-					return obj
-				}
-
-				if obj.Error = n.objectDelete(ctx, bkt, deleteOID); obj.Error != nil {
-					return obj
-				}
-			}
-		} else {
-			var markerOID oid.ID
-			markerOID, obj.Error = n.putDeleteMarker(ctx, bkt, obj.Name)
-			obj.DeleteMarkVersion = markerOID.EncodeToString()
+		if obj.Error = n.objectDelete(ctx, bkt, deleteOID); obj.Error != nil {
+			return obj
 		}
 
 		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 		return obj
 	}
 
-	if settings.VersioningSuspended() {
-		obj.VersionID = data.UnversionedObjectVersionID
+	if settings.VersioningEnabled() && len(obj.VersionID) == 0 {
+		// No version specified -> add deletion marker.
+		var markerOID oid.ID
+		markerOID, obj.Error = n.putDeleteMarker(ctx, bkt, obj.Name)
+		obj.DeleteMarkVersion = markerOID.EncodeToString()
 
-		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, true)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				obj.Error = nil
-			} else {
-				obj.Error = fmt.Errorf("search versions: %w", err)
-			}
-
-			return obj
-		}
-
-		for _, version := range versions {
-			if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
-				return obj
-			}
-		}
-
+		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 		return obj
 	}
 
-	versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, false)
+	versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, settings.VersioningEnabled() || settings.VersioningSuspended())
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			obj.Error = nil
@@ -955,30 +915,20 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		return obj
 	}
 
-	if obj.VersionID == "" {
-		for _, ver := range versions {
-			if obj.Error = n.objectDelete(ctx, bkt, ver.ID); obj.Error != nil {
-				n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", ver.ID))
-				if isErrObjectAlreadyRemoved(obj.Error) {
-					obj.Error = nil
-					continue
-				}
-
-				return obj
+	for _, version := range versions {
+		if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
+			n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", version.ID))
+			if isErrObjectAlreadyRemoved(obj.Error) {
+				obj.Error = nil
+				continue
 			}
-		}
-	} else {
-		for _, ver := range versions {
-			if ver.ID.EncodeToString() == obj.VersionID {
-				if obj.Error = n.objectDelete(ctx, bkt, ver.ID); obj.Error != nil {
-					return obj
-				}
-
-				return obj
-			}
+			return obj
 		}
 	}
-
+	if settings.VersioningSuspended() {
+		// Return unversioned ID.
+		obj.VersionID = data.UnversionedObjectVersionID
+	}
 	n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 
 	return obj
