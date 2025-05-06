@@ -593,13 +593,14 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		return nil, err
 	}
 
-	if len(p.VersionID) == 0 {
+	if len(p.VersionID) == 0 || p.VersionID == data.UnversionedObjectVersionID {
 		if versions[0].IsDeleteMarker {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			if len(p.VersionID) == 0 {
+				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			}
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 
-		id = versions[0].ID
-	} else if p.VersionID == data.UnversionedObjectVersionID {
 		id = versions[0].ID
 	} else {
 		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
