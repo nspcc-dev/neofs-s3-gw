@@ -6,6 +6,12 @@ Each uploaded object includes a set of attributes.
 
 ### `S3-Meta-VersioningState`
 
+S3 buckets can have versioning enabled, disabled or suspended. The expected
+behavior for puts/gets is dependent on combination of current _and_ previous
+(at object creation time) setting, so while technically the setting is
+bucket-level we need to know if the object was created with versioning enabled
+or not. This attribute makes it possible.
+
 If bucket versioning is enabled, each uploaded object will have the attribute `S3-Meta-VersioningState: Enabled`.
 > It means storing multiple versions of an object within the same bucket. Each version can be retrieved from the
 > versioning container. If you attempt to retrieve an object by name without specifying a version,
