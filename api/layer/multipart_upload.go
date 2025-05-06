@@ -459,7 +459,7 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	currentVersion := version.Current()
 	hashlessHeaderObject.SetVersion(&currentVersion)
 
-	// encoding hash.Hash state to save it in tree service.
+	// encoding hash.Hash state to save it in the object metadata.
 	// the required interface is guaranteed according to the docs, so just cast without checks.
 	binaryMarshaler := multipartHash.(encoding.BinaryMarshaler)
 	stateBytes, err := binaryMarshaler.MarshalBinary()
@@ -1985,7 +1985,7 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 		mpHashBytes, homoHashBytes []byte
 	)
 
-	// encoding hash.Hash state to save it in tree service.
+	// encoding hash.Hash state to save it the object metadata.
 	// the required interface is guaranteed according to the docs, so just cast without checks.
 	binaryMarshaler := multipartHash.(encoding.BinaryMarshaler)
 	mpHashBytes, err := binaryMarshaler.MarshalBinary()

@@ -276,7 +276,7 @@ type (
 
 		// Compound methods for optimizations
 
-		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in single tree service invocation.
+		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in a single search invocation.
 		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
 	}
 )
@@ -296,10 +296,10 @@ var (
 )
 
 var (
-	// ErrNodeNotFound is returned from Tree service in case of not found error.
+	// ErrNodeNotFound is returned in case of not found error.
 	ErrNodeNotFound = errors.New("not found")
 
-	// ErrNodeAccessDenied is returned from Tree service in case of access denied error.
+	// ErrNodeAccessDenied is returned in case of access denied error.
 	ErrNodeAccessDenied = errors.New("access denied")
 
 	// ErrPartListIsEmpty is returned if no parts available for the upload.
@@ -572,7 +572,7 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.O
 	return extendedObjectInfo.ObjectInfo, nil
 }
 
-// GetExtendedObjectInfo returns meta information and corresponding info from the tree service about the object.
+// GetExtendedObjectInfo returns meta information and corresponding info about the object.
 func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
 	var (
 		id       oid.ID

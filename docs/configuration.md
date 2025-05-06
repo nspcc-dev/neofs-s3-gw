@@ -158,7 +158,6 @@ There are some custom types used for brevity:
 | `placement_policy` | [Placement policy configuration](#placement_policy-section) |
 | `server`           | [Server configuration](#server-section)                     |
 | `logger`           | [Logger configuration](#logger-section)                     |
-| `tree`             | [Tree configuration](#tree-section)                         |
 | `cache`            | [Cache configuration](#cache-section)                       |
 | `nats`             | [NATS configuration](#nats-section)                         |
 | `cors`             | [CORS configuration](#cors-section)                         |
@@ -326,17 +325,6 @@ logger:
 | `level`     | `string` | yes           | `debug`       | Logging level.<br/>Possible values:  `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`.  |
 | `encoding`  | `string` |               | `console`     | Encoding type.<br/>Possible values:  `console`, `json`.                                             |
 | `timestamp` | `bool`   |               | `false`       | Flag to enable timestamps. If the parameter is not set, they will be enabled when you run with tty. |
-
-### `tree` section
-
-```yaml
-tree:
-  service: s01.neofs.devenv:8080
-```
-
-| Parameter | Type     | Default value | Description                                                                                                |
-|-----------|----------|---------------|------------------------------------------------------------------------------------------------------------|
-| `service` | `string` |               | Endpoint of the tree service. Must be provided. Can be one of the node address (from the `peers` section). |
 
 ### `cache` section
 

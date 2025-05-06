@@ -39,7 +39,7 @@ Reference:
       
 ## ACL
 
-For now there are some limitations:
+There are some limitations:
 * [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) supports only one `Principal` per `Statement`. 
 Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"` (base58 encoded address of desired user).
 ```json
@@ -114,6 +114,9 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
     "Grants": []
 }
 ```
+Given that ACLs are disabled by default now and users are expected to use
+alternative mechanisms to manage access improving ACL support is not
+a priority.
 
 |    | Method       | Comments        |
 |----|--------------|-----------------|
@@ -136,8 +139,6 @@ For now there are some limitations:
 | 🟡  | PutObjectRetention         |                           |
 
 ## Multipart
-
-Should be supported soon.
 
 |    | Method                  | Comments |
 |----|-------------------------|----------|
@@ -164,7 +165,7 @@ See also `GetObject` and other method parameters.
 |    | Method             | Comments                 |
 |----|--------------------|--------------------------|
 | 🟢 | ListObjectVersions | ListBucketObjectVersions |
-| 🔵 | RestoreObject      |                          |
+| 🔵 | RestoreObject      | Related to lifecycles and tiering. |
 
 ## Bucket
 
@@ -176,7 +177,7 @@ See also `GetObject` and other method parameters.
 | 🟢 | HeadBucket           |           |
 | 🟢 | ListBuckets          |           |
 | 🔵 | PutPublicAccessBlock |           |
-| 🔵 | GetPublicAccessBlock |           |
+| 🔵 | GetPublicAccessBlock | Related to ACL management, not a priority. |
 
 * `CreateBucket` method allows you to select a placement policy using the `LocationConstraint` parameter in the AWS CLI. The policy name should be passed as a value.
   * Policies mapping can be defined via:
@@ -203,6 +204,8 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 
 ## Analytics
 
+Requires a separate entity to generate/upload data daily.
+
 |    | Method                             | Comments |
 |----|------------------------------------|----------|
 | 🔵 | DeleteBucketAnalyticsConfiguration |          |
@@ -220,6 +223,8 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 
 ## Encryption
 
+Methods below are related to AWS SSE-S3 and SSE-KMS encryption. S3 gateway supports SSE-C only for now.
+
 |    | Method                 | Comments |
 |----|------------------------|----------|
 | 🔵 | DeleteBucketEncryption |          |
@@ -227,6 +232,8 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 | 🔵 | PutBucketEncryption    |          |
 
 ## Inventory
+
+Requires a separate entity to generate/upload data regularly.
 
 |    | Method                             | Comments |
 |----|------------------------------------|----------|
@@ -236,6 +243,9 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 | 🔵 | PutBucketInventoryConfiguration    |          |
      
 ## Lifecycle
+
+In general requires a separate entity to manage uploaded objects. Without it
+can be only partially supported.
 
 |    | Method                          | Comments                                             |
 |----|---------------------------------|------------------------------------------------------|
@@ -247,12 +257,16 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 
 ## Logging
 
+Doesn't make much sense in non-AWS case.
+
 |    | Method           | Comments |
 |----|------------------|----------|
 | 🔵 | GetBucketLogging |          |
 | 🔵 | PutBucketLogging |          |
 
 ## Metrics
+
+Doesn't make much sense in non-AWS case.
 
 |    | Method                           | Comments |
 |----|----------------------------------|----------|
@@ -262,6 +276,9 @@ See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
 | 🔵 | PutBucketMetricsConfiguration    |          |
 
 ## Notifications
+
+Can't be exactly the same as in AWS. AMQP/NATS/etc can be supported, but it's
+not exactly the gateway job. It also requires metadata synchronization.
 
 |    | Method                             | Comments      |
 |----|------------------------------------|---------------|
@@ -309,7 +326,7 @@ Pay attention to the fact that object owner in NeoFS is bucket owner in any case
 | 🔵 | GetBucketReplication    |                             |
 | 🟢 | PostPolicyBucket        | Upload file using POST form |
 | 🟡 | PutBucketPolicy         | See ACL limitations         |
-| 🔵 | PutBucketReplication    |                             |
+| 🔵 | PutBucketReplication    | Hardly applicable to NeoFS  |
 
 You may set requiring the `bucket-owner-full-control` canned ACL for Amazon S3 PUT operations ([bucket owner preferred](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ensure-object-ownership.html#ensure-object-ownership-bucket-policy)):
 ```shell
@@ -361,6 +378,8 @@ policy.json:
 | 🟢 | PutBucketTagging    |          |
 
 ## Tiering
+
+Tightly related to lifecycle support.
 
 |    | Method                                      | Comments |
 |----|---------------------------------------------|----------|
