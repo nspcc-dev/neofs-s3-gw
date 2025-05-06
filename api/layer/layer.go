@@ -212,9 +212,9 @@ type (
 	}
 
 	PlacementPolicy struct {
-		Version     int
-		Placement   netmap.PlacementPolicy
-		Consistency string
+		Version     int                    `json:"version"`
+		Placement   netmap.PlacementPolicy `json:"placement"`
+		Consistency string                 `json:"consistency"`
 	}
 
 	// Client provides S3 API client interface.
