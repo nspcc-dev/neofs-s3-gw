@@ -1051,11 +1051,21 @@ func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) 
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
-	objects, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.BktInfo.Owner, "", false)
+	var (
+		filters = make(object.SearchFilters, 0, 2)
+		opts    client.SearchObjectsOptions
+	)
+
+	opts.SetCount(1) // Enough for the purpose.
+	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
+
+	objects, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, filters, []string{object.FilterType}, opts)
 	if err != nil {
-		if !errors.Is(err, ErrNodeNotFound) {
-			return err
-		}
+		return err
 	}
 
 	// there are only Regular objects in slice.
