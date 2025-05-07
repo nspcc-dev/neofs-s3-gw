@@ -6,6 +6,12 @@ Each uploaded object includes a set of attributes.
 
 ### `S3-Meta-VersioningState`
 
+S3 buckets can have versioning enabled, disabled or suspended. The expected
+behavior for puts/gets is dependent on combination of current _and_ previous
+(at object creation time) setting, so while technically the setting is
+bucket-level we need to know if the object was created with versioning enabled
+or not. This attribute makes it possible.
+
 If bucket versioning is enabled, each uploaded object will have the attribute `S3-Meta-VersioningState: Enabled`.
 > It means storing multiple versions of an object within the same bucket. Each version can be retrieved from the
 > versioning container. If you attempt to retrieve an object by name without specifying a version,
@@ -221,7 +227,8 @@ These objects are used to implement specific S3 features.
 
 ### Lock Object
 
-Stores lock data for an object.
+Stores lock data for an object. It has a standard NeoFS LOCK type and standard
+contents for NeoFS lock objects.
 
 **Attributes:**
 
@@ -231,7 +238,8 @@ Stores lock data for an object.
 
 ### Tags Object
 
-Stores tag data for an object.
+Stores tag data for an object. Contents is a JSON object with string keys and
+values repsenting tags.
 
 **Attributes:**
 
@@ -241,7 +249,8 @@ Stores tag data for an object.
 
 ### Bucket Tags Object
 
-Stores tag data for a bucket.
+Stores tag data for a bucket. Contents is a JSON object with string keys and
+values repsenting tags.
 
 **Attributes:**
 
@@ -279,15 +288,16 @@ Stores settings configuration for a bucket.
 
 - `S3-MetaType: bucketSettings`
 - `S3-BucketSettings-Versioning`
-- `S3-ObjectVersion`
+  Deprecated, replaced by meta version.
+- `S3-BucketSettings-MetaVersion`
+  Stores settings version.
 
-The object payload contains the settings data.
-
-It canbe empty string or `%s,%d,%s,%d` string.
-
-* `string`. Is object lock enabled. Possible values: `` (empty string), `Enabled`.
-* `int64`. Retention days for bucket objects.
-* `string`. Retention mode. Possible values: `GOVERNANCE`, `COMPLIANCE`.
-* `int64`. Retention years for bucket objects.
-
-`Days` and `Years` represent durations and cannot be used simultaneously. Only one of them can be specified at a time.
+The object payload contains settings data in JSON format. For version 1 it's
+an object with the following fields:
+ * "versioning", corresponding to bucket versioning settings
+   (Unversioned/Enabled/Suspended)
+ * "lock_configuration" which is an object with "ObjectLockEnabled" and "Rule"
+   members corresponding to XML parameters of lock configuration in S3 API
+ * "bucket_owner" which is a number representing object ownership and ACL
+   settings (0 for owner enforced, 1 for owner preferred, 2 for owner
+   preferred and restricted and 3 for object writer owner)
