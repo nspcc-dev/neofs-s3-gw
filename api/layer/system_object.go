@@ -30,7 +30,6 @@ type PutLockInfoParams struct {
 type locksSearchResult struct {
 	ID                 oid.ID
 	FilePath           string
-	CreationEpoch      uint64
 	CreationTimestamp  int64
 	ExpirationEpoch    uint64
 	IsComplianceMode   bool
@@ -107,7 +106,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
 			object.AttributeFilePath,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 			object.AttributeExpirationEpoch,
 			s3headers.AttributeComplianceMode,
@@ -154,30 +152,23 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
 		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+			psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[2], 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+				return nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[2], err)
 			}
 		}
 
-		if item.Attributes[3] != "" {
-			psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[3], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[3], err)
-			}
-		}
+		psr.IsComplianceMode = item.Attributes[3] == "true"
 
-		psr.IsComplianceMode = item.Attributes[4] == "true"
-
-		if item.Attributes[5] != "" {
-			psr.RetentionUntilMode, err = time.Parse(time.RFC3339, item.Attributes[5])
+		if item.Attributes[4] != "" {
+			psr.RetentionUntilMode, err = time.Parse(time.RFC3339, item.Attributes[4])
 			if err != nil {
 				return nil, fmt.Errorf("parse retention until attribute: %w", err)
 			}
@@ -187,10 +178,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	}
 
 	sortFunc := func(a, b locksSearchResult) int {
-		if c := cmp.Compare(a.CreationEpoch, b.CreationEpoch); c != 0 { // direct order.
-			return c
-		}
-
 		if c := cmp.Compare(a.CreationTimestamp, b.CreationTimestamp); c != 0 { // direct order.
 			return c
 		}
