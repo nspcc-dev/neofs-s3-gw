@@ -79,7 +79,6 @@ type (
 	prefixSearchResult struct {
 		ID                oid.ID
 		FilePath          string
-		CreationEpoch     uint64
 		CreationTimestamp int64
 		IsDeleteMarker    bool
 		DecryptedSize     int64
@@ -90,7 +89,6 @@ type (
 	versioningContainerIDSearchResult struct {
 		ID                oid.ID
 		FilePath          string
-		CreationEpoch     uint64
 		CreationTimestamp int64
 		IsDeleteMarker    bool
 	}
@@ -98,7 +96,6 @@ type (
 	allVersionsSearchResult struct {
 		ID                oid.ID
 		FilePath          string
-		CreationEpoch     uint64
 		CreationTimestamp int64
 		PayloadSize       int64
 		IsDeleteMarker    bool
@@ -107,21 +104,12 @@ type (
 
 	baseSearchResult struct {
 		ID                oid.ID
-		CreationEpoch     uint64
 		CreationTimestamp int64
 	}
 )
 
 func (a prefixSearchResult) isNewerThan(b prefixSearchResult) bool {
-	if a.CreationEpoch > b.CreationEpoch {
-		return true
-	}
-
-	if a.CreationTimestamp > b.CreationTimestamp {
-		return true
-	}
-
-	return false
+	return a.CreationTimestamp > b.CreationTimestamp
 }
 
 // objectHead returns all object's headers.
@@ -419,7 +407,6 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 		filters             = make(object.SearchFilters, 0, 6)
 		returningAttributes = []string{
 			object.AttributeFilePath,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 			s3headers.AttributeVersioningState,
 			object.FilterPayloadSize,
@@ -472,38 +459,27 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+		psr.IsVersioned = item.Attributes[2] == data.VersioningEnabled
+
+		if item.Attributes[3] != "" {
+			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[3], 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+				return nil, fmt.Errorf("invalid payload size %s: %w", item.Attributes[3], err)
 			}
 		}
 
-		psr.IsVersioned = item.Attributes[3] == data.VersioningEnabled
-
-		if item.Attributes[4] != "" {
-			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[4], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid payload size %s: %w", item.Attributes[4], err)
-			}
-		}
-
-		psr.IsDeleteMarker = item.Attributes[5] != ""
+		psr.IsDeleteMarker = item.Attributes[4] != ""
 
 		searchResults = append(searchResults, psr)
 	}
 
 	sortFunc := func(a, b allVersionsSearchResult) int {
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
-			return c
-		}
-
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
 			return c
 		}
@@ -522,7 +498,6 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		filters             = make(object.SearchFilters, 0, 7)
 		returningAttributes = []string{
 			object.AttributeFilePath,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 			s3headers.AttributeVersioningState,
 			object.FilterPayloadSize,
@@ -577,20 +552,13 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return nil, false, false, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+				return nil, false, false, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
-			if err != nil {
-				return nil, false, false, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
-			}
-		}
-
-		switch item.Attributes[6] {
+		switch item.Attributes[5] {
 		case s3headers.TypeTags:
 			hasTags = true
 			continue
@@ -600,25 +568,21 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		default:
 		}
 
-		psr.IsVersioned = item.Attributes[3] == data.VersioningEnabled
+		psr.IsVersioned = item.Attributes[2] == data.VersioningEnabled
 
-		if item.Attributes[4] != "" {
-			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[4], 10, 64)
+		if item.Attributes[3] != "" {
+			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[3], 10, 64)
 			if err != nil {
-				return nil, false, false, fmt.Errorf("invalid payload size %s: %w", item.Attributes[4], err)
+				return nil, false, false, fmt.Errorf("invalid payload size %s: %w", item.Attributes[3], err)
 			}
 		}
 
-		psr.IsDeleteMarker = item.Attributes[5] != ""
+		psr.IsDeleteMarker = item.Attributes[4] != ""
 
 		searchResults = append(searchResults, psr)
 	}
 
 	sortFunc := func(a, b allVersionsSearchResult) int {
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
-			return c
-		}
-
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
 			return c
 		}
@@ -706,7 +670,6 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
 			object.AttributeFilePath,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 			s3headers.AttributeDeleteMarker,
 			s3headers.AttributeDecryptedSize,
@@ -757,32 +720,25 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return nil, "", fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+				return nil, "", fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
+		psr.IsDeleteMarker = item.Attributes[2] != ""
+
+		if item.Attributes[3] != "" {
+			psr.DecryptedSize, err = strconv.ParseInt(item.Attributes[3], 10, 64)
 			if err != nil {
-				return nil, "", fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+				return nil, "", fmt.Errorf("invalid decrypted size %s: %w", item.Attributes[3], err)
 			}
 		}
-
-		psr.IsDeleteMarker = item.Attributes[3] != ""
 
 		if item.Attributes[4] != "" {
-			psr.DecryptedSize, err = strconv.ParseInt(item.Attributes[4], 10, 64)
+			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[4], 10, 64)
 			if err != nil {
-				return nil, "", fmt.Errorf("invalid decrypted size %s: %w", item.Attributes[4], err)
-			}
-		}
-
-		if item.Attributes[5] != "" {
-			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[5], 10, 64)
-			if err != nil {
-				return nil, "", fmt.Errorf("invalid payload size %s: %w", item.Attributes[5], err)
+				return nil, "", fmt.Errorf("invalid payload size %s: %w", item.Attributes[4], err)
 			}
 		}
 
@@ -790,17 +746,13 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 			psr.PayloadSize = psr.DecryptedSize
 		}
 
-		psr.PayloadChecksum = item.Attributes[6]
+		psr.PayloadChecksum = item.Attributes[5]
 
 		searchResults = append(searchResults, psr)
 	}
 
 	sortFunc := func(a, b prefixSearchResult) int {
 		if c := cmp.Compare(a.FilePath, b.FilePath); c != 0 { // direct order.
-			return c
-		}
-
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
 			return c
 		}
 
@@ -1316,7 +1268,6 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 		filters             = make(object.SearchFilters, 0, 2)
 		returningAttributes = []string{
 			s3headers.MetaType,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 		}
 	)
@@ -1353,16 +1304,9 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
-			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
@@ -1370,10 +1314,6 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 	}
 
 	sortFunc := func(a, b baseSearchResult) int {
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
-			return c
-		}
-
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
 			return c
 		}
