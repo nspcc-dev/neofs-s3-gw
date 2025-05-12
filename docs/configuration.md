@@ -227,16 +227,13 @@ wallet:
 # nodes with other priority are not used.
 # The lower the value, the higher the priority.
 peers:
-  0:
-    address: node1.neofs:8080
+  - address: node1.neofs:8080
     priority: 1
     weight: 1
-  1:
-    address: node2.neofs:8080
+  - address: node2.neofs:8080
     priority: 2
     weight: 0.1
-  2:
-    address: node3.neofs:8080
+  - address: node3.neofs:8080
     priority: 2
     weight: 0.9
 ```
