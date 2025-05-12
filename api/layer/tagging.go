@@ -34,7 +34,6 @@ type PutObjectTaggingParams struct {
 type taggingSearchResult struct {
 	ID                oid.ID
 	FilePath          string
-	CreationEpoch     uint64
 	CreationTimestamp int64
 }
 
@@ -85,7 +84,6 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
 			object.AttributeFilePath,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 		}
 
@@ -129,16 +127,9 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return "", nil, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
-			if err != nil {
-				return "", nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
+				return "", nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
@@ -146,10 +137,6 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	}
 
 	sortFunc := func(a, b taggingSearchResult) int {
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
-			return c
-		}
-
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
 			return c
 		}

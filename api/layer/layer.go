@@ -761,7 +761,6 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
 			object.AttributeFilePath,
-			object.FilterCreationEpoch,
 			object.AttributeTimestamp,
 			s3headers.AttributeDeleteMarker,
 		}
@@ -807,29 +806,18 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 		}
 
 		if item.Attributes[1] != "" {
-			psr.CreationEpoch, err = strconv.ParseUint(item.Attributes[1], 10, 64)
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation epoch %s: %w", item.Attributes[1], err)
+				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
-		if item.Attributes[2] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[2], 10, 64)
-			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[2], err)
-			}
-		}
-
-		psr.IsDeleteMarker = item.Attributes[3] != ""
+		psr.IsDeleteMarker = item.Attributes[2] != ""
 
 		searchResults = append(searchResults, psr)
 	}
 
 	sortFunc := func(a, b versioningContainerIDSearchResult) int {
-		if c := cmp.Compare(b.CreationEpoch, a.CreationEpoch); c != 0 { // reverse order.
-			return c
-		}
-
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
 			return c
 		}

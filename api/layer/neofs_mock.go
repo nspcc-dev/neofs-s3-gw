@@ -40,6 +40,7 @@ type TestNeoFS struct {
 	containers   map[string]*container.Container
 	eaclTables   map[string]*eacl.Table
 	currentEpoch uint64
+	currentTime  int64
 	signer       neofscrypto.Signer
 }
 
@@ -54,10 +55,11 @@ const (
 
 func NewTestNeoFS(signer neofscrypto.Signer) *TestNeoFS {
 	return &TestNeoFS{
-		objects:    make(map[string]*object.Object),
-		containers: make(map[string]*container.Container),
-		eaclTables: make(map[string]*eacl.Table),
-		signer:     signer,
+		objects:     make(map[string]*object.Object),
+		containers:  make(map[string]*container.Container),
+		eaclTables:  make(map[string]*eacl.Table),
+		currentTime: time.Now().Unix(),
+		signer:      signer,
 	}
 }
 
@@ -273,14 +275,14 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	id := oid.NewFromObjectHeaderBinary(b)
 
 	attrs := make([]object.Attribute, 0)
-	creationTime := prm.CreationTime
-	if creationTime.IsZero() {
-		creationTime = time.Now()
-	}
 
+	// Deliberately ignore `prm.CreationTime` here, it's based on time.Now()
+	// which leads to duplicate timestamps in different object versions and
+	// this breaks many tests.
 	var a *object.Attribute
-	a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10))
+	a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(t.currentTime, 10))
 	attrs = append(attrs, *a)
+	t.currentTime++
 
 	if prm.Filepath != "" {
 		a = object.NewAttribute(object.AttributeFilePath, prm.Filepath)
