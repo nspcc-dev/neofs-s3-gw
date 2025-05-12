@@ -581,29 +581,24 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		owner    = n.Owner(ctx)
 	)
 
-	if len(p.VersionID) == 0 {
-		heads, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
+	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID == data.UnversionedObjectVersionID)
+	if err != nil {
+		if errors.Is(err, ErrNodeNotFound) {
+			if len(p.VersionID) == 0 {
+				err = s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+			} else {
+				err = s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+		}
+		return nil, err
+	}
+
+	if len(p.VersionID) == 0 || p.VersionID == data.UnversionedObjectVersionID {
+		if versions[0].IsDeleteMarker {
+			if len(p.VersionID) == 0 {
 				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
 			}
-
-			return nil, err
-		}
-
-		if heads[0].IsDeleteMarker {
-			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
-		}
-
-		id = heads[0].ID
-	} else if p.VersionID == data.UnversionedObjectVersionID {
-		versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-
-			return nil, err
+			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 
 		id = versions[0].ID
@@ -611,14 +606,6 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
 		if err != nil {
 			return nil, fmt.Errorf("get bucket settings: %w", err)
-		}
-
-		versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, false)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
-			}
-			return nil, err
 		}
 
 		var foundVersion *allVersionsSearchResult
@@ -890,75 +877,35 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Exte
 }
 
 func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings *data.BucketSettings, obj *VersionedObject) *VersionedObject {
-	if settings.VersioningEnabled() {
-		if len(obj.VersionID) > 0 {
-			var deleteOID oid.ID
+	// Specific version ID passed, drop it.
+	if len(obj.VersionID) > 0 && obj.VersionID != data.UnversionedObjectVersionID {
+		// Simple single ID deletion.
+		var deleteOID oid.ID
 
-			if obj.VersionID == data.UnversionedObjectVersionID {
-				versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, true)
-				if err != nil {
-					obj.Error = fmt.Errorf("search versions: %w", err)
-					if errors.Is(err, ErrNodeNotFound) {
-						obj.Error = nil
-					}
+		if err := deleteOID.DecodeString(obj.VersionID); err != nil {
+			obj.Error = fmt.Errorf("decode version: %w", err)
+			return obj
+		}
 
-					return obj
-				}
-
-				if len(versions) == 0 {
-					obj.Error = nil
-					return obj
-				}
-
-				for _, version := range versions {
-					if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
-						return obj
-					}
-				}
-			} else {
-				if err := deleteOID.DecodeString(obj.VersionID); err != nil {
-					obj.Error = fmt.Errorf("decode version: %w", err)
-					return obj
-				}
-
-				if obj.Error = n.objectDelete(ctx, bkt, deleteOID); obj.Error != nil {
-					return obj
-				}
-			}
-		} else {
-			var markerOID oid.ID
-			markerOID, obj.Error = n.putDeleteMarker(ctx, bkt, obj.Name)
-			obj.DeleteMarkVersion = markerOID.EncodeToString()
+		if obj.Error = n.objectDelete(ctx, bkt, deleteOID); obj.Error != nil {
+			return obj
 		}
 
 		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 		return obj
 	}
 
-	if settings.VersioningSuspended() {
-		obj.VersionID = data.UnversionedObjectVersionID
+	if settings.VersioningEnabled() && len(obj.VersionID) == 0 {
+		// No version specified -> add deletion marker.
+		var markerOID oid.ID
+		markerOID, obj.Error = n.putDeleteMarker(ctx, bkt, obj.Name)
+		obj.DeleteMarkVersion = markerOID.EncodeToString()
 
-		versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, true)
-		if err != nil {
-			if errors.Is(err, ErrNodeNotFound) {
-				obj.Error = nil
-			} else {
-				obj.Error = fmt.Errorf("search versions: %w", err)
-			}
-
-			return obj
-		}
-
-		for _, version := range versions {
-			if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
-				return obj
-			}
-		}
-
+		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 		return obj
 	}
 
-	versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, false)
+	versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, settings.VersioningEnabled() || settings.VersioningSuspended())
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			obj.Error = nil
@@ -969,30 +916,20 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		return obj
 	}
 
-	if obj.VersionID == "" {
-		for _, ver := range versions {
-			if obj.Error = n.objectDelete(ctx, bkt, ver.ID); obj.Error != nil {
-				n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", ver.ID))
-				if isErrObjectAlreadyRemoved(obj.Error) {
-					obj.Error = nil
-					continue
-				}
-
-				return obj
+	for _, version := range versions {
+		if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
+			n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", version.ID))
+			if isErrObjectAlreadyRemoved(obj.Error) {
+				obj.Error = nil
+				continue
 			}
-		}
-	} else {
-		for _, ver := range versions {
-			if ver.ID.EncodeToString() == obj.VersionID {
-				if obj.Error = n.objectDelete(ctx, bkt, ver.ID); obj.Error != nil {
-					return obj
-				}
-
-				return obj
-			}
+			return obj
 		}
 	}
-
+	if settings.VersioningSuspended() {
+		// Return unversioned ID.
+		obj.VersionID = data.UnversionedObjectVersionID
+	}
 	n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
 
 	return obj
@@ -1051,11 +988,21 @@ func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) 
 }
 
 func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
-	objects, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.BktInfo.Owner, "", false)
+	var (
+		filters = make(object.SearchFilters, 0, 2)
+		opts    client.SearchObjectsOptions
+	)
+
+	opts.SetCount(1) // Enough for the purpose.
+	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
+
+	objects, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, filters, []string{object.FilterType}, opts)
 	if err != nil {
-		if !errors.Is(err, ErrNodeNotFound) {
-			return err
-		}
+		return err
 	}
 
 	// there are only Regular objects in slice.
