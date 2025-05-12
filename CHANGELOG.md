@@ -5,12 +5,8 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- Support of `x-amz-content-sha256` header with `STREAMING-UNSIGNED-PAYLOAD-TRAILER` value (#1028)
 
 ### Changed
-- AWS SDK migrated to V2 (#1028)
-- Bucket ownership settings moved from EACL to bucket settings meta objects (#1120)
-- Peers list definition in config files (#1149)
 
 ### Fixed
 
@@ -18,11 +14,42 @@ This document outlines major changes between releases.
 
 ### Removed
 
-## Upgrading from 0.36.1
+### Upgrading from 0.37.0
+
+## [0.37.0] - 2025-05-12
+
+### Added
+- Support of `x-amz-content-sha256` header with `STREAMING-UNSIGNED-PAYLOAD-TRAILER` value (#1028)
+- Fetching metadata consistency policy from contract (#1150)
+
+### Changed
+- Request-related metrics are histograms now (#1127)
+- Bucket ownership settings moved from EACL to bucket settings meta objects (#1120)
+- Bucket settings data is versioned now (#1143)
+- Unified prefixes for object attributes (#1145)
+- Peers list definition in config files (#1149)
+- Object's Epoch attribute is no longer considered when sorting (only timestamp is used, #1163)
+- ChaCha20-Poly1305 is replaced by AES for access boxes (#1136)
+
+### Fixed
+- Requirement to pass Content-MD5 header when deleting multiple objects (#1113)
+- Missing prefix in ListObjectVersions result (#1128)
+- Duplicates in object listings (#1133)
+- Incorrect ownership of multipart upload metadata objects (#1139)
+- Homomorphic hashing enabled for new bucket when it's disabled network-wide (#1138)
+- Attempt to list whole bucket when removing it (#1157)
+
+### Updated
+- AWS SDK to V2 (#1028)
+
+### Removed
+- MetaMultipartType object attribute (#1146)
+
+### Upgrading from 0.36.1
 authmate tool "reset-bucket-acl" command was updated to clean redundant EACL records. These settings were moved to
 bucket settings object.
 
-Updating peers config should be done from old format:
+Please change peer config from the old format:
 ```yaml
 peers:
   0:
@@ -790,4 +817,5 @@ releases.
 [0.35.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.34.1...v0.35.0
 [0.36.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.35.0...v0.36.0
 [0.36.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.0...v0.36.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.1...master
+[0.37.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.1...v0.37.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.37.0...master
