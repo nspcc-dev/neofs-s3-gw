@@ -185,29 +185,10 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 		searchResults = append(searchResults, psr)
 	}
 
-	sortFunc := func(a, b locksSearchResult) int {
-		if c := cmp.Compare(a.CreationTimestamp, b.CreationTimestamp); c != 0 { // direct order.
-			return c
-		}
+	slices.SortFunc(searchResults, locksSearchResultsSortFunc)
+	lock := extractLockInfoFromSearch(searchResults)
 
-		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(a.ID[:], b.ID[:]) // direct order.
-	}
-
-	slices.SortFunc(searchResults, sortFunc)
-
-	var lock data.LockInfo
-
-	for _, item := range searchResults {
-		// legal hold.
-		if item.ExpirationEpoch == math.MaxUint64 {
-			lock.SetLegalHold(item.ID)
-		} else {
-			lock.SetRetention(item.ID, item.RetentionUntilMode.Format(time.RFC3339), item.IsComplianceMode)
-		}
-	}
-
-	return &lock, nil
+	return lock, nil
 }
 
 func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32, objectName, objectVersion string) (oid.ID, error) {
@@ -414,4 +395,28 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 	}
 
 	return result, nil
+}
+
+func locksSearchResultsSortFunc(a, b locksSearchResult) int {
+	if c := cmp.Compare(a.CreationTimestamp, b.CreationTimestamp); c != 0 { // direct order.
+		return c
+	}
+
+	// It is a temporary decision. We can't figure out what object was first and what the second right now.
+	return bytes.Compare(a.ID[:], b.ID[:]) // direct order.
+}
+
+func extractLockInfoFromSearch(lockVersions []locksSearchResult) *data.LockInfo {
+	var lockInfo data.LockInfo
+
+	for _, item := range lockVersions {
+		// legal hold.
+		if item.ExpirationEpoch == math.MaxUint64 {
+			lockInfo.SetLegalHold(item.ID)
+		} else {
+			lockInfo.SetRetention(item.ID, item.RetentionUntilMode.Format(time.RFC3339), item.IsComplianceMode)
+		}
+	}
+
+	return &lockInfo
 }

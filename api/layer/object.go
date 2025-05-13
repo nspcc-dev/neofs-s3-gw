@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -493,16 +494,18 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	return searchResults, nil
 }
 
-func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, bool, bool, error) {
+func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, oid.ID, *data.LockInfo, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 7)
 		returningAttributes = []string{
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
 			s3headers.AttributeVersioningState,
-			object.FilterPayloadSize,
 			s3headers.AttributeDeleteMarker,
 			s3headers.MetaType,
+			s3headers.AttributeObjectVersion,
+			object.AttributeExpirationEpoch,
+			s3headers.AttributeLockMeta,
 		}
 
 		opts client.SearchObjectsOptions
@@ -525,62 +528,23 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return nil, false, false, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+			return nil, oid.ID{}, nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
-		return nil, false, false, fmt.Errorf("search object version: %w", err)
+		return nil, oid.ID{}, nil, fmt.Errorf("search object version: %w", err)
 	}
 
 	if len(searchResultItems) == 0 {
-		return nil, false, false, ErrNodeNotFound
+		return nil, oid.ID{}, nil, ErrNodeNotFound
 	}
 
 	var (
-		searchResults = make([]allVersionsSearchResult, 0, len(searchResultItems))
-		hasTags       bool
-		hasLocks      bool
+		searchResults   = make([]allVersionsSearchResult, 0, len(searchResultItems))
+		locksByVersions = make(map[string][]locksSearchResult)
+		lockInfo        *data.LockInfo
+		tagsObjectOID   allVersionsSearchResult
+		tagsByVersion   = make(map[string]allVersionsSearchResult)
 	)
-
-	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, false, false, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
-		var psr = allVersionsSearchResult{
-			ID:       item.ID,
-			FilePath: item.Attributes[0],
-		}
-
-		if item.Attributes[1] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
-			if err != nil {
-				return nil, false, false, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		switch item.Attributes[5] {
-		case s3headers.TypeTags:
-			hasTags = true
-			continue
-		case s3headers.TypeLock:
-			hasLocks = true
-			continue
-		default:
-		}
-
-		psr.IsVersioned = item.Attributes[2] == data.VersioningEnabled
-
-		if item.Attributes[3] != "" {
-			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[3], 10, 64)
-			if err != nil {
-				return nil, false, false, fmt.Errorf("invalid payload size %s: %w", item.Attributes[3], err)
-			}
-		}
-
-		psr.IsDeleteMarker = item.Attributes[4] != ""
-
-		searchResults = append(searchResults, psr)
-	}
 
 	sortFunc := func(a, b allVersionsSearchResult) int {
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
@@ -591,17 +555,99 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
 	}
 
+	for _, item := range searchResultItems {
+		if len(item.Attributes) != len(returningAttributes) {
+			return nil, oid.ID{}, nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+		}
+
+		var psr = allVersionsSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[0],
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
+			if err != nil {
+				return nil, oid.ID{}, nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		var version = item.Attributes[5]
+
+		switch item.Attributes[4] {
+		case s3headers.TypeTags:
+			tagResult, ok := tagsByVersion[version]
+			if !ok || psr.CreationTimestamp > tagResult.CreationTimestamp {
+				tagsByVersion[version] = psr
+				continue
+			}
+		case s3headers.TypeLock:
+			var lsr = locksSearchResult{
+				ID:                item.ID,
+				FilePath:          item.Attributes[0],
+				CreationTimestamp: psr.CreationTimestamp,
+			}
+
+			if item.Attributes[6] != "" {
+				lsr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[6], 10, 64)
+				if err != nil {
+					return nil, oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[6], err)
+				}
+			}
+
+			if item.Attributes[7] != "" {
+				if err = extractLockDataFromAttrubute(&lsr, item.Attributes[7]); err != nil {
+					return nil, oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
+				}
+			}
+
+			if _, ok := locksByVersions[version]; !ok {
+				locksByVersions[version] = make([]locksSearchResult, 1)
+			}
+
+			locksByVersions[version] = append(locksByVersions[version], lsr)
+			continue
+		default:
+		}
+
+		psr.IsVersioned = item.Attributes[2] == data.VersioningEnabled
+		psr.IsDeleteMarker = item.Attributes[3] != ""
+
+		searchResults = append(searchResults, psr)
+	}
+
 	slices.SortFunc(searchResults, sortFunc)
 
-	return searchResults, hasTags, hasLocks, nil
+	if len(searchResults) > 0 {
+		var lockVersions []locksSearchResult
+
+		if searchResults[0].IsVersioned {
+			var ver = searchResults[0].ID.EncodeToString()
+
+			tagsObjectOID = tagsByVersion[ver]
+			lockVersions = locksByVersions[ver]
+		} else {
+			// empty version
+			tagsObjectOID = tagsByVersion[""]
+			lockVersions = locksByVersions[""]
+		}
+
+		slices.SortFunc(lockVersions, locksSearchResultsSortFunc)
+		lockInfo = extractLockInfoFromSearch(lockVersions)
+	}
+
+	return searchResults, tagsObjectOID.ID, lockInfo, nil
 }
 
-func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName, objectVersion string) (bool, bool, error) {
+func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName, objectVersion string) (oid.ID, *data.LockInfo, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
 			object.AttributeFilePath,
+			object.AttributeTimestamp,
 			s3headers.MetaType,
+			object.AttributeExpirationEpoch,
+			s3headers.AttributeLockMeta,
 		}
 
 		opts client.SearchObjectsOptions
@@ -625,41 +671,66 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return false, false, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+			return oid.ID{}, nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
-		return false, false, fmt.Errorf("search object version: %w", err)
+		return oid.ID{}, nil, fmt.Errorf("search object version: %w", err)
 	}
 
 	if len(searchResultItems) == 0 {
-		return false, false, nil
+		return oid.ID{}, nil, nil
 	}
 
 	var (
-		hasTags  bool
-		hasLocks bool
+		tagResult         locksSearchResult
+		lockSearchResults = make([]locksSearchResult, 0, len(searchResultItems))
 	)
 
 	for _, item := range searchResultItems {
 		if len(item.Attributes) != len(returningAttributes) {
-			return false, false, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
+			return oid.ID{}, nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
 		}
 
-		switch item.Attributes[1] {
+		var psr = locksSearchResult{
+			ID:       item.ID,
+			FilePath: item.Attributes[0],
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
+			if err != nil {
+				return oid.ID{}, nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		switch item.Attributes[2] {
 		case s3headers.TypeTags:
-			hasTags = true
+			if psr.CreationTimestamp > tagResult.CreationTimestamp {
+				tagResult = psr
+			}
 		case s3headers.TypeLock:
-			hasLocks = true
-		default:
-		}
+			if item.Attributes[3] != "" {
+				psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[3], 10, 64)
+				if err != nil {
+					return oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[3], err)
+				}
+			}
 
-		// we already got maximum information.
-		if hasTags && hasLocks {
-			break
+			if item.Attributes[4] != "" {
+				if err = extractLockDataFromAttrubute(&psr, item.Attributes[4]); err != nil {
+					return oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
+				}
+			}
+
+			lockSearchResults = append(lockSearchResults, psr)
+		default:
 		}
 	}
 
-	return hasTags, hasLocks, nil
+	slices.SortFunc(lockSearchResults, locksSearchResultsSortFunc)
+	lock := extractLockInfoFromSearch(lockSearchResults)
+
+	return tagResult.ID, lock, nil
 }
 
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
@@ -1325,4 +1396,24 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 	slices.SortFunc(searchResults, sortFunc)
 
 	return searchResults[0].ID, nil
+}
+
+func extractLockDataFromAttrubute(lsr *locksSearchResult, attributeValue string) error {
+	fields := make(map[string]string)
+	if err := json.Unmarshal([]byte(attributeValue), &fields); err != nil {
+		return fmt.Errorf("unmarshal lock meta fields: %w", err)
+	}
+
+	lsr.IsComplianceMode = fields[s3headers.FieldComplianceMode] == "true"
+
+	if fields[s3headers.FieldRetentionUntilMode] != "" {
+		ts, err := strconv.ParseInt(fields[s3headers.FieldRetentionUntilMode], 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid retention until time: %w", err)
+		}
+
+		lsr.RetentionUntilMode = time.Unix(ts, 0).UTC()
+	}
+
+	return nil
 }
