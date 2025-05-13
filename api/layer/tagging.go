@@ -49,7 +49,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: p.CopiesNumber,
 		Filepath:     p.ObjectVersion.ObjectName,
-		Attributes:   make(map[string]string, 2),
+		Attributes:   make(map[string]string, 3+len(p.TagSet)),
 		Payload:      bytes.NewBuffer(payload),
 		PayloadSize:  uint64(len(payload)),
 	}
@@ -60,6 +60,9 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 	}
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
+	for k, v := range p.TagSet {
+		prm.Attributes[s3headers.NeoFSSystemMetadataTagPrefix+k] = v
+	}
 
 	if _, _, err = n.objectPutAndHash(ctx, prm, p.ObjectVersion.BktInfo); err != nil {
 		return fmt.Errorf("create tagging object: %w", err)
