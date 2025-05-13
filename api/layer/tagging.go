@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
@@ -35,6 +36,7 @@ type taggingSearchResult struct {
 	ID                oid.ID
 	FilePath          string
 	CreationTimestamp int64
+	IsOriginalObject  bool
 }
 
 func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) error {
@@ -88,6 +90,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		returningAttributes = []string{
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
+			s3headers.MetaType,
 		}
 
 		opts client.SearchObjectsOptions
@@ -98,7 +101,6 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	}
 
 	filters.AddFilter(object.AttributeFilePath, p.ObjectVersion.ObjectName, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.ObjectVersion.VersionID != "" {
 		filters.AddFilter(s3headers.AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
@@ -114,10 +116,30 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	}
 
 	if len(searchResultItems) == 0 {
+		// Objects inside versioned container don't have s3headers.AttributeObjectVersion attribute.
+		// This case means there are no separate attbute meta objects, let's try to get attributes from object itself.
+		if p.ObjectVersion.VersionID != "" {
+			var objID oid.ID
+			if err = objID.DecodeString(p.ObjectVersion.VersionID); err != nil {
+				return "", nil, fmt.Errorf("parse object version %s into oid: %w", p.ObjectVersion.VersionID, err)
+			}
+
+			tags, err := n.getTagsFromOriginalObject(ctx, p.ObjectVersion.BktInfo, objID)
+			if err != nil {
+				return "", nil, fmt.Errorf("get tags by oid: %w", err)
+			}
+
+			return p.ObjectVersion.VersionID, tags, nil
+		}
+
 		return "", nil, nil
 	}
 
-	var searchResults = make([]taggingSearchResult, 0, len(searchResultItems))
+	var (
+		tags                        map[string]string
+		metaObjectSearchResults     = make([]taggingSearchResult, 0, len(searchResultItems))
+		originalObjectSearchResults = make([]taggingSearchResult, 0, 1)
+	)
 
 	for _, item := range searchResultItems {
 		if len(item.Attributes) != len(returningAttributes) {
@@ -129,6 +151,16 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 			FilePath: item.Attributes[0],
 		}
 
+		switch item.Attributes[2] {
+		case "":
+			psr.IsOriginalObject = true
+		case s3headers.TypeTags:
+			// is a tag meta object.
+		default:
+			// skip other meta types.
+			continue
+		}
+
 		if item.Attributes[1] != "" {
 			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
@@ -136,7 +168,11 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 			}
 		}
 
-		searchResults = append(searchResults, psr)
+		if psr.IsOriginalObject {
+			originalObjectSearchResults = append(originalObjectSearchResults, psr)
+		} else {
+			metaObjectSearchResults = append(metaObjectSearchResults, psr)
+		}
 	}
 
 	sortFunc := func(a, b taggingSearchResult) int {
@@ -148,14 +184,41 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
 	}
 
-	slices.SortFunc(searchResults, sortFunc)
+	// There are not extra meta objects with tags.
+	if len(metaObjectSearchResults) == 0 {
+		slices.SortFunc(originalObjectSearchResults, sortFunc)
 
-	tags, err := n.getTagsByOID(ctx, p.ObjectVersion.BktInfo, searchResults[0].ID)
-	if err != nil {
-		return "", nil, err
+		tags, err = n.getTagsFromOriginalObject(ctx, p.ObjectVersion.BktInfo, originalObjectSearchResults[0].ID)
+		if err != nil {
+			return "", nil, err
+		}
+	} else {
+		slices.SortFunc(metaObjectSearchResults, sortFunc)
+
+		tags, err = n.getTagsByOID(ctx, p.ObjectVersion.BktInfo, metaObjectSearchResults[0].ID)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 
 	return p.ObjectVersion.VersionID, tags, nil
+}
+
+func (n *layer) getTagsFromOriginalObject(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID) (map[string]string, error) {
+	var tagSet = make(map[string]string)
+
+	header, err := n.objectHead(ctx, bktInfo, id)
+	if err != nil {
+		return nil, fmt.Errorf("get object head: %w", err)
+	}
+
+	for _, attr := range header.Attributes() {
+		if strings.HasPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix) {
+			tagSet[strings.TrimPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix)] = attr.Value()
+		}
+	}
+
+	return tagSet, nil
 }
 
 func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID) (map[string]string, error) {
@@ -179,7 +242,7 @@ func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id o
 	return tags, nil
 }
 
-func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
+func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copiesNumber uint32) error {
 	fs := make(object.SearchFilters, 0, 4)
 	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
@@ -214,7 +277,14 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 
 	n.cache.DeleteTagging(objectTaggingCacheKey(p))
 
-	return nil
+	// Put an empty tag list to override tags inside the object itself.
+	putObjectTaggingParams := PutObjectTaggingParams{
+		ObjectVersion: p,
+		TagSet:        make(map[string]string),
+		CopiesNumber:  copiesNumber,
+	}
+
+	return n.PutObjectTagging(ctx, &putObjectTaggingParams)
 }
 
 func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {

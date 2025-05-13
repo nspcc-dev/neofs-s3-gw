@@ -184,7 +184,7 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		p.VersionID = ei.EncodeToString()
 	}
 
-	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
+	if err = h.obj.DeleteObjectTagging(r.Context(), p, h.cfg.CopiesNumber); err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
 	}
