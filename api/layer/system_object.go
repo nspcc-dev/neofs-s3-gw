@@ -108,8 +108,7 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
 			object.AttributeExpirationEpoch,
-			s3headers.AttributeComplianceMode,
-			s3headers.AttributeRetentionUntilMode,
+			s3headers.AttributeLockMeta,
 		}
 
 		opts client.SearchObjectsOptions
@@ -165,12 +164,21 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 			}
 		}
 
-		psr.IsComplianceMode = item.Attributes[3] == "true"
+		if item.Attributes[3] != "" {
+			fields := make(map[string]string)
+			if err = json.Unmarshal([]byte(item.Attributes[3]), &fields); err != nil {
+				return nil, fmt.Errorf("unmarshal retention fields: %w", err)
+			}
 
-		if item.Attributes[4] != "" {
-			psr.RetentionUntilMode, err = time.Parse(time.RFC3339, item.Attributes[4])
-			if err != nil {
-				return nil, fmt.Errorf("parse retention until attribute: %w", err)
+			psr.IsComplianceMode = fields[s3headers.FieldComplianceMode] == "true"
+
+			if fields[s3headers.FieldRetentionUntilMode] != "" {
+				ts, err := strconv.ParseInt(fields[s3headers.FieldRetentionUntilMode], 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid retention until time: %w", err)
+				}
+
+				psr.RetentionUntilMode = time.Unix(ts, 0).UTC()
 			}
 		}
 
@@ -375,11 +383,23 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
 
-		result[s3headers.AttributeRetentionUntilMode] = lock.Retention.Until.UTC().Format(time.RFC3339)
+		var (
+			retention        = make(map[string]string, 2)
+			attributePayload []byte
+		)
+
+		retention[s3headers.FieldRetentionUntilMode] = strconv.FormatInt(lock.Retention.Until.UTC().Unix(), 10)
 
 		if lock.Retention.IsCompliance {
-			result[s3headers.AttributeComplianceMode] = "true"
+			retention[s3headers.FieldComplianceMode] = "true"
 		}
+
+		attributePayload, err = json.Marshal(retention)
+		if err != nil {
+			return nil, fmt.Errorf("marshal attribute: %w", err)
+		}
+
+		result[s3headers.AttributeLockMeta] = string(attributePayload)
 	}
 
 	if lock.LegalHold != nil && lock.LegalHold.Enabled {

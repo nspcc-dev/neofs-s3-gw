@@ -170,17 +170,11 @@ Specifies the version of the bucket settings object's file structure
 
 If bucket versioning is enabled, this attribute indicates which version the object belongs to.
 
-### `S3-BucketSettings-ComplianceMode`
+### `S3-Lock-Meta`
 
-Indicates whether the object is under a compliance-mode retention lock.
-
-**Possible values:**
-
-- `true`
-
-### `S3-BucketSettings-RetentionUntil`
-
-Contains the retention expiration timestamp in `time.RFC3339` format.
+Contains JSON encoded lock metadata in the next fields:
+- `ComplianceMode`. Indicates whether the object is under a compliance-mode retention lock.
+- `RetentionUntil`. Contains the retention expiration timestamp.
 
 ### S3-Algorithm
 
@@ -235,6 +229,7 @@ contents for NeoFS lock objects.
 - `S3-MetaType: lock`
 - `S3-ObjectVersion`
 - `S3-Meta-VersioningState`
+- `S3-Lock-Meta`
 
 ### Tags Object
 
