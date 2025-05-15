@@ -1417,3 +1417,89 @@ func extractLockDataFromAttrubute(lsr *locksSearchResult, attributeValue string)
 
 	return nil
 }
+
+// DeleteObjectMetaFiles removes all metafiles for.
+func (n *layer) DeleteObjectMetaFiles(ctx context.Context, p *ObjectVersion) error {
+	fs := make(object.SearchFilters, 0, 4)
+	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
+	fs.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
+	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	if p.VersionID != "" {
+		fs.AddFilter(s3headers.AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+	}
+
+	var opts client.SearchObjectsOptions
+	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(res) == 0 {
+		return nil
+	}
+
+	for i := range res {
+		if err = n.objectDelete(ctx, p.BktInfo, res[i].ID); err != nil {
+			// only log.
+			n.log.Warn("couldn't delete meta object", zap.Stringer("oid", res[i].ID), zap.Stringer("cid", p.BktInfo.CID), zap.Error(err))
+		}
+	}
+
+	n.cache.DeleteTagging(objectTaggingCacheKey(p))
+
+	return nil
+}
+
+// searchEverythingForRemove returns all object versions and metadata files related to objectName.
+//
+// Returns ErrNodeNotFound if zero objects found.
+func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]oid.ID, error) {
+	var (
+		filters             = make(object.SearchFilters, 0, 3)
+		returningAttributes = []string{
+			object.AttributeFilePath,
+		}
+
+		opts client.SearchObjectsOptions
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+		opts.WithBearerToken(*bt)
+	}
+
+	filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	if onlyUnversioned {
+		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+	}
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return nil, ErrNodeNotFound
+	}
+
+	var oids = make([]oid.ID, 0, len(searchResultItems))
+
+	for _, item := range searchResultItems {
+		oids = append(oids, item.ID)
+	}
+
+	return oids, nil
+}
