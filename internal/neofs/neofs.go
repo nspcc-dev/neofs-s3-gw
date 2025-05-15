@@ -370,6 +370,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	}
 
 	if x.cfg.IsSlicerEnabled {
+		var signer = x.signer(ctx)
+
+		obj.SetOwner(signer.UserID())
+
 		opts := slicer.Options{}
 		opts.SetObjectPayloadLimit(uint64(x.cfg.MaxObjectSize))
 		opts.SetCopiesNumber(prm.CopiesNumber)
@@ -400,7 +404,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			opts.SetBearerToken(*prm.BearerToken)
 		}
 
-		objID, err := slicer.Put(ctx, x.pool, obj, x.signer(ctx), prm.Payload, opts)
+		objID, err := slicer.Put(ctx, x.pool, obj, signer, prm.Payload, opts)
 		if returnToPool {
 			x.buffers.Put(chunk)
 		}
