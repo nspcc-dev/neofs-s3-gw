@@ -60,14 +60,15 @@ const (
 	bucketSettingsPrefix = attributePrefix + "BucketSettings-"
 
 	// BucketSettingsVersioning contains versioning setting for bucket.
-	BucketSettingsVersioning    = bucketSettingsPrefix + "Versioning"
-	AttributeComplianceMode     = bucketSettingsPrefix + "ComplianceMode"
-	AttributeRetentionUntilMode = bucketSettingsPrefix + "RetentionUntil"
+	BucketSettingsVersioning = bucketSettingsPrefix + "Versioning"
 	// BucketSettingsMetaVersion contains version of bucket settings file.
 	BucketSettingsMetaVersion = bucketSettingsPrefix + "MetaVersion"
 
 	AttributeObjectVersion = attributePrefix + "ObjectVersion"
 	AttributeObjectNonce   = "__NEOFS__NONCE"
+
+	// Result: S3-Lock-Meta.
+	AttributeLockMeta = attributePrefix + "Lock-Meta"
 
 	NeoFSSystemMetadataPrefix = attributePrefix + "Meta-"
 	// Result: S3-Meta-Algorithm.
@@ -78,4 +79,9 @@ const (
 	AttributeVersioningState     = NeoFSSystemMetadataPrefix + "VersioningState"
 	AttributeDeleteMarker        = NeoFSSystemMetadataPrefix + "DeleteMarker"
 	UploadCompletedParts         = NeoFSSystemMetadataPrefix + "Completed-Parts"
+)
+
+const (
+	FieldComplianceMode     = "ComplianceMode"
+	FieldRetentionUntilMode = "RetentionUntil"
 )
