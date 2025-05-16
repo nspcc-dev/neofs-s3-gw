@@ -656,11 +656,11 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 
 func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error) {
 	var (
-		id                oid.ID
-		err               error
-		owner             = n.Owner(ctx)
-		versions          []allVersionsSearchResult
-		hasTags, hasLocks bool
+		id            oid.ID
+		tagsObjectOID oid.ID
+		err           error
+		owner         = n.Owner(ctx)
+		versions      []allVersionsSearchResult
 
 		tagSet         map[string]string
 		lockInfo       *data.LockInfo
@@ -669,7 +669,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 	)
 
 	if isEmptyVersion || isNullVersion {
-		versions, hasTags, hasLocks, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, isNullVersion)
+		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, isNullVersion)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				if isEmptyVersion {
@@ -708,34 +708,17 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 			return nil, fmt.Errorf("head version %s: %w", p.VersionID, err)
 		}
 
-		hasTags, hasLocks, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID)
+		tagsObjectOID, lockInfo, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if hasTags {
-		tagPrm := &GetObjectTaggingParams{
-			ObjectVersion: &ObjectVersion{
-				BktInfo:    p.BktInfo,
-				ObjectName: p.Object,
-				VersionID:  p.VersionID,
-			},
-		}
-
-		_, tagSet, err = n.GetObjectTagging(ctx, tagPrm)
+	if !tagsObjectOID.IsZero() {
+		tagSet, err = n.getTagsByOID(ctx, p.BktInfo, tagsObjectOID)
 		if err != nil {
 			if !errors.Is(err, ErrNodeNotFound) {
 				return nil, fmt.Errorf("get tags: %w", err)
-			}
-		}
-	}
-
-	if hasLocks {
-		lockInfo, err = n.getLockDataFromObjects(ctx, p.BktInfo, p.Object, p.VersionID)
-		if err != nil {
-			if !errors.Is(err, ErrNodeNotFound) {
-				return nil, fmt.Errorf("get locks: %w", err)
 			}
 		}
 	}
