@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/sio"
@@ -280,13 +281,65 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Attributes:   p.Header,
 	}
 
+	var (
+		oldVersions    []allVersionsSearchResult
+		oldVersionsErr error
+		wg             sync.WaitGroup
+	)
+
 	if bktSettings.VersioningEnabled() {
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
+	} else {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
+		}()
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
 	if err != nil {
 		return nil, err
+	}
+
+	// We need new object id to filter it out.
+	wg.Wait()
+
+	if oldVersionsErr != nil {
+		n.log.Warn("search old object versions failed",
+			zap.String("object", p.Object),
+			zap.String("bucket", p.BktInfo.Name),
+			zap.Stringer("cid", p.BktInfo.CID),
+			zap.Error(err))
+	}
+
+	if len(oldVersions) > 0 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for _, ver := range oldVersions {
+				// skip new added object.
+				if ver.ID == id {
+					continue
+				}
+
+				if err = n.objectDelete(ctx, p.BktInfo, ver.ID); err != nil {
+					// only log.
+					n.log.Warn(
+						"failed to delete old object",
+						zap.String("object", p.Object),
+						zap.String("bucket", p.BktInfo.Name),
+						zap.Stringer("cid", p.BktInfo.CID),
+						zap.Stringer("oid", ver.ID),
+						zap.Error(err),
+					)
+				}
+			}
+		}()
 	}
 
 	reqInfo := api.GetReqInfo(ctx)
@@ -339,6 +392,8 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	n.cache.PutObjectWithName(owner, extendedObjInfo)
+
+	wg.Wait()
 
 	return extendedObjInfo, nil
 }

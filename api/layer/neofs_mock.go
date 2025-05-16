@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -35,6 +36,7 @@ import (
 type TestNeoFS struct {
 	NeoFS
 
+	objectsMutex *sync.RWMutex
 	objects      map[string]*object.Object
 	containers   map[string]*container.Container
 	eaclTables   map[string]*eacl.Table
@@ -54,11 +56,12 @@ const (
 
 func NewTestNeoFS(signer neofscrypto.Signer) *TestNeoFS {
 	return &TestNeoFS{
-		objects:     make(map[string]*object.Object),
-		containers:  make(map[string]*container.Container),
-		eaclTables:  make(map[string]*eacl.Table),
-		currentTime: time.Now().Unix(),
-		signer:      signer,
+		objectsMutex: &sync.RWMutex{},
+		objects:      make(map[string]*object.Object),
+		containers:   make(map[string]*container.Container),
+		eaclTables:   make(map[string]*eacl.Table),
+		currentTime:  time.Now().Unix(),
+		signer:       signer,
 	}
 }
 
@@ -67,6 +70,8 @@ func (t *TestNeoFS) CurrentEpoch() uint64 {
 }
 
 func (t *TestNeoFS) Objects() []*object.Object {
+	t.objectsMutex.RLock()
+	defer t.objectsMutex.RUnlock()
 	res := make([]*object.Object, 0, len(t.objects))
 
 	for _, obj := range t.objects {
@@ -77,7 +82,9 @@ func (t *TestNeoFS) Objects() []*object.Object {
 }
 
 func (t *TestNeoFS) AddObject(key string, obj *object.Object) {
+	t.objectsMutex.Lock()
 	t.objects[key] = obj
+	t.objectsMutex.Unlock()
 }
 
 func (t *TestNeoFS) ContainerID(name string) (cid.ID, error) {
@@ -159,6 +166,8 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 
 	sAddr := addr.EncodeToString()
 
+	t.objectsMutex.RLock()
+	defer t.objectsMutex.RUnlock()
 	obj, ok := t.objects[sAddr]
 	if !ok {
 		// trying to find linking object.
@@ -335,9 +344,12 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 			for _, e := range prm.Multipart.Link.Objects() {
 				addr = oid.NewAddress(prm.Container, e.ObjectID())
+
+				t.objectsMutex.RLock()
 				if partialObject, ok := t.objects[addr.EncodeToString()]; ok {
 					payload = append(payload, partialObject.Payload()...)
 				}
+				t.objectsMutex.RUnlock()
 			}
 
 			pid := prm.Multipart.HeaderObject.GetID()
@@ -357,7 +369,9 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 			realHeaderObj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(payload)))
 
 			addr = oid.NewAddress(prm.Container, pid)
+			t.objectsMutex.Lock()
 			t.objects[addr.EncodeToString()] = realHeaderObj
+			t.objectsMutex.Unlock()
 		}
 	}
 
@@ -378,7 +392,9 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	objID := obj.GetID()
 
 	addr := oid.NewAddress(obj.GetContainerID(), objID)
+	t.objectsMutex.Lock()
 	t.objects[addr.EncodeToString()] = obj
+	t.objectsMutex.Unlock()
 	return objID, nil
 }
 
@@ -401,6 +417,8 @@ func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header
 func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error {
 	addr := oid.NewAddress(prm.Container, prm.Object)
 
+	t.objectsMutex.Lock()
+	defer t.objectsMutex.Unlock()
 	if obj, ok := t.objects[addr.EncodeToString()]; ok {
 		owner := getOwner(ctx)
 		if obj.Owner() != owner {
@@ -427,6 +445,8 @@ func (t *TestNeoFS) IsHomomorphicHashingEnabled() bool {
 }
 
 func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
+	t.objectsMutex.RLock()
+	defer t.objectsMutex.RUnlock()
 	result := make([]oid.ID, 0, len(t.objects))
 
 	for _, val := range t.objects {
@@ -474,6 +494,8 @@ func getOwner(ctx context.Context) user.ID {
 func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid.ID, error) {
 	var oids []oid.ID
 
+	t.objectsMutex.RLock()
+	defer t.objectsMutex.RUnlock()
 	if len(prm.Filters) == 0 {
 		for _, obj := range t.objects {
 			oids = append(oids, obj.GetID())
@@ -498,6 +520,7 @@ func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters objec
 		ignoreFilters = len(filters) == 0
 	)
 
+	t.objectsMutex.RLock()
 	for _, obj := range t.objects {
 		if obj.GetContainerID() != cid {
 			continue
@@ -507,6 +530,7 @@ func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters objec
 			searchedItems = append(searchedItems, fillResultObject(obj, attributes))
 		}
 	}
+	t.objectsMutex.RUnlock()
 
 	var result = make([]client.SearchResultItem, 0, len(searchedItems))
 	for _, item := range searchedItems {
@@ -538,7 +562,9 @@ func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, fil
 		}
 	}
 
+	t.objectsMutex.RLock()
 	objects := slices.Collect(maps.Values(t.objects))
+	t.objectsMutex.RUnlock()
 	slices.SortFunc(objects, func(a, b *object.Object) int {
 		var (
 			aPath string
