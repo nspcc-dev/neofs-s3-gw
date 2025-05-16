@@ -880,6 +880,24 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		}
 
 		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
+
+		ov := ObjectVersion{
+			BktInfo:    bkt,
+			ObjectName: obj.Name,
+			VersionID:  obj.VersionID,
+		}
+
+		if err := n.DeleteObjectMetaFiles(ctx, &ov); err != nil {
+			// only log
+			n.log.Warn(
+				"couldn't delete object meta files",
+				zap.Error(err),
+				zap.Stringer("cid", bkt.CID),
+				zap.String("object", obj.Name),
+				zap.String("version", obj.VersionID),
+			)
+		}
+
 		return obj
 	}
 
@@ -893,7 +911,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		return obj
 	}
 
-	versions, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, obj.Name, settings.VersioningEnabled() || settings.VersioningSuspended())
+	versions, err := n.searchEverythingForRemove(ctx, bkt, bkt.Owner, obj.Name, settings.VersioningEnabled() || settings.VersioningSuspended())
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			obj.Error = nil
@@ -904,9 +922,9 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		return obj
 	}
 
-	for _, version := range versions {
-		if obj.Error = n.objectDelete(ctx, bkt, version.ID); obj.Error != nil {
-			n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", version.ID))
+	for _, id := range versions {
+		if obj.Error = n.objectDelete(ctx, bkt, id); obj.Error != nil {
+			n.log.Error("could not delete object", zap.Error(obj.Error), zap.Stringer("oid", id))
 			if isErrObjectAlreadyRemoved(obj.Error) {
 				obj.Error = nil
 				continue
