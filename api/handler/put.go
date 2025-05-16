@@ -271,6 +271,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Header:       metadata,
 		Encryption:   encryptionParams,
 		CopiesNumber: copiesNumber,
+		Tags:         tagSet,
 	}
 
 	params.Lock, err = formObjectLock(r.Context(), bktInfo, settings.LockConfiguration, r.Header)
@@ -307,27 +308,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if containsACLHeaders(r) {
 		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
-			return
-		}
-	}
-
-	if tagSet != nil {
-		tagPrm := &layer.PutObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
-				BktInfo:    bktInfo,
-				ObjectName: objInfo.Name,
-				VersionID:  objInfo.VersionID(),
-			},
-			TagSet:       tagSet,
-			CopiesNumber: h.cfg.CopiesNumber,
-		}
-
-		if !settings.VersioningEnabled() {
-			tagPrm.ObjectVersion.VersionID = ""
-		}
-
-		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
-			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
 	}
@@ -502,6 +482,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		Reader:  contentReader,
 		Size:    size,
 		Header:  metadata,
+		Tags:    tagSet,
 	}
 
 	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
@@ -534,22 +515,6 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 
 		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
 			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
-			return
-		}
-	}
-
-	if tagSet != nil {
-		tagPrm := &layer.PutObjectTaggingParams{
-			ObjectVersion: &layer.ObjectVersion{
-				BktInfo:    bktInfo,
-				ObjectName: objInfo.Name,
-				VersionID:  objInfo.VersionID(),
-			},
-			CopiesNumber: h.cfg.CopiesNumber,
-		}
-
-		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
-			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)
 			return
 		}
 	}
