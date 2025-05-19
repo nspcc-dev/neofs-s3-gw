@@ -120,6 +120,7 @@ type (
 		Lock         *data.ObjectLock
 		Encryption   encryption.Params
 		CopiesNumber uint32
+		Tags         map[string]string
 	}
 
 	DeleteObjectParams struct {
@@ -251,7 +252,7 @@ type (
 
 		GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams) (string, map[string]string, error)
 		PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) error
-		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
+		DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copiesNumber uint32) error
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error)
 
@@ -662,10 +663,11 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		owner         = n.Owner(ctx)
 		versions      []allVersionsSearchResult
 
-		tagSet         map[string]string
+		tagSet         = make(map[string]string)
 		lockInfo       *data.LockInfo
 		isEmptyVersion = len(p.VersionID) == 0
 		isNullVersion  = p.VersionID == data.UnversionedObjectVersionID
+		header         *object.Object
 	)
 
 	if isEmptyVersion || isNullVersion {
@@ -698,7 +700,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 			return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 		}
 
-		if _, err = n.objectHead(ctx, p.BktInfo, id); err != nil {
+		if header, err = n.objectHead(ctx, p.BktInfo, id); err != nil {
 			var errNotFound *apistatus.ObjectNotFound
 
 			if errors.As(err, &errNotFound) {
@@ -706,6 +708,12 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 			}
 
 			return nil, fmt.Errorf("head version %s: %w", p.VersionID, err)
+		}
+
+		for _, attr := range header.Attributes() {
+			if strings.HasPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix) {
+				tagSet[strings.TrimPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix)] = attr.Value()
+			}
 		}
 
 		tagsObjectOID, lockInfo, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID)

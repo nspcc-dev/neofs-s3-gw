@@ -265,6 +265,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		}
 	}
 
+	for k, v := range p.Tags {
+		p.Header[s3headers.NeoFSSystemMetadataTagPrefix+k] = v
+	}
+
 	prm := PrmObjectCreate{
 		Container:    p.BktInfo.CID,
 		Creator:      owner,
