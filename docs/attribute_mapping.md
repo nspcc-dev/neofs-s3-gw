@@ -196,6 +196,11 @@ Contains key for encryption algorith, if encryption is enabled.
 
 Contains info about all multipart parts for object. It is stored in the final object attributes.
 
+### S3-Meta-Tag-*
+
+Attributes with the `S3-Meta-Tag-` prefix contain tags for the original object. These attributes can be a part of
+an original object or a tags meta object.
+
 ---
 
 ### `S3-MetaType`
@@ -235,6 +240,14 @@ contents for NeoFS lock objects.
 
 Stores tag data for an object. Contents is a JSON object with string keys and
 values repsenting tags.
+
+Tags passed with an object during a `Put` operation are stored as object attributes using the `S3-Meta-Tag-` prefix.
+In this case, the creation of a separate metadata object is skipped. To enable proper handling of tag removal,
+an empty metadata object is created during a `DeleteObjectTagging` request.
+
+Any subsequent changes to the object's attributes will result in the creation of tag metadata objects as usual.
+It stores the original object's tags within the body payload. Additionally, it uses the `S3-Meta-Tag-` prefix to store
+the original object's attributes.
 
 **Attributes:**
 
