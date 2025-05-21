@@ -435,7 +435,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -526,7 +526,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	}
 
 	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -1484,7 +1484,7 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 
 	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
