@@ -119,7 +119,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	}
 
 	filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaType, s3headers.TypeLock, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
 	if version != "" {
 		filters.AddFilter(s3headers.AttributeObjectVersion, version, object.MatchStringEqual)
@@ -141,10 +140,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	var searchResults = make([]locksSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = locksSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -211,8 +206,6 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 		prm.Attributes[s3headers.AttributeObjectVersion] = objectVersion
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 	}
-
-	prm.Attributes[s3headers.MetaType] = s3headers.TypeLock
 
 	id, _, err := n.objectPutAndHash(ctx, prm, bktInfo)
 	return id, err
@@ -354,9 +347,11 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 
 func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (map[string]string, error) {
 	var (
-		err      error
-		expEpoch uint64
-		result   = make(map[string]string)
+		err              error
+		expEpoch         uint64
+		result           = make(map[string]string)
+		lockMetaPayload  = make(map[string]string, 2)
+		attributePayload []byte
 	)
 
 	if lock.Retention != nil {
@@ -364,23 +359,11 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 			return nil, fmt.Errorf("fetch time to epoch: %w", err)
 		}
 
-		var (
-			retention        = make(map[string]string, 2)
-			attributePayload []byte
-		)
-
-		retention[s3headers.FieldRetentionUntilMode] = strconv.FormatInt(lock.Retention.Until.UTC().Unix(), 10)
+		lockMetaPayload[s3headers.FieldRetentionUntilMode] = strconv.FormatInt(lock.Retention.Until.UTC().Unix(), 10)
 
 		if lock.Retention.IsCompliance {
-			retention[s3headers.FieldComplianceMode] = "true"
+			lockMetaPayload[s3headers.FieldComplianceMode] = "true"
 		}
-
-		attributePayload, err = json.Marshal(retention)
-		if err != nil {
-			return nil, fmt.Errorf("marshal attribute: %w", err)
-		}
-
-		result[s3headers.AttributeLockMeta] = string(attributePayload)
 	}
 
 	if lock.LegalHold != nil && lock.LegalHold.Enabled {
@@ -393,6 +376,14 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 	if expEpoch != 0 {
 		result[object.AttributeExpirationEpoch] = strconv.FormatUint(expEpoch, 10)
 	}
+
+	attributePayload, err = json.Marshal(lockMetaPayload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal attribute: %w", err)
+	}
+
+	// This attribute is required for meta lock objects. We filter out lock objects with this attribute.
+	result[s3headers.AttributeLockMeta] = string(attributePayload)
 
 	return result, nil
 }

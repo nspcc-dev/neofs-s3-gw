@@ -46,7 +46,6 @@ const (
 	// Result: S3-MetaType.
 	MetaType = attributePrefix + "MetaType"
 
-	TypeLock              = "lock"
 	TypeTags              = "tags"
 	TypeBucketTags        = "bucketTags"
 	TypeBucketNotifConfig = "bucketNotifConf"

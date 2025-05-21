@@ -435,7 +435,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
 	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -454,10 +454,6 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	var searchResults = make([]allVersionsSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = allVersionsSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -526,7 +522,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	}
 
 	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -560,10 +556,6 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	}
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, oid.ID{}, nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = allVersionsSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -585,33 +577,33 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 				tagsByVersion[version] = psr
 				continue
 			}
-		case s3headers.TypeLock:
-			var lsr = locksSearchResult{
-				ID:                item.ID,
-				FilePath:          item.Attributes[0],
-				CreationTimestamp: psr.CreationTimestamp,
-			}
-
-			if item.Attributes[6] != "" {
-				lsr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[6], 10, 64)
-				if err != nil {
-					return nil, oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[6], err)
-				}
-			}
-
+		default:
+			// lock meta object.
 			if item.Attributes[7] != "" {
+				var lsr = locksSearchResult{
+					ID:                item.ID,
+					FilePath:          item.Attributes[0],
+					CreationTimestamp: psr.CreationTimestamp,
+				}
+
+				if item.Attributes[6] != "" {
+					lsr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[6], 10, 64)
+					if err != nil {
+						return nil, oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[6], err)
+					}
+				}
+
 				if err = extractLockDataFromAttrubute(&lsr, item.Attributes[7]); err != nil {
 					return nil, oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
 				}
-			}
 
-			if _, ok := locksByVersions[version]; !ok {
-				locksByVersions[version] = make([]locksSearchResult, 1)
-			}
+				if _, ok := locksByVersions[version]; !ok {
+					locksByVersions[version] = make([]locksSearchResult, 1)
+				}
 
-			locksByVersions[version] = append(locksByVersions[version], lsr)
-			continue
-		default:
+				locksByVersions[version] = append(locksByVersions[version], lsr)
+				continue
+			}
 		}
 
 		psr.IsVersioned = item.Attributes[2] == data.VersioningEnabled
@@ -670,8 +662,6 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 	filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningEnabled, object.MatchStringEqual)
 	filters.AddFilter(s3headers.AttributeObjectVersion, objectVersion, object.MatchStringEqual)
 
-	filters.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
-
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
@@ -691,10 +681,6 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 	)
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return oid.ID{}, nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = locksSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -712,7 +698,17 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 			if psr.CreationTimestamp > tagResult.CreationTimestamp {
 				tagResult = psr
 			}
-		case s3headers.TypeLock:
+		default:
+			// it is a regular object, skip it.
+			if item.Attributes[4] == "" {
+				continue
+			}
+
+			// lock meta object.
+			if err = extractLockDataFromAttrubute(&psr, item.Attributes[4]); err != nil {
+				return oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
+			}
+
 			if item.Attributes[3] != "" {
 				psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[3], 10, 64)
 				if err != nil {
@@ -720,14 +716,7 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 				}
 			}
 
-			if item.Attributes[4] != "" {
-				if err = extractLockDataFromAttrubute(&psr, item.Attributes[4]); err != nil {
-					return oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
-				}
-			}
-
 			lockSearchResults = append(lockSearchResults, psr)
-		default:
 		}
 	}
 
@@ -785,10 +774,6 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	var searchResults = make([]prefixSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, "", fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = prefixSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -1370,10 +1355,6 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return oid.ID{}, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = baseSearchResult{
 			ID: item.ID,
 		}
@@ -1483,7 +1464,7 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 
 	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningUnversioned, object.MatchNotPresent)
+		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)

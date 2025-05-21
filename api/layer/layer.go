@@ -787,10 +787,6 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 	var searchResults = make([]versioningContainerIDSearchResult, 0, len(ids))
 
 	for _, item := range ids {
-		if len(item.Attributes) != len(returningAttributes) {
-			return oid.ID{}, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = versioningContainerIDSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
