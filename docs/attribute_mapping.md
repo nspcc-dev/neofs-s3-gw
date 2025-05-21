@@ -209,7 +209,6 @@ Describes special metadata types used for S3 features.
 
 **Possible values:**
 
-- `lock` – Stores object lock info
 - `tags` – Stores object tags
 - `bucketTags` – Stores bucket tags
 - `bucketNotifConf` – Stores bucket notification configuration
@@ -231,7 +230,6 @@ contents for NeoFS lock objects.
 
 **Attributes:**
 
-- `S3-MetaType: lock`
 - `S3-ObjectVersion`
 - `S3-Meta-VersioningState`
 - `S3-Lock-Meta`

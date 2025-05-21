@@ -585,33 +585,33 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 				tagsByVersion[version] = psr
 				continue
 			}
-		case s3headers.TypeLock:
-			var lsr = locksSearchResult{
-				ID:                item.ID,
-				FilePath:          item.Attributes[0],
-				CreationTimestamp: psr.CreationTimestamp,
-			}
-
-			if item.Attributes[6] != "" {
-				lsr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[6], 10, 64)
-				if err != nil {
-					return nil, oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[6], err)
-				}
-			}
-
+		default:
+			// lock meta object.
 			if item.Attributes[7] != "" {
+				var lsr = locksSearchResult{
+					ID:                item.ID,
+					FilePath:          item.Attributes[0],
+					CreationTimestamp: psr.CreationTimestamp,
+				}
+
+				if item.Attributes[6] != "" {
+					lsr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[6], 10, 64)
+					if err != nil {
+						return nil, oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[6], err)
+					}
+				}
+
 				if err = extractLockDataFromAttrubute(&lsr, item.Attributes[7]); err != nil {
 					return nil, oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
 				}
-			}
 
-			if _, ok := locksByVersions[version]; !ok {
-				locksByVersions[version] = make([]locksSearchResult, 1)
-			}
+				if _, ok := locksByVersions[version]; !ok {
+					locksByVersions[version] = make([]locksSearchResult, 1)
+				}
 
-			locksByVersions[version] = append(locksByVersions[version], lsr)
-			continue
-		default:
+				locksByVersions[version] = append(locksByVersions[version], lsr)
+				continue
+			}
 		}
 
 		psr.IsVersioned = item.Attributes[2] == data.VersioningEnabled
@@ -670,8 +670,6 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 	filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningEnabled, object.MatchStringEqual)
 	filters.AddFilter(s3headers.AttributeObjectVersion, objectVersion, object.MatchStringEqual)
 
-	filters.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
-
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
@@ -712,7 +710,17 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 			if psr.CreationTimestamp > tagResult.CreationTimestamp {
 				tagResult = psr
 			}
-		case s3headers.TypeLock:
+		default:
+			// it is a regular object, skip it.
+			if item.Attributes[4] == "" {
+				continue
+			}
+
+			// lock meta object.
+			if err = extractLockDataFromAttrubute(&psr, item.Attributes[4]); err != nil {
+				return oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
+			}
+
 			if item.Attributes[3] != "" {
 				psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[3], 10, 64)
 				if err != nil {
@@ -720,14 +728,7 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 				}
 			}
 
-			if item.Attributes[4] != "" {
-				if err = extractLockDataFromAttrubute(&psr, item.Attributes[4]); err != nil {
-					return oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
-				}
-			}
-
 			lockSearchResults = append(lockSearchResults, psr)
-		default:
 		}
 	}
 
