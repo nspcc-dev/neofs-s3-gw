@@ -142,10 +142,6 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	)
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return "", nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = taggingSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],

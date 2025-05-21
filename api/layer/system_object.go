@@ -140,10 +140,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	var searchResults = make([]locksSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = locksSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],

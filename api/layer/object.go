@@ -454,10 +454,6 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	var searchResults = make([]allVersionsSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = allVersionsSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -560,10 +556,6 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	}
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, oid.ID{}, nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = allVersionsSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -689,10 +681,6 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 	)
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return oid.ID{}, nil, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = locksSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -786,10 +774,6 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	var searchResults = make([]prefixSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return nil, "", fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = prefixSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -1371,10 +1355,6 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
 
 	for _, item := range searchResultItems {
-		if len(item.Attributes) != len(returningAttributes) {
-			return oid.ID{}, fmt.Errorf("invalid attribute count returned, expected %d, got %d", len(returningAttributes), len(item.Attributes))
-		}
-
 		var psr = baseSearchResult{
 			ID: item.ID,
 		}
