@@ -279,19 +279,18 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	// Deliberately ignore `prm.CreationTime` here, it's based on time.Now()
 	// which leads to duplicate timestamps in different object versions and
 	// this breaks many tests.
-	var a *object.Attribute
-	a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(t.currentTime, 10))
-	attrs = append(attrs, *a)
+	var a = object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(t.currentTime, 10))
+	attrs = append(attrs, a)
 	t.currentTime++
 
 	if prm.Filepath != "" {
 		a = object.NewAttribute(object.AttributeFilePath, prm.Filepath)
-		attrs = append(attrs, *a)
+		attrs = append(attrs, a)
 	}
 
 	for k, v := range prm.Attributes {
 		a = object.NewAttribute(k, v)
-		attrs = append(attrs, *a)
+		attrs = append(attrs, a)
 	}
 
 	nonce := make([]byte, objectNonceSize)
@@ -299,7 +298,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
 	}
 	objectNonceAttr := object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
-	attrs = append(attrs, *objectNonceAttr)
+	attrs = append(attrs, objectNonceAttr)
 
 	obj := object.New()
 	obj.SetContainerID(prm.Container)

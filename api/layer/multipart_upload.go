@@ -435,18 +435,18 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	}
 
 	attrs := make([]object.Attribute, 0, len(multipartInfo.Meta)+1)
-	attrs = append(attrs, *object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
+	attrs = append(attrs, object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
 
 	for key, val := range multipartInfo.Meta {
 		if strings.HasPrefix(key, metaPrefix) {
-			attrs = append(attrs, *object.NewAttribute(strings.TrimPrefix(key, metaPrefix), val))
+			attrs = append(attrs, object.NewAttribute(strings.TrimPrefix(key, metaPrefix), val))
 		}
 	}
 
 	if encInfo.Enabled {
-		attrs = append(attrs, *object.NewAttribute(s3headers.AttributeEncryptionAlgorithm, encInfo.Algorithm))
-		attrs = append(attrs, *object.NewAttribute(s3headers.AttributeHMACKey, encInfo.HMACKey))
-		attrs = append(attrs, *object.NewAttribute(s3headers.AttributeHMACSalt, encInfo.HMACSalt))
+		attrs = append(attrs, object.NewAttribute(s3headers.AttributeEncryptionAlgorithm, encInfo.Algorithm))
+		attrs = append(attrs, object.NewAttribute(s3headers.AttributeHMACKey, encInfo.HMACKey))
+		attrs = append(attrs, object.NewAttribute(s3headers.AttributeHMACSalt, encInfo.HMACSalt))
 	}
 
 	var hashlessHeaderObject object.Object

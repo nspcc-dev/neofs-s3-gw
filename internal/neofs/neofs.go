@@ -301,7 +301,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	attrs := make([]object.Attribute, 0, len(uniqAttributes))
 	for k, v := range uniqAttributes {
 		attr := object.NewAttribute(k, v)
-		attrs = append(attrs, *attr)
+		attrs = append(attrs, attr)
 	}
 
 	var obj object.Object

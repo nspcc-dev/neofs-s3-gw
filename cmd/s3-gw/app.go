@@ -105,7 +105,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		log.logger.Fatal("newApp: couldn't generate random key", zap.Error(err))
 	}
 	anonSigner := user.NewAutoIDSignerRFC6979(anonKey.PrivateKey)
-	log.logger.Info("anonymous signer", zap.String("userID", anonSigner.UserID().String()))
+	log.logger.Info("anonymous signer", zap.String("pub key", hex.EncodeToString(anonKey.PublicKey().Bytes())), zap.String("userID", anonSigner.UserID().String()))
 
 	ni, err := conns.NetworkInfo(ctx, client.PrmNetworkInfo{})
 	if err != nil {
@@ -340,8 +340,9 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 		logger.Fatal("could not load NeoFS private key", zap.Error(err))
 	}
 
-	prm.SetSigner(user.NewAutoIDSignerRFC6979(key.PrivateKey))
-	logger.Info("using credentials", zap.String("NeoFS", hex.EncodeToString(key.PublicKey().Bytes())))
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
+	prm.SetSigner(signer)
+	logger.Info("using credentials", zap.String("pub key", hex.EncodeToString(key.PublicKey().Bytes())), zap.Stringer("userID", signer.UserID()))
 
 	for _, peer := range fetchPeers(logger, cfg) {
 		prm.AddNode(peer)

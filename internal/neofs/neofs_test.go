@@ -267,7 +267,7 @@ func TestObjectNonce(t *testing.T) {
 
 		var (
 			attr  = object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
-			attrs = []object.Attribute{*attrTS, *attr}
+			attrs = []object.Attribute{attrTS, attr}
 		)
 
 		obj.SetAttributes(attrs...)
