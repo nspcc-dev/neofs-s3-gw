@@ -377,21 +377,21 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 			return nil, ErrMetaEmptyParameterValue
 		}
 
-		attributes = append(attributes, *object.NewAttribute(k, v))
+		attributes = append(attributes, object.NewAttribute(k, v))
 	}
 
 	creationTime := TimeNow(ctx)
 	if creationTime.IsZero() {
 		creationTime = time.Now()
 	}
-	attributes = append(attributes, *object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
+	attributes = append(attributes, object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
 
 	if p.Object != "" {
-		attributes = append(attributes, *object.NewAttribute(object.AttributeFilePath, p.Object))
+		attributes = append(attributes, object.NewAttribute(object.AttributeFilePath, p.Object))
 	}
 
 	if versioningEnabled {
-		attributes = append(attributes, *object.NewAttribute(s3headers.AttributeVersioningState, data.VersioningEnabled))
+		attributes = append(attributes, object.NewAttribute(s3headers.AttributeVersioningState, data.VersioningEnabled))
 	}
 
 	headerObject.SetAttributes(attributes...)
