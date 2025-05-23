@@ -125,6 +125,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		reqInfo = api.GetReqInfo(r.Context())
 	)
 
+	t1 := time.Now()
 	conditional, err := parseConditionalHeaders(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse request params", reqInfo, err)
@@ -150,12 +151,17 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		IsBucketVersioningEnabled: bktSettings.VersioningEnabled(),
 	}
 
+	t2 := time.Now()
+	h.log.Info("TIMING get initial", zap.Duration("duration", t2.Sub(t1)))
+
 	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
 
+	t3 := time.Now()
+	h.log.Info("TIMING get search", zap.Duration("duration", t3.Sub(t2)))
 	objectWithPayloadReader, err := h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
 		Owner:   bktInfo.Owner,
 		BktInfo: bktInfo,
@@ -166,6 +172,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.logAndSendError(w, "could not get object meta", reqInfo, err)
 		return
 	}
+
+	t4 := time.Now()
+	h.log.Info("TIMING get obj with reader", zap.Duration("duration", t4.Sub(t3)))
 
 	// There are no tags in separate objects. Try to get tags from the object headers.
 	if len(comprehensiveObjectInfo.TagSet) == 0 && objectWithPayloadReader.ObjectInfo != nil {
@@ -216,6 +225,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	t5 := time.Now()
+	h.log.Info("TIMING get encryption/headers", zap.Duration("duration", t5.Sub(t4)))
+
 	writeHeaders(w.Header(), r.Header, info, len(comprehensiveObjectInfo.TagSet), bktSettings.Unversioned())
 	if params != nil {
 		writeRangeHeaders(w, params, info.Size)
@@ -223,6 +235,8 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
+	t6 := time.Now()
+	h.log.Info("TIMING get write headers", zap.Duration("duration", t6.Sub(t5)))
 	if params != nil || encryptionParams.Enabled() {
 		// unfortunately this reader is useless for us in this case, we have to re-read another one.
 		_ = objectWithPayloadReader.Payload.Close()
@@ -254,6 +268,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err = objectWithPayloadReader.Payload.Close(); err != nil {
 		h.logAndSendError(w, "close output", reqInfo, err)
 	}
+	t7 := time.Now()
+	h.log.Info("TIMING get copy/close", zap.Duration("duration", t7.Sub(t6)))
+	h.log.Info("TIMING get overall", zap.Duration("duration", t7.Sub(t1)))
 }
 
 func checkPreconditions(info *data.ObjectInfo, args *conditionalArgs) error {
