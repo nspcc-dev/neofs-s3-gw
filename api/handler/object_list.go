@@ -271,7 +271,7 @@ func parseListObjectVersionsRequest(reqInfo *api.ReqInfo) (*layer.ListObjectVers
 	}
 
 	res.Prefix = queryValues.Get("prefix")
-	res.KeyMarker = queryValues.Get("marker")
+	res.KeyMarker = queryValues.Get("key-marker")
 	res.Delimiter = queryValues.Get("delimiter")
 	res.Encode = queryValues.Get("encoding-type")
 	res.VersionIDMarker = queryValues.Get("version-id-marker")
