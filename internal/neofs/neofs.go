@@ -29,6 +29,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -508,7 +509,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 	if prm.WithHeader {
 		if prm.WithPayload {
+			st := debugprint.LogRequestStageStart(ctx, "SN pool init object GET")
 			header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
+			debugprint.LogRequestStageFinish(st)
 			if err != nil {
 				if reason, ok := isErrAccessDenied(err); ok {
 					return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -519,7 +522,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 			defer res.Close()
 
+			st = debugprint.LogRequestStageStart(ctx, "read full object payload (GET)")
 			payload, err := io.ReadAll(res)
+			debugprint.LogRequestStageFinish(st)
 			if err != nil {
 				return nil, fmt.Errorf("read full object payload: %w", err)
 			}
@@ -537,7 +542,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			prmHead.WithBearerToken(*prm.BearerToken)
 		}
 
+		st := debugprint.LogRequestStageStart(ctx, "SN pool object HEAD")
 		hdr, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
+		debugprint.LogRequestStageFinish(st)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -550,7 +557,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			Head: hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
+		st := debugprint.LogRequestStageStart(ctx, "SN pool init object GET")
 		_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
+		debugprint.LogRequestStageFinish(st)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -570,7 +579,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		prmRange.WithBearerToken(*prm.BearerToken)
 	}
 
+	st := debugprint.LogRequestStageStart(ctx, "SN pool init object RANGE")
 	res, err := x.pool.ObjectRangeInit(ctx, prm.Container, prm.Object, prm.PayloadRange[0], prm.PayloadRange[1], x.signer(ctx), prmRange)
+	debugprint.LogRequestStageFinish(st)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -800,7 +811,9 @@ func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.
 
 // SearchObjectsV2WithCursor implements neofs.NeoFS interface method.
 func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
+	st := debugprint.LogRequestStageStart(ctx, "SN pool SearchV2")
 	items, cursor, err := x.pool.SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
+	debugprint.LogRequestStageFinish(st)
 	if err != nil {
 		return nil, "", fmt.Errorf("search objects: %w", err)
 	}

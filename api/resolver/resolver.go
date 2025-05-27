@@ -8,6 +8,7 @@ import (
 
 	rpcNNS "github.com/nspcc-dev/neofs-contract/rpc/nns"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 )
 
 const defaultZone = "container"
@@ -30,10 +31,12 @@ func NewNNSResolver(readers []*rpcNNS.ContractReader) *NNSResolver {
 }
 
 // ResolveCID looks up the container id by its name via NNS contract.
-func (r *NNSResolver) ResolveCID(_ context.Context, name string) (cid.ID, error) {
+func (r *NNSResolver) ResolveCID(ctx context.Context, name string) (cid.ID, error) {
 	var result cid.ID
 
+	st := debugprint.LogRequestStageStart(ctx, "NNS getRecords")
 	items, err := r.reader().GetRecords(nnsContainerDomain(name), rpcNNS.TXT)
+	debugprint.LogRequestStageFinish(st)
 	if err != nil {
 		return result, fmt.Errorf("nns get: %w", err)
 	}

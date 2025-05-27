@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -426,6 +427,8 @@ func newLogger(v *viper.Viper) *Logger {
 	if err != nil {
 		panic(fmt.Sprintf("build zap logger instance: %v", err))
 	}
+
+	debugprint.SetLogger(l)
 
 	return &Logger{
 		logger: l,

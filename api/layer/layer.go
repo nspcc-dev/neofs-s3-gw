@@ -26,6 +26,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
@@ -671,7 +672,9 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 	)
 
 	if isEmptyVersion || isNullVersion {
+		st := debugprint.LogRequestStageStart(ctx, "comprehensiveSearchAllVersionsInNeoFS")
 		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, isNullVersion)
+		debugprint.LogRequestStageFinish(st)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				if isEmptyVersion {
@@ -976,7 +979,10 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
 	cnrID, err := cid.DecodeString(name)
 	if err != nil {
-		if cnrID, err = n.resolver.ResolveCID(ctx, name); err != nil {
+		st := debugprint.LogRequestStageStart(ctx, "resolve container ID from name")
+		cnrID, err = n.resolver.ResolveCID(ctx, name)
+		debugprint.LogRequestStageFinish(st)
+		if err != nil {
 			return cid.ID{}, err
 		}
 

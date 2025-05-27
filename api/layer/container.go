@@ -13,6 +13,7 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
@@ -46,7 +47,9 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 			Name: idCnr.EncodeToString(),
 		}
 	)
+	st := debugprint.LogRequestStageStart(ctx, "get NeoFS container")
 	res, err = n.neoFS.Container(ctx, idCnr)
+	debugprint.LogRequestStageFinish(st)
 	if err != nil {
 		log.Error("could not fetch container", zap.Error(err))
 

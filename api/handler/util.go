@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -62,6 +63,13 @@ func transformToS3Error(err error) error {
 	}
 
 	return s3errors.GetAPIError(s3errors.ErrInternalError)
+}
+
+func (h *handler) getBucketAndCheckOwnerCtx(ctx context.Context, r *http.Request, bucket string, header ...string) (*data.BucketInfo, error) {
+	st := debugprint.LogRequestStageStart(ctx, "get bucket info by name")
+	res, err := h.getBucketAndCheckOwner(r, bucket, header...)
+	debugprint.LogRequestStageFinish(st)
+	return res, err
 }
 
 func (h *handler) getBucketAndCheckOwner(r *http.Request, bucket string, header ...string) (*data.BucketInfo, error) {

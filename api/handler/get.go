@@ -14,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	"github.com/nspcc-dev/neofs-sdk-go/debugprint"
 	"go.uber.org/zap"
 )
 
@@ -125,19 +126,28 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		reqInfo = api.GetReqInfo(r.Context())
 	)
 
+	ctx := debugprint.NewIncomingRequestContext(r.Context(), "GET_OBJECT", reqInfo.RequestID,
+		"s3-bucket", reqInfo.BucketName,
+		"s3-object", reqInfo.ObjectName,
+	)
+	debugprint.LogRequestRecv(ctx)
+	defer debugprint.LogRequestFin(ctx)
+
 	conditional, err := parseConditionalHeaders(r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not parse request params", reqInfo, err)
 		return
 	}
 
-	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	bktInfo, err := h.getBucketAndCheckOwnerCtx(ctx, r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	st := debugprint.LogRequestStageStart(ctx, "get bucket settings")
+	bktSettings, err := h.obj.GetBucketSettings(ctx, bktInfo)
+	debugprint.LogRequestStageFinish(st)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
 		return
@@ -150,17 +160,21 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		IsBucketVersioningEnabled: bktSettings.VersioningEnabled(),
 	}
 
-	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
+	st = debugprint.LogRequestStageStart(ctx, "obj.ComprehensiveObjectInfo")
+	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(ctx, p)
+	debugprint.LogRequestStageFinish(st)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
 
-	objectWithPayloadReader, err := h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
+	st = debugprint.LogRequestStageStart(ctx, "obj.GetObjectWithPayloadReader")
+	objectWithPayloadReader, err := h.obj.GetObjectWithPayloadReader(ctx, &layer.GetObjectWithPayloadReaderParams{
 		Owner:   bktInfo.Owner,
 		BktInfo: bktInfo,
 		Object:  comprehensiveObjectInfo.ID,
 	})
+	debugprint.LogRequestStageFinish(st)
 
 	if err != nil {
 		h.logAndSendError(w, "could not get object meta", reqInfo, err)
@@ -207,7 +221,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if layer.IsAuthenticatedRequest(r.Context()) {
+	if layer.IsAuthenticatedRequest(ctx) {
 		overrideResponseHeaders(w.Header(), reqInfo.URL.Query())
 	}
 
@@ -225,7 +239,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if params != nil || encryptionParams.Enabled() {
 		// unfortunately this reader is useless for us in this case, we have to re-read another one.
+		st = debugprint.LogRequestStageStart(ctx, "close payload reader")
 		_ = objectWithPayloadReader.Payload.Close()
+		debugprint.LogRequestStageFinish(st)
 
 		getParams := &layer.GetObjectParams{
 			ObjectInfo: info,
@@ -234,7 +250,10 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 			BucketInfo: bktInfo,
 			Encryption: encryptionParams,
 		}
-		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
+		st = debugprint.LogRequestStageStart(ctx, "obj.GetObject")
+		err = h.obj.GetObject(ctx, getParams)
+		debugprint.LogRequestStageFinish(st)
+		if err != nil {
 			h.logAndSendError(w, "could not get object", reqInfo, err)
 		}
 
@@ -247,11 +266,17 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	buf := make([]byte, bufferSize)
-	if _, err = io.CopyBuffer(w, objectWithPayloadReader.Payload, buf); err != nil {
+	st = debugprint.LogRequestStageStart(ctx, "copy payload")
+	_, err = io.CopyBuffer(w, objectWithPayloadReader.Payload, buf)
+	debugprint.LogRequestStageFinish(st)
+	if err != nil {
 		h.logAndSendError(w, "could write object output", reqInfo, err)
 	}
 
-	if err = objectWithPayloadReader.Payload.Close(); err != nil {
+	st = debugprint.LogRequestStageStart(ctx, "close payload reader")
+	err = objectWithPayloadReader.Payload.Close()
+	debugprint.LogRequestStageFinish(st)
+	if err != nil {
 		h.logAndSendError(w, "close output", reqInfo, err)
 	}
 }
