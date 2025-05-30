@@ -1,59 +1,109 @@
 package layer
 
 import (
-	"cmp"
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"maps"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsParams) (*ListObjectVersionsInfo, error) {
 	var (
-		allObjects = make([]*data.ExtendedObjectInfo, 0, p.MaxKeys)
-		res        = &ListObjectVersionsInfo{}
+		allObjects      = make([]*data.ExtendedObjectInfo, 0, p.MaxKeys)
+		res             = &ListObjectVersionsInfo{}
+		cursor          string
+		id              oid.ID
+		keyMarkerLastTs uint64
+		err             error
 	)
 
-	versions, err := n.getAllObjectsVersions(ctx, p.BktInfo, p.Prefix, p.Delimiter)
-	if err != nil {
-		if errors.Is(err, ErrNodeNotFound) {
-			return res, nil
-		}
-		return nil, err
-	}
-
-	sortedNames := make([]string, 0, len(versions))
-	for k := range versions {
-		sortedNames = append(sortedNames, k)
-	}
-	slices.Sort(sortedNames)
-
-	for _, name := range sortedNames {
-		sortedVersions := versions[name]
-		slices.SortFunc(sortedVersions, func(a, b *data.ExtendedObjectInfo) int {
-			return cmp.Compare(b.NodeVersion.Timestamp, a.NodeVersion.Timestamp) // sort in reverse order
-		})
-
-		// The object with "null" version should be only one. We get only last (actual) one.
-		var isNullVersionCounted bool
-
-		for i, version := range sortedVersions {
-			version.IsLatest = i == 0
-			if version.NodeVersion.IsUnversioned && isNullVersionCounted {
-				continue
+	// We should start with specific key.
+	if p.KeyMarker != "" {
+		// We should start with specific key version.
+		if p.VersionIDMarker != "" {
+			parts := strings.Split(p.VersionIDMarker, ":")
+			if err = id.DecodeString(parts[0]); err != nil {
+				return nil, err
 			}
 
-			if version.NodeVersion.IsUnversioned {
-				isNullVersionCounted = true
+			if len(parts) == 2 {
+				f, err := strconv.ParseInt(parts[1], 10, 64)
+				if err != nil {
+					return nil, err
+				}
+
+				keyMarkerLastTs = uint64(f)
 			}
-			allObjects = append(allObjects, version)
 		}
+
+		cursor = generateAdjustedContinuationToken(p.KeyMarker, oid.ID{})
 	}
 
-	for i, obj := range allObjects {
-		if obj.ObjectInfo.Name >= p.KeyMarker && obj.ObjectInfo.VersionID() >= p.VersionIDMarker {
-			allObjects = allObjects[i:]
+	for {
+		versions, nextCursor, err := n.getAllObjectsVersions(ctx, p.BktInfo, p.Prefix, cursor, p.Delimiter)
+		cursor = nextCursor
+
+		if err != nil {
+			if errors.Is(err, ErrNodeNotFound) {
+				return res, nil
+			}
+			return nil, err
+		}
+
+		sortedNames := slices.Collect(maps.Keys(versions))
+		slices.Sort(sortedNames)
+
+		for _, name := range sortedNames {
+			sortedVersions := versions[name]
+			// The object with "null" version should be only one. We get only last (actual) one.
+			var isNullVersionCounted bool
+			var isLatestShouldBeSet = true
+
+			for i, version := range sortedVersions {
+				version.IsLatest = i == 0
+				if version.NodeVersion.IsUnversioned && isNullVersionCounted {
+					continue
+				}
+
+				if version.NodeVersion.IsUnversioned {
+					isNullVersionCounted = true
+				}
+
+				// On the next pages, we should filter out objects we already showed on the previous page.
+				if p.KeyMarker == version.NodeVersion.FilePath && keyMarkerLastTs > 0 {
+					// Objects are sorted in reverse order. The most recently stored objects are at the beginning.
+					// We should skip what has already been shown by time.
+					if keyMarkerLastTs < version.NodeVersion.Timestamp {
+						continue
+					}
+
+					// But sometimes the objects with the same name can be created in one second.
+					// To handle this situation, we have to filter out processed objects with OIDs.
+					if keyMarkerLastTs == version.NodeVersion.Timestamp && !id.IsZero() {
+						if bytes.Compare(id[:], version.NodeVersion.OID[:]) < 0 {
+							continue
+						}
+					}
+				}
+
+				if !version.IsLatest && isLatestShouldBeSet {
+					version.IsLatest = true
+				}
+
+				isLatestShouldBeSet = false
+
+				allObjects = append(allObjects, version)
+			}
+		}
+
+		if nextCursor == "" || len(allObjects) >= p.MaxKeys {
 			break
 		}
 	}
@@ -62,8 +112,10 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 
 	if len(allObjects) > p.MaxKeys {
 		res.IsTruncated = true
-		res.NextKeyMarker = allObjects[p.MaxKeys].ObjectInfo.Name
-		res.NextVersionIDMarker = allObjects[p.MaxKeys].ObjectInfo.VersionID()
+		oi := allObjects[p.MaxKeys].ObjectInfo
+
+		res.NextKeyMarker = oi.Name
+		res.NextVersionIDMarker = fmt.Sprintf("%s:%d", oi.VersionID(), oi.Created.Unix())
 
 		allObjects = allObjects[:p.MaxKeys]
 		res.KeyMarker = allObjects[p.MaxKeys-1].ObjectInfo.Name

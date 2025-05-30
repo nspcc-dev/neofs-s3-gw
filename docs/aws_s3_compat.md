@@ -167,6 +167,8 @@ See also `GetObject` and other method parameters.
 | 🟢 | ListObjectVersions | ListBucketObjectVersions |
 | 🔵 | RestoreObject      | Related to lifecycles and tiering. |
 
+In some cases `ListObjectVersions` may return fewer elements than `max-keys` requested.
+
 ## Bucket
 
 |    | Method               | Comments  |
