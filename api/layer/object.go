@@ -408,8 +408,14 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 //
 // Returns ErrNodeNotFound if zero objects found.
 func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, error) {
+	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, owner, objectName, onlyUnversioned, nil)
+
+	return searchResults, err
+}
+
+func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool, cursor *string) ([]allVersionsSearchResult, string, error) {
 	var (
-		filters             = make(object.SearchFilters, 0, 6)
+		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
@@ -418,7 +424,10 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 			s3headers.AttributeDeleteMarker,
 		}
 
-		opts client.SearchObjectsOptions
+		opts              client.SearchObjectsOptions
+		searchResultItems []client.SearchResultItem
+		nextCursor        string
+		err               error
 	)
 
 	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
@@ -438,17 +447,28 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
 	}
 
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
+	if cursor != nil {
+		searchResultItems, nextCursor, err = n.neoFS.SearchObjectsV2WithCursor(ctx, bkt.CID, filters, returningAttributes, *cursor, opts)
+		if err != nil {
+			if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+				return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
+			}
 
-		return nil, fmt.Errorf("search object version: %w", err)
+			return nil, "", fmt.Errorf("search object version: %w", err)
+		}
+	} else {
+		searchResultItems, err = n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
+		if err != nil {
+			if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+				return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
+			}
+
+			return nil, "", fmt.Errorf("search object version: %w", err)
+		}
 	}
 
 	if len(searchResultItems) == 0 {
-		return nil, ErrNodeNotFound
+		return nil, "", ErrNodeNotFound
 	}
 
 	var searchResults = make([]allVersionsSearchResult, 0, len(searchResultItems))
@@ -462,7 +482,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 		if item.Attributes[1] != "" {
 			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
+				return nil, "", fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
@@ -471,7 +491,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 		if item.Attributes[3] != "" {
 			psr.PayloadSize, err = strconv.ParseInt(item.Attributes[3], 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid payload size %s: %w", item.Attributes[3], err)
+				return nil, "", fmt.Errorf("invalid payload size %s: %w", item.Attributes[3], err)
 			}
 		}
 
@@ -481,6 +501,10 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 	}
 
 	sortFunc := func(a, b allVersionsSearchResult) int {
+		if c := cmp.Compare(a.FilePath, b.FilePath); c != 0 { // direct order.
+			return c
+		}
+
 		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
 			return c
 		}
@@ -491,7 +515,7 @@ func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketIn
 
 	slices.SortFunc(searchResults, sortFunc)
 
-	return searchResults, nil
+	return searchResults, nextCursor, nil
 }
 
 func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, oid.ID, *data.LockInfo, error) {
@@ -1033,6 +1057,10 @@ func generateContinuationToken(filePath string) string {
 		id[i] = 255
 	}
 
+	return generateAdjustedContinuationToken(filePath, id)
+}
+
+func generateAdjustedContinuationToken(filePath string, id oid.ID) string {
 	cursorBuf := bytes.NewBuffer(nil)
 	cursorBuf.Write([]byte(object.AttributeFilePath))
 	cursorBuf.WriteByte(0x00)
@@ -1153,10 +1181,10 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	return
 }
 
-func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, delimiter string) (map[string][]*data.ExtendedObjectInfo, error) {
-	searchResults, err := n.searchAllVersionsInNeoFS(ctx, bkt, bkt.Owner, prefix, false)
+func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, cursor, delimiter string) (map[string][]*data.ExtendedObjectInfo, string, error) {
+	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, bkt.Owner, prefix, false, &cursor)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	versions := make(map[string][]*data.ExtendedObjectInfo, len(searchResults))
@@ -1205,7 +1233,7 @@ func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo,
 		versions[oi.Name] = objVersions
 	}
 
-	return versions, nil
+	return versions, nextCursor, nil
 }
 
 func IsSystemHeader(key string) bool {
