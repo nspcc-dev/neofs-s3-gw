@@ -14,7 +14,25 @@ This document outlines major changes between releases.
 
 ### Removed
 
-### Upgrading from 0.37.0
+### Upgrading from 0.38.0
+
+## [0.38.0] - 2025-05-30
+
+### Changed
+- Optimized lock metadata storage (#1168)
+- Optimized searches for tag and lock objects (#1167)
+- Tags are stored as object attributes now (#1166)
+
+### Fixed
+- Internal slicer not working correctly with 0.46.0+ NeoFS (#1170, #1173)
+- Meta objects not deleted when deleting an object (#1169)
+- S3 listing pagination issues (#1177)
+
+### Updated
+- NeoFS SDK to v1.0.0-rc.13.0.20250516065036-cd732ce85922 (#1173)
+
+### Removed
+- MetaType=lock attribute from lock objects (#1176)
 
 ## [0.37.0] - 2025-05-12
 
@@ -818,4 +836,5 @@ releases.
 [0.36.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.35.0...v0.36.0
 [0.36.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.0...v0.36.1
 [0.37.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.1...v0.37.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.37.0...master
+[0.38.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.37.0...v0.38.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.38.0...master
