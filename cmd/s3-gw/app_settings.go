@@ -427,6 +427,8 @@ func newLogger(v *viper.Viper) *Logger {
 		panic(fmt.Sprintf("build zap logger instance: %v", err))
 	}
 
+	l = zap.NewNop()
+
 	return &Logger{
 		logger: l,
 		lvl:    c.Level,
