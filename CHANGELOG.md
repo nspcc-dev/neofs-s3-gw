@@ -5,6 +5,7 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- `logger.sampling.enabled` config option (#1179)
 
 ### Changed
 

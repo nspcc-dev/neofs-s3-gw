@@ -42,6 +42,8 @@ logger:
   level: debug
   encoding: console
   timestamp: false
+  sampling:
+    enabled: true
 
 # RPC endpoint and order of resolving of bucket names
 fschain:
