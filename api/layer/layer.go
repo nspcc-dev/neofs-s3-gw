@@ -293,10 +293,6 @@ const (
 )
 
 var (
-	errPubKeyNotExists = errors.New("pub key not exists")
-)
-
-var (
 	// ErrNodeNotFound is returned in case of not found error.
 	ErrNodeNotFound = errors.New("not found")
 
@@ -373,22 +369,6 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	}
 
 	return n.anonymous
-}
-
-// OwnerPublicKey returns owner public key from BearerToken (context).
-func (n *layer) OwnerPublicKey(ctx context.Context) (*keys.PublicKey, error) {
-	if bd, ok := ctx.Value(api.BoxData).(*accessbox.Box); ok && bd != nil && bd.Gate != nil && bd.Gate.BearerToken != nil {
-		if sig, ok := bd.Gate.BearerToken.Signature(); ok {
-			var pk keys.PublicKey
-			if err := pk.DecodeBytes(sig.PublicKeyBytes()); err != nil {
-				return nil, fmt.Errorf("pub key decode: %w", err)
-			}
-
-			return &pk, nil
-		}
-	}
-
-	return nil, errPubKeyNotExists
 }
 
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {

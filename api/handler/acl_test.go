@@ -1547,9 +1547,7 @@ func TestEACLEncode(t *testing.T) {
 	owner := user.NewFromScriptHash(pubKey.GetScriptHash())
 
 	acl := layer.BucketACL{
-		Info: &data.BucketInfo{
-			OwnerPublicKey: *pubKey,
-		},
+		Info: &data.BucketInfo{},
 		EACL: &eacl.Table{},
 	}
 	acl.Info.Owner = s.UserID()

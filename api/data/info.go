@@ -1,11 +1,9 @@
 package data
 
 import (
-	"encoding/hex"
 	"encoding/xml"
 	"time"
 
-	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -47,7 +45,6 @@ type (
 		Name               string
 		CID                cid.ID
 		Owner              user.ID
-		OwnerPublicKey     keys.PublicKey
 		Created            time.Time
 		LocationConstraint string
 		ObjectLockEnabled  bool
@@ -60,16 +57,15 @@ type (
 		IsDir          bool
 		IsDeleteMarker bool
 
-		Bucket         string
-		Name           string
-		Size           int64
-		ContentType    string
-		Created        time.Time
-		HashSum        string
-		Owner          user.ID
-		OwnerPublicKey keys.PublicKey
-		Headers        map[string]string
-		Version        string
+		Bucket      string
+		Name        string
+		Size        int64
+		ContentType string
+		Created     time.Time
+		HashSum     string
+		Owner       user.ID
+		Headers     map[string]string
+		Version     string
 	}
 
 	// ObjectListResponseContent holds response data for object listing.
@@ -133,11 +129,6 @@ func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject
 
 func (b *BucketInfo) NotificationConfigurationObjectName() string {
 	return bktNotificationConfigurationObject
-}
-
-// PubKeyHex returns HEX string representation of public key.
-func (b *BucketInfo) PubKeyHex() string {
-	return hex.EncodeToString(b.OwnerPublicKey.Bytes())
 }
 
 // VersionID returns object version from ObjectInfo.

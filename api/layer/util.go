@@ -99,16 +99,15 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		CID:   bkt.CID,
 		IsDir: false,
 
-		Bucket:         bkt.Name,
-		Name:           filepathFromObject(meta),
-		Created:        creation,
-		ContentType:    mimeType,
-		Headers:        customHeaders,
-		Owner:          meta.Owner(),
-		OwnerPublicKey: bkt.OwnerPublicKey,
-		Size:           int64(meta.PayloadSize()),
-		HashSum:        hex.EncodeToString(payloadChecksum.Value()),
-		Version:        versionID,
+		Bucket:      bkt.Name,
+		Name:        filepathFromObject(meta),
+		Created:     creation,
+		ContentType: mimeType,
+		Headers:     customHeaders,
+		Owner:       meta.Owner(),
+		Size:        int64(meta.PayloadSize()),
+		HashSum:     hex.EncodeToString(payloadChecksum.Value()),
+		Version:     versionID,
 	}
 }
 
