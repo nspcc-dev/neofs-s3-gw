@@ -398,12 +398,11 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		ID:  id,
 		CID: bktInfo.CID,
 
-		Owner:          bktInfo.Owner,
-		OwnerPublicKey: bktInfo.OwnerPublicKey,
-		Bucket:         bktInfo.Name,
-		Size:           partInfo.Size,
-		Created:        partInfo.Created,
-		HashSum:        partInfo.ETag,
+		Owner:   bktInfo.Owner,
+		Bucket:  bktInfo.Name,
+		Size:    partInfo.Size,
+		Created: partInfo.Created,
+		HashSum: partInfo.ETag,
 	}
 
 	return objInfo, nil
@@ -1626,17 +1625,16 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	n.cache.CleanListCacheEntriesContainingObject(p.Info.Key, p.Info.Bkt.CID)
 
 	objInfo := &data.ObjectInfo{
-		ID:             headerObjectID,
-		CID:            p.Info.Bkt.CID,
-		Owner:          p.Info.Bkt.Owner,
-		OwnerPublicKey: p.Info.Bkt.OwnerPublicKey,
-		Bucket:         p.Info.Bkt.Name,
-		Name:           p.Info.Key,
-		Size:           multipartObjetSize,
-		Created:        prm.CreationTime,
-		Headers:        initMetadata,
-		ContentType:    initMetadata[api.ContentType],
-		HashSum:        newVersion.ETag,
+		ID:          headerObjectID,
+		CID:         p.Info.Bkt.CID,
+		Owner:       p.Info.Bkt.Owner,
+		Bucket:      p.Info.Bkt.Name,
+		Name:        p.Info.Key,
+		Size:        multipartObjetSize,
+		Created:     prm.CreationTime,
+		Headers:     initMetadata,
+		ContentType: initMetadata[api.ContentType],
+		HashSum:     newVersion.ETag,
 	}
 
 	extObjInfo := &data.ExtendedObjectInfo{
@@ -2042,12 +2040,11 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 		ID:  id,
 		CID: params.bktInfo.CID,
 
-		Owner:          params.bktInfo.Owner,
-		OwnerPublicKey: params.bktInfo.OwnerPublicKey,
-		Bucket:         params.bktInfo.Name,
-		Size:           params.decSize,
-		Created:        prm.CreationTime,
-		HashSum:        partInfo.ETag,
+		Owner:   params.bktInfo.Owner,
+		Bucket:  params.bktInfo.Name,
+		Size:    params.decSize,
+		Created: prm.CreationTime,
+		HashSum: partInfo.ETag,
 	}
 
 	return &objInfo, nil

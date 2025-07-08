@@ -31,9 +31,6 @@ type PrmContainerCreate struct {
 	// NeoFS identifier of the container creator.
 	Owner user.ID
 
-	// Public key of the container creator.
-	CreatorPubKey keys.PublicKey
-
 	// Container placement policy.
 	Policy netmap.PlacementPolicy
 
@@ -151,7 +148,7 @@ type (
 	}
 )
 
-func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner user.ID, ownerPubKey keys.PublicKey) (cid.ID, error) {
+func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwner user.ID) (cid.ID, error) {
 	if !opts.ID.IsZero() {
 		return opts.ID, a.neoFS.ContainerExists(ctx, opts.ID)
 	}
@@ -165,7 +162,6 @@ func (a *Agent) checkContainer(ctx context.Context, opts ContainerOptions, idOwn
 
 	prm.Owner = idOwner
 	prm.FriendlyName = opts.FriendlyName
-	prm.CreatorPubKey = ownerPubKey
 
 	cnrID, err := a.neoFS.CreateContainer(ctx, prm)
 	if err != nil {
@@ -247,7 +243,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	a.log.Info("check container or create", zap.Stringer("cid", options.Container.ID),
 		zap.String("friendly_name", options.Container.FriendlyName),
 		zap.String("placement_policy", options.Container.PlacementPolicy))
-	id, err := a.checkContainer(ctx, options.Container, idOwner, *options.NeoFSKey.PublicKey())
+	id, err := a.checkContainer(ctx, options.Container, idOwner)
 	if err != nil {
 		return fmt.Errorf("check container: %w", err)
 	}

@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -178,8 +177,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	for i := range prm.AdditionalAttributes {
 		cnr.SetAttribute(prm.AdditionalAttributes[i][0], prm.AdditionalAttributes[i][1])
 	}
-
-	cnr.SetAttribute(layer.AttributeOwnerPublicKey, hex.EncodeToString(prm.CreatorPubKey.Bytes()))
 
 	if prm.Policy.Consistency == ContainerMetaDataPolicyStrict ||
 		prm.Policy.Consistency == ContainerMetaDataPolicyOptimistic {
@@ -691,11 +688,10 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 	basicACL.AllowOp(acl.OpObjectGet, acl.RoleOthers)
 
 	return x.neoFS.CreateContainer(ctx, layer.PrmContainerCreate{
-		Creator:       prm.Owner,
-		Policy:        layer.PlacementPolicy{Placement: prm.Policy, Version: layer.PlacementPolicyV1},
-		Name:          prm.FriendlyName,
-		BasicACL:      basicACL,
-		CreatorPubKey: prm.CreatorPubKey,
+		Creator:  prm.Owner,
+		Policy:   layer.PlacementPolicy{Placement: prm.Policy, Version: layer.PlacementPolicyV1},
+		Name:     prm.FriendlyName,
+		BasicACL: basicACL,
 	})
 }
 
