@@ -12,7 +12,8 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
-- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13.0.20250709105423-10781475208e` (#1180)
+- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13.0.20250710125524-3779db10c349` (#1186)
+- NeoFS SDK to v1.0.0-rc.13.0.20250709105423-10781475208e (#1186)
 
 ### Removed
 
