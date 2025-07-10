@@ -170,6 +170,9 @@ Specifies the version of the bucket settings object's file structure
 
 If bucket versioning is enabled, this attribute indicates which version the object belongs to.
 
+The [tag meta object](#tags-object) includes this header for both versioned and unversioned containers.
+It indicates which object the tags are associated with.
+
 ### `S3-Lock-Meta`
 
 Contains JSON encoded lock metadata in the next fields:
@@ -251,7 +254,6 @@ the original object's attributes.
 
 - `S3-MetaType: tags`
 - `S3-ObjectVersion`
-- `S3-Meta-VersioningState`
 
 ### Bucket Tags Object
 

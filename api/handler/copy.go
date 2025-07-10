@@ -183,10 +183,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		if !settingsSrc.VersioningEnabled() {
-			tagPrm.ObjectVersion.VersionID = ""
-		}
-
 		_, tagSet, err = h.obj.GetObjectTagging(r.Context(), tagPrm)
 		if err != nil {
 			h.logAndSendError(w, "could not get object tagging", reqInfo, err)

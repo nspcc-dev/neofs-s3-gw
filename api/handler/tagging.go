@@ -49,17 +49,13 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		TagSet:       tagSet,
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
 
-	if settings.VersioningEnabled() && tagPrm.ObjectVersion.VersionID == "" {
+	if tagPrm.ObjectVersion.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
-			Owner:  bktInfo.Owner,
-			CID:    bktInfo.CID,
-			Object: reqInfo.ObjectName,
+			Owner:           bktInfo.Owner,
+			CID:             bktInfo.CID,
+			Object:          reqInfo.ObjectName,
+			FindNullVersion: true,
 		}
 
 		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
@@ -116,11 +112,12 @@ func (h *handler) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		},
 	}
 
-	if settings.VersioningEnabled() && tagPrm.ObjectVersion.VersionID == "" {
+	if tagPrm.ObjectVersion.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
-			Owner:  bktInfo.Owner,
-			CID:    bktInfo.CID,
-			Object: reqInfo.ObjectName,
+			Owner:           bktInfo.Owner,
+			CID:             bktInfo.CID,
+			Object:          reqInfo.ObjectName,
+			FindNullVersion: true,
 		}
 
 		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
@@ -162,17 +159,12 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if settings.VersioningEnabled() && p.VersionID == "" {
+	if p.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
-			Owner:  bktInfo.Owner,
-			CID:    bktInfo.CID,
-			Object: reqInfo.ObjectName,
+			Owner:           bktInfo.Owner,
+			CID:             bktInfo.CID,
+			Object:          reqInfo.ObjectName,
+			FindNullVersion: true,
 		}
 
 		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
