@@ -56,10 +56,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 		PayloadSize:  uint64(len(payload)),
 	}
 
-	if p.ObjectVersion.VersionID != "" {
-		prm.Attributes[s3headers.AttributeObjectVersion] = p.ObjectVersion.VersionID
-		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
-	}
+	prm.Attributes[s3headers.AttributeObjectVersion] = p.ObjectVersion.VersionID
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
 	for k, v := range p.TagSet {
@@ -243,9 +240,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copie
 	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	if p.VersionID != "" {
-		fs.AddFilter(s3headers.AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
-	}
+	fs.AddFilter(s3headers.AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
 
 	var opts client.SearchObjectsOptions
 	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {

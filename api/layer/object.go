@@ -544,10 +544,6 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
 	}
 
-	if onlyUnversioned {
-		filters.AddFilter(s3headers.AttributeVersioningState, "", object.MatchNotPresent)
-	}
-
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
@@ -682,7 +678,6 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
 	}
 
-	filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningEnabled, object.MatchStringEqual)
 	filters.AddFilter(s3headers.AttributeObjectVersion, objectVersion, object.MatchStringEqual)
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
