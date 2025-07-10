@@ -15,6 +15,7 @@ This document outlines major changes between releases.
 - `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13.0.20250710125524-3779db10c349` (#1186)
 - NeoFS SDK to v1.0.0-rc.13.0.20250709105423-10781475208e (#1186)
 - github.com/aws/aws-sdk-go-v2 from v1.36.3 to v1.36.5 (#1186)
+- github.com/nspcc-dev/neo-go from v0.108.1 to v0.110.0 (#1186)
 
 ### Removed
 
