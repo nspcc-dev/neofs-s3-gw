@@ -13,7 +13,7 @@ require (
 	github.com/minio/sio v0.4.1
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.110.0
-	github.com/nspcc-dev/neofs-contract v0.21.0
+	github.com/nspcc-dev/neofs-contract v0.23.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.13.0.20250710125524-3779db10c349
 	github.com/nspcc-dev/tzhash v1.8.2
 	github.com/prometheus/client_golang v1.21.1
