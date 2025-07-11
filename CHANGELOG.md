@@ -5,11 +5,24 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- `logger.sampling.enabled` config option (#1179)
 
 ### Changed
 
 ### Fixed
+
+### Updated
+
+### Removed
+
+### Upgrading from 0.39.0
+
+## [0.39.0] - 2025-07-11
+
+### Added
+- `logger.sampling.enabled` config option (#1179)
+
+### Fixed
+- Incorrect handling of tags in unversioned buckets (#1185)
 
 ### Updated
 - `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.13.0.20250710125524-3779db10c349` (#1186)
@@ -19,8 +32,7 @@ This document outlines major changes between releases.
 - github.com/nspcc-dev/neofs-contract from v0.21.0 to v0.23.0 (#1186)
 
 ### Removed
-
-### Upgrading from 0.38.0
+- Container attribute with owner public key (#1182)
 
 ## [0.38.0] - 2025-05-30
 
@@ -843,4 +855,5 @@ releases.
 [0.36.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.0...v0.36.1
 [0.37.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.1...v0.37.0
 [0.38.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.37.0...v0.38.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.38.0...master
+[0.39.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.38.0...v0.39.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.39.0...master
