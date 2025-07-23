@@ -361,10 +361,8 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		}
 	}
 
-	if len(prm.Locks) > 0 {
-		var lock object.Lock
-		lock.WriteMembers(prm.Locks)
-		obj.WriteLock(lock)
+	if !prm.Locked.IsZero() {
+		obj.AssociateLocked(prm.Locked)
 	}
 
 	if prm.Payload != nil {

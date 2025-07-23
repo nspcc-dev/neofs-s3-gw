@@ -190,7 +190,7 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
-		Locks:        []oid.ID{objID},
+		Locked:       objID,
 		CreationTime: TimeNow(ctx),
 		CopiesNumber: copiesNumber,
 		Filepath:     objectName,

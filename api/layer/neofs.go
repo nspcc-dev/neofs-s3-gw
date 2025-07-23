@@ -110,8 +110,8 @@ type PrmObjectCreate struct {
 	// Value for Timestamp attribute (optional).
 	CreationTime time.Time
 
-	// List of ids to lock (optional).
-	Locks []oid.ID
+	// ID to lock (optional).
+	Locked oid.ID
 
 	// Full payload size (optional).
 	PayloadSize uint64
