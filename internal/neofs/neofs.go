@@ -35,7 +35,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 	"github.com/nspcc-dev/tzhash/tz"
 )
@@ -354,17 +353,8 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 	}
 
-	if len(prm.Locks) > 0 {
-		var (
-			lock    object.Lock
-			lockVer version.Version
-		)
-		lockVer.SetMajor(2)
-		lockVer.SetMinor(17)
-
-		lock.WriteMembers(prm.Locks)
-		obj.WriteLock(lock)
-		obj.SetVersion(&lockVer)
+	if !prm.Locked.IsZero() {
+		obj.AssociateLocked(prm.Locked)
 
 		// we can't have locks and payload at the same time.
 		if len(obj.Payload()) > 0 && prm.Payload != nil {
