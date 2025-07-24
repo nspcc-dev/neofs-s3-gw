@@ -14,7 +14,15 @@ This document outlines major changes between releases.
 
 ### Removed
 
-### Upgrading from 0.39.0
+### Upgrading from 0.40.0
+
+## [0.40.0] - 2025-07-24
+
+### Changed
+- __NEOFS__ASSOCIATE attribute is used for locks and tags now (#1189, #1190)
+
+### Fixed
+- Incompatibility with NeoFS node 0.48.0 for lock objects (#1189)
 
 ## [0.39.0] - 2025-07-11
 
@@ -856,4 +864,5 @@ releases.
 [0.37.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.36.1...v0.37.0
 [0.38.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.37.0...v0.38.0
 [0.39.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.38.0...v0.39.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.39.0...master
+[0.40.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.39.0...v0.40.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.40.0...master
