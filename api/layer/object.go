@@ -526,7 +526,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 			s3headers.AttributeVersioningState,
 			s3headers.AttributeDeleteMarker,
 			s3headers.MetaType,
-			s3headers.AttributeObjectVersion,
+			object.AttributeAssociatedObject,
 			object.AttributeExpirationEpoch,
 			s3headers.AttributeLockMeta,
 		}
@@ -678,7 +678,7 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
 	}
 
-	filters.AddFilter(s3headers.AttributeObjectVersion, objectVersion, object.MatchStringEqual)
+	filters.AddFilter(object.AttributeAssociatedObject, objectVersion, object.MatchStringEqual)
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
 	if err != nil {
@@ -1432,7 +1432,7 @@ func (n *layer) DeleteObjectMetaFiles(ctx context.Context, p *ObjectVersion) err
 	fs.AddFilter(s3headers.MetaType, "", object.MatchStringNotEqual)
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.VersionID != "" {
-		fs.AddFilter(s3headers.AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+		fs.AddFilter(object.AttributeAssociatedObject, p.VersionID, object.MatchStringEqual)
 	}
 
 	var opts client.SearchObjectsOptions
