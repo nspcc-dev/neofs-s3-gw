@@ -63,8 +63,7 @@ const (
 	// BucketSettingsMetaVersion contains version of bucket settings file.
 	BucketSettingsMetaVersion = bucketSettingsPrefix + "MetaVersion"
 
-	AttributeObjectVersion = attributePrefix + "ObjectVersion"
-	AttributeObjectNonce   = "__NEOFS__NONCE"
+	AttributeObjectNonce = "__NEOFS__NONCE"
 
 	// Result: S3-Lock-Meta.
 	AttributeLockMeta = attributePrefix + "Lock-Meta"

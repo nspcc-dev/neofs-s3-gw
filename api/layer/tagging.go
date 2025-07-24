@@ -56,7 +56,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 		PayloadSize:  uint64(len(payload)),
 	}
 
-	prm.Attributes[s3headers.AttributeObjectVersion] = p.ObjectVersion.VersionID
+	prm.Attributes[object.AttributeAssociatedObject] = p.ObjectVersion.VersionID
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
 	for k, v := range p.TagSet {
@@ -100,7 +100,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	filters.AddFilter(object.AttributeFilePath, p.ObjectVersion.ObjectName, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	if p.ObjectVersion.VersionID != "" {
-		filters.AddFilter(s3headers.AttributeObjectVersion, p.ObjectVersion.VersionID, object.MatchStringEqual)
+		filters.AddFilter(object.AttributeAssociatedObject, p.ObjectVersion.VersionID, object.MatchStringEqual)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, p.ObjectVersion.BktInfo.CID, filters, returningAttributes, opts)
@@ -113,7 +113,6 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 	}
 
 	if len(searchResultItems) == 0 {
-		// Objects inside versioned container don't have s3headers.AttributeObjectVersion attribute.
 		// This case means there are no separate attbute meta objects, let's try to get attributes from object itself.
 		if p.ObjectVersion.VersionID != "" {
 			var objID oid.ID
@@ -240,7 +239,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copie
 	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	fs.AddFilter(s3headers.AttributeObjectVersion, p.VersionID, object.MatchStringEqual)
+	fs.AddFilter(object.AttributeAssociatedObject, p.VersionID, object.MatchStringEqual)
 
 	var opts client.SearchObjectsOptions
 	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {

@@ -166,12 +166,10 @@ Indicates whether bucket versioning is enabled.
 
 Specifies the version of the bucket settings object's file structure
 
-### `S3-ObjectVersion`
+### `__NEOFS__ASSOCIATE`
 
-If bucket versioning is enabled, this attribute indicates which version the object belongs to.
-
-The [tag meta object](#tags-object) includes this header for both versioned and unversioned containers.
-It indicates which object the tags are associated with.
+Used for auxiliary objects like tags and locks, indicates which original object
+is tagged or locked (both in versioned and unversioned buckets).
 
 ### `S3-Lock-Meta`
 
@@ -233,7 +231,7 @@ contents for NeoFS lock objects.
 
 **Attributes:**
 
-- `S3-ObjectVersion`
+- `__NEOFS__ASSOCIATE`
 - `S3-Meta-VersioningState`
 - `S3-Lock-Meta`
 
@@ -253,7 +251,7 @@ the original object's attributes.
 **Attributes:**
 
 - `S3-MetaType: tags`
-- `S3-ObjectVersion`
+- `__NEOFS__ASSOCIATE`
 
 ### Bucket Tags Object
 

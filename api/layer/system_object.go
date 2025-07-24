@@ -121,7 +121,7 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLock)
 	if version != "" {
-		filters.AddFilter(s3headers.AttributeObjectVersion, version, object.MatchStringEqual)
+		filters.AddFilter(object.AttributeAssociatedObject, version, object.MatchStringEqual)
 	}
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bkt.CID, filters, returningAttributes, opts)
@@ -203,7 +203,6 @@ func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, obj
 	}
 
 	if objectVersion != "" {
-		prm.Attributes[s3headers.AttributeObjectVersion] = objectVersion
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 	}
 
