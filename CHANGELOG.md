@@ -9,6 +9,7 @@ This document outlines major changes between releases.
 ### Changed
 
 ### Fixed
+- Incorrect EpochDuration processing wrt API 2.18 leading to improper expiration calculations (#1193)
 
 ### Updated
 

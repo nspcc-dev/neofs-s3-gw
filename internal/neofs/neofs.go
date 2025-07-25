@@ -112,12 +112,8 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uin
 	}
 
 	curr := networkInfo.CurrentEpoch()
-	msPerEpoch := durEpoch * uint64(networkInfo.MsPerBlock())
 
-	epochLifetime := uint64(dur.Milliseconds()) / msPerEpoch
-	if uint64(dur.Milliseconds())%msPerEpoch != 0 {
-		epochLifetime++
-	}
+	epochLifetime := (uint64(dur.Seconds()) + durEpoch - 1) / durEpoch
 
 	var epoch uint64
 	if epochLifetime >= math.MaxUint64-curr {
