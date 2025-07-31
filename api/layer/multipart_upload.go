@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/sio"
@@ -1556,6 +1557,22 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return nil, nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
 	}
 
+	var (
+		oldVersions    []allVersionsSearchResult
+		oldVersionsErr error
+		wg             sync.WaitGroup
+	)
+
+	if !bktSettings.VersioningEnabled() {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, n.Owner(ctx), p.Info.Key, true)
+		}()
+	}
+
 	header, err := n.prepareMultipartHeadObject(ctx, prmHeaderObject, multipartHash, homoHash, uint64(multipartObjetSize), bktSettings.VersioningEnabled())
 	if err != nil {
 		return nil, nil, err
@@ -1611,6 +1628,44 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return nil, nil, err
 	}
 
+	// Until this point the new object is not in the system.
+	wg.Wait()
+
+	if oldVersionsErr != nil {
+		n.log.Warn("search old object versions failed",
+			zap.String("object", p.Info.Key),
+			zap.String("bucket", p.Info.Bkt.Name),
+			zap.Stringer("cid", p.Info.Bkt.CID),
+			zap.Error(err))
+	}
+
+	if len(oldVersions) > 0 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for _, ver := range oldVersions {
+				// skip new added object.
+				if ver.ID == header.GetID() {
+					continue
+				}
+
+				if err = n.objectDelete(ctx, p.Info.Bkt, ver.ID); err != nil {
+					// only log.
+					n.log.Warn(
+						"failed to delete old object",
+						zap.String("object", p.Info.Key),
+						zap.String("bucket", p.Info.Bkt.Name),
+						zap.Stringer("cid", p.Info.Bkt.CID),
+						zap.Stringer("oid", ver.ID),
+						zap.Error(err),
+					)
+				}
+			}
+		}()
+	}
+
 	headerObjectID := header.GetID()
 
 	// the "big object" is not presented in system, but we have to put correct info about it and its version.
@@ -1643,6 +1698,8 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	n.cache.PutObjectWithName(p.Info.Bkt.Owner, extObjInfo)
+
+	wg.Wait()
 
 	return uploadData, extObjInfo, n.DeleteMultipartUpload(ctx, p.Info.Bkt, multipartInfo.ID)
 }
