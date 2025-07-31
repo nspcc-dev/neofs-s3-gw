@@ -153,13 +153,7 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
+	if p.ObjVersion.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
 			Owner:  bktInfo.Owner,
 			CID:    bktInfo.CID,
