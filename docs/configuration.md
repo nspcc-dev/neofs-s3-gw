@@ -179,6 +179,7 @@ stream_timeout: 60s
 healthcheck_timeout: 15s
 rebalance_interval: 60s
 pool_error_threshold: 100
+container_ops_poll_interval: 100ms
 
 max_clients_count: 100
 max_clients_deadline: 30s
@@ -188,18 +189,19 @@ allowed_access_key_id_prefixes:
    - 3stjWenX15YwYzczMr88gy3CQr4NYFBQ8P7keGzH5QFn
 ```
 
-| Parameter                        | Type       | SIGHUP reload | Default value | Description                                                                                                                                                                                                       |
-|----------------------------------|------------|---------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `listen_domains`                 | `[]string` |               |               | Domains to be able to use virtual-hosted-style access to bucket.                                                                                                                                                  |
-| `rpc_endpoint`                   | `string`   | yes           |               | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                                                                                           |
-| `connect_timeout`                | `duration` |               | `10s`         | Timeout to connect to a node.                                                                                                                                                                                     |
-| `stream_timeout`                 | `duration` |               | `60s`         | Timeout for individual operations in streaming RPC.                                                                                                                                                               |
-| `healthcheck_timeout`            | `duration` |               | `15s`         | Timeout to check node health during rebalance.                                                                                                                                                                    |
-| `rebalance_interval`             | `duration` |               | `60s`         | Interval to check node health.                                                                                                                                                                                    |
-| `pool_error_threshold`           | `uint32`   |               | `100`         | The number of errors on connection after which node is considered as unhealthy.                                                                                                                                   |
-| `max_clients_count`              | `int`      |               | `100`         | Limits for processing of clients' requests.                                                                                                                                                                       |
-| `max_clients_deadline`           | `duration` |               | `30s`         | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                                                                                           |
-| `allowed_access_key_id_prefixes` | `[]string` |               |               | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                                                                                        |
+| Parameter                        | Type       | SIGHUP reload | Default value | Description                                                                                                                |
+|----------------------------------|------------|---------------|---------------|----------------------------------------------------------------------------------------------------------------------------|
+| `listen_domains`                 | `[]string` |               |               | Domains to be able to use virtual-hosted-style access to bucket.                                                           |
+| `rpc_endpoint`                   | `string`   | yes           |               | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).    |
+| `connect_timeout`                | `duration` |               | `10s`         | Timeout to connect to a node.                                                                                              |
+| `stream_timeout`                 | `duration` |               | `60s`         | Timeout for individual operations in streaming RPC.                                                                        |
+| `healthcheck_timeout`            | `duration` |               | `15s`         | Timeout to check node health during rebalance.                                                                             |
+| `rebalance_interval`             | `duration` |               | `60s`         | Interval to check node health.                                                                                             |
+| `container_ops_poll_interval`    | `duration` |               | dynamic       | Polling interval for container operation waiter (half a block, but not less than 50ms by default).                         |
+| `pool_error_threshold`           | `uint32`   |               | `100`         | The number of errors on connection after which node is considered as unhealthy.                                            |
+| `max_clients_count`              | `int`      |               | `100`         | Limits for processing of clients' requests.                                                                                |
+| `max_clients_deadline`           | `duration` |               | `30s`         | Deadline after which the gate sends error `RequestTimeout` to a client.                                                    |
+| `allowed_access_key_id_prefixes` | `[]string` |               |               | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted. |
 
 ### `wallet` section
 

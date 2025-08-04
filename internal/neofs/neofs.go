@@ -45,6 +45,7 @@ type Config struct {
 	IsSlicerEnabled         bool
 	IsHomomorphicEnabled    bool
 	ContainerMetadataPolicy string
+	WaiterPollInterval      time.Duration
 }
 
 // NeoFS represents virtual connection to the NeoFS network.
@@ -189,7 +190,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		prmPut.WithinSession(*prm.SessionToken)
 	}
 
-	putWaiter := waiter.NewContainerPutWaiter(x.pool, waiter.DefaultPollInterval)
+	putWaiter := waiter.NewContainerPutWaiter(x.pool, x.cfg.WaiterPollInterval)
 
 	// send request to save the container
 	idCnr, err := putWaiter.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
@@ -218,7 +219,7 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionT
 		prm.WithinSession(*sessionToken)
 	}
 
-	eaclWaiter := waiter.NewContainerSetEACLWaiter(x.pool, waiter.DefaultPollInterval)
+	eaclWaiter := waiter.NewContainerSetEACLWaiter(x.pool, x.cfg.WaiterPollInterval)
 	err := eaclWaiter.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
@@ -245,7 +246,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 		prm.WithinSession(*token)
 	}
 
-	deleteWaiter := waiter.NewContainerDeleteWaiter(x.pool, waiter.DefaultPollInterval)
+	deleteWaiter := waiter.NewContainerDeleteWaiter(x.pool, x.cfg.WaiterPollInterval)
 	err := deleteWaiter.ContainerDelete(ctx, id, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("delete container via connection pool: %w", err)

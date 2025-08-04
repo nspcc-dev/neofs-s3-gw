@@ -5,8 +5,10 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- `pool.container-ops-poll-interval` option to control polling behavior for container operations (#1194)
 
 ### Changed
+- Default polling interval for container operations from fixed 1s to dynamic value based on block time (#1194)
 
 ### Fixed
 - Incorrect EpochDuration processing wrt API 2.18 leading to improper expiration calculations (#1193)
