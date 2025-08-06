@@ -31,6 +31,7 @@ const (
 	defaultMaxClientsDeadline = time.Second * 30
 
 	defaultMaxObjectDeletePerRequest = 1000
+	minWaiterPollInterval            = 50 * time.Millisecond
 )
 
 const ( // Settings.
@@ -141,6 +142,9 @@ const ( // Settings.
 
 	// Shows if slicer is enabled. If enabled slicer will be used for object put.
 	cfgSlicerEnabled = "internal_slicer"
+
+	// Polling interval for container operation waiter (half a block, but not less than 50ms by default).
+	cfgContainerOpsPollInterval = "container_ops_poll_interval"
 )
 
 var ignore = map[string]struct{}{

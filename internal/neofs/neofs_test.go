@@ -31,6 +31,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	minWaiterPollInterval = 50 * time.Millisecond
+)
+
 func TestErrorChecking(t *testing.T) {
 	reason := "some reason"
 	err := new(apistatus.ObjectAccessDenied)
@@ -75,6 +79,7 @@ func Benchmark(b *testing.B) {
 		MaxObjectSize:        int64(ni.MaxObjectSize()),
 		IsSlicerEnabled:      false,
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
+		WaiterPollInterval:   minWaiterPollInterval,
 	}
 
 	neo := NewNeoFS(p, signer, anonSigner, neofsCfg, ni)
@@ -133,7 +138,7 @@ func createContainer(ctx context.Context, signer user.Signer, p *pool.Pool) (cid
 
 	var prm client.PrmContainerPut
 
-	w := waiter.NewContainerPutWaiter(p, waiter.DefaultPollInterval)
+	w := waiter.NewContainerPutWaiter(p, minWaiterPollInterval)
 	return w.ContainerPut(ctx, cnr, signer, prm)
 }
 
@@ -173,6 +178,7 @@ func TestConcurrencyAndConsistency(t *testing.T) {
 		MaxObjectSize:        int64(ni.MaxObjectSize()),
 		IsSlicerEnabled:      false,
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
+		WaiterPollInterval:   minWaiterPollInterval,
 	}
 
 	neo := NewNeoFS(p, signer, anonSigner, neofsCfg, ni)
