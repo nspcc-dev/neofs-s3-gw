@@ -9,6 +9,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - Default polling interval for container operations from fixed 1s to dynamic value based on block time (#1194)
+- Use single node connection instead of pool to create bucket (NeoFS) and set EACL (NeoFS) for create bucket operation (#1198)
 
 ### Fixed
 - Incorrect EpochDuration processing wrt API 2.18 leading to improper expiration calculations (#1193)

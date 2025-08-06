@@ -18,6 +18,7 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 )
 
 // PrmContainerCreate groups parameters of NeoFS.CreateContainer operation.
@@ -42,6 +43,9 @@ type PrmContainerCreate struct {
 
 	// Attributes for optional parameters.
 	AdditionalAttributes [][2]string
+
+	// Executor allows to set-up custom executor to the operation.
+	Executor waiter.ContainerPutExecutor
 }
 
 // PrmAuth groups authentication parameters for the NeoFS operation.
@@ -225,6 +229,9 @@ type NeoFS interface {
 	//
 	// It returns any error encountered which prevented the eACL from being saved.
 	SetContainerEACL(context.Context, eacl.Table, *session.Container) error
+
+	// CreateContainerAndSetEACL creates container and sets EACL using the same rawClient.
+	CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionToken *session.Container) (cid.ID, error)
 
 	// ContainerEACL reads the container eACL from NeoFS by the container ID.
 	//
