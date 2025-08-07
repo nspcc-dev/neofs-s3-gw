@@ -312,7 +312,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			zap.String("object", p.Object),
 			zap.String("bucket", p.BktInfo.Name),
 			zap.Stringer("cid", p.BktInfo.CID),
-			zap.Error(err))
+			zap.Error(oldVersionsErr))
 	}
 
 	if len(oldVersions) > 0 {
