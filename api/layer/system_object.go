@@ -48,7 +48,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		lockInfo = &data.LockInfo{}
 	}
 
-	objList, err := n.searchAllVersionsInNeoFS(ctx, p.ObjVersion.BktInfo, p.ObjVersion.BktInfo.Owner, p.ObjVersion.ObjectName, p.ObjVersion.VersionID == "")
+	objList, err := n.searchAllVersionsInNeoFS(ctx, p.ObjVersion.BktInfo, p.ObjVersion.ObjectName, p.ObjVersion.VersionID == "")
 	if err != nil {
 		return err
 	}

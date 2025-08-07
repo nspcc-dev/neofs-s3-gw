@@ -138,6 +138,17 @@ func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.
 	return nil
 }
 
+func (t *TestNeoFS) CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionToken *session.Container) (cid.ID, error) {
+	cnrID, err := t.CreateContainer(ctx, prm)
+	if err != nil {
+		return cid.ID{}, err
+	}
+
+	table.SetCID(cnrID)
+
+	return cnrID, t.SetContainerEACL(ctx, table, sessionToken)
+}
+
 func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {
 	for k, v := range t.containers {
 		if k == id.EncodeToString() {
