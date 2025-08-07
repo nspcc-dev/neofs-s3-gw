@@ -1569,7 +1569,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		go func() {
 			defer wg.Done()
 
-			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, n.Owner(ctx), p.Info.Key, true)
+			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, p.Info.Key, true)
 		}()
 	}
 

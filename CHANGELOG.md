@@ -13,6 +13,7 @@ This document outlines major changes between releases.
 
 ### Fixed
 - Incorrect EpochDuration processing wrt API 2.18 leading to improper expiration calculations (#1193)
+- Incorrect bucket owner usage for search operations (#1184)
 
 ### Updated
 - NeoFS SDK to RC14 version (#1202)
