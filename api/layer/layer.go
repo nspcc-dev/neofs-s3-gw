@@ -649,7 +649,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 	)
 
 	if isEmptyVersion || isNullVersion {
-		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, isNullVersion)
+		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				if isEmptyVersion {

@@ -571,7 +571,7 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 	return searchResults, nextCursor, nil
 }
 
-func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, oid.ID, *data.LockInfo, error) {
+func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string) ([]allVersionsSearchResult, oid.ID, *data.LockInfo, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 7)
 		returningAttributes = []string{
