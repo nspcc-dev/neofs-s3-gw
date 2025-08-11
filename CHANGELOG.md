@@ -14,6 +14,7 @@ This document outlines major changes between releases.
 - Incorrect EpochDuration processing wrt API 2.18 leading to improper expiration calculations (#1193)
 
 ### Updated
+- NeoFS SDK to RC14 version (#1202)
 
 ### Removed
 
