@@ -17,6 +17,7 @@ This document outlines major changes between releases.
 
 ### Updated
 - NeoFS SDK to RC14 version (#1202)
+- github.com/nspcc-dev/neo-go v0.110.0 => v0.111.0 (#1184)
 
 ### Removed
 
