@@ -1569,7 +1569,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		go func() {
 			defer wg.Done()
 
-			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, n.Owner(ctx), p.Info.Key, true)
+			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, p.Info.Key, true)
 		}()
 	}
 
@@ -1636,7 +1636,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			zap.String("object", p.Info.Key),
 			zap.String("bucket", p.Info.Bkt.Name),
 			zap.Stringer("cid", p.Info.Bkt.CID),
-			zap.Error(err))
+			zap.Error(oldVersionsErr))
 	}
 
 	if len(oldVersions) > 0 {

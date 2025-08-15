@@ -190,7 +190,12 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		prmPut.WithinSession(*prm.SessionToken)
 	}
 
-	putWaiter := waiter.NewContainerPutWaiter(x.pool, x.cfg.WaiterPollInterval)
+	var executor waiter.ContainerPutExecutor = x.pool
+	if prm.Executor != nil {
+		executor = prm.Executor
+	}
+
+	putWaiter := waiter.NewContainerPutWaiter(executor, x.cfg.WaiterPollInterval)
 
 	// send request to save the container
 	idCnr, err := putWaiter.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
@@ -199,6 +204,25 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	return idCnr, nil
+}
+
+// CreateContainerAndSetEACL implements neofs.NeoFS interface method.
+func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table, sessionToken *session.Container) (cid.ID, error) {
+	cl, err := x.pool.RawClient()
+	if err != nil {
+		return cid.ID{}, fmt.Errorf("get node connection: %w", err)
+	}
+
+	prm.Executor = cl
+
+	cnrID, err := x.CreateContainer(ctx, prm)
+	if err != nil {
+		return cid.ID{}, fmt.Errorf("create container: %w", err)
+	}
+
+	table.SetCID(cnrID)
+
+	return cnrID, x.setContainerEACL(ctx, cl, table, sessionToken)
 }
 
 // UserContainers implements neofs.NeoFS interface method.
@@ -214,12 +238,17 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 
 // SetContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error {
+	return x.setContainerEACL(ctx, x.pool, table, sessionToken)
+}
+
+// SetContainerEACL implements neofs.NeoFS interface method.
+func (x *NeoFS) setContainerEACL(ctx context.Context, c waiter.ContainerSetEACLExecutor, table eacl.Table, sessionToken *session.Container) error {
 	var prm client.PrmContainerSetEACL
 	if sessionToken != nil {
 		prm.WithinSession(*sessionToken)
 	}
 
-	eaclWaiter := waiter.NewContainerSetEACLWaiter(x.pool, x.cfg.WaiterPollInterval)
+	eaclWaiter := waiter.NewContainerSetEACLWaiter(c, x.cfg.WaiterPollInterval)
 	err := eaclWaiter.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
