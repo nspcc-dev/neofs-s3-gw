@@ -559,10 +559,9 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		id       oid.ID
 		err      error
 		settings *data.BucketSettings
-		owner    = n.Owner(ctx)
 	)
 
-	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID == data.UnversionedObjectVersionID)
+	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, p.VersionID == data.UnversionedObjectVersionID)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			if len(p.VersionID) == 0 {
@@ -640,7 +639,6 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		id            oid.ID
 		tagsObjectOID oid.ID
 		err           error
-		owner         = n.Owner(ctx)
 		versions      []allVersionsSearchResult
 
 		tagSet         = make(map[string]string)
@@ -651,7 +649,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 	)
 
 	if isEmptyVersion || isNullVersion {
-		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, isNullVersion)
+		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				if isEmptyVersion {
@@ -696,7 +694,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 			}
 		}
 
-		tagsObjectOID, lockInfo, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, owner, p.Object, p.VersionID)
+		tagsObjectOID, lockInfo, err = n.searchTagsAndLocksInNeoFS(ctx, p.BktInfo, p.Object, p.VersionID)
 		if err != nil {
 			return nil, err
 		}
@@ -878,7 +876,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		return obj
 	}
 
-	versions, err := n.searchEverythingForRemove(ctx, bkt, bkt.Owner, obj.Name, settings.VersioningEnabled() || settings.VersioningSuspended())
+	versions, err := n.searchEverythingForRemove(ctx, bkt, obj.Name, settings.VersioningEnabled() || settings.VersioningSuspended())
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			obj.Error = nil

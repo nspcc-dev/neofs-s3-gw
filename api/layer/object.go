@@ -32,7 +32,6 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"go.uber.org/zap"
 )
@@ -295,7 +294,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		go func() {
 			defer wg.Done()
 
-			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.BktInfo, owner, p.Object, true)
+			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
 		}()
 	}
 
@@ -312,7 +311,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			zap.String("object", p.Object),
 			zap.String("bucket", p.BktInfo.Name),
 			zap.Stringer("cid", p.BktInfo.CID),
-			zap.Error(err))
+			zap.Error(oldVersionsErr))
 	}
 
 	if len(oldVersions) > 0 {
@@ -461,13 +460,13 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
-func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, error) {
-	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, owner, objectName, onlyUnversioned, nil)
+func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, error) {
+	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, objectName, onlyUnversioned, nil)
 
 	return searchResults, err
 }
 
-func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool, cursor *string) ([]allVersionsSearchResult, string, error) {
+func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool, cursor *string) ([]allVersionsSearchResult, string, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
@@ -484,7 +483,7 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 		err               error
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
 	}
 
@@ -572,7 +571,7 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 	return searchResults, nextCursor, nil
 }
 
-func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, oid.ID, *data.LockInfo, error) {
+func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string) ([]allVersionsSearchResult, oid.ID, *data.LockInfo, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 7)
 		returningAttributes = []string{
@@ -589,7 +588,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
 	}
 
@@ -709,7 +708,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	return searchResults, tagsObjectOID.ID, lockInfo, nil
 }
 
-func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName, objectVersion string) (oid.ID, *data.LockInfo, error) {
+func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName, objectVersion string) (oid.ID, *data.LockInfo, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
@@ -723,7 +722,7 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
 	}
 
@@ -802,7 +801,7 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
-func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
+func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.BucketInfo, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
@@ -817,7 +816,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
 	}
 
@@ -902,7 +901,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	return searchResults, nextCursor, nil
 }
 
-func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, owner user.ID, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
+func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
 	var (
 		batch          = make(map[string]prefixSearchResult, maxKeys)
 		searchedPage   []prefixSearchResult
@@ -916,7 +915,7 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 	)
 
 	for len(batch) < maxKeys {
-		searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, nextCursor, seachPageSize)
+		searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, prefix, nextCursor, seachPageSize)
 		if err != nil {
 			if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 				return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -959,7 +958,7 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 		for oneMorePage {
 			oneMorePage = false
 
-			searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, owner, prefix, nextCursor, seachPageSize)
+			searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, prefix, nextCursor, seachPageSize)
 			if err != nil {
 				if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 					return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -1179,7 +1178,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	var latestVersions []prefixSearchResult
 
 	if nodeVersions == nil {
-		latestVersions, next, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Bucket.Owner, p.Prefix, p.ContinuationToken, p.MaxKeys)
+		latestVersions, next, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Prefix, p.ContinuationToken, p.MaxKeys)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, "", nil
@@ -1231,7 +1230,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 }
 
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, cursor, delimiter string) (map[string][]*data.ExtendedObjectInfo, string, error) {
-	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, bkt.Owner, prefix, false, &cursor)
+	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, prefix, false, &cursor)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1523,7 +1522,7 @@ func (n *layer) DeleteObjectMetaFiles(ctx context.Context, p *ObjectVersion) err
 // searchEverythingForRemove returns all object versions and metadata files related to objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
-func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketInfo, owner user.ID, objectName string, onlyUnversioned bool) ([]oid.ID, error) {
+func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool) ([]oid.ID, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
@@ -1533,7 +1532,7 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil {
+	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
 		opts.WithBearerToken(*bt)
 	}
 
