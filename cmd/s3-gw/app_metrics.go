@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
@@ -27,13 +28,14 @@ type GateMetrics struct {
 }
 
 type stateMetrics struct {
+	p           *pool.Pool
 	healthCheck prometheus.Gauge
 	gwVersion   *prometheus.GaugeVec
 }
 
-func newGateMetrics() *GateMetrics {
-	stateMetric := newStateMetrics()
-	stateMetric.register()
+func newGateMetrics(p *pool.Pool) *GateMetrics {
+	stateMetric := newStateMetrics(p)
+	prometheus.MustRegister(stateMetric)
 
 	return &GateMetrics{
 		stateMetrics: *stateMetric,
@@ -44,8 +46,9 @@ func (g *GateMetrics) Unregister() {
 	g.stateMetrics.unregister()
 }
 
-func newStateMetrics() *stateMetrics {
+func newStateMetrics(p *pool.Pool) *stateMetrics {
 	return &stateMetrics{
+		p: p,
 		healthCheck: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: stateSubsystem,
@@ -63,16 +66,31 @@ func newStateMetrics() *stateMetrics {
 	}
 }
 
-func (m stateMetrics) register() {
-	prometheus.MustRegister(m.healthCheck)
-}
-
-func (m stateMetrics) unregister() {
+func (m *stateMetrics) unregister() {
 	prometheus.Unregister(m.healthCheck)
 }
 
-func (m stateMetrics) SetHealth(status healthStatus) {
+func (m *stateMetrics) SetHealth(status healthStatus) {
 	m.healthCheck.Set(float64(status))
+}
+
+func (m *stateMetrics) updateHealthStatus() {
+	// Only "no healthy client" error is possible.
+	if _, err := m.p.RawClient(); err != nil {
+		m.SetHealth(healthStatusUnhealthy)
+		return
+	}
+
+	m.SetHealth(healthStatusReady)
+}
+
+func (m *stateMetrics) Collect(ch chan<- prometheus.Metric) {
+	m.updateHealthStatus()
+	m.healthCheck.Collect(ch)
+}
+
+func (m stateMetrics) Describe(descs chan<- *prometheus.Desc) {
+	m.healthCheck.Describe(descs)
 }
 
 // NewPrometheusService creates a new service for gathering prometheus metrics.
