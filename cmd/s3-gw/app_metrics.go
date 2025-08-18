@@ -14,6 +14,14 @@ const (
 	stateSubsystem = "state"
 )
 
+const (
+	healthStatusUnhealthy healthStatus = iota
+	healthStatusStaring
+	healthStatusReady
+)
+
+type healthStatus int32
+
 type GateMetrics struct {
 	stateMetrics
 }
@@ -63,8 +71,8 @@ func (m stateMetrics) unregister() {
 	prometheus.Unregister(m.healthCheck)
 }
 
-func (m stateMetrics) SetHealth(s int32) {
-	m.healthCheck.Set(float64(s))
+func (m stateMetrics) SetHealth(status healthStatus) {
+	m.healthCheck.Set(float64(status))
 }
 
 // NewPrometheusService creates a new service for gathering prometheus metrics.

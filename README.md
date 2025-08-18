@@ -72,6 +72,17 @@ HTTP/1.1 200 OK
 
 Also, you can configure domains using `.env` variables or `yaml` file.
 
+## Metrics
+
+### Gateway Health Status
+
+You can use the `neofs_s3_gw_state_health` metric to monitor the health status of the gateway.  
+The metric exposes the following status codes:
+
+- **0 - Unhealthy**: The application cannot process user requests.
+- **1 - Starting**: The application is starting.
+- **2 - Ready**: The application has started and is serving user requests.
+
 ## Documentation
 
 - [Configuration](./docs/configuration.md)
