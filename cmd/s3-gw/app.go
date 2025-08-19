@@ -83,7 +83,7 @@ type (
 	}
 
 	GateMetricsCollector interface {
-		SetHealth(int32)
+		SetHealth(healthStatus)
 		Unregister()
 	}
 
@@ -488,7 +488,7 @@ func (m *appMetrics) SetEnabled(enabled bool) {
 	m.mu.Unlock()
 }
 
-func (m *appMetrics) SetHealth(status int32) {
+func (m *appMetrics) SetHealth(status healthStatus) {
 	m.mu.RLock()
 	if !m.enabled {
 		m.mu.RUnlock()
@@ -502,7 +502,7 @@ func (m *appMetrics) SetHealth(status int32) {
 func (m *appMetrics) Shutdown() {
 	m.mu.Lock()
 	if m.enabled {
-		m.provider.SetHealth(0)
+		m.provider.SetHealth(healthStatusUnhealthy)
 		m.enabled = false
 	}
 	m.provider.Unregister()
@@ -520,15 +520,15 @@ func (a *App) Wait() {
 		zap.String("version", version.Version),
 	)
 
-	a.setHealthStatus()
+	a.setHealthStatus(healthStatusReady)
 
 	<-a.webDone // wait for web-server to be stopped
 
 	a.log.Info("application finished")
 }
 
-func (a *App) setHealthStatus() {
-	a.metrics.SetHealth(1)
+func (a *App) setHealthStatus(status healthStatus) {
+	a.metrics.SetHealth(status)
 }
 
 // Serve runs HTTP server to handle S3 API requests.
@@ -544,6 +544,7 @@ func (a *App) Serve(ctx context.Context) {
 	srv.Handler = router
 	srv.ErrorLog = zap.NewStdLog(a.log)
 
+	a.setHealthStatus(healthStatusStaring)
 	a.startServices()
 
 	for i := range a.servers {
@@ -576,6 +577,7 @@ LOOP:
 
 	a.metrics.Shutdown()
 	a.stopServices(ctx)
+	a.setHealthStatus(healthStatusUnhealthy)
 
 	close(a.webDone)
 }
@@ -612,7 +614,7 @@ func (a *App) configReload(ctx context.Context) {
 	a.updateSettings(ctx)
 
 	a.metrics.SetEnabled(a.cfg.GetBool(cfgPrometheusEnabled))
-	a.setHealthStatus()
+	a.setHealthStatus(healthStatusReady)
 
 	a.log.Info("SIGHUP config reload completed")
 }
