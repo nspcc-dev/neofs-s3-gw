@@ -177,7 +177,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		settings:   newAppSettings(ctx, log, v),
 	}
 
-	app.init(ctx, anonSigner, neoFS)
+	app.init(ctx, anonSigner, neoFS, conns)
 
 	return app
 }
@@ -208,9 +208,9 @@ func resolveNetmapContractAddr(ctx context.Context, endpoint string) (util.Uint1
 	return netMapContract, nil
 }
 
-func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
+func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS, p *pool.Pool) {
 	a.initAPI(ctx, anonSigner, neoFS)
-	a.initMetrics()
+	a.initMetrics(p)
 	a.initServers(ctx)
 }
 
@@ -300,8 +300,8 @@ func (a *App) initAPI(ctx context.Context, anonSigner user.Signer, neoFS *neofs.
 	a.initHandler()
 }
 
-func (a *App) initMetrics() {
-	gateMetricsProvider := newGateMetrics()
+func (a *App) initMetrics(p *pool.Pool) {
+	gateMetricsProvider := newGateMetrics(p)
 	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
 }
