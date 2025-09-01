@@ -5,24 +5,36 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Updated
+
+### Removed
+
+### Upgrading from 0.41.0
+
+## [0.41.0] - 2025-09-01
+
+### Added
 - `pool.container-ops-poll-interval` option to control polling behavior for container operations (#1194)
 
 ### Changed
 - Default polling interval for container operations from fixed 1s to dynamic value based on block time (#1194)
 - Use single node connection instead of pool to create bucket (NeoFS) and set EACL (NeoFS) for create bucket operation (#1198)
-- `neofs_s3_gw_state_health` metric changes the state according to the gate health status (#1203)
+- `neofs_s3_gw_state_health` metric changes the state according to the gate health status (#1203, #1206)
 
 ### Fixed
 - Incorrect EpochDuration processing wrt API 2.18 leading to improper expiration calculations (#1193)
+- Missing object version in lock object (#1195)
+- Old object versions never deleted in unversioned S3 bucket (#1171)
 - Incorrect bucket owner usage for search operations (#1184)
 
 ### Updated
 - NeoFS SDK to RC14 version (#1202)
 - github.com/nspcc-dev/neo-go v0.110.0 => v0.111.0 (#1184)
-
-### Removed
-
-### Upgrading from 0.40.0
 
 ## [0.40.0] - 2025-07-24
 
@@ -873,4 +885,5 @@ releases.
 [0.38.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.37.0...v0.38.0
 [0.39.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.38.0...v0.39.0
 [0.40.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.39.0...v0.40.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.40.0...master
+[0.41.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.40.0...v0.41.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.0...master
