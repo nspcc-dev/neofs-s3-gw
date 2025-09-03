@@ -472,7 +472,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	attributes[s3headers.MultipartElementID] = "0"
 	attributes[s3headers.MultipartTotalSize] = "0"
 	attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
-	attributes[s3headers.MultipartHomoHash] = ""
 
 	if tzHash != nil {
 		binaryMarshaler = tzHash.(encoding.BinaryMarshaler)
@@ -1982,7 +1981,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 				return id, fmt.Errorf("marshalBinary: %w", err)
 			}
 			prm.Attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
-			prm.Attributes[s3headers.MultipartHomoHash] = ""
 			prm.Attributes[s3headers.MultipartTotalSize] = strconv.Itoa(totalBytes)
 			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes.PartHash.Sum(nil))
 
@@ -2049,7 +2047,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	}
 
 	params.attributes[s3headers.MultipartHash] = hex.EncodeToString(mpHashBytes)
-	params.attributes[s3headers.MultipartHomoHash] = ""
 
 	if params.tzHash != nil {
 		binaryMarshaler = params.tzHash.(encoding.BinaryMarshaler)
