@@ -14,7 +14,12 @@ This document outlines major changes between releases.
 
 ### Removed
 
-### Upgrading from 0.41.0
+### Upgrading from 0.41.1
+
+## [0.41.1] - 2025-09-04
+
+### Fixed
+- Multipart upload failures for containers with disabled homomorphic hashing (#1209)
 
 ## [0.41.0] - 2025-09-01
 
@@ -886,4 +891,5 @@ releases.
 [0.39.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.38.0...v0.39.0
 [0.40.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.39.0...v0.40.0
 [0.41.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.40.0...v0.41.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.0...master
+[0.41.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.0...v0.41.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.1...master
