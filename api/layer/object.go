@@ -306,7 +306,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	// We need new object id to filter it out.
 	wg.Wait()
 
-	if oldVersionsErr != nil {
+	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
 		n.log.Warn("search old object versions failed",
 			zap.String("object", p.Object),
 			zap.String("bucket", p.BktInfo.Name),
