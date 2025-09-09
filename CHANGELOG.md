@@ -9,6 +9,7 @@ This document outlines major changes between releases.
 ### Changed
 
 ### Fixed
+- Context cancellation in DeleteMultipleObjects handler leading to pool client status issues (#1212)
 
 ### Updated
 
