@@ -928,8 +928,18 @@ func isErrObjectAlreadyRemoved(err error) bool {
 
 // DeleteObjects from the storage.
 func (n *layer) DeleteObjects(ctx context.Context, p *DeleteObjectParams) []*VersionedObject {
+	var nextFailed = len(p.Objects)
+
 	for i, obj := range p.Objects {
 		p.Objects[i] = n.deleteObject(ctx, p.BktInfo, p.Settings, obj)
+		if ctx.Err() != nil { // Trying other objects won't help.
+			nextFailed = i + 1
+			break
+		}
+	}
+
+	for ; nextFailed < len(p.Objects); nextFailed++ {
+		p.Objects[nextFailed].Error = ctx.Err()
 	}
 
 	return p.Objects
