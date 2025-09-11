@@ -1630,7 +1630,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	// Until this point the new object is not in the system.
 	wg.Wait()
 
-	if oldVersionsErr != nil {
+	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
 		n.log.Warn("search old object versions failed",
 			zap.String("object", p.Info.Key),
 			zap.String("bucket", p.Info.Bkt.Name),
