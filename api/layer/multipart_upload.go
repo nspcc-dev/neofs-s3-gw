@@ -2127,14 +2127,24 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 		return 0, nil
 	}
 
-	slices.SortFunc(res, func(a, b client.SearchResultItem) int {
-		return cmp.Compare(a.Attributes[1], b.Attributes[1])
-	})
+	var (
+		minNumer  int64
+		tmpNumber int64
+	)
 
-	partNumber, err := strconv.ParseInt(res[0].Attributes[1], 10, 64)
+	minNumer, err = strconv.ParseInt(res[0].Attributes[1], 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("parse header: %w", err)
+		return 0, fmt.Errorf("parse int %s: %w", res[0].Attributes[1], err)
 	}
 
-	return partNumber, nil
+	for i := 1; i < len(res); i++ {
+		tmpNumber, err = strconv.ParseInt(res[i].Attributes[1], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse int %s: %w", res[i].Attributes[1], err)
+		}
+
+		minNumer = min(tmpNumber, minNumer)
+	}
+
+	return minNumer, nil
 }
