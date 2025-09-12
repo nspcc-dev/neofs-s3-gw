@@ -901,11 +901,11 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 	return searchResults, nextCursor, nil
 }
 
-func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.BucketInfo, prefix, cursor string, maxKeys int) ([]prefixSearchResult, string, error) {
+func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, p allObjectParams) ([]prefixSearchResult, string, error) {
 	var (
-		batch          = make(map[string]prefixSearchResult, maxKeys)
+		batch          = make(map[string]prefixSearchResult, p.MaxKeys)
 		searchedPage   []prefixSearchResult
-		nextCursor     = cursor
+		nextCursor     = p.ContinuationToken
 		seachPageSize  = 1000
 		err            error
 		generateCursor bool
@@ -914,8 +914,8 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 		isBatchDone bool
 	)
 
-	for len(batch) < maxKeys {
-		searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, prefix, nextCursor, seachPageSize)
+	for len(batch) < p.MaxKeys {
+		searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, p.Bucket, p.Prefix, nextCursor, seachPageSize)
 		if err != nil {
 			if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 				return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -925,20 +925,20 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 		}
 
 		for _, pageItem := range searchedPage {
-			batchItem, ok := batch[pageItem.FilePath]
-			if ok {
-				// Store only the newest item.
-				if pageItem.isNewerThan(batchItem) {
-					batch[pageItem.FilePath] = pageItem
-				}
-
-				continue
-			}
+			filePath := displayPath(pageItem.FilePath, p.Prefix, p.Delimiter)
 
 			// We collect unique items to response.
 			if !isBatchDone {
-				batch[pageItem.FilePath] = pageItem
-				isBatchDone = len(batch) == maxKeys
+				if v, ok := batch[filePath]; ok {
+					if pageItem.isNewerThan(v) {
+						batch[filePath] = pageItem
+					}
+
+					continue
+				}
+
+				batch[filePath] = pageItem
+				isBatchDone = len(batch) == p.MaxKeys
 			} else {
 				// We already collected `maxKeys` objects. Despite it, current page has items for the next request.
 				// We must shift cursor to the end of the current batch.
@@ -958,7 +958,7 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 		for oneMorePage {
 			oneMorePage = false
 
-			searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, bkt, prefix, nextCursor, seachPageSize)
+			searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, p.Bucket, p.Prefix, nextCursor, seachPageSize)
 			if err != nil {
 				if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 					return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
@@ -970,11 +970,13 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 			// searchedPage sorted by object.AttributeFilePath. If the last element from the extra page is presented in
 			// current bath we should check another page in advice to find all versions of objects.
 			if l := len(searchedPage); l > 0 {
-				_, oneMorePage = batch[searchedPage[l-1].FilePath]
+				filePath := displayPath(searchedPage[l-1].FilePath, p.Prefix, p.Delimiter)
+				_, oneMorePage = batch[filePath]
 			}
 
 			for _, result := range searchedPage {
-				existing, ok := batch[result.FilePath]
+				filePath := displayPath(result.FilePath, p.Prefix, p.Delimiter)
+				existing, ok := batch[filePath]
 
 				// We don't need new items which out of current batch.
 				if !ok {
@@ -985,8 +987,12 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 
 				// Try to get the latest version of the object from this page.
 				if result.isNewerThan(existing) {
-					batch[result.FilePath] = result
+					batch[filePath] = result
 				}
+			}
+
+			if len(nextCursor) == 0 {
+				break
 			}
 		}
 	}
@@ -1004,6 +1010,14 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, bkt *data.Buck
 	}
 
 	return items, nextCursor, nil
+}
+
+func displayPath(filePath string, prefix, delimiter string) string {
+	if dirName := tryDirectoryName(filePath, prefix, delimiter); len(dirName) != 0 {
+		return dirName
+	}
+
+	return filePath
 }
 
 // objectDelete puts tombstone object into neofs.
@@ -1178,7 +1192,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 	var latestVersions []prefixSearchResult
 
 	if nodeVersions == nil {
-		latestVersions, next, err = n.searchLatestVersionsByPrefix(ctx, p.Bucket, p.Prefix, p.ContinuationToken, p.MaxKeys)
+		latestVersions, next, err = n.searchLatestVersionsByPrefix(ctx, p)
 		if err != nil {
 			if errors.Is(err, ErrNodeNotFound) {
 				return nil, "", nil

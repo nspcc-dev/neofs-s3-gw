@@ -11,6 +11,7 @@ This document outlines major changes between releases.
 ### Fixed
 - Context cancellation in DeleteMultipleObjects handler leading to pool client status issues (#1212)
 - Useless "search old object versions failed" warning for new objects (#1211)
+- Duplicates in directory listings in some cases (#1213)
 
 ### Updated
 
