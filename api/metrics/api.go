@@ -195,10 +195,8 @@ func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	if r.Method == http.MethodGet {
-		// Increment the prometheus http request response histogram with appropriate label
-		httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
-	}
+	// Increment the prometheus http request response histogram with appropriate label
+	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
 }
 
 // WriteHeader -- writes http status code.
