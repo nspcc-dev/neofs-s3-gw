@@ -9,16 +9,23 @@ This document outlines major changes between releases.
 ### Changed
 
 ### Fixed
-- Context cancellation in DeleteMultipleObjects handler leading to pool client status issues (#1212)
-- Useless "search old object versions failed" warning for new objects (#1211)
-- Duplicates in directory listings in some cases (#1213)
-- Multipart upload in case of more than 9 parts (#1214)
 
 ### Updated
 
 ### Removed
 
-### Upgrading from 0.41.1
+### Upgrading from 0.41.2
+
+## [0.41.2] - 2025-09-17
+
+### Changed
+- All methods have duration histograms in metrics now, previous PUT and POST requests were excluded (#1219)
+
+### Fixed
+- Context cancellation in DeleteMultipleObjects handler leading to pool client status issues (#1212)
+- Useless "search old object versions failed" warning for new objects (#1211)
+- Duplicates in directory listings in some cases (#1213)
+- Multipart upload in case of more than 9 parts (#1214)
 
 ## [0.41.1] - 2025-09-04
 
@@ -896,4 +903,5 @@ releases.
 [0.40.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.39.0...v0.40.0
 [0.41.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.40.0...v0.41.0
 [0.41.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.0...v0.41.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.1...master
+[0.41.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.1...v0.41.2
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.2...master
