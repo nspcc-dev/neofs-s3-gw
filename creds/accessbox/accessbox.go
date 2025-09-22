@@ -5,11 +5,13 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"slices"
 
@@ -17,7 +19,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,7 +27,7 @@ const (
 )
 
 var (
-	hkdfInfo = []byte("neofs-s3-gw")
+	hkdfInfo = "neofs-s3-gw"
 )
 
 // Box represents friendly AccessBox.
@@ -264,10 +265,8 @@ func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, er
 }
 
 func deriveKey(secret []byte, hkdfSalt []byte) ([]byte, error) {
-	hash := sha256.New
-	kdf := hkdf.New(hash, secret, hkdfSalt, hkdfInfo)
-	key := make([]byte, 32)
-	_, err := io.ReadFull(kdf, key)
+	hash := func() hash.Hash { return sha256.New() }
+	key, err := hkdf.Key(hash, secret, hkdfSalt, hkdfInfo, 32)
 	return key, err
 }
 
