@@ -89,9 +89,7 @@ func (p Params) HMAC() ([]byte, []byte, error) {
 	mac := hmac.New(sha256.New, p.Key())
 
 	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, nil, errors.New("failed to init create salt")
-	}
+	_, _ = rand.Read(salt)
 
 	mac.Write(salt)
 	return mac.Sum(nil), salt, nil

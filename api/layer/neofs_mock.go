@@ -122,9 +122,7 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	}
 
 	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return cid.ID{}, err
-	}
+	_, _ = io.ReadFull(rand.Reader, b)
 
 	id := cid.NewFromMarshalledContainer(b)
 	t.containers[id.EncodeToString()] = &cnr
@@ -286,9 +284,7 @@ func (t *TestNeoFS) constructMupltipartObject(ctx context.Context, containerID c
 
 func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID, error) {
 	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return oid.ID{}, err
-	}
+	_, _ = io.ReadFull(rand.Reader, b)
 	id := oid.NewFromObjectHeaderBinary(b)
 
 	attrs := make([]object.Attribute, 0)
@@ -311,9 +307,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	}
 
 	nonce := make([]byte, objectNonceSize)
-	if _, err := rand.Read(nonce); err != nil {
-		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
-	}
+	_, _ = rand.Read(nonce)
 	objectNonceAttr := object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
 	attrs = append(attrs, objectNonceAttr)
 

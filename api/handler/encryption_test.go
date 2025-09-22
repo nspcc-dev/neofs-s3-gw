@@ -218,8 +218,7 @@ func uploadPart(hc *handlerContext, bktName, objName, uploadID string, num, size
 
 func uploadPartBase(hc *handlerContext, bktName, objName string, encrypted bool, uploadID string, num, size int) (string, []byte) {
 	partBody := make([]byte, size)
-	_, err := rand.Read(partBody)
-	require.NoError(hc.t, err)
+	_, _ = rand.Read(partBody)
 
 	query := make(url.Values)
 	query.Set(uploadIDQuery, uploadID)

@@ -35,8 +35,7 @@ import (
 
 func TestTableToAst(t *testing.T) {
 	b := make([]byte, 32)
-	_, err := io.ReadFull(rand.Reader, b)
-	require.NoError(t, err)
+	_, _ = io.ReadFull(rand.Reader, b)
 	id := oid.NewFromObjectHeaderBinary(b)
 
 	key, err := keys.NewPrivateKey()
@@ -1190,8 +1189,7 @@ func TestBucketAclToTable(t *testing.T) {
 
 func TestObjectAclToAst(t *testing.T) {
 	b := make([]byte, 32)
-	_, err := io.ReadFull(rand.Reader, b)
-	require.NoError(t, err)
+	_, _ = io.ReadFull(rand.Reader, b)
 	var objID oid.ID = sha256.Sum256(b)
 
 	key, err := keys.NewPrivateKey()
@@ -1267,8 +1265,7 @@ func TestObjectAclToAst(t *testing.T) {
 
 func TestBucketAclToAst(t *testing.T) {
 	b := make([]byte, 32)
-	_, err := io.ReadFull(rand.Reader, b)
-	require.NoError(t, err)
+	_, _ = io.ReadFull(rand.Reader, b)
 
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)

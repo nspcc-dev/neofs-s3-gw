@@ -113,12 +113,8 @@ func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	}
 	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
 
-	secret, err := generateSecret()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate accessKey as hex: %w", err)
-	}
-
-	if err := box.addTokens(gatesData, ephemeralKey, secret); err != nil {
+	secret := generateSecret()
+	if err = box.addTokens(gatesData, ephemeralKey, secret); err != nil {
 		return nil, nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
 	}
 
@@ -277,9 +273,7 @@ func deriveKey(secret []byte, hkdfSalt []byte) ([]byte, error) {
 
 func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
 	hkdfSalt := make([]byte, hkdfSaltLength)
-	if _, err := rand.Read(hkdfSalt); err != nil {
-		return nil, fmt.Errorf("generate hkdf salt: %w", err)
-	}
+	_, _ = rand.Read(hkdfSalt)
 
 	enc, err := getCipher(owner, sender, hkdfSalt)
 	if err != nil {
@@ -287,9 +281,7 @@ func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 	}
 
 	nonce := make([]byte, enc.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, fmt.Errorf("generate random nonce: %w", err)
-	}
+	_, _ = rand.Read(nonce)
 
 	return slices.Concat(hkdfSalt, enc.Seal(nonce, nonce, data, nil)), nil
 }
@@ -332,8 +324,8 @@ func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey, hkdfSalt []byte) 
 	return cipher.NewGCM(cipherBlock)
 }
 
-func generateSecret() ([]byte, error) {
+func generateSecret() []byte {
 	b := make([]byte, 32)
-	_, err := io.ReadFull(rand.Reader, b)
-	return b, err
+	_, _ = io.ReadFull(rand.Reader, b)
+	return b
 }

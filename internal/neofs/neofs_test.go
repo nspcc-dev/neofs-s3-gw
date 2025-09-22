@@ -91,8 +91,7 @@ func Benchmark(b *testing.B) {
 		b.Run("object upload "+strconv.Itoa(i), func(b *testing.B) {
 			b.StopTimer()
 			payload := make([]byte, i*1024)
-			_, err = rand.Read(payload)
-			require.NoError(b, err)
+			_, _ = rand.Read(payload)
 
 			id, err := createContainer(ctx, signer, p)
 			require.NoError(b, err)
@@ -223,8 +222,7 @@ func uploadDownload(ctx context.Context, t *testing.T, neo *NeoFS, p *pool.Pool,
 		default:
 		}
 
-		_, err = rand.Read(payload)
-		require.NoError(t, err)
+		_, _ = rand.Read(payload)
 
 		createParams.Payload = bytes.NewReader(payload)
 		createParams.CreationTime = time.Now()
@@ -263,8 +261,7 @@ func TestObjectNonce(t *testing.T) {
 			nonce = make([]byte, objectNonceSize)
 		)
 
-		_, err := rand.Read(nonce)
-		require.NoError(t, err)
+		_, _ = rand.Read(nonce)
 
 		obj.SetContainerID(cnrID)
 		obj.SetOwner(uid)
