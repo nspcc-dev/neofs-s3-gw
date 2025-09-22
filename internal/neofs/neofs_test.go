@@ -106,7 +106,7 @@ func Benchmark(b *testing.B) {
 			b.ResetTimer()
 			b.StartTimer()
 
-			for range b.N {
+			for b.Loop() {
 				b.StopTimer()
 				createParams.Payload = bytes.NewReader(payload)
 				createParams.CreationTime = time.Now()
