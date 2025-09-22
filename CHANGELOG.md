@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Minimal required Go is 1.24 now (#1080)
 
 ### Fixed
 
