@@ -66,7 +66,7 @@ func (p *policyCondition) match(value string) bool {
 	case "starts-with":
 		if p.Key == api.ContentType {
 			p.Matched = true
-			for _, contentType := range strings.Split(value, ",") {
+			for contentType := range strings.SplitSeq(value, ",") {
 				if !strings.HasPrefix(contentType, p.Value) {
 					p.Matched = false
 				}
@@ -858,8 +858,8 @@ func checkBucketName(bucketName string) error {
 		return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 	}
 
-	labels := strings.Split(bucketName, ".")
-	for _, label := range labels {
+	labels := strings.SplitSeq(bucketName, ".")
+	for label := range labels {
 		if len(label) == 0 {
 			return s3errors.GetAPIError(s3errors.ErrInvalidBucketName)
 		}

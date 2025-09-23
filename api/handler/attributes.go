@@ -152,8 +152,8 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAttributeName)
 	}
 
-	attributes := strings.Split(attributesVal, ",")
-	for _, a := range attributes {
+	attributes := strings.SplitSeq(attributesVal, ",")
+	for a := range attributes {
 		if _, ok := validAttributes[a]; !ok {
 			return nil, s3errors.GetAPIError(s3errors.ErrInvalidAttributeName)
 		}
