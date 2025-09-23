@@ -305,9 +305,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	}
 
 	nonce := make([]byte, objectNonceSize)
-	if _, err := rand.Read(nonce); err != nil {
-		return oid.ID{}, fmt.Errorf("object nonce: %w", err)
-	}
+	_, _ = rand.Read(nonce)
 
 	uniqAttributes := maps.Clone(prm.Attributes)
 	if uniqAttributes == nil {

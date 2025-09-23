@@ -186,8 +186,7 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 
 func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName string) *data.ObjectInfo {
 	content := make([]byte, 1024)
-	_, err := rand.Read(content)
-	require.NoError(hc.t, err)
+	_, _ = rand.Read(content)
 
 	header := map[string]string{
 		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),

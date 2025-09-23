@@ -689,8 +689,8 @@ func grantHdrToPermission(grant string) (amazonS3Permission, error) {
 func parseGrantee(grantees string) ([]*Grantee, error) {
 	var result []*Grantee
 
-	split := strings.Split(grantees, ", ")
-	for _, pair := range split {
+	split := strings.SplitSeq(grantees, ", ")
+	for pair := range split {
 		split2 := strings.Split(pair, "=")
 		if len(split2) != 2 {
 			return nil, s3errors.GetAPIError(s3errors.ErrInvalidArgument)

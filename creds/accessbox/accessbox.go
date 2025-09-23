@@ -5,11 +5,13 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"slices"
 
@@ -17,7 +19,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
-	"golang.org/x/crypto/hkdf"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,7 +27,7 @@ const (
 )
 
 var (
-	hkdfInfo = []byte("neofs-s3-gw")
+	hkdfInfo = "neofs-s3-gw"
 )
 
 // Box represents friendly AccessBox.
@@ -113,12 +114,8 @@ func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	}
 	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
 
-	secret, err := generateSecret()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate accessKey as hex: %w", err)
-	}
-
-	if err := box.addTokens(gatesData, ephemeralKey, secret); err != nil {
+	secret := generateSecret()
+	if err = box.addTokens(gatesData, ephemeralKey, secret); err != nil {
 		return nil, nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
 	}
 
@@ -268,18 +265,14 @@ func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, er
 }
 
 func deriveKey(secret []byte, hkdfSalt []byte) ([]byte, error) {
-	hash := sha256.New
-	kdf := hkdf.New(hash, secret, hkdfSalt, hkdfInfo)
-	key := make([]byte, 32)
-	_, err := io.ReadFull(kdf, key)
+	hash := func() hash.Hash { return sha256.New() }
+	key, err := hkdf.Key(hash, secret, hkdfSalt, hkdfInfo, 32)
 	return key, err
 }
 
 func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byte, error) {
 	hkdfSalt := make([]byte, hkdfSaltLength)
-	if _, err := rand.Read(hkdfSalt); err != nil {
-		return nil, fmt.Errorf("generate hkdf salt: %w", err)
-	}
+	_, _ = rand.Read(hkdfSalt)
 
 	enc, err := getCipher(owner, sender, hkdfSalt)
 	if err != nil {
@@ -287,9 +280,7 @@ func encrypt(owner *keys.PrivateKey, sender *keys.PublicKey, data []byte) ([]byt
 	}
 
 	nonce := make([]byte, enc.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, fmt.Errorf("generate random nonce: %w", err)
-	}
+	_, _ = rand.Read(nonce)
 
 	return slices.Concat(hkdfSalt, enc.Seal(nonce, nonce, data, nil)), nil
 }
@@ -332,8 +323,8 @@ func getCipher(owner *keys.PrivateKey, sender *keys.PublicKey, hkdfSalt []byte) 
 	return cipher.NewGCM(cipherBlock)
 }
 
-func generateSecret() ([]byte, error) {
+func generateSecret() []byte {
 	b := make([]byte, 32)
-	_, err := io.ReadFull(rand.Reader, b)
-	return b, err
+	_, _ = io.ReadFull(rand.Reader, b)
+	return b
 }
