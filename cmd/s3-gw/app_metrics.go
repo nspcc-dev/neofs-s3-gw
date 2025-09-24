@@ -43,7 +43,7 @@ func newGateMetrics(p *pool.Pool) *GateMetrics {
 }
 
 func (g *GateMetrics) Unregister() {
-	g.stateMetrics.unregister()
+	g.unregister()
 }
 
 func newStateMetrics(p *pool.Pool) *stateMetrics {

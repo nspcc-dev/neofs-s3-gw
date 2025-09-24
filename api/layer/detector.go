@@ -45,7 +45,7 @@ func newDetector(reader io.Reader) *detector {
 }
 
 func (d *detector) Detect() (string, error) {
-	n, err := d.Reader.Read(d.data)
+	n, err := d.Read(d.data)
 	if err != nil && !errors.Is(err, io.EOF) {
 		d.err = err
 		return "", err

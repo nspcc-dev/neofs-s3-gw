@@ -253,7 +253,7 @@ func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, er
 		return nil, fmt.Errorf("not equal curves")
 	}
 
-	x, _ := pub.Curve.ScalarMult(pub.X, pub.Y, prv.D.Bytes())
+	x, _ := pub.ScalarMult(pub.X, pub.Y, prv.D.Bytes())
 	if x == nil {
 		return nil, fmt.Errorf("shared key is point at infinity")
 	}
