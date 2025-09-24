@@ -12,6 +12,7 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
+- NeoGo dependency to 0.113.0 (#1222)
 
 ### Removed
 
