@@ -307,7 +307,7 @@ func newSettings() *viper.Viper {
 				continue
 			}
 
-			k := strings.Replace(keys[i], ".", "_", -1)
+			k := strings.ReplaceAll(keys[i], ".", "_")
 			fmt.Printf("%s_%s = %s\n", envPrefix, strings.ToUpper(k), defaultValue)
 		}
 

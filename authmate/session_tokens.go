@@ -66,10 +66,12 @@ func buildContext(rules []byte) ([]sessionTokenContext, error) {
 			containsSetEACL = false
 		)
 		for _, d := range sessionCtxs {
-			if d.verb == session.VerbContainerPut {
+			switch d.verb {
+			case session.VerbContainerPut:
 				containsPut = true
-			} else if d.verb == session.VerbContainerSetEACL {
+			case session.VerbContainerSetEACL:
 				containsSetEACL = true
+			default:
 			}
 		}
 		if containsPut && !containsSetEACL {

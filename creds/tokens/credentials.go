@@ -69,7 +69,7 @@ var (
 	// ErrEmptyPublicKeys is returned when no HCS keys are provided.
 	ErrEmptyPublicKeys = errors.New("HCS public keys could not be empty")
 	// ErrEmptyBearerToken is returned when no bearer token is provided.
-	ErrEmptyBearerToken = errors.New("Bearer token could not be empty")
+	ErrEmptyBearerToken = errors.New("bearer token could not be empty")
 )
 
 var _ = New

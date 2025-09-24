@@ -287,8 +287,8 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 			return fmt.Errorf("couldn't open aws cli credentials file: %w", err)
 		}
 		defer file.Close()
-		if _, err = file.WriteString(fmt.Sprintf("\n[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
-			profileName, accessKeyID, secrets.AccessKey)); err != nil {
+		if _, err = fmt.Fprintf(file, "\n[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
+			profileName, accessKeyID, secrets.AccessKey); err != nil {
 			return fmt.Errorf("fails to write to file: %w", err)
 		}
 	}

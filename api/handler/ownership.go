@@ -120,21 +120,20 @@ func (h *handler) GetBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if settings.BucketOwner == data.BucketOwnerEnforced {
+	switch settings.BucketOwner {
+	case data.BucketOwnerEnforced:
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerEnforced}},
 		}
-	} else if settings.BucketOwner == data.BucketOwnerPreferred {
+	case data.BucketOwnerPreferred:
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerPreferred}},
 		}
-	} else if settings.BucketOwner == data.BucketOwnerObjectWriter {
+	case data.BucketOwnerObjectWriter:
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerObjectWriter}},
 		}
-	}
-
-	if response == nil {
+	default:
 		api.WriteSuccessResponseHeadersOnly(w)
 		return
 	}
