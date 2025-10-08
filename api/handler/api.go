@@ -48,6 +48,8 @@ type (
 		// GetPlacementPolicy get policy by name.
 		// Returns [models.ErrNotFound] if policy not found.
 		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error)
+		// GetDefaultPolicy returns default policy.
+		GetDefaultPolicy() (layer.PlacementPolicy, error)
 	}
 
 	// ACLStateProvider get bucket ACL state.

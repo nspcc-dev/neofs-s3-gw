@@ -15,6 +15,7 @@ type (
 
 	servicePolicyProvider interface {
 		GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error)
+		GetDefaultPolicy() (layer.PlacementPolicy, error)
 	}
 )
 
@@ -30,6 +31,13 @@ func (s *storagePolicyService) GetPlacementPolicy(userAddr util.Uint160, policyN
 	defer s.mu.RUnlock()
 
 	return s.provider.GetPlacementPolicy(userAddr, policyName)
+}
+
+func (s *storagePolicyService) GetDefaultPolicy() (layer.PlacementPolicy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.provider.GetDefaultPolicy()
 }
 
 func (s *storagePolicyService) UpdateProvider(p servicePolicyProvider) {
