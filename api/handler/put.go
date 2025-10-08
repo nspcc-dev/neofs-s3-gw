@@ -793,12 +793,32 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	api.WriteSuccessResponseHeadersOnly(w)
 }
 
-func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
-	prm.Policy = layer.PlacementPolicy{
+func (h handler) getDefaultPolicy() layer.PlacementPolicy {
+	def := layer.PlacementPolicy{
 		Version:     layer.PlacementPolicyV1,
 		Placement:   h.cfg.Policy.Default(),
 		Consistency: h.cfg.ContainerMetadataPolicy,
 	}
+
+	if h.cfg.PlacementPolicyProvider != nil {
+		policy, err := h.cfg.PlacementPolicyProvider.GetDefaultPolicy()
+		if err != nil {
+			if errors.Is(err, models.ErrNotFound) {
+				return def
+			}
+
+			h.log.Error("get default policy from provider", zap.Error(err))
+			return def
+		}
+
+		return policy
+	}
+
+	return def
+}
+
+func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
+	prm.Policy = h.getDefaultPolicy()
 
 	if locationConstraint == "" {
 		return
@@ -836,7 +856,7 @@ func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160,
 		return
 	}
 
-	prm.Policy = *policy
+	prm.Policy = policy
 	prm.LocationConstraint = locationConstraint
 }
 
