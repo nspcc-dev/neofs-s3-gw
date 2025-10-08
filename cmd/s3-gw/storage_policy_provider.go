@@ -82,41 +82,20 @@ func resolveContract(cl *rpcclient.Client, inv *invoker.Invoker, contractName st
 	return contractHash, nil
 }
 
-func (p *storagePolicyProvider) GetPlacementPolicy(userAddr util.Uint160, policyName string) (*layer.PlacementPolicy, error) {
+func (p *storagePolicyProvider) GetPlacementPolicy(userAddr util.Uint160, policyName string) (layer.PlacementPolicy, error) {
 	payload, err := unwrap.Bytes(
 		p.invoker().Call(p.contractHash, "resolvePolicy", userAddr, policyName),
 	)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "policy not found") {
-			return nil, models.ErrNotFound
+			return layer.PlacementPolicy{}, models.ErrNotFound
 		}
 
-		return nil, fmt.Errorf("get system storage policy: %w", err)
+		return layer.PlacementPolicy{}, fmt.Errorf("get system storage policy: %w", err)
 	}
 
-	var (
-		policy layer.PlacementPolicy
-		pp     netmap.PlacementPolicy
-	)
-
-	if err = json.Unmarshal(payload, &policy); err != nil {
-		return nil, fmt.Errorf("unmarshal placement policy: %w", err)
-	}
-
-	switch policy.Version {
-	case layer.PlacementPolicyV1:
-		return &policy, nil
-	default:
-		if err = pp.UnmarshalJSON(payload); err != nil {
-			return nil, fmt.Errorf("unmarshal placement policy: %w", err)
-		}
-
-		policy.Placement = pp
-		policy.Version = layer.PlacementPolicyV1
-	}
-
-	return &policy, nil
+	return p.unmarshalPolicy(payload)
 }
 
 func (p *storagePolicyProvider) GetDefaultPolicy() (layer.PlacementPolicy, error) {
@@ -132,12 +111,16 @@ func (p *storagePolicyProvider) GetDefaultPolicy() (layer.PlacementPolicy, error
 		return layer.PlacementPolicy{}, models.ErrNotFound
 	}
 
+	return p.unmarshalPolicy(payload)
+}
+
+func (p *storagePolicyProvider) unmarshalPolicy(payload []byte) (layer.PlacementPolicy, error) {
 	var (
 		policy layer.PlacementPolicy
 		pp     netmap.PlacementPolicy
 	)
 
-	if err = json.Unmarshal(payload, &policy); err != nil {
+	if err := json.Unmarshal(payload, &policy); err != nil {
 		return layer.PlacementPolicy{}, fmt.Errorf("unmarshal placement policy: %w", err)
 	}
 
@@ -145,7 +128,7 @@ func (p *storagePolicyProvider) GetDefaultPolicy() (layer.PlacementPolicy, error
 	case layer.PlacementPolicyV1:
 		return policy, nil
 	default:
-		if err = pp.UnmarshalJSON(payload); err != nil {
+		if err := pp.UnmarshalJSON(payload); err != nil {
 			return layer.PlacementPolicy{}, fmt.Errorf("unmarshal placement policy: %w", err)
 		}
 
@@ -188,8 +171,8 @@ func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) 
 	return cl, nil
 }
 
-func (p *noOpStoragePolicyProvider) GetPlacementPolicy(_ util.Uint160, _ string) (*layer.PlacementPolicy, error) {
-	return nil, models.ErrNotFound
+func (p *noOpStoragePolicyProvider) GetPlacementPolicy(_ util.Uint160, _ string) (layer.PlacementPolicy, error) {
+	return layer.PlacementPolicy{}, models.ErrNotFound
 }
 
 func (p *noOpStoragePolicyProvider) GetDefaultPolicy() (layer.PlacementPolicy, error) {

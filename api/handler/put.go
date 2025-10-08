@@ -856,7 +856,7 @@ func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160,
 		return
 	}
 
-	prm.Policy = *policy
+	prm.Policy = policy
 	prm.LocationConstraint = locationConstraint
 }
 
