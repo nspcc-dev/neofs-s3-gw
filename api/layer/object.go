@@ -461,12 +461,12 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 //
 // Returns ErrNodeNotFound if zero objects found.
 func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, error) {
-	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, objectName, onlyUnversioned, nil)
+	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, objectName, onlyUnversioned, nil, false)
 
 	return searchResults, err
 }
 
-func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool, cursor *string) ([]allVersionsSearchResult, string, error) {
+func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool, cursor *string, isObjectNamePrefix bool) ([]allVersionsSearchResult, string, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
@@ -487,12 +487,12 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 		opts.WithBearerToken(*bt)
 	}
 
-	if len(objectName) > 0 {
-		filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
-	} else {
-		filters.AddFilter(object.AttributeFilePath, "", object.MatchCommonPrefix)
+	matchType := object.MatchCommonPrefix
+	if len(objectName) > 0 && !isObjectNamePrefix {
+		matchType = object.MatchStringEqual
 	}
 
+	filters.AddFilter(object.AttributeFilePath, objectName, matchType)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
 
@@ -1244,7 +1244,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 }
 
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, cursor, delimiter string) (map[string][]*data.ExtendedObjectInfo, string, error) {
-	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, prefix, false, &cursor)
+	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, prefix, false, &cursor, true)
 	if err != nil {
 		return nil, "", err
 	}
