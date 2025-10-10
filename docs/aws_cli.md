@@ -35,9 +35,9 @@ $ aws s3 ls
 
 #### Creation of a bucket
 
-At this moment, the gateway supports only canned ACL and doesn't support the setting of location constraints.
+At this moment, the gateway supports only canned ACL and supports setting of location constraints.
 
-To create a bucket, run the following command:
+To create a bucket with canned ACL, run the following command:
 ```
 $ aws s3api create-bucket --bucket %BUCKET_NAME --acl %ACL
 ```
@@ -53,6 +53,8 @@ If the parameter is not set, the default value is `private`.
 > later by bucket getting/listing commands, or by repeating the creating command
 > (previous success will result in the status mentioned above). It is worth clarifying
 > that the final success of the bucket creation is not guaranteed after a timeout error.
+
+To create a bucket with `LocationConstraint`, see [docs](./aws_s3_compat.md#bucket)
 
 #### Deletion of a bucket 
 
