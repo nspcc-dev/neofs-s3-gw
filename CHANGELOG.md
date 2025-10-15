@@ -502,7 +502,7 @@ placement_policy:
 
 Make sure you update the config accordingly:
 If you configure application using environment variables change:
-* `S3_GW_DEFAULT_POLICY` -> `S3_GW_PLACEMENT_POLICY_DEFAULT_POLICY`
+* `S3_GW_DEFAULT_POLICY` -> `S3_GW_PLACEMENT_POLICY_DEFAULT`
 * `S3_GW_LISTEN_ADDRESS` -> `S3_GW_SERVER_0_ADDRESS`
 * `S3_GW_TLS_CERT_FILE` -> `S3_GW_SERVER_0_TLS_CERT_FILE` (and set `S3_GW_SERVER_0_TLS_ENABLED=true`)
 * `S3_GW_TLS_KEY_FILE` -> `S3_GW_SERVER_0_TLS_KEY_FILE` (and set `S3_GW_SERVER_0_TLS_ENABLED=true`)
