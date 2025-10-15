@@ -7,16 +7,29 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- Minimal required Go is 1.24 now (#1080)
 
 ### Fixed
 
 ### Updated
-- NeoGo dependency to 0.113.0 (#1222)
 
 ### Removed
 
-### Upgrading from 0.41.2
+### Upgrading from 0.41.3
+
+## [0.41.3] - 2025-10-15
+
+### Added
+- Default policy can be retrieved from contract now (#1228)
+
+### Changed
+- Minimal required Go is 1.24 now (#1080)
+
+### Fixed
+- list-object-versions API not handling prefixes correctly (#1225)
+- Documentation (#1230, #1232)
+
+### Updated
+- NeoGo dependency to 0.113.0 (#1222)
 
 ## [0.41.2] - 2025-09-17
 
@@ -906,4 +919,5 @@ releases.
 [0.41.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.40.0...v0.41.0
 [0.41.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.0...v0.41.1
 [0.41.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.1...v0.41.2
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.2...master
+[0.41.3]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.2...v0.41.3
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.3...master
