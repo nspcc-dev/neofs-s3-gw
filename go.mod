@@ -14,8 +14,8 @@ require (
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.113.0
 	github.com/nspcc-dev/neofs-contract v0.23.0
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.14
-	github.com/nspcc-dev/tzhash v1.8.2
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.15
+	github.com/nspcc-dev/tzhash v1.8.3
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.19.0
@@ -23,8 +23,8 @@ require (
 	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.17.0
-	google.golang.org/grpc v1.70.0
-	google.golang.org/protobuf v1.36.8
+	google.golang.org/grpc v1.75.1
+	google.golang.org/protobuf v1.36.9
 )
 
 require (
@@ -41,7 +41,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nspcc-dev/bbolt v0.0.0-20250911202005-807225ebb0c8 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20250911084817-6fb4472993d1 // indirect
-	github.com/nspcc-dev/hrw/v2 v2.0.3 // indirect
+	github.com/nspcc-dev/hrw/v2 v2.0.4 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
@@ -52,8 +52,8 @@ require (
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a // indirect
+	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250922171735-9219d122eba9 // indirect
 )
 
 require (
@@ -64,7 +64,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/magiconair/properties v1.8.7 // indirect
+	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
