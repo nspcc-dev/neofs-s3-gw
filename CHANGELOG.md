@@ -5,13 +5,14 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- Support for erasure coding in bucket policies (#1235)
 
 ### Changed
 
 ### Fixed
 
 ### Updated
-- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.15` (#1234)
+- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.15.0.20251015122943-b38583ddd311` (#1234, #1235)
 - `github.com/nspcc-dev/tzhash` dependency to `v1.8.3` (#1234)
 - `google.golang.org/grpc` dependency to `v1.75.1` (#1234)
 - `google.golang.org/protobuf` dependency to `v1.36.9` (#1234)
