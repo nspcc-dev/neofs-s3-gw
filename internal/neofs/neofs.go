@@ -819,7 +819,7 @@ func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.
 // SearchObjectsV2WithCursor implements neofs.NeoFS interface method.
 func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
 	items, cursor, err := x.pool.SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
-	if err != nil {
+	if err != nil && !errors.Is(err, apistatus.ErrIncomplete) {
 		return nil, "", fmt.Errorf("search objects: %w", err)
 	}
 
