@@ -14,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
+	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
@@ -159,6 +160,8 @@ type Multipart struct {
 	PayloadHash hash.Hash
 	// HomoHash contains precalculated homomorphic hash for object if enabled.
 	HomoHash hash.Hash
+	// Storage policy of the container to upload data into. Ignored if Link is set.
+	ContainerPolicy netmap.PlacementPolicy
 }
 
 // PrmObjectDelete groups parameters of NeoFS.DeleteObject operation.
