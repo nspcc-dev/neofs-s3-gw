@@ -21,6 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
@@ -331,8 +332,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetAttributes(attrs...)
 	obj.SetPayloadSize(prm.PayloadSize)
 
+	signer := x.signer(ctx)
+
 	if prm.Multipart != nil {
-		obj.SetOwner(x.signer(ctx).UserID())
+		obj.SetOwner(signer.UserID())
 
 		if prm.Multipart.SplitPreviousID != nil {
 			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
@@ -369,7 +372,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 		if err := x.signMultipartObject(
 			&obj,
-			x.signer(ctx),
+			signer,
 			prm.Multipart.PayloadHash,
 			prm.Multipart.HomoHash,
 		); err != nil {
@@ -389,8 +392,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	}
 
 	if x.cfg.IsSlicerEnabled {
-		var signer = x.signer(ctx)
-
 		obj.SetOwner(signer.UserID())
 
 		opts := slicer.Options{}
@@ -435,14 +436,38 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		return objID, nil
 	}
 
-	var prmObjPutInit client.PrmObjectPutInit
-	prmObjPutInit.SetCopiesNumber(prm.CopiesNumber)
+	if prm.Multipart != nil && obj.Type() == object.TypeRegular {
+		if ecRules := prm.Multipart.ContainerPolicy.ECRules(); len(ecRules) > 0 {
+			pld, err := io.ReadAll(prm.Payload)
+			if err != nil {
+				return oid.ID{}, fmt.Errorf("read full payload: %w", err)
+			}
 
-	if prm.BearerToken != nil {
-		prmObjPutInit.WithBearerToken(*prm.BearerToken)
+			if err := x.ecAndSaveReadyObject(ctx, signer, prm.BearerToken, obj, pld, ecRules); err != nil {
+				return oid.ID{}, err
+			}
+
+			if prm.Multipart.ContainerPolicy.NumberOfReplicas() == 0 {
+				return obj.GetID(), nil
+			}
+
+			prm.Payload = bytes.NewReader(pld)
+		}
 	}
 
-	writer, err := x.pool.ObjectPutInit(ctx, obj, x.signer(ctx), prmObjPutInit)
+	return x.putReadyObject(ctx, signer, prm.BearerToken, obj, prm.Payload, prm.PayloadSize, prm.CopiesNumber)
+}
+
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, bTok *bearer.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64,
+	copyNum uint32) (oid.ID, error) {
+	var prmObjPutInit client.PrmObjectPutInit
+	prmObjPutInit.SetCopiesNumber(copyNum)
+
+	if bTok != nil {
+		prmObjPutInit.WithBearerToken(*bTok)
+	}
+
+	writer, err := x.pool.ObjectPutInit(ctx, hdr, signer, prmObjPutInit)
 	if err != nil {
 		reason, ok := isErrAccessDenied(err)
 		if ok {
@@ -456,8 +481,8 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		returnToPool bool
 	)
 
-	if prm.PayloadSize > 0 && prm.PayloadSize < uint64(x.MaxObjectSize()/2) {
-		c := make([]byte, prm.PayloadSize)
+	if pldSize > 0 && pldSize < uint64(x.MaxObjectSize()/2) {
+		c := make([]byte, pldSize)
 		chunk = &c
 	} else {
 		data := x.buffers.Get()
@@ -465,7 +490,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		returnToPool = true
 	}
 
-	_, err = io.CopyBuffer(writer, prm.Payload, *chunk)
+	_, err = io.CopyBuffer(writer, pldRdr, *chunk)
 	if returnToPool {
 		x.buffers.Put(chunk)
 	}

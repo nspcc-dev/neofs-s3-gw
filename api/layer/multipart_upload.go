@@ -246,6 +246,12 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
 	}
 
+	// TODO: reuse cache from containerInfo()
+	cnr, err := n.neoFS.Container(ctx, p.Info.Bkt.CID)
+	if err != nil {
+		return nil, fmt.Errorf("get container by ID=%s: %w", p.Info.Bkt.CID, err)
+	}
+
 	var (
 		bktInfo       = p.Info.Bkt
 		payloadReader = p.Reader
@@ -349,6 +355,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 				HomoHash: tzHash,
 				PartHash: currentPartHash,
 			},
+			ContainerPolicy: cnr.PlacementPolicy(),
 		},
 	}
 
@@ -414,6 +421,12 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	if err := p.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
+	}
+
+	// TODO: reuse cache from containerInfo()
+	cnr, err := n.neoFS.Container(ctx, p.Bkt.CID)
+	if err != nil {
+		return nil, fmt.Errorf("get container by ID=%s: %w", p.Bkt.CID, err)
 	}
 
 	var (
@@ -491,8 +504,9 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		CreationTime: creationTime,
 		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
-			HeaderObject: &hashlessHeaderObject,
-			PayloadHash:  sha256.New(),
+			HeaderObject:    &hashlessHeaderObject,
+			PayloadHash:     sha256.New(),
+			ContainerPolicy: cnr.PlacementPolicy(),
 		},
 		Payload: bytes.NewBuffer(nil),
 	}
@@ -1577,6 +1591,12 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return nil, nil, err
 	}
 
+	// TODO: reuse cache from containerInfo()
+	cnr, err := n.neoFS.Container(ctx, p.Info.Bkt.CID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get container by ID=%s: %w", p.Info.Bkt.CID, err)
+	}
+
 	// last part
 	prm := PrmObjectCreate{
 		Container:    p.Info.Bkt.CID,
@@ -1588,6 +1608,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			SplitPreviousID: &splitPreviousID,
 			HeaderObject:    header,
 			PayloadHash:     sha256.New(),
+			ContainerPolicy: cnr.PlacementPolicy(),
 		},
 		Payload: bytes.NewBuffer(nil),
 	}
