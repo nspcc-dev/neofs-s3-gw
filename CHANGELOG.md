@@ -5,21 +5,30 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- Support for erasure coding in bucket policies (#1235)
 
 ### Changed
 
 ### Fixed
 
 ### Updated
-- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.15.0.20251015122943-b38583ddd311` (#1234, #1235)
-- `github.com/nspcc-dev/tzhash` dependency to `v1.8.3` (#1234)
-- `google.golang.org/grpc` dependency to `v1.75.1` (#1234)
-- `google.golang.org/protobuf` dependency to `v1.36.9` (#1234)
 
 ### Removed
 
-### Upgrading from 0.41.3
+### Upgrading from 0.41.4
+
+## [0.41.4] - 2025-11-14
+
+### Added
+- Support for erasure coding in bucket policies (#1235)
+
+### Fixed
+- "Incomplete" status handling for internal searches (#1238)
+
+### Updated
+- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.16` (#1234, #1235, #1239)
+- `github.com/nspcc-dev/tzhash` dependency to `v1.8.3` (#1234)
+- `google.golang.org/grpc` dependency to `v1.75.1` (#1234)
+- `google.golang.org/protobuf` dependency to `v1.36.9` (#1234)
 
 ## [0.41.3] - 2025-10-15
 
@@ -925,4 +934,5 @@ releases.
 [0.41.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.0...v0.41.1
 [0.41.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.1...v0.41.2
 [0.41.3]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.2...v0.41.3
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.3...master
+[0.41.4]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.3...v0.41.4
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.4...master
