@@ -11,12 +11,17 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
-- NeoGo dependency to 0.114.0 (#1240)
-- NeoFS SDK dependency to RC16+ fixing Incomplete status processing (#1240)
 
 ### Removed
 
-### Upgrading from 0.41.4
+### Upgrading from 0.41.5
+
+## [0.41.5] - 2025-11-21
+
+### Updated
+- NeoGo dependency to 0.114.0 (#1240)
+- NeoFS SDK dependency to RC16+ fixing Incomplete status processing (#1240)
+- golang.org/x/crypto dependency from 0.42.0 to 0.45.0 (#1241)
 
 ## [0.41.4] - 2025-11-14
 
@@ -937,4 +942,5 @@ releases.
 [0.41.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.1...v0.41.2
 [0.41.3]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.2...v0.41.3
 [0.41.4]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.3...v0.41.4
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.4...master
+[0.41.5]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.4...v0.41.5
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.5...master
