@@ -48,6 +48,7 @@ type (
 		Created            time.Time
 		LocationConstraint string
 		ObjectLockEnabled  bool
+		AttributeCors      string
 	}
 
 	// ObjectInfo holds S3 object data.

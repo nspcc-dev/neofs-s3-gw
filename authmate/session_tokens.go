@@ -87,5 +87,7 @@ func buildContext(rules []byte) ([]sessionTokenContext, error) {
 		{verb: session.VerbContainerPut},
 		{verb: session.VerbContainerDelete},
 		{verb: session.VerbContainerSetEACL},
+		{verb: session.VerbContainerSetAttribute},
+		{verb: session.VerbContainerRemoveAttribute},
 	}, nil
 }
