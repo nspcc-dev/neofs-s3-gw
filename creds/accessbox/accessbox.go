@@ -70,6 +70,16 @@ func (g *GateData) SessionTokenForSetEACL() *session.Container {
 	return g.containerSessionToken(session.VerbContainerSetEACL)
 }
 
+// SessionTokenForSetAttribute returns the first suitable container session context for SetAttribute operation.
+func (g *GateData) SessionTokenForSetAttribute() *session.Container {
+	return g.containerSessionToken(session.VerbContainerSetAttribute)
+}
+
+// SessionTokenForRemoveAttribute returns the first suitable container session context for RemoveAttribute operation.
+func (g *GateData) SessionTokenForRemoveAttribute() *session.Container {
+	return g.containerSessionToken(session.VerbContainerRemoveAttribute)
+}
+
 func (g *GateData) containerSessionToken(verb session.ContainerVerb) *session.Container {
 	for _, sessionToken := range g.SessionTokens {
 		if isAppropriateContainerContext(sessionToken, verb) {
@@ -81,7 +91,11 @@ func (g *GateData) containerSessionToken(verb session.ContainerVerb) *session.Co
 
 func isAppropriateContainerContext(tok *session.Container, verb session.ContainerVerb) bool {
 	switch verb {
-	case session.VerbContainerSetEACL, session.VerbContainerDelete, session.VerbContainerPut:
+	case session.VerbContainerSetEACL,
+		session.VerbContainerDelete,
+		session.VerbContainerPut,
+		session.VerbContainerSetAttribute,
+		session.VerbContainerRemoveAttribute:
 		return tok.AssertVerb(verb)
 	default:
 		return false

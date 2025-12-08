@@ -624,6 +624,14 @@ func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, fil
 	return result, nextCursor, nil
 }
 
+func (t *TestNeoFS) SetContainerAttribute(_ context.Context, _ cid.ID, _, _ string, _ *session.Container) error {
+	return nil
+}
+
+func (t *TestNeoFS) RemoveContainerAttribute(_ context.Context, _ cid.ID, _ string, _ *session.Container) error {
+	return nil
+}
+
 func fillResultObject(obj *object.Object, attributes []string) searchedItem {
 	var (
 		result searchedItem
