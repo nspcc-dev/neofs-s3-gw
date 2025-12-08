@@ -38,7 +38,7 @@ jobs:
     runs-on: ${{ matrix.os.name }}
     strategy:
       matrix:
-        os: [{ name: ubuntu-22.04, bin-name: linux }, { name: macos-14, bin-name: darwin }] # { name: windows-2022, bin-name: windows }
+        os: [{ name: ubuntu-latest, bin-name: linux }, { name: macos-14, bin-name: darwin }] # { name: windows-2022, bin-name: windows }
         arch: [amd64, arm64]
 
     steps:
@@ -80,7 +80,7 @@ jobs:
   build_image:
     needs: build_bins
     name: Build Docker image
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
