@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -19,6 +18,7 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 )
 
 type PutLockInfoParams struct {
@@ -239,10 +239,15 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return settings, nil
 	}
 
-	var (
-		err      error
-		settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	)
+	var settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
+	if bktInfo.AttributeSettings != "" {
+		if err := json.Unmarshal([]byte(bktInfo.AttributeSettings), settings); err != nil {
+			return nil, fmt.Errorf("malformed data: %w", err)
+		}
+
+		n.cache.PutSettings(bktInfo, settings)
+		return settings, nil
+	}
 
 	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings)
 	if err != nil {
@@ -251,7 +256,6 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 
 	if id.IsZero() {
 		n.cache.PutSettings(bktInfo, settings)
-
 		return settings, nil
 	}
 
@@ -267,7 +271,19 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 		return nil, fmt.Errorf("decode bucket settings object: %w", err)
 	}
 
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		// Migrate bucket settings.
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeSettings, settings, boxData.Gate.SessionTokenForSetAttribute()); err != nil {
+			return nil, fmt.Errorf("store bucket settings object: %w", err)
+		}
+		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings); err != nil {
+			return nil, fmt.Errorf("delete obsolete bucket settings objects: %w", err)
+		}
+	}
+
 	n.cache.PutSettings(bktInfo, settings)
+	n.cache.DeleteBucket(bktInfo.Name)
 
 	return settings, nil
 }
@@ -315,28 +331,18 @@ func decodeBucketSettings(settingsObj *object.Object) (*data.BucketSettings, err
 
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	payload, err := json.Marshal(p.Settings)
-	if err != nil {
-		return fmt.Errorf("marshal bucket settings: %w", err)
+	var sessionToken *session.Container
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
 	}
 
-	prm := PrmObjectCreate{
-		Container:    p.BktInfo.CID,
-		Creator:      p.BktInfo.Owner,
-		CreationTime: TimeNow(ctx),
-		Attributes: map[string]string{
-			s3headers.MetaType:                  s3headers.TypeBucketSettings,
-			s3headers.BucketSettingsMetaVersion: data.BucketSettingsV1,
-		},
-		Payload:     bytes.NewReader(payload),
-		PayloadSize: uint64(len(payload)),
-	}
-
-	if _, _, err = n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
-		return fmt.Errorf("create bucket settings object: %w", err)
+	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeSettings, p.Settings, sessionToken); err != nil {
+		return fmt.Errorf("store bucket settings: %w", err)
 	}
 
 	n.cache.PutSettings(p.BktInfo, p.Settings)
+	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil
 }

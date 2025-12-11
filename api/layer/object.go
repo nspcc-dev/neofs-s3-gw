@@ -1471,6 +1471,45 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 	return searchResults[0].ID, nil
 }
 
+func (n *layer) deleteBucketMetaObjects(ctx context.Context, bktInfo *data.BucketInfo, objType string) error {
+	var (
+		opts                client.SearchObjectsOptions
+		owner               = n.Owner(ctx)
+		filters             = make(object.SearchFilters, 0, 2)
+		returningAttributes = []string{
+			s3headers.MetaType,
+		}
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil && bt.Issuer() == bktInfo.Owner {
+		opts.WithBearerToken(*bt)
+	}
+
+	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return nil
+	}
+
+	for _, item := range searchResultItems {
+		if err = n.objectDelete(ctx, bktInfo, item.ID); err != nil {
+			return fmt.Errorf("remove %s metaobject for %s: %w", objType, bktInfo.CID.EncodeToString(), err)
+		}
+	}
+
+	return nil
+}
+
 func extractLockDataFromAttrubute(lsr *locksSearchResult, attributeValue string) error {
 	fields := make(map[string]string)
 	if err := json.Unmarshal([]byte(attributeValue), &fields); err != nil {
