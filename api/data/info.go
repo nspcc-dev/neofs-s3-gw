@@ -50,6 +50,7 @@ type (
 		ObjectLockEnabled  bool
 		AttributeCors      string
 		AttributeTags      string
+		AttributeSettings  string
 	}
 
 	// ObjectInfo holds S3 object data.
