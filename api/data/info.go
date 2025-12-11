@@ -49,6 +49,7 @@ type (
 		LocationConstraint string
 		ObjectLockEnabled  bool
 		AttributeCors      string
+		AttributeTags      string
 	}
 
 	// ObjectInfo holds S3 object data.

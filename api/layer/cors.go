@@ -23,6 +23,7 @@ const (
 	wildcard = "*"
 
 	attributeCors = "CORS"
+	attributeTags = "S3_TAGS"
 )
 
 var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
