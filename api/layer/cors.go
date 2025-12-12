@@ -22,9 +22,10 @@ import (
 const (
 	wildcard = "*"
 
-	attributeCors     = "CORS"
-	attributeTags     = "S3_TAGS"
-	attributeSettings = "S3_SETTINGS"
+	attributeCors          = "CORS"
+	attributeTags          = "S3_TAGS"
+	attributeSettings      = "S3_SETTINGS"
+	attributeNotifications = "S3_NOTIFICATIONS"
 )
 
 var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
