@@ -311,13 +311,11 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	objectNonceAttr := object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
 	attrs = append(attrs, objectNonceAttr)
 
-	obj := object.New()
-	obj.SetContainerID(prm.Container)
+	obj := object.New(prm.Container, prm.Creator)
 	obj.SetID(id)
 	obj.SetPayloadSize(prm.PayloadSize)
 	obj.SetAttributes(attrs...)
 	obj.SetCreationEpoch(t.currentEpoch)
-	obj.SetOwner(prm.Creator)
 	t.currentEpoch++
 
 	if prm.Multipart != nil {
@@ -362,13 +360,11 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 				return oid.ID{}, errors.New("HeaderObject id is not set")
 			}
 
-			realHeaderObj := object.New()
-			realHeaderObj.SetContainerID(prm.Container)
+			realHeaderObj := object.New(prm.Container, prm.Creator)
 			realHeaderObj.SetID(pid)
 			realHeaderObj.SetPayloadSize(uint64(len(payload)))
 			realHeaderObj.SetAttributes(prm.Multipart.HeaderObject.Attributes()...)
 			realHeaderObj.SetCreationEpoch(t.currentEpoch)
-			realHeaderObj.SetOwner(prm.Creator)
 			realHeaderObj.SetPayload(payload)
 
 			realHeaderObj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(payload)))
