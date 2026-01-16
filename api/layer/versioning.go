@@ -1,7 +1,6 @@
 package layer
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -87,7 +86,7 @@ func (n *layer) ListObjectVersions(ctx context.Context, p *ListObjectVersionsPar
 					// But sometimes the objects with the same name can be created in one second.
 					// To handle this situation, we have to filter out processed objects with OIDs.
 					if keyMarkerLastTs == version.NodeVersion.Timestamp && !id.IsZero() {
-						if bytes.Compare(id[:], version.NodeVersion.OID[:]) < 0 {
+						if id.Compare(version.NodeVersion.OID) < 0 {
 							continue
 						}
 					}

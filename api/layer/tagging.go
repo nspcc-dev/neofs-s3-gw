@@ -173,7 +173,7 @@ func (n *layer) GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams)
 		}
 
 		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+		return b.ID.Compare(a.ID) // reverse order.
 	}
 
 	// There are not extra meta objects with tags.

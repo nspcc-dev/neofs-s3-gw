@@ -393,7 +393,7 @@ func locksSearchResultsSortFunc(a, b locksSearchResult) int {
 	}
 
 	// It is a temporary decision. We can't figure out what object was first and what the second right now.
-	return bytes.Compare(a.ID[:], b.ID[:]) // direct order.
+	return b.ID.Compare(a.ID) // direct order.
 }
 
 func extractLockInfoFromSearch(lockVersions []locksSearchResult) *data.LockInfo {

@@ -788,7 +788,7 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 		}
 
 		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+		return b.ID.Compare(a.ID) // reverse order.
 	}
 
 	slices.SortFunc(searchResults, sortFunc)
