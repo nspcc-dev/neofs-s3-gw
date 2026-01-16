@@ -369,9 +369,8 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 			realHeaderObj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(payload)))
 
-			addr = oid.NewAddress(prm.Container, pid)
 			t.objectsMutex.Lock()
-			t.objects[addr.EncodeToString()] = realHeaderObj
+			t.objects[realHeaderObj.Address().EncodeToString()] = realHeaderObj
 			t.objectsMutex.Unlock()
 		}
 	}
@@ -390,13 +389,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		obj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(all)))
 	}
 
-	objID := obj.GetID()
-
-	addr := oid.NewAddress(obj.GetContainerID(), objID)
 	t.objectsMutex.Lock()
-	t.objects[addr.EncodeToString()] = obj
+	t.objects[obj.Address().EncodeToString()] = obj
 	t.objectsMutex.Unlock()
-	return objID, nil
+	return obj.GetID(), nil
 }
 
 func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {

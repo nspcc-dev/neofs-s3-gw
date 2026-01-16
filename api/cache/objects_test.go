@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	objecttest "github.com/nspcc-dev/neofs-sdk-go/object/test"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -22,7 +21,7 @@ func getTestConfig() *Config {
 func TestCache(t *testing.T) {
 	obj := objecttest.Object()
 
-	addr := oid.NewAddress(obj.GetContainerID(), obj.GetID())
+	addr := obj.Address()
 
 	extObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo: &data.ObjectInfo{
