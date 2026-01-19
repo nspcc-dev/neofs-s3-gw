@@ -563,7 +563,7 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 		}
 
 		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+		return b.ID.Compare(a.ID) // reverse order.
 	}
 
 	slices.SortFunc(searchResults, sortFunc)
@@ -625,7 +625,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		}
 
 		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+		return b.ID.Compare(a.ID) // reverse order.
 	}
 
 	for _, item := range searchResultItems {
@@ -893,7 +893,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 		}
 
 		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+		return b.ID.Compare(a.ID) // reverse order.
 	}
 
 	slices.SortFunc(searchResults, sortFunc)
@@ -1465,7 +1465,7 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 		}
 
 		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return bytes.Compare(b.ID[:], a.ID[:]) // reverse order.
+		return b.ID.Compare(a.ID) // reverse order.
 	}
 
 	slices.SortFunc(searchResults, sortFunc)
