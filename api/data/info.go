@@ -42,12 +42,16 @@ type (
 
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
-		Name               string
-		CID                cid.ID
-		Owner              user.ID
-		Created            time.Time
-		LocationConstraint string
-		ObjectLockEnabled  bool
+		Name                   string
+		CID                    cid.ID
+		Owner                  user.ID
+		Created                time.Time
+		LocationConstraint     string
+		ObjectLockEnabled      bool
+		AttributeCors          string
+		AttributeTags          string
+		AttributeSettings      string
+		AttributeNotifications string
 	}
 
 	// ObjectInfo holds S3 object data.
