@@ -28,8 +28,6 @@ type GetObjectTaggingParams struct {
 type PutObjectTaggingParams struct {
 	ObjectVersion *ObjectVersion
 	TagSet        map[string]string
-
-	CopiesNumber uint32
 }
 
 type taggingSearchResult struct {
@@ -49,7 +47,6 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 		Container:    p.ObjectVersion.BktInfo.CID,
 		Creator:      p.ObjectVersion.BktInfo.Owner,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: p.CopiesNumber,
 		Filepath:     p.ObjectVersion.ObjectName,
 		Attributes:   make(map[string]string, 3+len(p.TagSet)),
 		Payload:      bytes.NewBuffer(payload),
@@ -234,7 +231,7 @@ func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id o
 	return tags, nil
 }
 
-func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copiesNumber uint32) error {
+func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
 	fs := make(object.SearchFilters, 0, 4)
 	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
@@ -271,7 +268,6 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copie
 	putObjectTaggingParams := PutObjectTaggingParams{
 		ObjectVersion: p,
 		TagSet:        make(map[string]string),
-		CopiesNumber:  copiesNumber,
 	}
 
 	return n.PutObjectTagging(ctx, &putObjectTaggingParams)
@@ -306,7 +302,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 	return tags, nil
 }
 
-func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string, copiesNumber uint32) error {
+func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
 	payload, err := json.Marshal(tagSet)
 	if err != nil {
 		return fmt.Errorf("could not marshal tag set: %w", err)
@@ -316,7 +312,6 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: copiesNumber,
 		Attributes: map[string]string{
 			s3headers.MetaType: s3headers.TypeBucketTags,
 		},

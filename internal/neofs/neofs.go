@@ -396,7 +396,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 		opts := slicer.Options{}
 		opts.SetObjectPayloadLimit(uint64(x.cfg.MaxObjectSize))
-		opts.SetCopiesNumber(prm.CopiesNumber)
 		opts.SetCurrentNeoFSEpoch(x.epochGetter.CurrentEpoch())
 		opts.SetPayloadSize(prm.PayloadSize)
 
@@ -455,13 +454,11 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 	}
 
-	return x.putReadyObject(ctx, signer, prm.BearerToken, obj, prm.Payload, prm.PayloadSize, prm.CopiesNumber)
+	return x.putReadyObject(ctx, signer, prm.BearerToken, obj, prm.Payload, prm.PayloadSize)
 }
 
-func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, bTok *bearer.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64,
-	copyNum uint32) (oid.ID, error) {
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, bTok *bearer.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64) (oid.ID, error) {
 	var prmObjPutInit client.PrmObjectPutInit
-	prmObjPutInit.SetCopiesNumber(copyNum)
 
 	if bTok != nil {
 		prmObjPutInit.WithBearerToken(*bTok)

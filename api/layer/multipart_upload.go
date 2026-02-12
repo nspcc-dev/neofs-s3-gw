@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -57,10 +56,9 @@ type (
 	}
 
 	CreateMultipartParams struct {
-		Info         *UploadInfoParams
-		Header       map[string]string
-		Data         *UploadData
-		CopiesNumber uint32
+		Info   *UploadInfoParams
+		Header map[string]string
+		Data   *UploadData
 	}
 
 	UploadData struct {
@@ -162,11 +160,10 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 	}
 
 	info := &data.MultipartInfo{
-		Key:          p.Info.Key,
-		Owner:        n.Owner(ctx),
-		Created:      TimeNow(ctx),
-		Meta:         make(map[string]string, metaSize),
-		CopiesNumber: p.CopiesNumber,
+		Key:     p.Info.Key,
+		Owner:   n.Owner(ctx),
+		Created: TimeNow(ctx),
+		Meta:    make(map[string]string, metaSize),
 	}
 
 	for key, val := range p.Header {
@@ -348,7 +345,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		Creator:      bktInfo.Owner,
 		Attributes:   attributes,
 		CreationTime: creationTime,
-		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
 			MultipartHashes: &MultipartHashes{
 				Hash:     multipartHash,
@@ -502,7 +498,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		Creator:      bktInfo.Owner,
 		Attributes:   attributes,
 		CreationTime: creationTime,
-		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
 			HeaderObject:    &hashlessHeaderObject,
 			PayloadHash:     sha256.New(),
@@ -694,10 +689,9 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 		attributes = make(map[string]string, 3)
 
 		payloadMap = map[string]string{
-			s3headers.MultipartObjectKey:    info.Key,
-			s3headers.MultipartOwner:        info.Owner.EncodeToString(),
-			s3headers.MultipartCreated:      strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
-			s3headers.MultipartCopiesNumber: strconv.FormatUint(uint64(info.CopiesNumber), 10),
+			s3headers.MultipartObjectKey: info.Key,
+			s3headers.MultipartOwner:     info.Owner.EncodeToString(),
+			s3headers.MultipartCreated:   strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 		}
 	)
 
@@ -724,7 +718,6 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 		Creator:      bktInfo.Owner,
 		Attributes:   attributes,
 		CreationTime: info.Created.UTC(),
-		CopiesNumber: info.CopiesNumber,
 		Payload:      bytes.NewReader(payload),
 		PayloadSize:  uint64(len(payload)),
 	}
@@ -863,14 +856,6 @@ func (n *layer) parseMultipartInfoObject(uploadID string, obj *object.Object) (d
 
 	if utcMilli, err := strconv.ParseInt(payloadMap[s3headers.MultipartCreated], 10, 64); err == nil {
 		multipartInfo.Created = time.UnixMilli(utcMilli)
-	}
-
-	if copies, err := strconv.ParseUint(payloadMap[s3headers.MultipartCopiesNumber], 10, 64); err == nil {
-		if copies <= math.MaxUint32 {
-			multipartInfo.CopiesNumber = uint32(copies)
-		} else {
-			return data.MultipartInfo{}, fmt.Errorf("copies number %d exceeds uint32 max value", copies)
-		}
 	}
 
 	multipartInfo.Key = payloadMap[s3headers.MultipartObjectKey]
@@ -1556,13 +1541,12 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	// This is our "big object". It doesn't have any payload.
 	prmHeaderObject := &PutObjectParams{
-		BktInfo:      p.Info.Bkt,
-		Object:       p.Info.Key,
-		Reader:       bytes.NewBuffer(nil),
-		Header:       initMetadata,
-		Size:         multipartObjetSize,
-		Encryption:   p.Info.Encryption,
-		CopiesNumber: multipartInfo.CopiesNumber,
+		BktInfo:    p.Info.Bkt,
+		Object:     p.Info.Key,
+		Reader:     bytes.NewBuffer(nil),
+		Header:     initMetadata,
+		Size:       multipartObjetSize,
+		Encryption: p.Info.Encryption,
 	}
 
 	bktSettings, err := n.GetBucketSettings(ctx, p.Info.Bkt)
@@ -1602,7 +1586,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		Container:    p.Info.Bkt.CID,
 		Creator:      p.Info.Bkt.Owner,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
 			SplitFirstID:    &splitFirstID,
 			SplitPreviousID: &splitPreviousID,
@@ -1635,7 +1618,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		Container:    p.Info.Bkt.CID,
 		Creator:      p.Info.Bkt.Owner,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: multipartInfo.CopiesNumber,
 		Multipart: &Multipart{
 			HeaderObject: header,
 			SplitFirstID: &splitFirstID,
@@ -2092,7 +2074,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 		Creator:      params.bktInfo.Owner,
 		Attributes:   params.attributes,
 		CreationTime: params.creationTime,
-		CopiesNumber: params.multipartInfo.CopiesNumber,
 		Payload:      params.payloadReader,
 		PayloadSize:  uint64(params.decSize),
 	}

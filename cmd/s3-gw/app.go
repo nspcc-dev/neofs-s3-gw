@@ -785,7 +785,6 @@ func (a *App) initHandler() {
 		PlacementPolicyProvider: a.settings.policyService,
 		DefaultMaxAge:           handler.DefaultMaxAge,
 		NotificatorEnabled:      a.cfg.GetBool(cfgEnableNATS),
-		CopiesNumber:            handler.DefaultCopiesNumber,
 	}
 
 	if a.cfg.IsSet(cfgDefaultMaxAge) {
@@ -797,10 +796,6 @@ func (a *App) initHandler() {
 				zap.String("value in config", strconv.Itoa(defaultMaxAge)))
 		}
 		cfg.DefaultMaxAge = defaultMaxAge
-	}
-
-	if val := a.cfg.GetUint32(cfgSetCopiesNumber); val > 0 {
-		cfg.CopiesNumber = val
 	}
 
 	cfg.MaxDeletePerRequest = a.cfg.GetInt(cfgMaxObjectToDeletePerRequest)

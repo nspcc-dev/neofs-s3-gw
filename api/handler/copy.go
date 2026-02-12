@@ -215,21 +215,14 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		metadata[api.ContentType] = contentType
 	}
 
-	copiesNumber, err := getCopiesNumberOrDefault(metadata, h.cfg.CopiesNumber)
-	if err != nil {
-		h.logAndSendError(w, "invalid copies number", reqInfo, err)
-		return
-	}
-
 	params := &layer.CopyObjectParams{
-		SrcObject:   srcObjInfo,
-		ScrBktInfo:  srcObjPrm.BktInfo,
-		DstBktInfo:  dstBktInfo,
-		DstObject:   reqInfo.ObjectName,
-		SrcSize:     srcObjInfo.Size,
-		Header:      metadata,
-		Encryption:  encryptionParams,
-		CopiesNuber: copiesNumber,
+		SrcObject:  srcObjInfo,
+		ScrBktInfo: srcObjPrm.BktInfo,
+		DstBktInfo: dstBktInfo,
+		DstObject:  reqInfo.ObjectName,
+		SrcSize:    srcObjInfo.Size,
+		Header:     metadata,
+		Encryption: encryptionParams,
 	}
 
 	params.Lock, err = formObjectLock(r.Context(), dstBktInfo, settings.LockConfiguration, r.Header)
@@ -278,8 +271,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 				ObjectName: reqInfo.ObjectName,
 				VersionID:  dstObjInfo.VersionID(),
 			},
-			TagSet:       tagSet,
-			CopiesNumber: h.cfg.CopiesNumber,
+			TagSet: tagSet,
 		}
 		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not upload object tagging", reqInfo, err)

@@ -124,10 +124,6 @@ const ( // Settings.
 
 	cmdListenAddress = "listen_address"
 
-	// Configuration of parameters of requests to NeoFS.
-	// Number of the object copies to consider PUT to NeoFS successful.
-	cfgSetCopiesNumber = "neofs.set_copies_number"
-
 	// cfgContainerMetadataPolicy is an experimental setting with "strict", "optimistic" and unset values.
 	cfgContainerMetadataPolicy = "neofs.metadata_policy"
 

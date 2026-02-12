@@ -22,9 +22,8 @@ import (
 )
 
 type PutLockInfoParams struct {
-	ObjVersion   *ObjectVersion
-	NewLock      *data.ObjectLock
-	CopiesNumber uint32
+	ObjVersion *ObjectVersion
+	NewLock    *data.ObjectLock
 }
 
 type locksSearchResult struct {
@@ -76,7 +75,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 			}
 		}
 		lock := &data.ObjectLock{Retention: newLock.Retention}
-		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
+		retentionOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 		if err != nil {
 			return err
 		}
@@ -86,7 +85,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	if newLock.LegalHold != nil {
 		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
 			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.CopiesNumber, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
+			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
 			if err != nil {
 				return err
 			}
@@ -186,13 +185,12 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 	return lock, nil
 }
 
-func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, copiesNumber uint32, objectName, objectVersion string) (oid.ID, error) {
+func (n *layer) putLockObject(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID, lock *data.ObjectLock, objectName, objectVersion string) (oid.ID, error) {
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
 		Locked:       objID,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: copiesNumber,
 		Filepath:     objectName,
 	}
 
@@ -326,7 +324,6 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: p.CopiesNumber,
 		Attributes: map[string]string{
 			s3headers.MetaType:                  s3headers.TypeBucketSettings,
 			s3headers.BucketSettingsMetaVersion: data.BucketSettingsV1,

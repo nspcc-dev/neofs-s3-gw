@@ -15,7 +15,6 @@ type PutBucketNotificationConfigurationParams struct {
 	RequestInfo   *api.ReqInfo
 	BktInfo       *data.BucketInfo
 	Configuration *data.NotificationConfiguration
-	CopiesNumber  uint32
 }
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
@@ -29,7 +28,6 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		Creator:      p.BktInfo.Owner,
 		Payload:      bytes.NewReader(confXML),
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: p.CopiesNumber,
 		Attributes: map[string]string{
 			s3headers.MetaType: s3headers.TypeBucketNotifConfig,
 		},

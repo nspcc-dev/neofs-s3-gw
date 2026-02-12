@@ -69,7 +69,7 @@ func (x *NeoFS) saveECPart(ctx context.Context, signer user.Signer, bTok *bearer
 		return fmt.Errorf("form object: %w", err)
 	}
 
-	_, err = x.putReadyObject(ctx, signer, bTok, partObjHdr, bytes.NewReader(part), partObjHdr.PayloadSize(), 0)
+	_, err = x.putReadyObject(ctx, signer, bTok, partObjHdr, bytes.NewReader(part), partObjHdr.PayloadSize())
 	return err
 }
 

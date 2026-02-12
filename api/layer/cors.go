@@ -43,7 +43,6 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		Container:    p.BktInfo.CID,
 		Creator:      p.BktInfo.Owner,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: p.CopiesNumber,
 		Attributes: map[string]string{
 			s3headers.MetaType: s3headers.TypeBucketCORS,
 		},
