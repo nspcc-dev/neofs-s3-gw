@@ -166,12 +166,6 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		p.Header[api.ContentType] = contentType
 	}
 
-	p.CopiesNumber, err = getCopiesNumberOrDefault(p.Header, h.cfg.CopiesNumber)
-	if err != nil {
-		h.logAndSendError(w, "invalid copies number", reqInfo, err)
-		return
-	}
-
 	uploadID, err := h.obj.CreateMultipartUpload(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could create multipart upload", reqInfo, err, additional...)
@@ -439,8 +433,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 				ObjectName: objInfo.Name,
 				VersionID:  objInfo.VersionID(),
 			},
-			TagSet:       uploadData.TagSet,
-			CopiesNumber: h.cfg.CopiesNumber,
+			TagSet: uploadData.TagSet,
 		}
 		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)

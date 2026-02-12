@@ -48,9 +48,8 @@ func (h *handler) PutBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &layer.PutCORSParams{
-		BktInfo:      bktInfo,
-		Reader:       r.Body,
-		CopiesNumber: h.cfg.CopiesNumber,
+		BktInfo: bktInfo,
+		Reader:  r.Body,
 	}
 
 	if err = h.obj.PutBucketCORS(r.Context(), p); err != nil {

@@ -46,8 +46,7 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 		},
-		TagSet:       tagSet,
-		CopiesNumber: h.cfg.CopiesNumber,
+		TagSet: tagSet,
 	}
 
 	if tagPrm.ObjectVersion.VersionID == "" {
@@ -176,7 +175,7 @@ func (h *handler) DeleteObjectTaggingHandler(w http.ResponseWriter, r *http.Requ
 		p.VersionID = ei.EncodeToString()
 	}
 
-	if err = h.obj.DeleteObjectTagging(r.Context(), p, h.cfg.CopiesNumber); err != nil {
+	if err = h.obj.DeleteObjectTagging(r.Context(), p); err != nil {
 		h.logAndSendError(w, "could not delete object tagging", reqInfo, err)
 		return
 	}
@@ -211,7 +210,7 @@ func (h *handler) PutBucketTaggingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = h.obj.PutBucketTagging(r.Context(), bktInfo, tagSet, h.cfg.CopiesNumber); err != nil {
+	if err = h.obj.PutBucketTagging(r.Context(), bktInfo, tagSet); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return
 	}

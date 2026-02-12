@@ -30,7 +30,6 @@ func TestObjectLockAttributes(t *testing.T) {
 				Until: time.Now(),
 			},
 		},
-		CopiesNumber: 0,
 	}
 
 	err = tc.layer.PutLockInfo(tc.ctx, p)

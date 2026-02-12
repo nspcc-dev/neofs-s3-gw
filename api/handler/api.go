@@ -33,7 +33,6 @@ type (
 		PlacementPolicyProvider PlacementPolicyProvider
 		DefaultMaxAge           int
 		NotificatorEnabled      bool
-		CopiesNumber            uint32
 		MaxDeletePerRequest     int
 		ContainerMetadataPolicy string
 	}
@@ -61,8 +60,6 @@ type (
 const (
 	// DefaultPolicy is a default policy of placing containers in NeoFS if it's not set at the request.
 	DefaultPolicy = "REP 3"
-	// DefaultCopiesNumber is a default number of object copies that is enough to consider put successful if it's not set in config.
-	DefaultCopiesNumber uint32 = 0
 )
 
 var _ api.Handler = (*handler)(nil)

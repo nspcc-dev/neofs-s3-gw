@@ -33,8 +33,6 @@ const (
 	MultipartPartHash = multipartPrefix + "PartHash"
 	// MultipartOwner contains object owner for uploading object.
 	MultipartOwner = multipartPrefix + "Owner"
-	// MultipartCopiesNumber contains CopiesNumber setting for uploading object.
-	MultipartCopiesNumber = multipartPrefix + "CopiesNumber"
 	// MultipartMeta contains original object attributes.
 	MultipartMeta = multipartPrefix + "Meta"
 	// MultipartCreated contains final object creation date.

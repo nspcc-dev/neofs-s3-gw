@@ -67,7 +67,6 @@ Includes the following attributes:
 - `S3-MP-ObjectKey`
 - `S3-MP-Upload`
 - `S3-MP-Meta`, contains base64 encoded map with: `S3-MP-ObjectKey`, `S3-MP-Owner`, `S3-MP-Created`,
-  `S3-MP-CopiesNumber`
 
 ### Multipart Part Object
 
@@ -145,10 +144,6 @@ Stores the hash of the entire part (including slices).
 ### `S3-MP-Owner`
 
 Stores the owner of the uploading object.
-
-### `S3-MP-CopiesNumber`
-
-Indicates the CopiesNumber setting for the object.
 
 ### `S3-MP-Meta`
 

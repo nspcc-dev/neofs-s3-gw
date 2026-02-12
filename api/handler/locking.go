@@ -68,9 +68,8 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 	newSettings.LockConfiguration = lockingConf
 
 	sp := &layer.PutSettingsParams{
-		BktInfo:      bktInfo,
-		Settings:     &newSettings,
-		CopiesNumber: h.cfg.CopiesNumber,
+		BktInfo:  bktInfo,
+		Settings: &newSettings,
 	}
 
 	if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
@@ -150,7 +149,6 @@ func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Reque
 				Enabled: legalHold.Status == legalHoldOn,
 			},
 		},
-		CopiesNumber: h.cfg.CopiesNumber,
 	}
 
 	if p.ObjVersion.VersionID == "" {
@@ -244,8 +242,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 			ObjectName: reqInfo.ObjectName,
 			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 		},
-		NewLock:      lock,
-		CopiesNumber: h.cfg.CopiesNumber,
+		NewLock: lock,
 	}
 
 	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)

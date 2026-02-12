@@ -127,9 +127,6 @@ type PrmObjectCreate struct {
 	// Object payload encapsulated in io.Reader primitive.
 	Payload io.Reader
 
-	// Number of object copies that is enough to consider put successful.
-	CopiesNumber uint32
-
 	Multipart *Multipart
 }
 

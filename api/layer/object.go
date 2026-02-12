@@ -276,7 +276,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Filepath:     p.Object,
 		Payload:      r,
 		CreationTime: TimeNow(ctx),
-		CopiesNumber: p.CopiesNumber,
 		Attributes:   p.Header,
 	}
 
@@ -356,8 +355,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 				BktInfo:    p.BktInfo,
 				ObjectName: p.Object,
 			},
-			NewLock:      p.Lock,
-			CopiesNumber: p.CopiesNumber,
+			NewLock: p.Lock,
 		}
 
 		if bktSettings.VersioningEnabled() {

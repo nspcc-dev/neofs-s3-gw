@@ -245,12 +245,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		metadata[api.Expires] = expires
 	}
 
-	copiesNumber, err := getCopiesNumberOrDefault(metadata, h.cfg.CopiesNumber)
-	if err != nil {
-		h.logAndSendError(w, "invalid copies number", reqInfo, err)
-		return
-	}
-
 	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
@@ -264,14 +258,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := &layer.PutObjectParams{
-		BktInfo:      bktInfo,
-		Object:       reqInfo.ObjectName,
-		Reader:       r.Body,
-		Size:         cl,
-		Header:       metadata,
-		Encryption:   encryptionParams,
-		CopiesNumber: copiesNumber,
-		Tags:         tagSet,
+		BktInfo:    bktInfo,
+		Object:     reqInfo.ObjectName,
+		Reader:     r.Body,
+		Size:       cl,
+		Header:     metadata,
+		Encryption: encryptionParams,
+		Tags:       tagSet,
 	}
 
 	params.Lock, err = formObjectLock(r.Context(), bktInfo, settings.LockConfiguration, r.Header)
@@ -334,20 +327,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(api.ETag, objInfo.HashSum)
 	api.WriteSuccessResponseHeadersOnly(w)
-}
-
-func getCopiesNumberOrDefault(metadata map[string]string, defaultCopiesNumber uint32) (uint32, error) {
-	copiesNumberStr, ok := metadata[layer.AttributeNeofsCopiesNumber]
-	if !ok {
-		return defaultCopiesNumber, nil
-	}
-
-	copiesNumber, err := strconv.ParseUint(copiesNumberStr, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("pasrse copies number: %w", err)
-	}
-
-	return uint32(copiesNumber), nil
 }
 
 func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
@@ -779,9 +758,8 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	if p.ObjectLockEnabled {
 		sp := &layer.PutSettingsParams{
-			BktInfo:      bktInfo,
-			Settings:     &data.BucketSettings{Versioning: data.VersioningEnabled},
-			CopiesNumber: h.cfg.CopiesNumber,
+			BktInfo:  bktInfo,
+			Settings: &data.BucketSettings{Versioning: data.VersioningEnabled},
 		}
 		if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
 			h.logAndSendError(w, "couldn't enable bucket versioning", reqInfo, err,

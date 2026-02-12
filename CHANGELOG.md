@@ -13,6 +13,7 @@ This document outlines major changes between releases.
 ### Updated
 
 ### Removed
+- Configuration of `set_copies_number` (#1249)
 
 ### Upgrading from 0.41.5
 

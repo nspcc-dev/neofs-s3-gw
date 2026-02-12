@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
-	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,26 +103,4 @@ func TestEmptyPostPolicy(t *testing.T) {
 
 	_, err := checkPostPolicy(r, reqInfo, metadata)
 	require.NoError(t, err)
-}
-
-func TestPutObjectOverrideCopiesNumber(t *testing.T) {
-	tc := prepareHandlerContext(t)
-
-	bktName, objName := "bucket-for-copies-number", "object-for-copies-number"
-	bktInfo := createTestBucket(tc, bktName)
-
-	w, r := prepareTestRequest(tc, bktName, objName, nil)
-	r.Header.Set(api.MetadataPrefix+strings.ToUpper(layer.AttributeNeofsCopiesNumber), "1")
-	tc.Handler().PutObjectHandler(w, r)
-
-	require.Equal(t, http.StatusOK, w.Code)
-
-	p := &layer.HeadObjectParams{
-		BktInfo: bktInfo,
-		Object:  objName,
-	}
-
-	objInfo, err := tc.Layer().GetObjectInfo(tc.Context(), p)
-	require.NoError(t, err)
-	require.Equal(t, "1", objInfo.Headers[layer.AttributeNeofsCopiesNumber])
 }

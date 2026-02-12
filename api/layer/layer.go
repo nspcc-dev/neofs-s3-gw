@@ -112,15 +112,14 @@ type (
 
 	// PutObjectParams stores object put request parameters.
 	PutObjectParams struct {
-		BktInfo      *data.BucketInfo
-		Object       string
-		Size         int64
-		Reader       io.Reader
-		Header       map[string]string
-		Lock         *data.ObjectLock
-		Encryption   encryption.Params
-		CopiesNumber uint32
-		Tags         map[string]string
+		BktInfo    *data.BucketInfo
+		Object     string
+		Size       int64
+		Reader     io.Reader
+		Header     map[string]string
+		Lock       *data.ObjectLock
+		Encryption encryption.Params
+		Tags       map[string]string
 	}
 
 	DeleteObjectParams struct {
@@ -131,30 +130,27 @@ type (
 
 	// PutSettingsParams stores object copy request parameters.
 	PutSettingsParams struct {
-		BktInfo      *data.BucketInfo
-		Settings     *data.BucketSettings
-		CopiesNumber uint32
+		BktInfo  *data.BucketInfo
+		Settings *data.BucketSettings
 	}
 
 	// PutCORSParams stores PutCORS request parameters.
 	PutCORSParams struct {
-		BktInfo      *data.BucketInfo
-		Reader       io.Reader
-		CopiesNumber uint32
+		BktInfo *data.BucketInfo
+		Reader  io.Reader
 	}
 
 	// CopyObjectParams stores object copy request parameters.
 	CopyObjectParams struct {
-		SrcObject   *data.ObjectInfo
-		ScrBktInfo  *data.BucketInfo
-		DstBktInfo  *data.BucketInfo
-		DstObject   string
-		SrcSize     int64
-		Header      map[string]string
-		Range       *RangeParams
-		Lock        *data.ObjectLock
-		Encryption  encryption.Params
-		CopiesNuber uint32
+		SrcObject  *data.ObjectInfo
+		ScrBktInfo *data.BucketInfo
+		DstBktInfo *data.BucketInfo
+		DstObject  string
+		SrcSize    int64
+		Header     map[string]string
+		Range      *RangeParams
+		Lock       *data.ObjectLock
+		Encryption encryption.Params
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
@@ -247,12 +243,12 @@ type (
 		PutLockInfo(ctx context.Context, p *PutLockInfoParams) error
 
 		GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error)
-		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string, copiesNumber uint32) error
+		PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error
 		DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error
 
 		GetObjectTagging(ctx context.Context, p *GetObjectTaggingParams) (string, map[string]string, error)
 		PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams) error
-		DeleteObjectTagging(ctx context.Context, p *ObjectVersion, copiesNumber uint32) error
+		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error)
 
@@ -285,9 +281,8 @@ type (
 const (
 	tagPrefix = "S3-Tag-"
 
-	AESEncryptionAlgorithm     = "AES256"
-	AESKeySize                 = 32
-	AttributeNeofsCopiesNumber = "neofs-copies-number" // such format to match X-Amz-Meta-Neofs-Copies-Number header
+	AESEncryptionAlgorithm = "AES256"
+	AESKeySize             = 32
 
 	PlacementPolicyV1 = 1
 )
@@ -819,13 +814,12 @@ func (n *layer) CopyObject(ctx context.Context, p *CopyObjectParams) (*data.Exte
 	}()
 
 	return n.PutObject(ctx, &PutObjectParams{
-		BktInfo:      p.DstBktInfo,
-		Object:       p.DstObject,
-		Size:         p.SrcSize,
-		Reader:       pr,
-		Header:       p.Header,
-		Encryption:   p.Encryption,
-		CopiesNumber: p.CopiesNuber,
+		BktInfo:    p.DstBktInfo,
+		Object:     p.DstObject,
+		Size:       p.SrcSize,
+		Reader:     pr,
+		Header:     p.Header,
+		Encryption: p.Encryption,
 	})
 }
 
