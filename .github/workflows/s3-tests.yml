@@ -58,9 +58,9 @@ jobs:
       - run: go version
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6.1.0
         with:
-          python-version: '3.12'
+          python-version: '3.13'
       - run: python --version
 
       - name: Checkout neofs-s3-gw repository
@@ -111,9 +111,10 @@ jobs:
         run: |
           git submodule init
           git submodule update
-          python3.12 -m venv virtualenv
+          python3.13 -m venv virtualenv
           source virtualenv/bin/activate
           pip3 install --upgrade pip
+          pip3 install -r neofs-testcases/requirements.txt
           pip3 install -r requirements.txt
           echo "export PYTHONPATH=$PYTHONPATH:$(realpath .):$(realpath .)/neofs-testcases/pytest_tests/lib:$(realpath .)/neofs-testcases/neofs-testlib:$(realpath .)/neofs-testcases" >> virtualenv/bin/activate 
         working-directory: s3-tests
