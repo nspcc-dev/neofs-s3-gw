@@ -60,6 +60,10 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 	}
 	info.Created = cnr.CreatedAt()
 	info.LocationConstraint = cnr.Attribute(attributeLocationConstraint)
+	info.AttributeCors = cnr.Attribute(attributeCors)
+	info.AttributeTags = cnr.Attribute(attributeTags)
+	info.AttributeSettings = cnr.Attribute(attributeSettings)
+	info.AttributeNotifications = cnr.Attribute(attributeNotifications)
 
 	attrLockEnabled := cnr.Attribute(AttributeLockEnabled)
 	if len(attrLockEnabled) > 0 {

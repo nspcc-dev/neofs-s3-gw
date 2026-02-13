@@ -19,6 +19,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 )
 
 type GetObjectTaggingParams struct {
@@ -283,6 +284,18 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 		return tags, nil
 	}
 
+	var tags map[string]string
+	if bktInfo.AttributeTags != "" {
+		if err = json.Unmarshal([]byte(bktInfo.AttributeTags), &tags); err != nil {
+			return nil, fmt.Errorf("malformed data: %w", err)
+		}
+
+		if len(tags) > 0 {
+			n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
+			return tags, nil
+		}
+	}
+
 	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketTags)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
@@ -292,43 +305,72 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
 	}
 
-	tags, err := n.getTagsByOID(ctx, bktInfo, id)
+	tags, err = n.getTagsByOID(ctx, bktInfo, id)
 	if err != nil {
 		return nil, err
 	}
 
+	if len(tags) == 0 {
+		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
+	}
+
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		// Migrate bucket tags to contract.
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tags, boxData.Gate.SessionTokenForSetAttribute()); err != nil {
+			return nil, fmt.Errorf("bucket tags migration: %w", err)
+		}
+
+		if err = n.deleteBucketTagging(ctx, bktInfo); err != nil {
+			return nil, fmt.Errorf("couldn't delete bucket tags: %w", err)
+		}
+	}
+
 	n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
+	n.cache.DeleteBucket(bktInfo.Name)
 
 	return tags, nil
 }
 
 func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	payload, err := json.Marshal(tagSet)
-	if err != nil {
-		return fmt.Errorf("could not marshal tag set: %w", err)
+	var sessionToken *session.Container
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
 	}
 
-	prm := PrmObjectCreate{
-		Container:    bktInfo.CID,
-		Creator:      bktInfo.Owner,
-		CreationTime: TimeNow(ctx),
-		Attributes: map[string]string{
-			s3headers.MetaType: s3headers.TypeBucketTags,
-		},
-		Payload:     bytes.NewBuffer(payload),
-		PayloadSize: uint64(len(payload)),
-	}
-
-	if _, _, err = n.objectPutAndHash(ctx, prm, bktInfo); err != nil {
-		return fmt.Errorf("create bucket tagging object: %w", err)
+	if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tagSet, sessionToken); err != nil {
+		return fmt.Errorf("couldn't store bucket tags: %w", err)
 	}
 
 	n.cache.PutTagging(n.Owner(ctx), bucketTaggingCacheKey(bktInfo.CID), tagSet)
+	n.cache.DeleteBucket(bktInfo.Name)
 
 	return nil
 }
 
 func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
+	if err := n.deleteBucketTagging(ctx, bktInfo); err != nil {
+		return fmt.Errorf("couldn't delete bucket tags: %w", err)
+	}
+
+	var sessionToken *session.Container
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForRemoveAttribute()
+	}
+
+	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeTags, sessionToken); err != nil {
+		return fmt.Errorf("couldn't remove bucket tags: %w", err)
+	}
+
+	n.cache.DeleteTagging(bucketTaggingCacheKey(bktInfo.CID))
+	n.cache.DeleteBucket(bktInfo.Name)
+
+	return nil
+}
+
+func (n *layer) deleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
 	fs := make(object.SearchFilters, 0, 1)
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeBucketTags, object.MatchStringEqual)
 
@@ -357,6 +399,7 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 	}
 
 	n.cache.DeleteTagging(bucketTaggingCacheKey(bktInfo.CID))
+	n.cache.DeleteBucket(bktInfo.Name)
 
 	return nil
 }

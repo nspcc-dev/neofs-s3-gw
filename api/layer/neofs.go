@@ -313,6 +313,12 @@ type NeoFS interface {
 
 	// SearchObjectsV2WithCursor searches objects with corresponding filters and return objectID with requested attributes. It uses cursor to start from required point.
 	SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error)
+
+	// SetContainerAttribute sets corresponding container attribute. It requires session token with VerbContainerSetAttribute verb.
+	SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionToken *session.Container) error
+
+	// RemoveContainerAttribute removes corresponding container attribute. It requires session token with VerbContainerRemoveAttribute verb.
+	RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionToken *session.Container) error
 }
 
 // WritePayload writes bts to each available hash.

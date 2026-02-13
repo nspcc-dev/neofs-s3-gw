@@ -67,6 +67,8 @@ const (
 	containerMetaDataPolicyAttribute  = "__NEOFS__METAINFO_CONSISTENCY"
 	ContainerMetaDataPolicyStrict     = "strict"
 	ContainerMetaDataPolicyOptimistic = "optimistic"
+
+	attributesValidUntilDuration = 10 * time.Second
 )
 
 // NewNeoFS creates new NeoFS using provided pool.Pool.
@@ -846,4 +848,59 @@ func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filte
 	}
 
 	return items, cursor, nil
+}
+
+// SetContainerAttribute sets container attribute via NeoFS api.
+func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionToken *session.Container) error {
+	var (
+		prm = client.SetContainerAttributeParameters{
+			ID:         cid,
+			Attribute:  attributeName,
+			Value:      attributeValue,
+			ValidUntil: time.Now().Add(attributesValidUntilDuration),
+		}
+		o client.SetContainerAttributeOptions
+	)
+
+	if sessionToken != nil {
+		o.AttachSessionTokenV1(*sessionToken)
+	}
+
+	sig, err := client.SignSetContainerAttributeParameters(x.signer(ctx), prm)
+	if err != nil {
+		return fmt.Errorf("sign set container attribute: %w", err)
+	}
+
+	if err = x.pool.SetContainerAttribute(ctx, prm, sig, o); err != nil {
+		return fmt.Errorf("set container attribute: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveContainerAttribute removes container attribute via NeoFS api.
+func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionToken *session.Container) error {
+	var (
+		prm = client.RemoveContainerAttributeParameters{
+			ID:         cid,
+			Attribute:  attributeName,
+			ValidUntil: time.Now().Add(attributesValidUntilDuration),
+		}
+		o client.RemoveContainerAttributeOptions
+	)
+
+	if sessionToken != nil {
+		o.AttachSessionTokenV1(*sessionToken)
+	}
+
+	sig, err := client.SignRemoveContainerAttributeParameters(x.signer(ctx), prm)
+	if err != nil {
+		return fmt.Errorf("sign remove container attribute: %w", err)
+	}
+
+	if err = x.pool.RemoveContainerAttribute(ctx, prm, sig, o); err != nil {
+		return fmt.Errorf("set remove attribute: %w", err)
+	}
+
+	return nil
 }

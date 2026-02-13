@@ -3,6 +3,7 @@ package layer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -13,12 +14,34 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 )
 
-const wildcard = "*"
+const (
+	wildcard = "*"
+
+	attributeCors          = "CORS"
+	attributeTags          = "S3_TAGS"
+	attributeSettings      = "S3_SETTINGS"
+	attributeNotifications = "S3_NOTIFICATIONS"
+)
 
 var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
+
+func (n *layer) storeAttribute(ctx context.Context, cID cid.ID, attributeName string, payload any, sessionToken *session.Container) error {
+	pl, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+
+	if err = n.neoFS.SetContainerAttribute(ctx, cID, attributeName, string(pl), sessionToken); err != nil {
+		return fmt.Errorf("could't store %s %s: %w", cID.EncodeToString(), attributeName, err)
+	}
+
+	return nil
+}
 
 func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 	var (
@@ -39,22 +62,18 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
-	prm := PrmObjectCreate{
-		Container:    p.BktInfo.CID,
-		Creator:      p.BktInfo.Owner,
-		CreationTime: TimeNow(ctx),
-		Attributes: map[string]string{
-			s3headers.MetaType: s3headers.TypeBucketCORS,
-		},
-		Payload:     &buf,
-		PayloadSize: uint64(buf.Len()),
+	var sessionToken *session.Container
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
 	}
 
-	if _, _, err := n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
-		return fmt.Errorf("create bucket CORS object: %w", err)
+	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeCors, cors.CORSRules, sessionToken); err != nil {
+		return fmt.Errorf("store bucket CORS: %w", err)
 	}
 
 	n.cache.PutCORS(n.Owner(ctx), p.BktInfo, cors)
+	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil
 }
@@ -66,6 +85,20 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 	)
 
 	if cors := n.cache.GetCORS(owner, bktInfo); cors != nil {
+		return cors, nil
+	}
+
+	var corsRules []data.CORSRule
+	if bktInfo.AttributeCors != "" {
+		if err = json.Unmarshal([]byte(bktInfo.AttributeCors), &corsRules); err != nil {
+			return nil, fmt.Errorf("malformed data: %w", err)
+		}
+
+		cors := &data.CORSConfiguration{
+			CORSRules: corsRules,
+		}
+
+		n.cache.PutCORS(owner, bktInfo, cors)
 		return cors, nil
 	}
 
@@ -89,12 +122,45 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 		return nil, fmt.Errorf("unmarshal cors: %w", err)
 	}
 
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		// Migrate CORS to contract.
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeCors, cors.CORSRules, boxData.Gate.SessionTokenForSetAttribute()); err != nil {
+			return nil, fmt.Errorf("migrate bucket CORS: %w", err)
+		}
+		if err = n.deleteBucketCORS(ctx, bktInfo); err != nil {
+			return nil, fmt.Errorf("delete bucket CORS: %w", err)
+		}
+	}
+
 	n.cache.PutCORS(owner, bktInfo, cors)
+	n.cache.DeleteBucket(bktInfo.Name)
 
 	return cors, nil
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
+	if err := n.deleteBucketCORS(ctx, bktInfo); err != nil {
+		return fmt.Errorf("delete bucket CORS: %w", err)
+	}
+
+	var sessionToken *session.Container
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForRemoveAttribute()
+	}
+
+	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeCors, sessionToken); err != nil {
+		return fmt.Errorf("remove bucket CORS: %w", err)
+	}
+
+	n.cache.DeleteCORS(bktInfo)
+	n.cache.DeleteBucket(bktInfo.Name)
+
+	return nil
+}
+
+func (n *layer) deleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
 	fs := make(object.SearchFilters, 0, 2)
 	fs.AddFilter(s3headers.MetaType, s3headers.TypeBucketCORS, object.MatchStringEqual)
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)

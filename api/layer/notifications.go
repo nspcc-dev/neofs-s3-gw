@@ -1,14 +1,15 @@
 package layer
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 )
 
 type PutBucketNotificationConfigurationParams struct {
@@ -18,26 +19,18 @@ type PutBucketNotificationConfigurationParams struct {
 }
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
-	confXML, err := xml.Marshal(p.Configuration)
-	if err != nil {
-		return fmt.Errorf("marshal notify configuration: %w", err)
+	var sessionToken *session.Container
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
 	}
 
-	prm := PrmObjectCreate{
-		Container:    p.BktInfo.CID,
-		Creator:      p.BktInfo.Owner,
-		Payload:      bytes.NewReader(confXML),
-		CreationTime: TimeNow(ctx),
-		Attributes: map[string]string{
-			s3headers.MetaType: s3headers.TypeBucketNotifConfig,
-		},
-	}
-
-	if _, _, err = n.objectPutAndHash(ctx, prm, p.BktInfo); err != nil {
-		return err
+	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeNotifications, p.Configuration, sessionToken); err != nil {
+		return fmt.Errorf("store bucket notification settings: %w", err)
 	}
 
 	n.cache.PutNotificationConfiguration(n.Owner(ctx), p.BktInfo, p.Configuration)
+	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil
 }
@@ -48,10 +41,15 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		return conf, nil
 	}
 
-	var (
-		err  error
-		conf data.NotificationConfiguration
-	)
+	var conf = data.NotificationConfiguration{}
+	if bktInfo.AttributeNotifications != "" {
+		if err := json.Unmarshal([]byte(bktInfo.AttributeNotifications), &conf); err != nil {
+			return nil, fmt.Errorf("malformed data: %w", err)
+		}
+
+		n.cache.PutNotificationConfiguration(n.Owner(ctx), bktInfo, &conf)
+		return &conf, nil
+	}
 
 	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig)
 	if err != nil {
@@ -71,7 +69,18 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		return nil, fmt.Errorf("unmarshal notify configuration: %w", err)
 	}
 
-	n.cache.PutNotificationConfiguration(n.Owner(ctx), bktInfo, &conf)
+	boxData, err := GetBoxData(ctx)
+	if err == nil {
+		// Migrate notification settings.
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeNotifications, conf, boxData.Gate.SessionTokenForSetAttribute()); err != nil {
+			return nil, fmt.Errorf("migrate bucket notification settings: %w", err)
+		}
+		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig); err != nil {
+			return nil, fmt.Errorf("delete bucket notification settings: %w", err)
+		}
+	}
+
+	n.cache.PutNotificationConfiguration(owner, bktInfo, &conf)
 
 	return &conf, nil
 }
