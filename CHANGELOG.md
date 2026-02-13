@@ -13,9 +13,33 @@ This document outlines major changes between releases.
 ### Updated
 
 ### Removed
+
+### Upgrading from 0.42.0
+
+## [0.42.0] - 2026-02-13
+
+### Changed
+- Bucket settings (including notification settings), CORS and tags are no longer stored in objects, container attributes are used instead (#1247)
+
+### Fixed
+- Excessive node disconnects (#1246)
+
+### Updated
+- NeoFS SDK RC17 (#1246, #1247)
+- neofs-contract dependency to v0.26.0 (#1247)
+
+### Removed
 - Configuration of `set_copies_number` (#1249)
+- Support for `X-Amz-Meta-Neofs-Copies-Number` parameter (#1249)
 
 ### Upgrading from 0.41.5
+This version is incompatible with NeoFS node <0.51.0.
+
+Drop `set_copies_number` from configuration files.
+
+Bucket settings, CORS and tags are to be migrated automatically from objects
+into container attributes upon access made to relevant data, but this
+functionality will eventually be removed, so please migrate ASAP.
 
 ## [0.41.5] - 2025-11-21
 
@@ -944,4 +968,5 @@ releases.
 [0.41.3]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.2...v0.41.3
 [0.41.4]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.3...v0.41.4
 [0.41.5]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.4...v0.41.5
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.5...master
+[0.42.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.5...v0.42.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.42.0...master
