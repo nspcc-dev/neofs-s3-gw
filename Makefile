@@ -3,7 +3,7 @@
 # Common variables
 REPO ?= $(shell go list -m)
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 | sed 's/^v//' 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
-GO_VERSION ?= 1.25
+GO_VERSION ?= 1.26
 BINDIR = bin
 
 # Binaries to build

@@ -1561,13 +1561,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	)
 
 	if !bktSettings.VersioningEnabled() {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, p.Info.Key, true)
-		}()
+		})
 	}
 
 	header, err := n.prepareMultipartHeadObject(ctx, prmHeaderObject, multipartHash, homoHash, uint64(multipartObjetSize), bktSettings.VersioningEnabled())

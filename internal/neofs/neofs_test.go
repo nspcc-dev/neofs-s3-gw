@@ -186,12 +186,11 @@ func TestConcurrencyAndConsistency(t *testing.T) {
 	createParams.Creator = signer.UserID()
 
 	wg := sync.WaitGroup{}
-	wg.Add(gorutines)
 
 	for range gorutines {
-		go func() {
-			uploadDownload(ctx, t, neo, p, signer, createParams, &wg)
-		}()
+		wg.Go(func() {
+			uploadDownload(ctx, t, neo, p, signer, createParams)
+		})
 	}
 
 	<-time.After(30 * time.Second)
@@ -199,9 +198,7 @@ func TestConcurrencyAndConsistency(t *testing.T) {
 	wg.Wait()
 }
 
-func uploadDownload(ctx context.Context, t *testing.T, neo *NeoFS, p *pool.Pool, signer user.Signer, createParams layer.PrmObjectCreate, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func uploadDownload(ctx context.Context, t *testing.T, neo *NeoFS, p *pool.Pool, signer user.Signer, createParams layer.PrmObjectCreate) {
 	payload := make([]byte, 32*1024)
 
 	id, err := createContainer(ctx, signer, p)

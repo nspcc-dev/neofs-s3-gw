@@ -288,13 +288,9 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	if bktSettings.VersioningEnabled() {
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 	} else {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
-		}()
+		})
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
