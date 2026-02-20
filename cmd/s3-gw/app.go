@@ -17,10 +17,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
-	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
-	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
-	"github.com/nspcc-dev/neo-go/pkg/util"
-	rpcNNS "github.com/nspcc-dev/neofs-contract/rpc/nns"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -30,6 +26,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/notifications"
 	"github.com/nspcc-dev/neofs-s3-gw/api/resolver"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/contracts"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/version"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/wallet"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
@@ -92,11 +89,6 @@ type (
 		defaultPolicy netmap.PlacementPolicy
 		regionMap     map[string]netmap.PlacementPolicy
 	}
-
-	resolvedContracts struct {
-		netMapContract    util.Uint160
-		containerContract util.Uint160
-	}
 )
 
 func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
@@ -144,18 +136,24 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		}
 	}
 
-	contracts, err := resolveContracts(ctx, log.logger, rpcHTTPEndpoints)
+	resolvedContracts, err := contracts.ResolveContracts(ctx, log.logger, rpcHTTPEndpoints)
 	if err != nil {
 		log.logger.Fatal("resolve contracts failed", zap.Error(err), zap.Strings("enpoints", rpcHTTPEndpoints))
 	}
 
-	epochListener := neofs.NewEpochListener(wsEndpoints, log.logger, contracts.netMapContract)
+	epochListener := neofs.NewEpochListener(wsEndpoints, log.logger, resolvedContracts.NetMapContract)
 	epochListener.ListenNotifications(ctx)
 
 	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochListener)
 
 	// prepare auth center
-	ctr := auth.New(neofs.NewAuthmateNeoFS(neoFS), key, v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes), getAccessBoxCacheConfig(v, log.logger))
+	ctr := auth.New(
+		neofs.NewAuthmateNeoFS(neoFS),
+		key,
+		v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes),
+		getAccessBoxCacheConfig(v, log.logger),
+		contracts.NewNNSResolver(resolvedContracts.NNSContractReader),
+	)
 
 	app := &App{
 		ctr:     ctr,
@@ -827,48 +825,4 @@ func httpToWS(endpoint string) (string, error) {
 	u.Path = "/ws"
 
 	return u.String(), nil
-}
-
-func resolveContracts(ctx context.Context, log *zap.Logger, rpcHTTPEndpoints []string) (resolvedContracts, error) {
-	var (
-		opt    rpcclient.Options
-		result resolvedContracts
-	)
-
-	log = log.Named("resolveContracts")
-
-	for _, endpoint := range rpcHTTPEndpoints {
-		cl, err := rpcclient.New(ctx, endpoint, opt)
-		if err != nil {
-			log.Info("could not instantiate RPC client", zap.String("endpoint", endpoint), zap.Error(err))
-			continue
-		}
-		defer cl.Close()
-
-		if err = cl.Init(); err != nil {
-			log.Info("could not initialize RPC client", zap.String("endpoint", endpoint), zap.Error(err))
-			continue
-		}
-
-		nnsReader, err := rpcNNS.NewInferredReader(cl, invoker.New(cl, nil))
-		if err != nil {
-			log.Info("couldn't create inferred reader", zap.String("endpoint", endpoint), zap.Error(err))
-			continue
-		}
-
-		result.netMapContract, err = nnsReader.ResolveFSContract(rpcNNS.NameNetmap)
-		if err != nil {
-			log.Info("couldn't resolve netmap contract", zap.String("endpoint", endpoint), zap.Error(err))
-			continue
-		}
-		result.containerContract, err = nnsReader.ResolveFSContract(rpcNNS.NameContainer)
-		if err != nil {
-			log.Info("couldn't resolve cotanier contract", zap.String("endpoint", endpoint), zap.Error(err))
-			continue
-		}
-
-		return result, nil
-	}
-
-	return result, errors.New("could not initialize RPC client")
 }

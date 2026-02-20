@@ -589,9 +589,7 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(number), object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
@@ -730,9 +728,7 @@ func (n *layer) getMultipartInfoObject(ctx context.Context, bktInfo *data.Bucket
 	filters.AddFilter(s3headers.MultipartObjectKey, objectName, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartInfo, object.MatchStringEqual)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	opts.SetCount(1)
 
@@ -775,9 +771,7 @@ func (n *layer) getMultipartInfoByPrefix(ctx context.Context, bktInfo *data.Buck
 		}
 	)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	if maxKeys <= 0 || maxKeys > 1000 {
 		maxKeys = 1000
@@ -877,9 +871,7 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
@@ -968,9 +960,7 @@ func (n *layer) multipartMetaGetOIDsForAbort(ctx context.Context, bktInfo *data.
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
@@ -1012,9 +1002,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
@@ -1091,9 +1079,7 @@ func (n *layer) multipartMetaGetPartsAfter(ctx context.Context, bktInfo *data.Bu
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(partID), object.MatchNumGT)
 
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
@@ -2101,9 +2087,7 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 	filters.AddFilter(s3headers.MultipartIsArbitraryPart, "true", object.MatchStringEqual)
 
 	var opts client.SearchObjectsOptions
-	if bt := bearerTokenFromContext(ctx, bucketInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bucketInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bucketInfo.CID, filters, []string{
 		s3headers.MultipartUpload,

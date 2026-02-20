@@ -1,10 +1,12 @@
 package accessbox
 
 import (
+	"crypto/rand"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -32,10 +34,10 @@ func TestTokensEncryptDecrypt(t *testing.T) {
 	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
-	data, err := encrypt(cred, cred.PublicKey(), tkn.Marshal())
+	data, err := accessbox.Encrypt(cred, cred.PublicKey(), tkn.Marshal())
 	require.NoError(t, err)
 
-	rawTkn2, err := decrypt(cred, cred.PublicKey(), data)
+	rawTkn2, err := accessbox.Decrypt(cred, cred.PublicKey(), data)
 	require.NoError(t, err)
 
 	err = tkn2.Unmarshal(rawTkn2)
@@ -60,8 +62,11 @@ func TestBearerTokenInAccessBox(t *testing.T) {
 	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
+	ephemeralKey, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
 	gate := NewGateData(cred.PublicKey(), &tkn)
-	box, _, err = PackTokens([]*GateData{gate})
+	box, _, err = PackTokens([]*GateData{gate}, ephemeralKey, generateSecret())
 	require.NoError(t, err)
 
 	data, err := box.Marshal()
@@ -70,7 +75,7 @@ func TestBearerTokenInAccessBox(t *testing.T) {
 	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	tkns, err := box2.GetTokens(cred)
+	tkns, err := box2.GetTokens(cred, nil)
 	require.NoError(t, err)
 
 	assertBearerToken(t, tkn, *tkns.BearerToken)
@@ -93,10 +98,13 @@ func TestSessionTokenInAccessBox(t *testing.T) {
 	tkn.SetAuthKey((*neofsecdsa.PublicKey)(sec.PublicKey()))
 	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
 
+	ephemeralKey, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
 	var newTkn bearer.Token
 	gate := NewGateData(cred.PublicKey(), &newTkn)
 	gate.SessionTokens = []*session.Container{tkn}
-	box, _, err = PackTokens([]*GateData{gate})
+	box, _, err = PackTokens([]*GateData{gate}, ephemeralKey, generateSecret())
 	require.NoError(t, err)
 
 	data, err := box.Marshal()
@@ -105,7 +113,7 @@ func TestSessionTokenInAccessBox(t *testing.T) {
 	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	tkns, err := box2.GetTokens(cred)
+	tkns, err := box2.GetTokens(cred, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, []*session.Container{tkn}, tkns.SessionTokens)
@@ -136,11 +144,14 @@ func TestAccessboxMultipleKeys(t *testing.T) {
 		}
 	}
 
-	box, _, err = PackTokens(gates)
+	ephemeralKey, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
+	box, _, err = PackTokens(gates, ephemeralKey, generateSecret())
 	require.NoError(t, err)
 
 	for i, k := range privateKeys {
-		tkns, err := box.GetTokens(k)
+		tkns, err := box.GetTokens(k, nil)
 		require.NoError(t, err, "key #%d: %s failed", i, k)
 		assertBearerToken(t, tkn, *tkns.BearerToken)
 	}
@@ -164,10 +175,19 @@ func TestUnknownKey(t *testing.T) {
 	tkn.SetEACLTable(eacl.Table{})
 	require.NoError(t, tkn.Sign(user.NewAutoIDSigner(sec.PrivateKey)))
 
-	gate := NewGateData(cred.PublicKey(), &tkn)
-	box, _, err = PackTokens([]*GateData{gate})
+	ephemeralKey, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	_, err = box.GetTokens(wrongCred)
+	gate := NewGateData(cred.PublicKey(), &tkn)
+	box, _, err = PackTokens([]*GateData{gate}, ephemeralKey, generateSecret())
+	require.NoError(t, err)
+
+	_, err = box.GetTokens(wrongCred, nil)
 	require.Error(t, err)
+}
+
+func generateSecret() []byte {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	return b
 }
