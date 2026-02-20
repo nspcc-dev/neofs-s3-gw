@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"go.uber.org/zap"
 )
@@ -59,6 +60,10 @@ func transformToS3Error(err error) error {
 
 	if errors.Is(err, layer.ErrDecodeUserID) {
 		return s3errors.GetAPIError(s3errors.ErrInvalidArgument)
+	}
+
+	if errors.Is(err, apistatus.ErrContainerAwaitTimeout) {
+		return s3errors.GetAPIError(s3errors.ErrOperationTimedOut)
 	}
 
 	return s3errors.GetAPIError(s3errors.ErrInternalError)

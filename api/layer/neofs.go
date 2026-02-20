@@ -13,13 +13,13 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 )
 
 // PrmContainerCreate groups parameters of NeoFS.CreateContainer operation.
@@ -46,7 +46,12 @@ type PrmContainerCreate struct {
 	AdditionalAttributes [][2]string
 
 	// Executor allows to set-up custom executor to the operation.
-	Executor waiter.ContainerPutExecutor
+	Executor ContainerPutExecutor
+}
+
+// ContainerPutExecutor puts container.
+type ContainerPutExecutor interface {
+	ContainerPut(ctx context.Context, cont container.Container, signer neofscrypto.Signer, prm client.PrmContainerPut) (cid.ID, error)
 }
 
 // PrmAuth groups authentication parameters for the NeoFS operation.

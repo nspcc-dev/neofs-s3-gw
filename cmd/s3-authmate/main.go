@@ -35,7 +35,6 @@ const (
 	poolHealthcheckTimeout = 5 * time.Second
 	poolRebalanceInterval  = 30 * time.Second
 	poolStreamTimeout      = 10 * time.Second
-	minWaiterPollInterval  = 50 * time.Millisecond
 
 	// a month.
 	defaultLifetime = 30 * 24 * time.Hour
@@ -48,7 +47,6 @@ type PoolConfig struct {
 	HealthcheckTimeout time.Duration
 	StreamTimeout      time.Duration
 	RebalanceInterval  time.Duration
-	WaiterPollInterval time.Duration
 }
 
 var (
@@ -79,8 +77,6 @@ var (
 	poolHealthcheckTimeoutFlag time.Duration
 	poolRebalanceIntervalFlag  time.Duration
 	poolStreamTimeoutFlag      time.Duration
-
-	waiterPollIntervalFlag time.Duration
 )
 
 const (
@@ -283,13 +279,6 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				Value:       poolRebalanceInterval,
 			},
 			&cli.DurationFlag{
-				Name:        "container-ops-poll-interval",
-				Usage:       `Polling interval for container operation waiter (50ms by default)`,
-				Required:    false,
-				Destination: &waiterPollIntervalFlag,
-				Value:       minWaiterPollInterval,
-			},
-			&cli.DurationFlag{
 				Name:        "pool-stream-timeout",
 				Usage:       `Timeout for individual operation in streaming RPC`,
 				Required:    false,
@@ -321,7 +310,6 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				HealthcheckTimeout: poolHealthcheckTimeoutFlag,
 				StreamTimeout:      poolStreamTimeoutFlag,
 				RebalanceInterval:  poolRebalanceIntervalFlag,
-				WaiterPollInterval: max(waiterPollIntervalFlag, minWaiterPollInterval),
 			}
 
 			// authmate doesn't require anonKey for work, but let's create random one.
@@ -525,13 +513,6 @@ func obtainSecret() *cli.Command {
 				Value:       poolRebalanceInterval,
 			},
 			&cli.DurationFlag{
-				Name:        "container-ops-poll-interval",
-				Usage:       `Polling interval for container operation waiter (50ms by default)`,
-				Required:    false,
-				Destination: &waiterPollIntervalFlag,
-				Value:       minWaiterPollInterval,
-			},
-			&cli.DurationFlag{
 				Name:        "pool-stream-timeout",
 				Usage:       `Timeout for individual operation in streaming RPC`,
 				Required:    false,
@@ -558,7 +539,6 @@ func obtainSecret() *cli.Command {
 				HealthcheckTimeout: poolHealthcheckTimeoutFlag,
 				StreamTimeout:      poolStreamTimeoutFlag,
 				RebalanceInterval:  poolRebalanceIntervalFlag,
-				WaiterPollInterval: max(waiterPollIntervalFlag, minWaiterPollInterval),
 			}
 
 			// authmate doesn't require anonKey for work, but let's create random one.
@@ -638,7 +618,6 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigne
 		MaxObjectSize:        int64(ni.MaxObjectSize()),
 		IsSlicerEnabled:      isSlicerEnabled,
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
-		WaiterPollInterval:   cfg.WaiterPollInterval,
 	}
 
 	neoFS := neofs.NewNeoFS(p, signer, anonSigner, neofsCfg, ni)

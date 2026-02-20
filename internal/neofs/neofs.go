@@ -36,7 +36,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	"github.com/nspcc-dev/neofs-sdk-go/waiter"
 	"github.com/nspcc-dev/tzhash/tz"
 )
 
@@ -46,7 +45,6 @@ type Config struct {
 	IsSlicerEnabled         bool
 	IsHomomorphicEnabled    bool
 	ContainerMetadataPolicy string
-	WaiterPollInterval      time.Duration
 }
 
 // NeoFS represents virtual connection to the NeoFS network.
@@ -59,6 +57,11 @@ type NeoFS struct {
 	cfg         Config
 	epochGetter EpochGetter
 	buffers     *sync.Pool
+}
+
+// SetEACLExecutor sets EACL.
+type SetEACLExecutor interface {
+	ContainerSetEACL(ctx context.Context, table eacl.Table, signer user.Signer, prm client.PrmContainerSetEACL) error
 }
 
 const (
@@ -193,15 +196,13 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		prmPut.WithinSession(*prm.SessionToken)
 	}
 
-	var executor waiter.ContainerPutExecutor = x.pool
+	var executor layer.ContainerPutExecutor = x.pool
 	if prm.Executor != nil {
 		executor = prm.Executor
 	}
 
-	putWaiter := waiter.NewContainerPutWaiter(executor, x.cfg.WaiterPollInterval)
-
 	// send request to save the container
-	idCnr, err := putWaiter.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
+	idCnr, err := executor.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
@@ -245,19 +246,18 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionT
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) setContainerEACL(ctx context.Context, c waiter.ContainerSetEACLExecutor, table eacl.Table, sessionToken *session.Container) error {
+func (x *NeoFS) setContainerEACL(ctx context.Context, executor SetEACLExecutor, table eacl.Table, sessionToken *session.Container) error {
 	var prm client.PrmContainerSetEACL
 	if sessionToken != nil {
 		prm.WithinSession(*sessionToken)
 	}
 
-	eaclWaiter := waiter.NewContainerSetEACLWaiter(c, x.cfg.WaiterPollInterval)
-	err := eaclWaiter.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
+	err := executor.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 // ContainerEACL implements neofs.NeoFS interface method.
@@ -278,8 +278,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 		prm.WithinSession(*token)
 	}
 
-	deleteWaiter := waiter.NewContainerDeleteWaiter(x.pool, x.cfg.WaiterPollInterval)
-	err := deleteWaiter.ContainerDelete(ctx, id, x.signer(ctx), prm)
+	err := x.pool.ContainerDelete(ctx, id, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("delete container via connection pool: %w", err)
 	}

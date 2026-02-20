@@ -13,6 +13,7 @@ This document outlines major changes between releases.
 ### Updated
 
 ### Removed
+- waiter usage and `container_ops_poll_interval` config option (#1254)
 
 ### Upgrading from 0.42.0
 
