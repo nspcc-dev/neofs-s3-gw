@@ -20,6 +20,7 @@ message AccessBox {
     bytes ownerPublicKey = 1 [json_name = "ownerPublicKey"];
     repeated Gate gates = 2 [json_name = "gates"];
     repeated ContainerPolicy containerPolicy = 3 [json_name = "containerPolicy"];
+    uint32 version = 4 [json_name = "version"];
 }
 
 message Tokens {
@@ -28,3 +29,7 @@ message Tokens {
     repeated bytes sessionTokens = 3 [json_name = "sessionTokens"];
 }
 
+message TokensV2 {
+    bytes accessKey = 1 [json_name = "accessKey"];
+    bytes sessionTokenV2 = 2 [json_name = "sessionTokenV2"];
+}

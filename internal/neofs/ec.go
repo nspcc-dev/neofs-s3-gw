@@ -10,11 +10,12 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"golang.org/x/sync/errgroup"
 )
 
-func (x *NeoFS) ecAndSaveReadyObject(ctx context.Context, signer user.Signer, bTok *bearer.Token, hdr object.Object, pld []byte, rules []netmap.ECRule) error {
+func (x *NeoFS) ecAndSaveReadyObject(ctx context.Context, signer user.Signer, bTok *bearer.Token, sessionv2 *session2.Token, hdr object.Object, pld []byte, rules []netmap.ECRule) error {
 	for i := range rules {
 		if slices.ContainsFunc(rules[:i], func(rule netmap.ECRule) bool {
 			return sameECEncodingRules(rule, rules[i])
@@ -28,7 +29,7 @@ func (x *NeoFS) ecAndSaveReadyObject(ctx context.Context, signer user.Signer, bT
 			return fmt.Errorf("split payload into EC parts for rule #%d (%s): %w", i, iec.RuleStringer(rules[i]), err)
 		}
 
-		if err := x.saveECParts(ctx, signer, bTok, hdr, i, payloadParts); err != nil {
+		if err := x.saveECParts(ctx, signer, bTok, sessionv2, hdr, i, payloadParts); err != nil {
 			return fmt.Errorf("save EC parts by rule #%d (%s): %w", i, iec.RuleStringer(rules[i]), err)
 		}
 
@@ -36,7 +37,7 @@ func (x *NeoFS) ecAndSaveReadyObject(ctx context.Context, signer user.Signer, bT
 			if !sameECEncodingRules(rules[i], rules[j]) {
 				continue
 			}
-			if err := x.saveECParts(ctx, signer, bTok, hdr, j, payloadParts); err != nil {
+			if err := x.saveECParts(ctx, signer, bTok, sessionv2, hdr, j, payloadParts); err != nil {
 				return fmt.Errorf("save EC parts by rule #%d (%s): %w", j, iec.RuleStringer(rules[j]), err)
 			}
 		}
@@ -45,14 +46,14 @@ func (x *NeoFS) ecAndSaveReadyObject(ctx context.Context, signer user.Signer, bT
 	return nil
 }
 
-func (x *NeoFS) saveECParts(ctx context.Context, signer user.Signer, bTok *bearer.Token, hdr object.Object, ruleIdx int, parts [][]byte) error {
+func (x *NeoFS) saveECParts(ctx context.Context, signer user.Signer, bTok *bearer.Token, sessionv2 *session2.Token, hdr object.Object, ruleIdx int, parts [][]byte) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	for i := range parts {
 		partIdx := i
 
 		eg.Go(func() error {
-			if err := x.saveECPart(egCtx, signer, bTok, hdr, ruleIdx, parts[partIdx], partIdx); err != nil {
+			if err := x.saveECPart(egCtx, signer, bTok, sessionv2, hdr, ruleIdx, parts[partIdx], partIdx); err != nil {
 				return fmt.Errorf("save part %d: %w", i, err)
 			}
 
@@ -63,13 +64,13 @@ func (x *NeoFS) saveECParts(ctx context.Context, signer user.Signer, bTok *beare
 	return eg.Wait()
 }
 
-func (x *NeoFS) saveECPart(ctx context.Context, signer user.Signer, bTok *bearer.Token, hdr object.Object, ruleIdx int, part []byte, partIdx int) error {
+func (x *NeoFS) saveECPart(ctx context.Context, signer user.Signer, bTok *bearer.Token, sessionv2 *session2.Token, hdr object.Object, ruleIdx int, part []byte, partIdx int) error {
 	partObjHdr, err := iec.FormObjectHeaderForECPart(signer, hdr, part, ruleIdx, partIdx)
 	if err != nil {
 		return fmt.Errorf("form object: %w", err)
 	}
 
-	_, err = x.putReadyObject(ctx, signer, bTok, partObjHdr, bytes.NewReader(part), partObjHdr.PayloadSize())
+	_, err = x.putReadyObject(ctx, signer, bTok, sessionv2, partObjHdr, bytes.NewReader(part), partObjHdr.PayloadSize())
 	return err
 }
 

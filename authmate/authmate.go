@@ -7,21 +7,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
@@ -77,7 +78,7 @@ type NeoFS interface {
 	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
 
 	// SetContainerEACL updates container EACL.
-	SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container) error
+	SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) error
 
 	// ContainerEACL gets container EACL.
 	ContainerEACL(ctx context.Context, containerID cid.ID) (*eacl.Table, error)
@@ -129,6 +130,9 @@ type (
 type lifetimeOptions struct {
 	Iat uint64
 	Exp uint64
+
+	IssuedAt time.Time
+	ExpireAt time.Time
 }
 
 type (
@@ -144,6 +148,7 @@ type (
 	ObtainingResult struct {
 		BearerToken            *bearer.Token      `json:"-"`
 		SessionTokenForSetEACL *session.Container `json:"-"`
+		SessionTokenV2         *session2.Token    `json:"-"`
 		SecretAccessKey        string             `json:"secret_access_key"`
 	}
 )
@@ -210,9 +215,14 @@ func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPo
 // IssueSecret creates an auth token, puts it in the NeoFS network and writes to io.Writer a new secret access key.
 func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecretOptions) error {
 	var (
-		err      error
-		box      *accessbox.AccessBox
-		lifetime lifetimeOptions
+		err error
+		box *accessbox.AccessBox
+		ts  = time.Now()
+
+		lifetime = lifetimeOptions{
+			IssuedAt: ts,
+			ExpireAt: ts.Add(options.Lifetime),
+		}
 	)
 
 	policies, err := preparePolicy(options.ContainerPolicies)
@@ -314,120 +324,142 @@ func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) 
 		BearerToken:            box.Gate.BearerToken,
 		SecretAccessKey:        box.Gate.AccessKey,
 		SessionTokenForSetEACL: box.Gate.SessionTokenForSetEACL(),
+		SessionTokenV2:         box.Gate.SessionTokenV2,
 	}, nil
 }
 
-func buildEACLTable(eaclTable []byte) (*eacl.Table, error) {
-	var table eacl.Table
+func buildSessionTokenV2(key *keys.PrivateKey, lifetime lifetimeOptions, contexts []session2.Context, gateKeys []*keys.PublicKey) ([]session2.Token, error) {
+	var (
+		tokens []session2.Token
 
-	if len(eaclTable) != 0 {
-		return &table, table.UnmarshalJSON(eaclTable)
+		// https://github.com/nspcc-dev/neofs-node/pull/3671#discussion_r2709969518
+		tokenIssueTime = lifetime.IssuedAt.Add(-30 * time.Second)
+		signer         = user.NewAutoIDSignerRFC6979(key.PrivateKey)
+	)
+
+	chunks := slices.Chunk(gateKeys, session2.MaxSubjectsPerToken)
+
+	for keys := range chunks {
+		var (
+			tokenV2 session2.Token
+			targets = make([]session2.Target, 0, len(keys))
+		)
+
+		for _, gateKey := range keys {
+			targets = append(targets, session2.NewTargetUser(user.NewFromScriptHash(gateKey.GetScriptHash())))
+		}
+
+		if err := tokenV2.SetSubjects(targets); err != nil {
+			return nil, fmt.Errorf("set subjects: %w", err)
+		}
+
+		slices.SortFunc(contexts, func(a, b session2.Context) int {
+			return a.Container().Compare(b.Container())
+		})
+
+		if err := tokenV2.SetContexts(contexts); err != nil {
+			return nil, fmt.Errorf("set contexts: %w", err)
+		}
+
+		tokenV2.SetNbf(tokenIssueTime)
+		tokenV2.SetIat(tokenIssueTime)
+		tokenV2.SetExp(lifetime.ExpireAt)
+		tokenV2.SetIssuer(signer.UserID())
+		tokenV2.SetVersion(session2.TokenCurrentVersion)
+
+		if err := tokenV2.Sign(signer); err != nil {
+			return nil, fmt.Errorf("sign: %w", err)
+		}
+
+		tokens = append(tokens, tokenV2)
 	}
 
+	return tokens, nil
+}
+
+func buildSessionTokensV2(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []sessionTokenContext, gatesKeys []*keys.PublicKey) ([]session2.Token, error) {
 	var (
-		records = []eacl.Record{
-			eacl.ConstructRecord(eacl.ActionAllow, eacl.OperationGet,
-				[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
-			),
+		verbsByCnr = make(map[cid.ID][]session2.Verb)
+
+		objectOperations = []session2.Verb{
+			session2.VerbObjectPut,
+			session2.VerbObjectGet,
+			session2.VerbObjectHead,
+			session2.VerbObjectSearch,
+			session2.VerbObjectDelete,
+			session2.VerbObjectRange,
+			session2.VerbObjectRangeHash,
 		}
 	)
 
-	for _, rec := range restrictedRecords() {
-		records = append(records, *rec)
+	for _, c := range ctxs {
+		var v2Verb session2.Verb
+
+		switch c.verb {
+		case session.VerbContainerPut:
+			v2Verb = session2.VerbContainerPut
+		case session.VerbContainerDelete:
+			v2Verb = session2.VerbContainerDelete
+		case session.VerbContainerSetEACL:
+			v2Verb = session2.VerbContainerSetEACL
+		case session.VerbContainerSetAttribute:
+			v2Verb = session2.VerbContainerSetAttribute
+		case session.VerbContainerRemoveAttribute:
+			v2Verb = session2.VerbContainerRemoveAttribute
+		default:
+			return nil, fmt.Errorf("unknown verb: %v", c.verb)
+		}
+
+		if _, ok := verbsByCnr[c.containerID]; !ok {
+			verbsByCnr[c.containerID] = []session2.Verb{v2Verb}
+			continue
+		}
+
+		verbsByCnr[c.containerID] = append(verbsByCnr[c.containerID], append(objectOperations, v2Verb)...)
 	}
 
-	table.SetRecords(records)
-
-	return &table, nil
-}
-
-func restrictedRecords() (records []*eacl.Record) {
-	for op := eacl.OperationHead; op <= eacl.OperationRangeHash; op++ {
-		record := eacl.ConstructRecord(eacl.ActionDeny, op,
-			[]eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)},
-		)
-
-		records = append(records, &record)
-	}
-
-	return
-}
-
-func buildBearerToken(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gateKey *keys.PublicKey) (*bearer.Token, error) {
-	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
-
-	var bearerToken bearer.Token
-	bearerToken.SetEACLTable(*table)
-	bearerToken.ForUser(user.NewFromScriptHash(gateKey.GetScriptHash()))
-	bearerToken.SetExp(lifetime.Exp)
-	bearerToken.SetIat(lifetime.Iat)
-	bearerToken.SetNbf(lifetime.Iat)
-
-	err := bearerToken.Sign(signer)
+	deduplicate, err := deduplicateVerbs(verbsByCnr)
 	if err != nil {
-		return nil, fmt.Errorf("sign bearer token: %w", err)
+		return nil, fmt.Errorf("deduplicate verbs: %w", err)
 	}
 
-	return &bearerToken, nil
-}
+	slices.SortFunc(deduplicate, func(a, b session2.Context) int {
+		return a.Container().Compare(b.Container())
+	})
 
-func buildBearerTokens(key *keys.PrivateKey, table *eacl.Table, lifetime lifetimeOptions, gatesKeys []*keys.PublicKey) ([]*bearer.Token, error) {
-	bearerTokens := make([]*bearer.Token, 0, len(gatesKeys))
-	for _, gateKey := range gatesKeys {
-		tkn, err := buildBearerToken(key, table, lifetime, gateKey)
-		if err != nil {
-			return nil, fmt.Errorf("build bearer token: %w", err)
-		}
-		bearerTokens = append(bearerTokens, tkn)
+	sessionTokens, err := buildSessionTokenV2(key, lifetime, deduplicate, gatesKeys)
+	if err != nil {
+		return nil, fmt.Errorf("build session tokens v2: %w", err)
 	}
-	return bearerTokens, nil
-}
 
-func buildSessionToken(key *keys.PrivateKey, lifetime lifetimeOptions, ctx sessionTokenContext, gateKey *keys.PublicKey) (*session.Container, error) {
-	tok := new(session.Container)
-	tok.ForVerb(ctx.verb)
-	tok.AppliedTo(ctx.containerID)
-
-	tok.SetID(uuid.New())
-	tok.SetAuthKey((*neofsecdsa.PublicKey)(gateKey))
-
-	tok.SetIat(lifetime.Iat)
-	tok.SetNbf(lifetime.Iat)
-	tok.SetExp(lifetime.Exp)
-
-	return tok, tok.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
-}
-
-func buildSessionTokens(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []sessionTokenContext, gatesKeys []*keys.PublicKey) ([][]*session.Container, error) {
-	sessionTokens := make([][]*session.Container, 0, len(gatesKeys))
-	for _, gateKey := range gatesKeys {
-		tkns := make([]*session.Container, len(ctxs))
-		for i, ctx := range ctxs {
-			tkn, err := buildSessionToken(key, lifetime, ctx, gateKey)
-			if err != nil {
-				return nil, fmt.Errorf("build session token: %w", err)
-			}
-			tkns[i] = tkn
-		}
-		sessionTokens = append(sessionTokens, tkns)
-	}
 	return sessionTokens, nil
 }
 
-func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*accessbox.GateData, error) {
-	gates := make([]*accessbox.GateData, len(options.GatesPublicKeys))
+func deduplicateVerbs(m map[cid.ID][]session2.Verb) ([]session2.Context, error) {
+	var r []session2.Context
 
-	table, err := buildEACLTable(options.EACLRules)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build eacl table: %w", err)
+	for cnrID, verbs := range m {
+		var uniqueVerbsMap = make(map[session2.Verb]struct{}, len(verbs))
+		for _, verb := range verbs {
+			uniqueVerbsMap[verb] = struct{}{}
+		}
+
+		uniqueVerbs := maps.Keys(uniqueVerbsMap)
+		sortedVerbs := slices.Sorted(uniqueVerbs)
+
+		newContext, err := session2.NewContext(cnrID, sortedVerbs)
+		if err != nil {
+			return nil, fmt.Errorf("session context: %w", err)
+		}
+
+		r = append(r, newContext)
 	}
-	bearerTokens, err := buildBearerTokens(options.NeoFSKey, table, lifetime, options.GatesPublicKeys)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build bearer tokens: %w", err)
-	}
-	for i, gateKey := range options.GatesPublicKeys {
-		gates[i] = accessbox.NewGateData(gateKey, bearerTokens[i])
-	}
+
+	return r, nil
+}
+
+func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*accessbox.GateData, error) {
+	var gates []*accessbox.GateData
 
 	if !options.SkipSessionRules {
 		sessionRules, err := buildContext(options.SessionTokenRules)
@@ -435,12 +467,16 @@ func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions) ([]*acc
 			return nil, fmt.Errorf("failed to build context for session token: %w", err)
 		}
 
-		sessionTokens, err := buildSessionTokens(options.NeoFSKey, lifetime, sessionRules, options.GatesPublicKeys)
+		sessionTokensV2, err := buildSessionTokensV2(options.NeoFSKey, lifetime, sessionRules, options.GatesPublicKeys)
 		if err != nil {
-			return nil, fmt.Errorf("failed to biuild session token: %w", err)
+			return nil, fmt.Errorf("failed to build session token v2: %w", err)
 		}
-		for i, sessionTkns := range sessionTokens {
-			gates[i].SessionTokens = sessionTkns
+		for _, sessionTokenV2 := range sessionTokensV2 {
+			var gate = accessbox.GateData{
+				SessionTokenV2: &sessionTokenV2,
+			}
+
+			gates = append(gates, &gate)
 		}
 	}
 
