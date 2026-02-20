@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 type PutBucketNotificationConfigurationParams struct {
@@ -19,13 +20,17 @@ type PutBucketNotificationConfigurationParams struct {
 }
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
-	var sessionToken *session.Container
+	var (
+		sessionToken   *session.Container
+		sessionTokenV2 *session2.Token
+	)
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
+		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeNotifications, p.Configuration, sessionToken); err != nil {
+	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeNotifications, p.Configuration, sessionToken, sessionTokenV2); err != nil {
 		return fmt.Errorf("store bucket notification settings: %w", err)
 	}
 
@@ -72,7 +77,7 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		// Migrate notification settings.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeNotifications, conf, boxData.Gate.SessionTokenForSetAttribute()); err != nil {
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeNotifications, conf, boxData.Gate.SessionTokenForSetAttribute(), boxData.Gate.SessionTokenV2); err != nil {
 			return nil, fmt.Errorf("migrate bucket notification settings: %w", err)
 		}
 		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig); err != nil {
