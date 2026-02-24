@@ -122,11 +122,6 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		IsSlicerEnabled:         v.GetBool(cfgSlicerEnabled),
 		IsHomomorphicEnabled:    !ni.HomomorphicHashingDisabled(),
 		ContainerMetadataPolicy: v.GetString(cfgContainerMetadataPolicy),
-		WaiterPollInterval:      v.GetDuration(cfgContainerOpsPollInterval),
-	}
-
-	if neofsCfg.WaiterPollInterval == 0 {
-		neofsCfg.WaiterPollInterval = max(minWaiterPollInterval, time.Duration(ni.MsPerBlock())*time.Millisecond/2)
 	}
 
 	switch neofsCfg.ContainerMetadataPolicy {
