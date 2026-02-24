@@ -16,7 +16,7 @@ require (
 	github.com/nspcc-dev/neo-go v0.117.0
 	github.com/nspcc-dev/neofs-contract v0.26.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17
-	github.com/nspcc-dev/tzhash v1.8.3
+	github.com/nspcc-dev/tzhash v1.8.4
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
