@@ -13,7 +13,7 @@ require (
 	github.com/minio/crc64nvme v1.0.1
 	github.com/minio/sio v0.4.1
 	github.com/nats-io/nats.go v1.37.0
-	github.com/nspcc-dev/neo-go v0.116.0
+	github.com/nspcc-dev/neo-go v0.117.0
 	github.com/nspcc-dev/neofs-contract v0.26.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17
 	github.com/nspcc-dev/tzhash v1.8.3
