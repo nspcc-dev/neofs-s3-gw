@@ -9,7 +9,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/klauspost/reedsolomon v1.12.5
+	github.com/klauspost/reedsolomon v1.13.2
 	github.com/minio/crc64nvme v1.0.1
 	github.com/minio/sio v0.4.1
 	github.com/nats-io/nats.go v1.37.0
@@ -39,7 +39,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
+	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nspcc-dev/bbolt v0.0.0-20250911202005-807225ebb0c8 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20250911084817-6fb4472993d1 // indirect
