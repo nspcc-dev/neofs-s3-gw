@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/klauspost/reedsolomon v1.13.2
-	github.com/minio/crc64nvme v1.0.1
+	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.4.3
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nspcc-dev/neo-go v0.117.0
