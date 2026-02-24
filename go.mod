@@ -12,7 +12,7 @@ require (
 	github.com/klauspost/reedsolomon v1.13.2
 	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.4.3
-	github.com/nats-io/nats.go v1.37.0
+	github.com/nats-io/nats.go v1.49.0
 	github.com/nspcc-dev/neo-go v0.117.0
 	github.com/nspcc-dev/neofs-contract v0.26.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17
@@ -38,7 +38,7 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nspcc-dev/bbolt v0.0.0-20250911202005-807225ebb0c8 // indirect
@@ -65,7 +65,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
-	github.com/nats-io/nkeys v0.4.7 // indirect
+	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/rfc6979 v0.2.4 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
