@@ -684,8 +684,8 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		}
 
 		for _, attr := range header.Attributes() {
-			if strings.HasPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix) {
-				tagSet[strings.TrimPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix)] = attr.Value()
+			if after, ok := strings.CutPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix); ok {
+				tagSet[after] = attr.Value()
 			}
 		}
 

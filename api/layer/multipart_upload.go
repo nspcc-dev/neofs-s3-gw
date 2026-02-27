@@ -447,8 +447,8 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	attrs = append(attrs, object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
 
 	for key, val := range multipartInfo.Meta {
-		if strings.HasPrefix(key, metaPrefix) {
-			attrs = append(attrs, object.NewAttribute(strings.TrimPrefix(key, metaPrefix), val))
+		if after, ok := strings.CutPrefix(key, metaPrefix); ok {
+			attrs = append(attrs, object.NewAttribute(after, val))
 		}
 	}
 
@@ -1520,12 +1520,12 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		ACLHeaders: make(map[string]string),
 	}
 	for key, val := range multipartInfo.Meta {
-		if strings.HasPrefix(key, metaPrefix) {
-			initMetadata[strings.TrimPrefix(key, metaPrefix)] = val
-		} else if strings.HasPrefix(key, tagPrefix) {
-			uploadData.TagSet[strings.TrimPrefix(key, tagPrefix)] = val
-		} else if strings.HasPrefix(key, aclPrefix) {
-			uploadData.ACLHeaders[strings.TrimPrefix(key, aclPrefix)] = val
+		if after, ok := strings.CutPrefix(key, metaPrefix); ok {
+			initMetadata[after] = val
+		} else if after, ok := strings.CutPrefix(key, tagPrefix); ok {
+			uploadData.TagSet[after] = val
+		} else if after, ok := strings.CutPrefix(key, aclPrefix); ok {
+			uploadData.ACLHeaders[after] = val
 		}
 	}
 
@@ -1638,11 +1638,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	if len(oldVersions) > 0 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for _, ver := range oldVersions {
 				// skip new added object.
 				if ver.ID == header.GetID() {
@@ -1661,7 +1657,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 					)
 				}
 			}
-		}()
+		})
 	}
 
 	headerObjectID := header.GetID()

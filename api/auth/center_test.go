@@ -450,11 +450,7 @@ func chunkSlice(payload []byte, chunkSize int) [][]byte {
 	var result [][]byte
 
 	for i := 0; i < len(payload); i += chunkSize {
-		end := i + chunkSize
-
-		if end > len(payload) {
-			end = len(payload)
-		}
+		end := min(i+chunkSize, len(payload))
 
 		result = append(result, payload[i:end])
 	}

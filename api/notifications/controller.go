@@ -88,7 +88,7 @@ type (
 
 	Bucket struct {
 		Name          string       `json:"name"`
-		OwnerIdentity UserIdentity `json:"ownerIdentity,omitempty"`
+		OwnerIdentity UserIdentity `json:"ownerIdentity"`
 		Arn           string       `json:"arn,omitempty"`
 	}
 

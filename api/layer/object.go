@@ -310,11 +310,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	if len(oldVersions) > 0 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for _, ver := range oldVersions {
 				// skip new added object.
 				if ver.ID == id {
@@ -333,7 +329,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 					)
 				}
 			}
-		}()
+		})
 	}
 
 	reqInfo := api.GetReqInfo(ctx)

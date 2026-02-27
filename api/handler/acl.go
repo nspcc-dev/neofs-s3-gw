@@ -1123,16 +1123,7 @@ OPLOOP:
 	if found != nil {
 		if !groupTarget {
 			for _, acc := range target.Accounts() {
-				var exist bool
-
-				for _, accounts := range found.Users {
-					if accounts == acc {
-						exist = true
-						break
-					}
-				}
-
-				if !exist {
+				if !slices.Contains(found.Users, acc) {
 					found.Users = append(found.Users, acc)
 				}
 			}
@@ -1285,7 +1276,7 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 	LOOP:
 		for action, ops := range actionToOpMap {
 			for _, op := range ops {
-				if !contains(userOps, op) {
+				if !slices.Contains(userOps, op) {
 					continue LOOP
 				}
 			}
@@ -1654,15 +1645,6 @@ func generateGrant(key string, bucketACL *layer.BucketACL, permission amazonS3Pe
 
 func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL) *AccessControlPolicyResponse {
 	return encodeObjectACL(h.log, bucketACL, bucketName, "")
-}
-
-func contains(list []eacl.Operation, op eacl.Operation) bool {
-	for _, operation := range list {
-		if operation == op {
-			return true
-		}
-	}
-	return false
 }
 
 func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {

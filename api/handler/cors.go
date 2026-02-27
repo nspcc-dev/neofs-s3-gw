@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -105,29 +106,25 @@ func (h *handler) AppendCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	for _, rule := range cors.CORSRules {
 		for _, o := range rule.AllowedOrigins {
 			if o == origin {
-				for _, m := range rule.AllowedMethods {
-					if m == r.Method {
-						w.Header().Set(api.AccessControlAllowOrigin, origin)
-						w.Header().Set(api.AccessControlAllowMethods, strings.Join(rule.AllowedMethods, ", "))
-						w.Header().Set(api.AccessControlAllowCredentials, "true")
-						w.Header().Set(api.Vary, api.Origin)
-						return
-					}
+				if slices.Contains(rule.AllowedMethods, r.Method) {
+					w.Header().Set(api.AccessControlAllowOrigin, origin)
+					w.Header().Set(api.AccessControlAllowMethods, strings.Join(rule.AllowedMethods, ", "))
+					w.Header().Set(api.AccessControlAllowCredentials, "true")
+					w.Header().Set(api.Vary, api.Origin)
+					return
 				}
 			}
 			if o == wildcard {
-				for _, m := range rule.AllowedMethods {
-					if m == r.Method {
-						if withCredentials {
-							w.Header().Set(api.AccessControlAllowOrigin, origin)
-							w.Header().Set(api.AccessControlAllowCredentials, "true")
-							w.Header().Set(api.Vary, api.Origin)
-						} else {
-							w.Header().Set(api.AccessControlAllowOrigin, o)
-						}
-						w.Header().Set(api.AccessControlAllowMethods, strings.Join(rule.AllowedMethods, ", "))
-						return
+				if slices.Contains(rule.AllowedMethods, r.Method) {
+					if withCredentials {
+						w.Header().Set(api.AccessControlAllowOrigin, origin)
+						w.Header().Set(api.AccessControlAllowCredentials, "true")
+						w.Header().Set(api.Vary, api.Origin)
+					} else {
+						w.Header().Set(api.AccessControlAllowOrigin, o)
 					}
+					w.Header().Set(api.AccessControlAllowMethods, strings.Join(rule.AllowedMethods, ", "))
+					return
 				}
 			}
 		}
@@ -205,25 +202,16 @@ func (h *handler) Preflight(w http.ResponseWriter, r *http.Request) {
 }
 
 func checkSubslice(slice []string, subSlice []string) bool {
-	if sliceContains(slice, wildcard) {
+	if slices.Contains(slice, wildcard) {
 		return true
 	}
 	if len(subSlice) > len(slice) {
 		return false
 	}
 	for _, r := range subSlice {
-		if !sliceContains(slice, r) {
+		if !slices.Contains(slice, r) {
 			return false
 		}
 	}
 	return true
-}
-
-func sliceContains(slice []string, str string) bool {
-	for _, s := range slice {
-		if s == str {
-			return true
-		}
-	}
-	return false
 }

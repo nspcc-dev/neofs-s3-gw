@@ -14,7 +14,7 @@ BINS = $(addprefix $(BINDIR)/, $(CMDS))
 REPO_BASENAME = $(shell basename `go list -m`)
 HUB_IMAGE ?= "nspccdev/$(REPO_BASENAME)"
 
-.PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format image image-push dirty-image version clean protoc
+.PHONY: all $(BINS) $(BINDIR) dep docker/ test cover format modernize image image-push dirty-image version clean protoc
 
 # .deb package versioning
 OS_RELEASE = $(shell lsb_release -cs)
@@ -71,6 +71,11 @@ cover:
 format:
 	@echo "⇒ Processing gofmt check"
 	@gofmt -s -w ./
+
+# Prettify code
+modernize:
+	@echo "⇒ Processing modernize check"
+	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
 
 # Build clean Docker image
 image:

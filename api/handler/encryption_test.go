@@ -132,10 +132,7 @@ func checkContentUsingRangeEnc(t *testing.T, tc *handlerContext, bktName, objNam
 	var off, toRead, end int
 
 	for off < len(data) {
-		toRead = len(data) - off
-		if toRead > step {
-			toRead = step
-		}
+		toRead = min(len(data)-off, step)
 		end = off + toRead - 1
 
 		rangeData := getEncryptedObjectRange(t, tc, bktName, objName, off, end)
