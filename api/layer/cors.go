@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
@@ -201,10 +202,8 @@ func checkCORS(cors *data.CORSConfiguration) error {
 				return s3errors.GetAPIErrorWithError(s3errors.ErrCORSUnsupportedMethod, fmt.Errorf("unsupported method is %s", m))
 			}
 		}
-		for _, h := range r.ExposeHeaders {
-			if h == wildcard {
-				return s3errors.GetAPIError(s3errors.ErrCORSWildcardExposeHeaders)
-			}
+		if slices.Contains(r.ExposeHeaders, wildcard) {
+			return s3errors.GetAPIError(s3errors.ErrCORSWildcardExposeHeaders)
 		}
 	}
 	return nil

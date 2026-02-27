@@ -571,8 +571,8 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		}
 
 		prefix := strings.ToLower(api.MetadataPrefix)
-		if strings.HasPrefix(key, prefix) {
-			metadata[strings.TrimPrefix(key, prefix)] = value
+		if after, ok := strings.CutPrefix(key, prefix); ok {
+			metadata[after] = value
 		}
 
 		if key == "content-type" {
@@ -676,8 +676,8 @@ func parseTaggingHeader(header http.Header) (map[string]string, error) {
 func parseMetadata(r *http.Request) map[string]string {
 	res := make(map[string]string)
 	for k, v := range r.Header {
-		if strings.HasPrefix(k, api.MetadataPrefix) {
-			key := strings.ToLower(strings.TrimPrefix(k, api.MetadataPrefix))
+		if after, ok := strings.CutPrefix(k, api.MetadataPrefix); ok {
+			key := strings.ToLower(after)
 			res[key] = v[0]
 		}
 	}

@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -162,11 +163,7 @@ func (stats *HTTPAPIStats) Dec(api string) {
 func (stats *HTTPAPIStats) Load() map[string]int {
 	stats.Lock()
 	defer stats.Unlock()
-	var apiStats = make(map[string]int, len(stats.apiStats))
-	for k, v := range stats.apiStats {
-		apiStats[k] = v
-	}
-	return apiStats
+	return maps.Clone(stats.apiStats)
 }
 
 func (st *HTTPStats) getInputBytes() uint64 {

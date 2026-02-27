@@ -14,10 +14,7 @@ import (
 const sizeToDetectType = 512
 
 func getRangeToDetectContentType(maxSize int64) *layer.RangeParams {
-	end := uint64(maxSize)
-	if sizeToDetectType < end {
-		end = sizeToDetectType
-	}
+	end := min(sizeToDetectType, uint64(maxSize))
 
 	return &layer.RangeParams{
 		Start: 0,
