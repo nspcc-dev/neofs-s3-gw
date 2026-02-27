@@ -3,6 +3,7 @@ package data
 import (
 	"cmp"
 	"strconv"
+	"strings"
 	"time"
 
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -84,7 +85,12 @@ type ElementInfo struct {
 
 // ToHeaderString form short part representation to use in S3-Completed-Parts header.
 func (p *PartInfo) ToHeaderString() string {
-	return strconv.Itoa(p.Number) + "-" + strconv.FormatInt(p.Size, 10) + "-" + p.ETag
+	return strings.Join([]string{
+		strconv.Itoa(p.Number),
+		strconv.FormatInt(p.Size, 10),
+		p.ETag,
+		p.OID.String(),
+	}, "-")
 }
 
 // SortPartInfo sorts PartInfo for Number ASC, ServerCreated ASC.

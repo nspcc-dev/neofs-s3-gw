@@ -194,9 +194,10 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 }
 
 func ParseCompletedPartHeader(hdr string) (*Part, error) {
-	// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum
+	// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum, partInfo[3] -- OID
 	partInfo := strings.Split(hdr, "-")
-	if len(partInfo) != 3 {
+	partsLen := len(partInfo)
+	if partsLen < 3 || partsLen > 4 {
 		return nil, fmt.Errorf("invalid completed part header")
 	}
 	num, err := strconv.Atoi(partInfo[0])
@@ -208,10 +209,18 @@ func ParseCompletedPartHeader(hdr string) (*Part, error) {
 		return nil, fmt.Errorf("invalid completed part size '%s': %w", partInfo[1], err)
 	}
 
+	var id oid.ID
+	if partsLen == 4 {
+		if err = id.DecodeString(partInfo[3]); err != nil {
+			return nil, fmt.Errorf("invalid completed part oid %s: %w", partInfo[3], err)
+		}
+	}
+
 	return &Part{
 		ETag:       partInfo[2],
 		PartNumber: num,
 		Size:       int64(size),
+		OID:        id,
 	}, nil
 }
 

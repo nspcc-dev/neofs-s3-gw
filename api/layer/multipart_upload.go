@@ -100,6 +100,7 @@ type (
 		ETag       string
 		PartNumber int
 		Size       int64
+		OID        oid.ID
 	}
 
 	ListMultipartUploadsParams struct {
