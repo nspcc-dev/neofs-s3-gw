@@ -194,6 +194,68 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var pInfo *layer.Part
+	if partNumberStr := reqInfo.URL.Query().Get("partNumber"); len(partNumberStr) > 0 {
+		var partNumber int
+
+		partNumber, err = strconv.Atoi(partNumberStr)
+		if err != nil || partNumber < layer.UploadMinPartNumber || partNumber > layer.UploadMaxPartNumber {
+			h.logAndSendError(w, "invalid part number", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
+			return
+		}
+
+		linkingObjectID, err := h.obj.SearchLinkingObject(r.Context(), bktInfo, info.ID)
+		if err != nil {
+			h.logAndSendError(w, "linking object search failed", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
+			return
+		}
+
+		if linkingObjectID.IsZero() {
+			h.logAndSendError(w, "linking object not found", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
+			return
+		}
+
+		linkingObject, err := h.obj.GetLinkingObject(r.Context(), bktInfo, linkingObjectID)
+		if err != nil {
+			h.logAndSendError(w, "linking object get failed", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
+			return
+		}
+
+		var measuredObjects = linkingObject.Objects()
+		// two meta parts + as minimum one payload part.
+		if len(measuredObjects) < 3 {
+			h.logAndSendError(w, "linking object should have at least 3 parts", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidRequest))
+			return
+		}
+
+		var (
+			// first and last elements are metadata parts with zero length.
+			completedParts = measuredObjects[1 : len(measuredObjects)-1]
+			totalParts     = len(completedParts)
+		)
+
+		if partNumber > totalParts {
+			h.logAndSendError(w, "requested part not found", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
+			return
+		}
+
+		part := completedParts[partNumber-1]
+
+		objectWithPayloadReader, err = h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
+			Owner:   bktInfo.Owner,
+			BktInfo: bktInfo,
+			Object:  part.ObjectID(),
+		})
+
+		if err != nil {
+			h.logAndSendError(w, "could not get part object meta", reqInfo, err)
+			return
+		}
+
+		info = objectWithPayloadReader.ObjectInfo
+		w.Header().Set("x-amz-mp-parts-count", strconv.Itoa(totalParts))
+	}
+
 	fullSize := info.Size
 	if encryptionParams.Enabled() {
 		if fullSize, err = strconv.ParseInt(info.Headers[s3headers.AttributeDecryptedSize], 10, 64); err != nil {
@@ -233,6 +295,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Range:      params,
 			BucketInfo: bktInfo,
 			Encryption: encryptionParams,
+			Part:       pInfo,
 		}
 		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 			h.logAndSendError(w, "could not get object", reqInfo, err)
