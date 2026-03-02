@@ -194,6 +194,60 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var pInfo *layer.Part
+	if partNumberStr := reqInfo.URL.Query().Get("partNumber"); len(partNumberStr) > 0 {
+		var partNumber int
+
+		partNumber, err = strconv.Atoi(partNumberStr)
+		if err != nil || partNumber < layer.UploadMinPartNumber || partNumber > layer.UploadMaxPartNumber {
+			h.logAndSendError(w, "invalid part number", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
+			return
+		}
+
+		completedParts, ok := info.Headers[s3headers.UploadCompletedParts]
+		if !ok || len(completedParts) == 0 {
+			h.logAndSendError(w, "non-multipart object", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
+			return
+		}
+
+		var (
+			partInfos  = strings.Split(completedParts, ",")
+			totalParts = len(partInfos)
+			partIndex  = partNumber - 1
+		)
+
+		if partNumber > totalParts {
+			h.logAndSendError(w, "requested part not found", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
+			return
+		}
+
+		pStr := partInfos[partIndex]
+		pInfo, err = layer.ParseCompletedPartHeader(pStr)
+		if err != nil {
+			h.logAndSendError(w, "invalid completed part header", reqInfo, err)
+			return
+		}
+		if pInfo.PartNumber != partNumber {
+			h.logAndSendError(w, "invalid completed part", reqInfo, err)
+			return
+		}
+
+		objectWithPayloadReader, err = h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
+			Owner:   bktInfo.Owner,
+			BktInfo: bktInfo,
+			Object:  pInfo.OID,
+		})
+
+		if err != nil {
+			h.logAndSendError(w, "could not get part object meta", reqInfo, err)
+			return
+		}
+
+		info = objectWithPayloadReader.ObjectInfo
+
+		w.Header().Set("x-amz-mp-parts-count", strconv.Itoa(totalParts))
+	}
+
 	fullSize := info.Size
 	if encryptionParams.Enabled() {
 		if fullSize, err = strconv.ParseInt(info.Headers[s3headers.AttributeDecryptedSize], 10, 64); err != nil {
@@ -233,6 +287,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Range:      params,
 			BucketInfo: bktInfo,
 			Encryption: encryptionParams,
+			Part:       pInfo,
 		}
 		if err = h.obj.GetObject(r.Context(), getParams); err != nil {
 			h.logAndSendError(w, "could not get object", reqInfo, err)
