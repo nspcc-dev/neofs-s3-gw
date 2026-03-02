@@ -74,6 +74,7 @@ type (
 		BucketInfo *data.BucketInfo
 		Writer     io.Writer
 		Encryption encryption.Params
+		Part       *Part
 	}
 
 	// HeadObjectParams stores object head request parameters.
@@ -460,9 +461,22 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var decReader *encryption.Decrypter
 	if p.Encryption.Enabled() {
 		var err error
-		decReader, err = getDecrypter(p)
-		if err != nil {
-			return fmt.Errorf("creating decrypter: %w", err)
+
+		if p.Part != nil {
+			var encRange *encryption.Range
+			if p.Range != nil {
+				encRange = &encryption.Range{Start: p.Range.Start, End: p.Range.End}
+			}
+
+			decReader, err = encryption.NewDecrypter(p.Encryption, uint64(p.Part.Size), encRange)
+			if err != nil {
+				return fmt.Errorf("creating part decrypter: %w", err)
+			}
+		} else {
+			decReader, err = getDecrypter(p)
+			if err != nil {
+				return fmt.Errorf("creating decrypter: %w", err)
+			}
 		}
 		params.off = decReader.EncryptedOffset()
 		params.ln = decReader.EncryptedLength()
