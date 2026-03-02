@@ -18,6 +18,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 const (
@@ -31,13 +32,13 @@ const (
 
 var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
 
-func (n *layer) storeAttribute(ctx context.Context, cID cid.ID, attributeName string, payload any, sessionToken *session.Container) error {
+func (n *layer) storeAttribute(ctx context.Context, cID cid.ID, attributeName string, payload any, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
 	pl, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	if err = n.neoFS.SetContainerAttribute(ctx, cID, attributeName, string(pl), sessionToken); err != nil {
+	if err = n.neoFS.SetContainerAttribute(ctx, cID, attributeName, string(pl), sessionToken, sessionTokenV2); err != nil {
 		return fmt.Errorf("could't store %s %s: %w", cID.EncodeToString(), attributeName, err)
 	}
 
@@ -63,13 +64,17 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
-	var sessionToken *session.Container
+	var (
+		sessionToken   *session.Container
+		sessionTokenV2 *session2.Token
+	)
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
+		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeCors, cors.CORSRules, sessionToken); err != nil {
+	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeCors, cors.CORSRules, sessionToken, sessionTokenV2); err != nil {
 		return fmt.Errorf("store bucket CORS: %w", err)
 	}
 
@@ -126,7 +131,7 @@ func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*d
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		// Migrate CORS to contract.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeCors, cors.CORSRules, boxData.Gate.SessionTokenForSetAttribute()); err != nil {
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeCors, cors.CORSRules, boxData.Gate.SessionTokenForSetAttribute(), boxData.Gate.SessionTokenV2); err != nil {
 			return nil, fmt.Errorf("migrate bucket CORS: %w", err)
 		}
 		if err = n.deleteBucketCORS(ctx, bktInfo); err != nil {
@@ -145,13 +150,17 @@ func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 		return fmt.Errorf("delete bucket CORS: %w", err)
 	}
 
-	var sessionToken *session.Container
+	var (
+		sessionToken   *session.Container
+		sessionTokenV2 *session2.Token
+	)
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionToken = boxData.Gate.SessionTokenForRemoveAttribute()
+		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeCors, sessionToken); err != nil {
+	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeCors, sessionToken, sessionTokenV2); err != nil {
 		return fmt.Errorf("remove bucket CORS: %w", err)
 	}
 
@@ -167,9 +176,7 @@ func (n *layer) deleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
 
 	var opts client.SearchObjectsOptions
-	if bt := bearerTokenFromContext(ctx, bktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, fs, nil, opts)
 	if err != nil {

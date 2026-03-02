@@ -28,6 +28,7 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -184,15 +185,16 @@ type createBucketParams struct {
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err              error
-		newEaclTable     *eacl.Table
-		sessionTokenEACL *session.Container
-		containsACL      = containsACLHeaders(r)
-		reqInfo          = api.GetReqInfo(r.Context())
+		err                error
+		newEaclTable       *eacl.Table
+		sessionTokenEACL   *session.Container
+		sessionTokenEACLV2 *session2.Token
+		containsACL        = containsACLHeaders(r)
+		reqInfo            = api.GetReqInfo(r.Context())
 	)
 
 	if containsACL {
-		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+		if sessionTokenEACL, sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
 			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
 			return
 		}
@@ -307,9 +309,10 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if newEaclTable != nil {
 		p := &layer.PutBucketACLParams{
-			BktInfo:      bktInfo,
-			EACL:         newEaclTable,
-			SessionToken: sessionTokenEACL,
+			BktInfo:        bktInfo,
+			EACL:           newEaclTable,
+			SessionToken:   sessionTokenEACL,
+			SessionTokenV2: sessionTokenEACLV2,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
@@ -375,12 +378,13 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 
 func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	var (
-		newEaclTable     *eacl.Table
-		tagSet           map[string]string
-		sessionTokenEACL *session.Container
-		reqInfo          = api.GetReqInfo(r.Context())
-		metadata         = make(map[string]string)
-		containsACL      = containsACLHeaders(r)
+		newEaclTable            *eacl.Table
+		tagSet                  map[string]string
+		sessionTokenEACL        *session.Container
+		sessionTokenEACLTokenV2 *session2.Token
+		reqInfo                 = api.GetReqInfo(r.Context())
+		metadata                = make(map[string]string)
+		containsACL             = containsACLHeaders(r)
 	)
 
 	policy, err := checkPostPolicy(r, reqInfo, metadata)
@@ -399,7 +403,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsACL {
-		if sessionTokenEACL, err = getSessionTokenSetEACL(r.Context()); err != nil {
+		if sessionTokenEACL, sessionTokenEACLTokenV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
 			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
 			return
 		}
@@ -500,9 +504,10 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 
 	if newEaclTable != nil {
 		p := &layer.PutBucketACLParams{
-			BktInfo:      bktInfo,
-			EACL:         newEaclTable,
-			SessionToken: sessionTokenEACL,
+			BktInfo:        bktInfo,
+			EACL:           newEaclTable,
+			SessionToken:   sessionTokenEACL,
+			SessionTokenV2: sessionTokenEACLTokenV2,
 		}
 
 		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
@@ -603,7 +608,7 @@ func containsACLHeaders(r *http.Request) bool {
 func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) (*eacl.Table, error) {
 	var newEaclTable *eacl.Table
 
-	iss, err := h.bearerTokenIssuer(r.Context())
+	iss, err := h.authTokenIssuer(r.Context())
 	if err != nil {
 		return nil, fmt.Errorf("get bearer token issuer: %w", err)
 	}
@@ -695,9 +700,9 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iss, err := h.bearerTokenIssuer(r.Context())
+	iss, err := h.authTokenIssuer(r.Context())
 	if err != nil {
-		h.logAndSendError(w, "couldn't get bearer token issuer", reqInfo, err)
+		h.logAndSendError(w, "couldn't get token issuer", reqInfo, err)
 		return
 	}
 
@@ -726,15 +731,21 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		policies = boxData.Policies
 		p.SessionContainerCreation = boxData.Gate.SessionTokenForPut()
 		p.SessionEACL = boxData.Gate.SessionTokenForSetEACL()
-		userAddr = boxData.Gate.BearerToken.Issuer().ScriptHash()
+		p.SessionTokenV2 = boxData.Gate.SessionTokenV2
+
+		if boxData.Gate.SessionTokenV2 != nil {
+			userAddr = boxData.Gate.SessionTokenV2.Issuer().ScriptHash()
+		} else {
+			userAddr = boxData.Gate.BearerToken.Issuer().ScriptHash()
+		}
 	}
 
-	if p.SessionContainerCreation == nil {
+	if p.SessionContainerCreation == nil && p.SessionTokenV2 == nil {
 		h.logAndSendError(w, "couldn't find session token for put", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		return
 	}
 
-	if p.SessionEACL == nil {
+	if p.SessionEACL == nil && p.SessionTokenV2 == nil {
 		h.logAndSendError(w, "couldn't find session token for setEACL", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		return
 	}

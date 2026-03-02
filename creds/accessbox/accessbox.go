@@ -19,11 +19,15 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
 	hkdfSaltLength = 16
+
+	accessBoxVersionSessionV2 = 1
 )
 
 var (
@@ -44,10 +48,11 @@ type ContainerPolicy struct {
 
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
-	AccessKey     string
-	BearerToken   *bearer.Token
-	SessionTokens []*session.Container
-	GateKey       *keys.PublicKey
+	AccessKey      string
+	BearerToken    *bearer.Token
+	SessionTokens  []*session.Container
+	SessionTokenV2 *session2.Token
+	GateKey        *keys.PublicKey
 }
 
 // NewGateData returns GateData from the provided bearer token and the public gate key.
@@ -143,12 +148,36 @@ func (x *AccessBox) GetTokens(owner *keys.PrivateKey) (*GateData, error) {
 		return nil, fmt.Errorf("couldn't unmarshal OwnerPublicKey: %w", err)
 	}
 	ownerKey := owner.PublicKey().Bytes()
+	ownerID := user.NewFromScriptHash(owner.PublicKey().GetScriptHash())
+
 	for _, gate := range x.Gates {
-		if !bytes.Equal(gate.GatePublicKey, ownerKey) {
-			continue
+		var gateData *GateData
+
+		if x.Version == accessBoxVersionSessionV2 {
+			gateData, err = decodeGateV2(gate, owner, sender)
+			if err == nil {
+				if gateData.SessionTokenV2 == nil {
+					return nil, fmt.Errorf("session token v2 is null")
+				}
+
+				ok, err := gateData.SessionTokenV2.AssertAuthority(ownerID, nil)
+				if err != nil {
+					return nil, fmt.Errorf("failed to check authority: %w", err)
+				}
+
+				// this token doesn't belong to this gate.
+				if !ok {
+					continue
+				}
+			}
+		} else {
+			if !bytes.Equal(gate.GatePublicKey, ownerKey) {
+				continue
+			}
+
+			gateData, err = decodeGate(gate, owner, sender)
 		}
 
-		gateData, err := decodeGate(gate, owner, sender)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode gate: %w", err)
 		}
@@ -195,18 +224,34 @@ func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
 
 func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) error {
 	for _, gate := range gatesData {
-		encBearer := gate.BearerToken.Marshal()
-		encSessions := make([][]byte, len(gate.SessionTokens))
-		for i, sessionToken := range gate.SessionTokens {
-			encSessions[i] = sessionToken.Marshal()
+		var msg proto.Message
+
+		if gate.SessionTokenV2 != nil {
+			x.Version = accessBoxVersionSessionV2
+
+			msg = &TokensV2{
+				AccessKey:      secret,
+				SessionTokenV2: gate.SessionTokenV2.Marshal(),
+			}
+		} else {
+			var encBearer []byte
+			if gate.BearerToken != nil {
+				encBearer = gate.BearerToken.Marshal()
+			}
+
+			encSessions := make([][]byte, len(gate.SessionTokens))
+			for i, sessionToken := range gate.SessionTokens {
+				encSessions[i] = sessionToken.Marshal()
+			}
+
+			msg = &Tokens{
+				AccessKey:     secret,
+				BearerToken:   encBearer,
+				SessionTokens: encSessions,
+			}
 		}
 
-		tokens := new(Tokens)
-		tokens.AccessKey = secret
-		tokens.BearerToken = encBearer
-		tokens.SessionTokens = encSessions
-
-		boxGate, err := encodeGate(ephemeralKey, gate.GateKey, tokens)
+		boxGate, err := encodeGate(ephemeralKey, gate.GateKey, msg)
 		if err != nil {
 			return fmt.Errorf("encode gate: %w", err)
 		}
@@ -215,7 +260,7 @@ func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateK
 	return nil
 }
 
-func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens *Tokens) (*AccessBox_Gate, error) {
+func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens proto.Message) (*AccessBox_Gate, error) {
 	data, err := proto.Marshal(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("encode tokens: %w", err)
@@ -242,9 +287,13 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 		return nil, fmt.Errorf("unmarshal tokens: %w", err)
 	}
 
-	var bearerTkn bearer.Token
-	if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
-		return nil, fmt.Errorf("unmarshal bearer token: %w", err)
+	// The Bearer token is no longer mandatory. We leave it null if it isn't provided.
+	var bearerTkn *bearer.Token
+	if tokens.BearerToken != nil {
+		bearerTkn = &bearer.Token{}
+		if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
+			return nil, fmt.Errorf("unmarshal bearer token: %w", err)
+		}
 	}
 
 	sessionTkns := make([]*session.Container, len(tokens.SessionTokens))
@@ -256,9 +305,31 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 		sessionTkns[i] = sessionTkn
 	}
 
-	gateData := NewGateData(owner.PublicKey(), &bearerTkn)
+	gateData := NewGateData(owner.PublicKey(), bearerTkn)
 	gateData.SessionTokens = sessionTkns
 	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
+	return gateData, nil
+}
+
+func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.PublicKey) (*GateData, error) {
+	data, err := decrypt(owner, sender, gate.Tokens)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt tokens: %w", err)
+	}
+
+	var tokens TokensV2
+	if err = proto.Unmarshal(data, &tokens); err != nil {
+		return nil, fmt.Errorf("unmarshal tokens: %w", err)
+	}
+
+	var stv2 session2.Token
+	if err = stv2.Unmarshal(tokens.SessionTokenV2); err != nil {
+		return nil, fmt.Errorf("unmarshal session token v2: %w", err)
+	}
+
+	gateData := NewGateData(owner.PublicKey(), nil)
+	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
+	gateData.SessionTokenV2 = &stv2
 	return gateData, nil
 }
 

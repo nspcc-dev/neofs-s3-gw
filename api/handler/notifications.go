@@ -160,8 +160,12 @@ func (h *handler) sendNotifications(ctx context.Context, p *SendNotificationPara
 	}
 
 	box, err := layer.GetBoxData(ctx)
-	if err == nil && box.Gate.BearerToken != nil {
-		p.User = box.Gate.BearerToken.ResolveIssuer().EncodeToString()
+	if err == nil {
+		if box.Gate.SessionTokenV2 != nil {
+			p.User = box.Gate.SessionTokenV2.Issuer().EncodeToString()
+		} else if box.Gate.BearerToken != nil {
+			p.User = box.Gate.BearerToken.ResolveIssuer().EncodeToString()
+		}
 	}
 
 	p.Time = layer.TimeNow(ctx)
