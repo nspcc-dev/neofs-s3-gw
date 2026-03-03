@@ -358,6 +358,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			obj.WriteLink(*prm.Multipart.Link)
 			prm.Payload = bytes.NewReader(obj.Payload())
 			obj.SetPayloadSize(uint64(len(obj.Payload())))
+			prm.PayloadSize = obj.PayloadSize()
 
 			prm.Multipart.PayloadHash = sha256.New()
 			prm.Multipart.PayloadHash.Write(obj.Payload())
