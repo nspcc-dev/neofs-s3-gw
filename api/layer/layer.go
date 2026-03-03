@@ -74,6 +74,7 @@ type (
 		BucketInfo *data.BucketInfo
 		Writer     io.Writer
 		Encryption encryption.Params
+		Part       *Part
 	}
 
 	// HeadObjectParams stores object head request parameters.
@@ -275,6 +276,12 @@ type (
 
 		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in a single search invocation.
 		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
+
+		// SearchLinkingObject searches link object for corresponding parentID.
+		SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (oid.ID, error)
+
+		// GetLinkingObject gets linking object.
+		GetLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, linkObjID oid.ID) (object.Link, error)
 	}
 )
 
@@ -460,9 +467,22 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	var decReader *encryption.Decrypter
 	if p.Encryption.Enabled() {
 		var err error
-		decReader, err = getDecrypter(p)
-		if err != nil {
-			return fmt.Errorf("creating decrypter: %w", err)
+
+		if p.Part != nil {
+			var encRange *encryption.Range
+			if p.Range != nil {
+				encRange = &encryption.Range{Start: p.Range.Start, End: p.Range.End}
+			}
+
+			decReader, err = encryption.NewDecrypter(p.Encryption, uint64(p.Part.Size), encRange)
+			if err != nil {
+				return fmt.Errorf("creating part decrypter: %w", err)
+			}
+		} else {
+			decReader, err = getDecrypter(p)
+			if err != nil {
+				return fmt.Errorf("creating decrypter: %w", err)
+			}
 		}
 		params.off = decReader.EncryptedOffset()
 		params.ln = decReader.EncryptedLength()
@@ -1015,4 +1035,92 @@ func (n *layer) putDeleteMarker(ctx context.Context, bktInfo *data.BucketInfo, o
 	}
 
 	return extendedObjectInfo.ObjectInfo.ID, nil
+}
+
+// SearchLinkingObject searches link object for corresponding parentID.
+func (n *layer) SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (oid.ID, error) {
+	var (
+		opts                client.SearchObjectsOptions
+		owner               = n.Owner(ctx)
+		filters             = make(object.SearchFilters, 0, 2)
+		returningAttributes = []string{
+			object.FilterType,
+			object.AttributeTimestamp,
+		}
+	)
+
+	if bt := bearerTokenFromContext(ctx, owner); bt != nil && bt.Issuer() == bktInfo.Owner {
+		opts.WithBearerToken(*bt)
+	}
+
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLink)
+	filters.AddParentIDFilter(object.MatchStringEqual, parentID)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return oid.ID{}, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return oid.ID{}, nil
+	}
+
+	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
+
+	for _, item := range searchResultItems {
+		var psr = baseSearchResult{
+			ID: item.ID,
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
+			if err != nil {
+				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b baseSearchResult) int {
+		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
+			return c
+		}
+
+		// It is a temporary decision. We can't figure out what object was first and what the second right now.
+		return b.ID.Compare(a.ID) // reverse order.
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	return searchResults[0].ID, nil
+}
+
+// GetLinkingObject gets linking object.
+func (n *layer) GetLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, linkObjID oid.ID) (object.Link, error) {
+	pl, err := n.GetObjectWithPayloadReader(ctx, &GetObjectWithPayloadReaderParams{
+		Owner:   bktInfo.Owner,
+		BktInfo: bktInfo,
+		Object:  linkObjID,
+	})
+
+	if err != nil {
+		return object.Link{}, err
+	}
+
+	raw, err := io.ReadAll(pl.Payload)
+	if err != nil {
+		return object.Link{}, err
+	}
+
+	var link object.Link
+	if err = link.Unmarshal(raw); err != nil {
+		return object.Link{}, err
+	}
+
+	return link, nil
 }
