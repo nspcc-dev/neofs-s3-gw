@@ -78,7 +78,6 @@ Includes the following attributes:
 
 - `S3-MetaType: multipartPart`
 - `S3-MP-PartNumber`
-- `S3-MP-ElementId`
 - `S3-MP-TotalSize`
 - `S3-MP-Hash`
 - `S3-MP-HomoHash`
@@ -95,11 +94,6 @@ Stores the part number for multipart uploads.
 Note: Per [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html), the first valid
 part number is `1`.  
 An internal part `0` exist but is hidden from users.
-
-### `S3-MP-ElementId`
-
-Since each part can be up to 5 GB (and NeoFS atomic max object size smaller), this attribute tracks internal slices that
-form a full part.
 
 ### `S3-MP-TotalSize`
 
