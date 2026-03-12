@@ -12,6 +12,7 @@ require (
 	github.com/klauspost/reedsolomon v1.13.2
 	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.4.3
+	github.com/mr-tron/base58 v1.2.0
 	github.com/nats-io/nats.go v1.49.0
 	github.com/nspcc-dev/neo-go v0.117.0
 	github.com/nspcc-dev/neofs-contract v0.26.1
@@ -64,7 +65,6 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/rfc6979 v0.2.4 // indirect

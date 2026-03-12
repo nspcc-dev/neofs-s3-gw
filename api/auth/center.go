@@ -22,6 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
@@ -68,7 +69,6 @@ type (
 )
 
 const (
-	accessKeyPartsNum  = 2
 	authHeaderPartsNum = 6
 	maxFormSizeMemory  = 50 * 1048576 // 50 MB
 
@@ -122,7 +122,7 @@ func (c *center) parseAuthHeader(header, amzContentSha256Header string) (*authHe
 	}
 
 	accessKey := strings.Split(submatches["access_key_id"], "0")
-	if len(accessKey) != accessKeyPartsNum {
+	if len(accessKey) < auth.AccessKeyPartsNum || len(accessKey) > auth.AccessKeyPartsNumV2 {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 
@@ -139,12 +139,8 @@ func (c *center) parseAuthHeader(header, amzContentSha256Header string) (*authHe
 	}, nil
 }
 
-func (a *authHeader) getAddress() (oid.Address, error) {
-	addr, err := oid.DecodeAddressString(strings.ReplaceAll(a.AccessKeyID, "0", "/"))
-	if err != nil {
-		return addr, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
-	}
-	return addr, nil
+func (a *authHeader) getAddress() (oid.Address, []byte, error) {
+	return auth.ParseAccessKeyID(a.AccessKeyID)
 }
 
 func (c *center) Authenticate(r *http.Request) (*Box, error) {
@@ -218,12 +214,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		return nil, err
 	}
 
-	addr, err := authHdr.getAddress()
+	addr, encodingKey, err := authHdr.getAddress()
 	if err != nil {
 		return nil, err
 	}
 
-	box, err := c.cli.GetBox(r.Context(), addr)
+	box, err := c.cli.GetBox(r.Context(), addr, encodingKey)
 	if err != nil {
 		return nil, fmt.Errorf("get box: %w", err)
 	}
@@ -303,12 +299,12 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
 	}
 
-	addr, err := oid.DecodeAddressString(strings.ReplaceAll(submatches["access_key_id"], "0", "/"))
+	addr, encodingKey, err := auth.ParseAccessKeyID(submatches["access_key_id"])
 	if err != nil {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 
-	box, err := c.cli.GetBox(r.Context(), addr)
+	box, err := c.cli.GetBox(r.Context(), addr, encodingKey)
 	if err != nil {
 		return nil, fmt.Errorf("get box: %w", err)
 	}

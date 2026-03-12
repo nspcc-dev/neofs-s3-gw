@@ -19,7 +19,7 @@ import (
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
-		GetBox(context.Context, oid.Address) (*accessbox.Box, error)
+		GetBox(context.Context, oid.Address, []byte) (*accessbox.Box, error)
 		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (oid.Address, error)
 	}
 
@@ -81,7 +81,7 @@ func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config, resolver sessi
 	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config), resolver: resolver}
 }
 
-func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, error) {
+func (c *cred) GetBox(ctx context.Context, addr oid.Address, decodingSecret []byte) (*accessbox.Box, error) {
 	cachedBox := c.cache.Get(addr)
 	if cachedBox != nil {
 		return cachedBox, nil
@@ -92,7 +92,7 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 		return nil, fmt.Errorf("get access box: %w", err)
 	}
 
-	cachedBox, err = box.GetBox(c.key, c.resolver)
+	cachedBox, err = box.GetBox(c.key, c.resolver, decodingSecret)
 	if err != nil {
 		return nil, fmt.Errorf("get box: %w", err)
 	}

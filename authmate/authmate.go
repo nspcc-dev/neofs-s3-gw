@@ -16,12 +16,12 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/contracts"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -275,7 +275,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 	objID := addr.Object()
 	strIDObj := objID.EncodeToString()
 
-	accessKeyID := addr.Container().EncodeToString() + "0" + strIDObj
+	accessKeyID := addr.Container().EncodeToString() + "0" + strIDObj + "0" + secrets.EncodingKey
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
@@ -319,12 +319,12 @@ func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) 
 
 	bearerCreds := tokens.New(a.neoFS, options.GatePrivateKey, cache.DefaultAccessBoxConfig(a.log), contracts.NewNNSResolver(resolvedContracts.NNSContractReader))
 
-	addr, err := oid.DecodeAddressString(options.SecretAddress)
+	addr, encodingKey, err := auth.ParseAccessKeyID(options.SecretAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse secret address: %w", err)
 	}
 
-	box, err := bearerCreds.GetBox(ctx, addr)
+	box, err := bearerCreds.GetBox(ctx, addr, encodingKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tokens: %w", err)
 	}
