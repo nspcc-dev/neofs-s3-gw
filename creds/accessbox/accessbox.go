@@ -15,15 +15,20 @@ import (
 	"io"
 	"slices"
 
+	"github.com/mr-tron/base58"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
 	hkdfSaltLength = 16
+
+	accessBoxVersionSessionV2 = 1
 )
 
 var (
@@ -44,10 +49,11 @@ type ContainerPolicy struct {
 
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
-	AccessKey     string
-	BearerToken   *bearer.Token
-	SessionTokens []*session.Container
-	GateKey       *keys.PublicKey
+	AccessKey      string
+	BearerToken    *bearer.Token
+	SessionTokens  []*session.Container
+	SessionTokenV2 *session2.Token
+	GateKey        *keys.PublicKey
 }
 
 // NewGateData returns GateData from the provided bearer token and the public gate key.
@@ -106,6 +112,7 @@ func isAppropriateContainerContext(tok *session.Container, verb session.Containe
 type Secrets struct {
 	AccessKey    string
 	EphemeralKey *keys.PrivateKey
+	EncodingKey  string
 }
 
 // Marshal returns the wire-format of AccessBox.
@@ -129,26 +136,51 @@ func PackTokens(gatesData []*GateData) (*AccessBox, *Secrets, error) {
 	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
 
 	secret := generateSecret()
-	if err = box.addTokens(gatesData, ephemeralKey, secret); err != nil {
+	encodingSecret := generateSecret()
+	if err = box.addTokens(gatesData, ephemeralKey, secret, encodingSecret); err != nil {
 		return nil, nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
 	}
 
-	return box, &Secrets{hex.EncodeToString(secret), ephemeralKey}, err
+	return box, &Secrets{hex.EncodeToString(secret), ephemeralKey, base58.Encode(encodingSecret)}, err
 }
 
 // GetTokens returns gate tokens from AccessBox.
-func (x *AccessBox) GetTokens(owner *keys.PrivateKey) (*GateData, error) {
+func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session2.NNSResolver, decodingSecret []byte) (*GateData, error) {
 	sender, err := keys.NewPublicKeyFromBytes(x.OwnerPublicKey, elliptic.P256())
 	if err != nil {
 		return nil, fmt.Errorf("couldn't unmarshal OwnerPublicKey: %w", err)
 	}
 	ownerKey := owner.PublicKey().Bytes()
+	ownerID := user.NewFromScriptHash(owner.PublicKey().GetScriptHash())
+
 	for _, gate := range x.Gates {
-		if !bytes.Equal(gate.GatePublicKey, ownerKey) {
-			continue
+		var gateData *GateData
+
+		if x.Version == accessBoxVersionSessionV2 {
+			gateData, err = decodeGateV2(gate, decodingSecret)
+			if err == nil {
+				if gateData.SessionTokenV2 == nil {
+					return nil, fmt.Errorf("session token v2 is null")
+				}
+
+				ok, err := gateData.SessionTokenV2.AssertAuthority(ownerID, resolver)
+				if err != nil {
+					return nil, fmt.Errorf("failed to check authority: %w", err)
+				}
+
+				// this token doesn't belong to this gate.
+				if !ok {
+					continue
+				}
+			}
+		} else {
+			if !bytes.Equal(gate.GatePublicKey, ownerKey) {
+				continue
+			}
+
+			gateData, err = decodeGate(gate, owner, sender)
 		}
 
-		gateData, err := decodeGate(gate, owner, sender)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode gate: %w", err)
 		}
@@ -176,8 +208,8 @@ func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 }
 
 // GetBox parses AccessBox to Box.
-func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
-	tokens, err := x.GetTokens(owner)
+func (x *AccessBox) GetBox(owner *keys.PrivateKey, resolver session2.NNSResolver, decodingSecret []byte) (*Box, error) {
+	tokens, err := x.GetTokens(owner, resolver, decodingSecret)
 	if err != nil {
 		return nil, fmt.Errorf("get tokens: %w", err)
 	}
@@ -193,29 +225,55 @@ func (x *AccessBox) GetBox(owner *keys.PrivateKey) (*Box, error) {
 	}, nil
 }
 
-func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) error {
+func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret, encodingSecret []byte) error {
 	for _, gate := range gatesData {
-		encBearer := gate.BearerToken.Marshal()
-		encSessions := make([][]byte, len(gate.SessionTokens))
-		for i, sessionToken := range gate.SessionTokens {
-			encSessions[i] = sessionToken.Marshal()
+		var (
+			msg     proto.Message
+			boxGate *AccessBox_Gate
+			err     error
+		)
+
+		if gate.SessionTokenV2 != nil {
+			x.Version = accessBoxVersionSessionV2
+
+			msg = &TokensV2{
+				AccessKey:      secret,
+				SessionTokenV2: gate.SessionTokenV2.Marshal(),
+			}
+
+			boxGate, err = encodeGateV2(msg, encodingSecret)
+			if err != nil {
+				return fmt.Errorf("encode gate v2: %w", err)
+			}
+		} else {
+			var encBearer []byte
+			if gate.BearerToken != nil {
+				encBearer = gate.BearerToken.Marshal()
+			}
+
+			encSessions := make([][]byte, len(gate.SessionTokens))
+			for i, sessionToken := range gate.SessionTokens {
+				encSessions[i] = sessionToken.Marshal()
+			}
+
+			msg = &Tokens{
+				AccessKey:     secret,
+				BearerToken:   encBearer,
+				SessionTokens: encSessions,
+			}
+
+			boxGate, err = encodeGate(ephemeralKey, gate.GateKey, msg)
+			if err != nil {
+				return fmt.Errorf("encode gate: %w", err)
+			}
 		}
 
-		tokens := new(Tokens)
-		tokens.AccessKey = secret
-		tokens.BearerToken = encBearer
-		tokens.SessionTokens = encSessions
-
-		boxGate, err := encodeGate(ephemeralKey, gate.GateKey, tokens)
-		if err != nil {
-			return fmt.Errorf("encode gate: %w", err)
-		}
 		x.Gates = append(x.Gates, boxGate)
 	}
 	return nil
 }
 
-func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens *Tokens) (*AccessBox_Gate, error) {
+func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens proto.Message) (*AccessBox_Gate, error) {
 	data, err := proto.Marshal(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("encode tokens: %w", err)
@@ -242,9 +300,13 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 		return nil, fmt.Errorf("unmarshal tokens: %w", err)
 	}
 
-	var bearerTkn bearer.Token
-	if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
-		return nil, fmt.Errorf("unmarshal bearer token: %w", err)
+	// The Bearer token is no longer mandatory. We leave it null if it isn't provided.
+	var bearerTkn *bearer.Token
+	if tokens.BearerToken != nil {
+		bearerTkn = &bearer.Token{}
+		if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
+			return nil, fmt.Errorf("unmarshal bearer token: %w", err)
+		}
 	}
 
 	sessionTkns := make([]*session.Container, len(tokens.SessionTokens))
@@ -256,10 +318,48 @@ func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Publi
 		sessionTkns[i] = sessionTkn
 	}
 
-	gateData := NewGateData(owner.PublicKey(), &bearerTkn)
+	gateData := NewGateData(owner.PublicKey(), bearerTkn)
 	gateData.SessionTokens = sessionTkns
 	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
 	return gateData, nil
+}
+
+func encodeGateV2(tokens proto.Message, secret []byte) (*AccessBox_Gate, error) {
+	data, err := proto.Marshal(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("marshal tokens: %w", err)
+	}
+
+	encrypted, err := aesEncrypt(data, secret)
+	if err != nil {
+		return nil, fmt.Errorf("encode tokens: %w", err)
+	}
+
+	gate := &AccessBox_Gate{}
+	gate.Tokens = encrypted
+	return gate, nil
+}
+
+func decodeGateV2(gate *AccessBox_Gate, secret []byte) (*GateData, error) {
+	var tokens TokensV2
+	aesDecrypted, err := aesDecrypt(gate.Tokens, secret)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt tokens: %w", err)
+	}
+
+	if err = proto.Unmarshal(aesDecrypted, &tokens); err != nil {
+		return nil, fmt.Errorf("unmarshal tokens: %w", err)
+	}
+
+	var stv2 session2.Token
+	if err = stv2.Unmarshal(tokens.SessionTokenV2); err != nil {
+		return nil, fmt.Errorf("unmarshal session token v2: %w", err)
+	}
+
+	gateData := GateData{}
+	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
+	gateData.SessionTokenV2 = &stv2
+	return &gateData, nil
 }
 
 func generateShared256(prv *keys.PrivateKey, pub *keys.PublicKey) (sk []byte, err error) {
@@ -341,4 +441,47 @@ func generateSecret() []byte {
 	b := make([]byte, 32)
 	_, _ = io.ReadFull(rand.Reader, b)
 	return b
+}
+
+func aesEncrypt(plaintext, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	_, _ = io.ReadFull(rand.Reader, nonce)
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return ciphertext, nil
+}
+
+func aesDecrypt(ciphertext, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	return plaintext, nil
 }

@@ -473,9 +473,7 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 		err               error
 	)
 
-	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bkt.Owner, &opts)
 
 	matchType := object.MatchCommonPrefix
 	if len(objectName) > 0 && !isObjectNamePrefix {
@@ -578,9 +576,7 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bkt.Owner, &opts)
 
 	if len(objectName) > 0 {
 		filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
@@ -712,9 +708,7 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bkt.Owner, &opts)
 
 	if len(objectName) > 0 {
 		filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
@@ -806,9 +800,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bkt.Owner, &opts)
 
 	if maxKeys <= 0 || maxKeys > 1000 {
 		maxKeys = 1000
@@ -1412,9 +1404,7 @@ func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 		}
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil && bt.Issuer() == bktInfo.Owner {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, owner, &opts)
 
 	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
@@ -1473,9 +1463,7 @@ func (n *layer) deleteBucketMetaObjects(ctx context.Context, bktInfo *data.Bucke
 		}
 	)
 
-	if bt := bearerTokenFromContext(ctx, owner); bt != nil && bt.Issuer() == bktInfo.Owner {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, owner, &opts)
 
 	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
@@ -1533,9 +1521,7 @@ func (n *layer) DeleteObjectMetaFiles(ctx context.Context, p *ObjectVersion) err
 	}
 
 	var opts client.SearchObjectsOptions
-	if bt := bearerTokenFromContext(ctx, p.BktInfo.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, p.BktInfo.Owner, &opts)
 
 	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
 	if err != nil {
@@ -1575,9 +1561,7 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 		opts client.SearchObjectsOptions
 	)
 
-	if bt := bearerTokenFromContext(ctx, bkt.Owner); bt != nil {
-		opts.WithBearerToken(*bt)
-	}
+	attachTokenToParams(ctx, bkt.Owner, &opts)
 
 	filters.AddFilter(object.AttributeFilePath, objectName, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)

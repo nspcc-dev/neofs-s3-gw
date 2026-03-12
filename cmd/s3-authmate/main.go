@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -62,6 +64,7 @@ var (
 	containerFriendlyName    string
 	containerPlacementPolicy string
 	gatesPublicKeysFlag      cli.StringSlice
+	gatesNNSsFlag            cli.StringSlice
 	logEnabledFlag           bool
 	logDebugEnabledFlag      bool
 	sessionTokenFlag         string
@@ -208,8 +211,14 @@ func issueSecret() *cli.Command {
 			&cli.StringSliceFlag{
 				Name:        "gate-public-key",
 				Usage:       "public 256r1 key of a gate (use flags repeatedly for multiple gates)",
-				Required:    true,
+				Required:    false,
 				Destination: &gatesPublicKeysFlag,
+			},
+			&cli.StringSliceFlag{
+				Name:        "gate-nns",
+				Usage:       "gate NNS name (use flags repeatedly for multiple gates)",
+				Required:    false,
+				Destination: &gatesNNSsFlag,
 			},
 			&cli.StringFlag{
 				Name:        "container-id",
@@ -342,23 +351,36 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				gatesPublicKeys = append(gatesPublicKeys, gpk)
 			}
 
+			var gatesNNS []string
+			for _, nnsName := range gatesNNSsFlag.Value() {
+				if err = isDomainName(nnsName); err != nil {
+					return cli.Exit(fmt.Sprintf("failed to load gate's NNS name: %s", err), 5)
+				}
+
+				gatesNNS = append(gatesNNS, nnsName)
+			}
+
+			if len(gatesPublicKeys) == 0 && len(gatesNNS) == 0 {
+				return cli.Exit("as minimum one --gate-public-key or --gate-nns must be set", 6)
+			}
+
 			if lifetimeFlag <= 0 {
-				return cli.Exit(fmt.Sprintf("lifetime must be greater 0, current value: %d", lifetimeFlag), 5)
+				return cli.Exit(fmt.Sprintf("lifetime must be greater 0, current value: %d", lifetimeFlag), 7)
 			}
 
 			policies, err := parsePolicies(containerPolicies)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("couldn't parse container policy: %s", err.Error()), 6)
+				return cli.Exit(fmt.Sprintf("couldn't parse container policy: %s", err.Error()), 8)
 			}
 
 			bearerRules, err := getJSONRules(eaclRulesFlag)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("couldn't parse 'bearer-rules' flag: %s", err.Error()), 7)
+				return cli.Exit(fmt.Sprintf("couldn't parse 'bearer-rules' flag: %s", err.Error()), 9)
 			}
 
 			sessionRules, skipSessionRules, err := getSessionRules(sessionTokenFlag)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("couldn't parse 'session-tokens' flag: %s", err.Error()), 8)
+				return cli.Exit(fmt.Sprintf("couldn't parse 'session-tokens' flag: %s", err.Error()), 10)
 			}
 
 			issueSecretOptions := &authmate.IssueSecretOptions{
@@ -369,6 +391,7 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				},
 				NeoFSKey:              key,
 				GatesPublicKeys:       gatesPublicKeys,
+				GatesNNS:              gatesNNS,
 				EACLRules:             bearerRules,
 				SessionTokenRules:     sessionRules,
 				SkipSessionRules:      skipSessionRules,
@@ -472,6 +495,13 @@ func obtainSecret() *cli.Command {
 				Destination: &peerAddressFlag,
 			},
 			&cli.StringFlag{
+				Name:        "rpc-endpoint",
+				Value:       "",
+				Usage:       "address of neofs RPC endpoint to connect to. https://localhost:30333 (with schema)",
+				Required:    true,
+				Destination: &rpcAddressFlag,
+			},
+			&cli.StringFlag{
 				Name:        "gate-wallet",
 				Value:       "",
 				Usage:       "path to the wallet",
@@ -566,8 +596,9 @@ func obtainSecret() *cli.Command {
 			secretAddress := strings.Replace(accessKeyIDFlag, "0", "/", 1)
 
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
-				SecretAddress:  secretAddress,
-				GatePrivateKey: gateCreds,
+				SecretAddress:    secretAddress,
+				GatePrivateKey:   gateCreds,
+				RPCHTTPEndpoints: []string{rpcAddressFlag},
 			}
 
 			var tcancel context.CancelFunc
@@ -710,8 +741,9 @@ func resetBucketEACL() *cli.Command {
 			secretAddress := strings.Replace(accessKeyIDFlag, "0", "/", 1)
 
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
-				SecretAddress:  secretAddress,
-				GatePrivateKey: gateCreds,
+				SecretAddress:    secretAddress,
+				GatePrivateKey:   gateCreds,
+				RPCHTTPEndpoints: []string{peerAddressFlag},
 			}
 
 			agent := authmate.New(log, neoFS)
@@ -748,7 +780,7 @@ func resetBucketEACL() *cli.Command {
 				ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
 				defer tcancel()
 
-				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenForSetEACL); err != nil {
+				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenForSetEACL, or.SessionTokenV2); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
 				}
 			} else {
@@ -768,4 +800,46 @@ func resetBucketEACL() *cli.Command {
 	}
 
 	return command
+}
+
+func isDomainName(d string) error {
+	if len(d) < 3 {
+		return errors.New("domain name is too short")
+	}
+
+	if len(d) > 255 {
+		return errors.New("domain name is too long")
+	}
+
+	// Raw IP is not a valid domain.
+	if ip := net.ParseIP(d); ip != nil {
+		return errors.New("IP addresses are not valid domain names in this context")
+	}
+
+	labels := strings.Split(d, ".")
+	if len(labels) < 2 {
+		return errors.New("domain must have at least a TLD (e.g., example.com)")
+	}
+
+	for _, label := range labels {
+		l := len(label)
+		if l < 1 || l > 63 {
+			return errors.New("domain labels must be between 1 and 63 characters")
+		}
+		if label[0] == '-' || label[l-1] == '-' {
+			return errors.New("domain labels cannot start or end with a hyphen")
+		}
+
+		for _, char := range label {
+			isAlphaNum := (char >= 'a' && char <= 'z') ||
+				(char >= 'A' && char <= 'Z') ||
+				(char >= '0' && char <= '9')
+
+			if !isAlphaNum && char != '-' {
+				return errors.New("domain contains invalid characters")
+			}
+		}
+	}
+
+	return nil
 }

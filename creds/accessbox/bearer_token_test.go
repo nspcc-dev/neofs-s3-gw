@@ -70,7 +70,7 @@ func TestBearerTokenInAccessBox(t *testing.T) {
 	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	tkns, err := box2.GetTokens(cred)
+	tkns, err := box2.GetTokens(cred, nil, nil)
 	require.NoError(t, err)
 
 	assertBearerToken(t, tkn, *tkns.BearerToken)
@@ -105,7 +105,7 @@ func TestSessionTokenInAccessBox(t *testing.T) {
 	err = box2.Unmarshal(data)
 	require.NoError(t, err)
 
-	tkns, err := box2.GetTokens(cred)
+	tkns, err := box2.GetTokens(cred, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, []*session.Container{tkn}, tkns.SessionTokens)
@@ -140,7 +140,7 @@ func TestAccessboxMultipleKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	for i, k := range privateKeys {
-		tkns, err := box.GetTokens(k)
+		tkns, err := box.GetTokens(k, nil, nil)
 		require.NoError(t, err, "key #%d: %s failed", i, k)
 		assertBearerToken(t, tkn, *tkns.BearerToken)
 	}
@@ -168,6 +168,6 @@ func TestUnknownKey(t *testing.T) {
 	box, _, err = PackTokens([]*GateData{gate})
 	require.NoError(t, err)
 
-	_, err = box.GetTokens(wrongCred)
+	_, err = box.GetTokens(wrongCred, nil, nil)
 	require.Error(t, err)
 }

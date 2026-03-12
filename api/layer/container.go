@@ -14,6 +14,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -143,9 +144,10 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Policy:               p.Policy,
 		Name:                 p.Name,
 		SessionToken:         p.SessionContainerCreation,
+		SessionTokenV2:       p.SessionTokenV2,
 		CreationTime:         bktInfo.Created,
 		AdditionalAttributes: attributes,
-	}, *p.EACL, p.SessionEACL)
+	}, *p.EACL, p.SessionEACL, p.SessionTokenV2)
 	if err != nil {
 		return nil, fmt.Errorf("create container: %w", err)
 	}
@@ -159,10 +161,10 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	return bktInfo, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionToken *session.Container) error {
+func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
 	table.SetCID(idCnr)
 
-	err := n.neoFS.SetContainerEACL(ctx, *table, sessionToken)
+	err := n.neoFS.SetContainerEACL(ctx, *table, sessionToken, sessionTokenV2)
 	if err == nil {
 		n.cache.PutBucketACL(idCnr, table)
 	}

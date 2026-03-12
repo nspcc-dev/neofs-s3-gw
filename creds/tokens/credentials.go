@@ -12,20 +12,22 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
 type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
-		GetBox(context.Context, oid.Address) (*accessbox.Box, error)
+		GetBox(context.Context, oid.Address, []byte) (*accessbox.Box, error)
 		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (oid.Address, error)
 	}
 
 	cred struct {
-		key   *keys.PrivateKey
-		neoFS NeoFS
-		cache *cache.AccessBoxCache
+		key      *keys.PrivateKey
+		neoFS    NeoFS
+		cache    *cache.AccessBoxCache
+		resolver session2.NNSResolver
 	}
 )
 
@@ -75,11 +77,11 @@ var (
 var _ = New
 
 // New creates a new Credentials instance using the given cli and key.
-func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config) Credentials {
-	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config)}
+func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config, resolver session2.NNSResolver) Credentials {
+	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config), resolver: resolver}
 }
 
-func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, error) {
+func (c *cred) GetBox(ctx context.Context, addr oid.Address, decodingSecret []byte) (*accessbox.Box, error) {
 	cachedBox := c.cache.Get(addr)
 	if cachedBox != nil {
 		return cachedBox, nil
@@ -90,7 +92,7 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 		return nil, fmt.Errorf("get access box: %w", err)
 	}
 
-	cachedBox, err = box.GetBox(c.key)
+	cachedBox, err = box.GetBox(c.key, c.resolver, decodingSecret)
 	if err != nil {
 		return nil, fmt.Errorf("get box: %w", err)
 	}

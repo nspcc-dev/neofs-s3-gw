@@ -96,7 +96,7 @@ func TestAuthHeaderGetAddress(t *testing.T) {
 			err: defaulErr,
 		},
 	} {
-		_, err := tc.authHeader.getAddress()
+		_, _, err := tc.authHeader.getAddress()
 		require.Equal(t, tc.err, err, tc.authHeader.AccessKeyID)
 	}
 }
