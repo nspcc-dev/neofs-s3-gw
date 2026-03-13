@@ -107,6 +107,17 @@ type (
 		ID                oid.ID
 		CreationTimestamp int64
 	}
+
+	multipartHeadObjectParams struct {
+		PutObject         PutObjectParams
+		PayloadHash       hash.Hash
+		HomoHash          hash.Hash
+		PayloadLength     uint64
+		VersioningEnabled bool
+		SplitFirstID      oid.ID
+		SplitPreviousID   oid.ID
+		DecryptedSize     *int64
+	}
 )
 
 func (a prefixSearchResult) isNewerThan(b prefixSearchResult) bool {
@@ -387,20 +398,26 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	return extendedObjInfo, nil
 }
 
-func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectParams, payloadHash hash.Hash, homoHash hash.Hash, payloadLength uint64, versioningEnabled bool) (*object.Object, error) {
+func (n *layer) prepareMultipartHeadObject(ctx context.Context, prm multipartHeadObjectParams) (*object.Object, error) {
 	var (
 		err   error
+		p     = prm.PutObject
 		owner = n.Owner(ctx)
 	)
 
 	if p.Encryption.Enabled() {
-		p.Header[s3headers.AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		decSize := p.Size
+		if prm.DecryptedSize != nil {
+			decSize = *prm.DecryptedSize
+		}
+
+		p.Header[s3headers.AttributeDecryptedSize] = strconv.FormatInt(decSize, 10)
 		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
 			return nil, fmt.Errorf("add encryption header: %w", err)
 		}
 
 		var encSize uint64
-		if _, encSize, err = encryptionReader(p.Reader, uint64(p.Size), p.Encryption.Key()); err != nil {
+		if _, encSize, err = encryptionReader(p.Reader, uint64(decSize), p.Encryption.Key()); err != nil {
 			return nil, fmt.Errorf("create encrypter: %w", err)
 		}
 		p.Size = int64(encSize)
@@ -433,13 +450,20 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, p *PutObjectPara
 		attributes = append(attributes, object.NewAttribute(object.AttributeFilePath, p.Object))
 	}
 
-	if versioningEnabled {
+	if prm.VersioningEnabled {
 		attributes = append(attributes, object.NewAttribute(s3headers.AttributeVersioningState, data.VersioningEnabled))
 	}
 
 	headerObject.SetAttributes(attributes...)
 
-	multipartHeader, err := n.neoFS.FinalizeObjectWithPayloadChecksums(ctx, headerObject, payloadHash, homoHash, payloadLength)
+	if !prm.SplitFirstID.IsZero() {
+		headerObject.SetFirstID(prm.SplitFirstID)
+	}
+	if !prm.SplitPreviousID.IsZero() {
+		headerObject.SetPreviousID(prm.SplitPreviousID)
+	}
+
+	multipartHeader, err := n.neoFS.FinalizeObjectWithPayloadChecksums(ctx, headerObject, prm.PayloadHash, prm.HomoHash, prm.PayloadLength)
 	if err != nil {
 		return nil, fmt.Errorf("FinalizeObjectWithPayloadChecksums: %w", err)
 	}

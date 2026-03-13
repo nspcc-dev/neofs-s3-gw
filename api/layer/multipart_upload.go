@@ -32,7 +32,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"github.com/nspcc-dev/tzhash/tz"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -368,7 +367,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		chunk = &smallChunk
 	}
 
-	if id, err = n.manualSlice(ctx, bktInfo, prm, p, splitFirstID, splitPreviousID, *chunk, payloadReader); err != nil {
+	if id, err = n.manualSlice(ctx, bktInfo, prm, p, splitFirstID, splitPreviousID, *chunk, payloadReader, decSize); err != nil {
 		return nil, err
 	}
 
@@ -478,7 +477,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 
 	attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	attributes[s3headers.MultipartPartNumber] = "0"
-	attributes[s3headers.MultipartElementID] = "0"
 	attributes[s3headers.MultipartTotalSize] = "0"
 	attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
 
@@ -583,7 +581,6 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 			s3headers.MultipartUpload,
 			s3headers.MultipartHash,
 			s3headers.MultipartHomoHash,
-			s3headers.MultipartElementID,
 		}
 	)
 
@@ -615,17 +612,8 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 			},
 		}
 
-		e.ElementID, err = strconv.Atoi(item.Attributes[3])
-		if err != nil {
-			return nil, fmt.Errorf("parse element id: %w", err)
-		}
-
 		elements[i] = e
 	}
-
-	slices.SortFunc(elements, func(a, b data.ElementInfo) int {
-		return cmp.Compare(a.ElementID, b.ElementID)
-	})
 
 	var (
 		lastElement             = elements[len(elements)-1]
@@ -651,10 +639,6 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 }
 
 func convertElementsToPartInfo(uploadID string, number int, elements []data.ElementInfo) (data.PartInfo, error) {
-	slices.SortFunc(elements, func(a, b data.ElementInfo) int {
-		return cmp.Compare(a.ElementID, b.ElementID)
-	})
-
 	var (
 		err         error
 		lastElement = elements[len(elements)-1]
@@ -936,10 +920,6 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[s3headers.MultipartPartNumber], err)
 		}
 
-		if element.ElementID, err = strconv.Atoi(element.Attributes[s3headers.MultipartElementID]); err != nil {
-			return nil, fmt.Errorf("convert multipart %s elementID %s: %w", uploadID, element.Attributes[s3headers.MultipartElementID], err)
-		}
-
 		if element.TotalSize, err = strconv.ParseInt(element.Attributes[s3headers.MultipartTotalSize], 10, 64); err != nil {
 			return nil, fmt.Errorf("convert multipart %s MultipartTotalSize %s: %w", uploadID, element.Attributes[s3headers.MultipartTotalSize], err)
 		}
@@ -1023,7 +1003,6 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			s3headers.MultipartUpload,
 			s3headers.MultipartPartNumber,
 			s3headers.MultipartPartHash,
-			s3headers.MultipartElementID,
 			s3headers.MultipartTotalSize,
 			s3headers.AttributeDecryptedSize,
 		}
@@ -1062,18 +1041,14 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 
 		element.Attributes[s3headers.MultipartPartHash] = item.Attributes[2]
 
-		if element.ElementID, err = strconv.Atoi(item.Attributes[3]); err != nil {
-			return nil, fmt.Errorf("convert multipart %s elementID %s: %w", uploadID, item.Attributes[3], err)
+		if element.TotalSize, err = strconv.ParseInt(item.Attributes[3], 10, 64); err != nil {
+			return nil, fmt.Errorf("convert multipart %s totalSize %s: %w", uploadID, item.Attributes[3], err)
 		}
 
-		if element.TotalSize, err = strconv.ParseInt(item.Attributes[4], 10, 64); err != nil {
-			return nil, fmt.Errorf("convert multipart %s totalSize %s: %w", uploadID, item.Attributes[4], err)
-		}
-
-		if decSize := item.Attributes[5]; decSize != "" {
+		if decSize := item.Attributes[4]; decSize != "" {
 			element.TotalSize, err = strconv.ParseInt(decSize, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("convert multipart %s decryptedSize %s: %w", uploadID, item.Attributes[5], err)
+				return nil, fmt.Errorf("convert multipart %s decryptedSize %s: %w", uploadID, item.Attributes[4], err)
 			}
 		}
 
@@ -1087,10 +1062,6 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 	parts := make([]*Part, 0, len(partElementMap))
 
 	for partNumber, elements := range partElementMap {
-		slices.SortFunc(elements, func(a, b data.ElementInfo) int {
-			return cmp.Compare(a.ElementID, b.ElementID)
-		})
-
 		lastElement := elements[len(elements)-1]
 
 		partInfo := Part{
@@ -1159,14 +1130,6 @@ func (n *layer) multipartMetaGetPartsAfter(ctx context.Context, bktInfo *data.Bu
 			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[s3headers.MultipartPartNumber], err)
 		}
 
-		if element.ElementID, err = strconv.Atoi(element.Attributes[s3headers.MultipartElementID]); err != nil {
-			return nil, fmt.Errorf("convert multipart %s elementID %s: %w", uploadID, element.Attributes[s3headers.MultipartElementID], err)
-		}
-
-		if element.TotalSize, err = strconv.ParseInt(element.Attributes[s3headers.MultipartTotalSize], 10, 64); err != nil {
-			return nil, fmt.Errorf("convert multipart %s totalSize %s: %w", uploadID, element.Attributes[s3headers.MultipartTotalSize], err)
-		}
-
 		if _, ok := partElementMap[number]; !ok {
 			partElementMap[number] = make([]data.ElementInfo, 0)
 		}
@@ -1204,93 +1167,9 @@ func (n *layer) reUploadFollowingParts(ctx context.Context, uploadParams UploadP
 	for _, part := range parts {
 		uploadParams.PartNumber = part.Number
 
-		if len(part.Elements) > 0 {
-			if err = n.reUploadSegmentedPart(ctx, uploadParams, part, bktInfo, multipartInfo); err != nil {
-				return fmt.Errorf("reupload number=%d: %w", part.Number, err)
-			}
-		} else {
-			if err = n.reUploadPart(ctx, uploadParams, part.OID, bktInfo, multipartInfo); err != nil {
-				return fmt.Errorf("reupload number=%d: %w", part.Number, err)
-			}
+		if err = n.reUploadPart(ctx, uploadParams, part.OID, bktInfo, multipartInfo); err != nil {
+			return fmt.Errorf("reupload number=%d: %w", part.Number, err)
 		}
-	}
-
-	return nil
-}
-
-func (n *layer) reUploadSegmentedPart(ctx context.Context, uploadParams UploadPartParams, part *data.PartInfo, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
-	var (
-		eg                     errgroup.Group
-		pipeReader, pipeWriter = io.Pipe()
-	)
-
-	eg.Go(func() error {
-		var (
-			err        error
-			elementObj *object.Object
-		)
-
-		for i, element := range part.Elements {
-			n.log.Warn(
-				"reUploadSegmentedPart elements",
-				zap.Int("partNumber", part.Number),
-				zap.Int("i", i),
-				zap.String("oid", element.ID.String()),
-				zap.Int("elementID", element.ElementID),
-			)
-
-			elementObj, err = n.objectGet(ctx, bktInfo, element.ID)
-			if err != nil {
-				err = fmt.Errorf("get part oid=%s, element oid=%s: %w", part.OID.String(), element.ID.String(), err)
-				break
-			}
-
-			if _, err = pipeWriter.Write(elementObj.Payload()); err != nil {
-				err = fmt.Errorf("write part oid=%s, element oid=%s: %w", part.OID.String(), element.ID.String(), err)
-				break
-			}
-
-			if deleteErr := n.objectDelete(ctx, bktInfo, element.ID); deleteErr != nil {
-				n.log.Error(
-					"couldn't delete object",
-					zap.Error(deleteErr),
-					zap.String("cnrID", bktInfo.CID.EncodeToString()),
-					zap.String("uploadID", multipartInfo.UploadID),
-					zap.Int("partNumber", part.Number),
-					zap.String("part.OID", part.OID.String()),
-					zap.String("part element OID", element.ID.String()),
-				)
-				// no return intentionally.
-			}
-		}
-
-		pipeCloseErr := pipeWriter.Close()
-
-		if err != nil {
-			return fmt.Errorf("pipe: %w", err)
-		}
-
-		if pipeCloseErr != nil {
-			return fmt.Errorf("close writer part oid=%s: %w", part.OID.String(), err)
-		}
-
-		return nil
-	})
-
-	eg.Go(func() error {
-		uploadParams.Size = part.Size
-		uploadParams.Reader = pipeReader
-
-		n.log.Debug("reUploadSegmentedPart", zap.String("oid", part.OID.String()), zap.Int64("payload size", uploadParams.Size), zap.Int("part", part.Number))
-		if _, err := n.uploadPart(ctx, multipartInfo, &uploadParams); err != nil {
-			return fmt.Errorf("upload id=%s: %w", part.OID.String(), err)
-		}
-
-		return nil
-	})
-
-	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("upload part oid=%s: %w", part.OID.String(), err)
 	}
 
 	return nil
@@ -1540,7 +1419,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	// This is our "big object". It doesn't have any payload.
-	prmHeaderObject := &PutObjectParams{
+	prmHeaderObject := PutObjectParams{
 		BktInfo:    p.Info.Bkt,
 		Object:     p.Info.Key,
 		Reader:     bytes.NewBuffer(nil),
@@ -1566,7 +1445,13 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		})
 	}
 
-	header, err := n.prepareMultipartHeadObject(ctx, prmHeaderObject, multipartHash, homoHash, uint64(multipartObjetSize), bktSettings.VersioningEnabled())
+	header, err := n.prepareMultipartHeadObject(ctx, multipartHeadObjectParams{
+		PutObject:         prmHeaderObject,
+		PayloadHash:       multipartHash,
+		HomoHash:          homoHash,
+		PayloadLength:     uint64(multipartObjetSize),
+		VersioningEnabled: bktSettings.VersioningEnabled(),
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1928,66 +1813,73 @@ func uploadInfoFromMultipartInfo(uploadInfo *data.MultipartInfo, prefix, delimit
 	}
 }
 
-func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm PrmObjectCreate, p *UploadPartParams, splitFirstID, splitPreviousID oid.ID, chunk []byte, payloadReader io.Reader) (oid.ID, error) {
+func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm PrmObjectCreate, p *UploadPartParams, splitFirstID, splitPreviousID oid.ID, chunk []byte, payloadReader io.Reader, decSize int64) (oid.ID, error) {
 	var (
-		totalBytes int
-		id         oid.ID
-		err        error
-		elementID  int
-		stateBytes []byte
+		totalBytes           int64
+		id                   oid.ID
+		err                  error
+		stateBytes           []byte
+		measuredObjects      []object.MeasuredObject
+		localSplitPreviousID oid.ID
+		localSplitFirstID    oid.ID
+		first                bool
+		hashlessHeaderObject object.Object
+		fullPartHomoHash     hash.Hash
+
+		currentVersion      = version.Current()
+		fullPartPayloadHash = sha256.New()
+		attrs               = make([]object.Attribute, 0, len(prm.Attributes))
 	)
 
-	prm.Attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
-	prm.Attributes[s3headers.MultipartUpload] = p.Info.UploadID
-	prm.Attributes[s3headers.MultipartPartNumber] = strconv.Itoa(p.PartNumber)
+	for k, v := range prm.Attributes {
+		attrs = append(attrs, object.NewAttribute(k, v))
+	}
+
+	hashlessHeaderObject.SetContainerID(bktInfo.CID)
+	hashlessHeaderObject.SetType(object.TypeRegular)
+	hashlessHeaderObject.SetOwner(bktInfo.Owner)
+	hashlessHeaderObject.SetCreationEpoch(n.neoFS.CurrentEpoch())
+	hashlessHeaderObject.SetAttributes(attrs...)
+	hashlessHeaderObject.SetVersion(&currentVersion)
 
 	// slice part manually. Simultaneously considering the part is a single object for user.
 	for {
-		elementID++
-		prm.Attributes[s3headers.MultipartElementID] = strconv.Itoa(elementID)
+		prm.Multipart.HeaderObject = nil
+		if first {
+			first = false
+			prm.Multipart.HeaderObject = &hashlessHeaderObject
+		}
 
-		prm.Multipart.SplitPreviousID = &splitPreviousID
+		if !localSplitPreviousID.IsZero() {
+			prm.Multipart.SplitPreviousID = &localSplitPreviousID
+		}
 
-		if !splitFirstID.IsZero() {
-			prm.Multipart.SplitFirstID = &splitFirstID
+		if !localSplitFirstID.IsZero() {
+			prm.Multipart.SplitFirstID = &localSplitFirstID
 		}
 
 		nBts, readErr := io.ReadAtLeast(payloadReader, chunk, len(chunk))
-		totalBytes += nBts
+		totalBytes += int64(nBts)
 
 		if nBts > 0 {
 			prm.Payload = bytes.NewReader((chunk)[:nBts])
 			prm.PayloadSize = uint64(nBts)
 			prm.Multipart.PayloadHash = sha256.New()
 			prm.Multipart.PayloadHash.Write((chunk)[:nBts])
+			fullPartPayloadHash.Write((chunk)[:nBts])
 
 			if n.neoFS.IsHomomorphicHashingEnabled() {
 				prm.Multipart.HomoHash = tz.New()
 				prm.Multipart.HomoHash.Write((chunk)[:nBts])
+
+				if fullPartHomoHash == nil {
+					fullPartHomoHash = tz.New()
+				}
+				fullPartHomoHash.Write((chunk)[:nBts])
 			}
 
 			if err = prm.Multipart.MultipartHashes.WritePayload((chunk)[:nBts]); err != nil {
 				return id, fmt.Errorf("hash payload write: %w", err)
-			}
-
-			binaryMarshaler := prm.Multipart.MultipartHashes.Hash.(encoding.BinaryMarshaler)
-			stateBytes, err = binaryMarshaler.MarshalBinary()
-			if err != nil {
-				return id, fmt.Errorf("marshalBinary: %w", err)
-			}
-			prm.Attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
-			prm.Attributes[s3headers.MultipartTotalSize] = strconv.Itoa(totalBytes)
-			prm.Attributes[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes.PartHash.Sum(nil))
-
-			if prm.Multipart.MultipartHashes.HomoHash != nil {
-				binaryMarshaler = prm.Multipart.MultipartHashes.HomoHash.(encoding.BinaryMarshaler)
-				stateBytes, err = binaryMarshaler.MarshalBinary()
-
-				if err != nil {
-					return id, fmt.Errorf("marshalBinary: %w", err)
-				}
-
-				prm.Attributes[s3headers.MultipartHomoHash] = hex.EncodeToString(stateBytes)
 			}
 
 			id, err = n.multipartObjectPut(ctx, prm, bktInfo)
@@ -1995,17 +1887,25 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 				return id, fmt.Errorf("multipart object put: %w", err)
 			}
 
+			if localSplitFirstID.IsZero() {
+				localSplitFirstID = id
+			}
+
 			n.log.Debug(
 				"uploaded element",
 				zap.String("upload", p.Info.UploadID),
 				zap.Int("part", p.PartNumber),
-				zap.Int("elementID", elementID),
 				zap.String("oid", id.String()),
 				zap.Int("size", nBts),
-				zap.Int("totalSize", totalBytes),
+				zap.Int64("totalSize", totalBytes),
 			)
 
-			splitPreviousID = id
+			localSplitPreviousID = id
+
+			var mObj object.MeasuredObject
+			mObj.SetObjectID(id)
+			mObj.SetObjectSize(uint32(nBts))
+			measuredObjects = append(measuredObjects, mObj)
 		}
 
 		if readErr == nil {
@@ -2021,7 +1921,115 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 		break
 	}
 
-	return id, nil
+	partHeaders := make(map[string]string, 6)
+
+	partHeaders[s3headers.MetaType] = s3headers.TypeMultipartPart
+	partHeaders[s3headers.MultipartUpload] = p.Info.UploadID
+	partHeaders[s3headers.MultipartPartNumber] = strconv.Itoa(p.PartNumber)
+
+	binaryMarshaler := prm.Multipart.MultipartHashes.Hash.(encoding.BinaryMarshaler)
+	stateBytes, err = binaryMarshaler.MarshalBinary()
+	if err != nil {
+		return id, fmt.Errorf("marshalBinary: %w", err)
+	}
+	partHeaders[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
+	partHeaders[s3headers.MultipartTotalSize] = strconv.FormatInt(totalBytes, 10)
+	partHeaders[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes.PartHash.Sum(nil))
+
+	if prm.Multipart.MultipartHashes.HomoHash != nil {
+		binaryMarshaler = prm.Multipart.MultipartHashes.HomoHash.(encoding.BinaryMarshaler)
+		stateBytes, err = binaryMarshaler.MarshalBinary()
+
+		if err != nil {
+			return id, fmt.Errorf("marshalBinary: %w", err)
+		}
+
+		partHeaders[s3headers.MultipartHomoHash] = hex.EncodeToString(stateBytes)
+	}
+
+	// This is our "full part object". It doesn't have any payload.
+	prmPartObjectHeader := PutObjectParams{
+		BktInfo:    bktInfo,
+		Reader:     bytes.NewBuffer(nil),
+		Header:     partHeaders,
+		Size:       totalBytes,
+		Encryption: p.Info.Encryption,
+	}
+
+	bktSettings, err := n.GetBucketSettings(ctx, bktInfo)
+	if err != nil {
+		return oid.ID{}, fmt.Errorf("couldn't get versioning settings object: %w", err)
+	}
+
+	partObjectHeader, err := n.prepareMultipartHeadObject(ctx, multipartHeadObjectParams{
+		PutObject:         prmPartObjectHeader,
+		PayloadHash:       fullPartPayloadHash,
+		HomoHash:          fullPartHomoHash,
+		PayloadLength:     uint64(totalBytes),
+		VersioningEnabled: bktSettings.VersioningEnabled(),
+		SplitFirstID:      splitFirstID,
+		SplitPreviousID:   splitPreviousID,
+		DecryptedSize:     &decSize,
+	})
+	if err != nil {
+		return oid.ID{}, err
+	}
+
+	// TODO: reuse cache from containerInfo()
+	cnr, err := n.neoFS.Container(ctx, bktInfo.CID)
+	if err != nil {
+		return oid.ID{}, fmt.Errorf("get container by ID=%s: %w", bktInfo.CID, err)
+	}
+
+	// last part
+	prm = PrmObjectCreate{
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		CreationTime: TimeNow(ctx),
+		Multipart: &Multipart{
+			SplitFirstID:    &localSplitFirstID,
+			SplitPreviousID: &localSplitPreviousID,
+			HeaderObject:    partObjectHeader,
+			PayloadHash:     sha256.New(),
+			ContainerPolicy: cnr.PlacementPolicy(),
+		},
+		Payload: bytes.NewBuffer(nil),
+	}
+
+	if n.neoFS.IsHomomorphicHashingEnabled() {
+		prm.Multipart.HomoHash = tz.New()
+	}
+
+	lastPartObjID, err := n.multipartObjectPut(ctx, prm, bktInfo)
+	if err != nil {
+		return oid.ID{}, err
+	}
+
+	var mObj object.MeasuredObject
+	// last part has the zero length.
+	mObj.SetObjectID(lastPartObjID)
+	measuredObjects = append(measuredObjects, mObj)
+
+	var linkObj = object.Link{}
+	linkObj.SetObjects(measuredObjects)
+
+	// linking object
+	prm = PrmObjectCreate{
+		Container:    bktInfo.CID,
+		Creator:      bktInfo.Owner,
+		CreationTime: TimeNow(ctx),
+		Multipart: &Multipart{
+			HeaderObject: partObjectHeader,
+			SplitFirstID: &localSplitFirstID,
+			Link:         &linkObj,
+		},
+	}
+
+	if _, err = n.multipartObjectPut(ctx, prm, p.Info.Bkt); err != nil {
+		return oid.ID{}, err
+	}
+
+	return partObjectHeader.GetID(), nil
 }
 
 // uploadPartAsSlot uploads multipart part, but without correct link to previous part because we don't have it.
@@ -2058,7 +2066,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	params.attributes[s3headers.MultipartPartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
 	params.attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	params.attributes[s3headers.MultipartIsArbitraryPart] = "true"
-	params.attributes[s3headers.MultipartElementID] = "0"
 	params.attributes[s3headers.MultipartTotalSize] = strconv.FormatInt(params.decSize, 10)
 
 	prm := PrmObjectCreate{

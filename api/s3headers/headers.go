@@ -7,9 +7,6 @@ const (
 const (
 	multipartPrefix = attributePrefix + "MP-"
 
-	// MultipartElementID is number of manual sliced part element.
-	// Result: S3-MP-ElementId.
-	MultipartElementID = multipartPrefix + "ElementId"
 	// MultipartIsArbitraryPart describes multipart which has been uploaded in not the subsequent order.
 	MultipartIsArbitraryPart = multipartPrefix + "IsArbitrary"
 	// MultipartTotalSize describes payload size for all manually sliced elements for part.
