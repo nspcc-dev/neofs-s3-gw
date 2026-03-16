@@ -76,7 +76,6 @@ type PartInfo struct {
 // ElementInfo represents small element in "big object" chain.
 type ElementInfo struct {
 	ID         oid.ID
-	ElementID  int
 	Attributes map[string]string
 	Size       int64
 	TotalSize  int64

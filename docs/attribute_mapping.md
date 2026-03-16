@@ -56,6 +56,63 @@ More details in the [AWS Documentation](https://docs.aws.amazon.com/AmazonS3/lat
 
 ## Multipart Uploads
 
+A multipart upload allows uploading a single S3 object in parts. Since NeoFS has a maximum atomic object size,
+each user-visible part may itself be split into multiple NeoFS objects. The S3 Gate manages two levels of split chains
+to reconcile S3 semantics with NeoFS storage:
+
+1. **Part-level split chain** (local) — slices that form a single part.
+2. **Object-level split chain** (global) — all parts chained together to form the final S3 object.
+
+### Object hierarchy
+
+```
+S3 Object (after CompleteMultipartUpload)
+├── Zero Part (object, part 0) ─── first object in the global chain. For simplicity uploadID == OID.
+│
+├── Part 1 (user-visible)
+│   ├── Slice 1-1 (NeoFS object, payload chunk)   ── local chain
+│   ├── Slice 1-2 (NeoFS object, payload chunk)
+│   ├── Part Header Object (no payload, carries part attributes and hashes)
+│   └── Part Linking Object (lists all slices of Part 1)
+│
+├── Part 2 (user-visible)
+│   ├── Slice 2-1
+│   ├── Part Header Object
+│   └── Part Linking Object
+│
+├── ...
+│
+├── Last Part Object (no payload, carries the "big" object headers) ── global chain tail
+└── Linking Object (lists zero part + all part slices + last part, forms the global chain)
+```
+
+Each **part** is stored as a NeoFS split chain:
+
+- **Payload slices**: one or more NeoFS objects, each up to `MaxObjectSize`, carrying actual payload data.
+  They form a local split chain with `SplitFirstID` / `SplitPreviousID` links.
+- **Part Header Object**: a zero-payload object that acts as the virtual "parent" of the local chain. It carries
+  per-part attributes (`S3-MP-PartNumber`, `S3-MP-TotalSize`, `S3-MP-Hash`, etc.) and the correct payload hash /
+  homomorphic hash computed over the entire part payload. Its `ObjectID` is the value returned to the user
+  as the part identifier.
+- **Part Linking Object**: references the Part Header Object as parent and lists all slices (measured objects)
+  including the zero-length last-part entry, so NeoFS can reconstruct the split chain.
+
+When the part payload fits into a single NeoFS object, the same structure is used: one payload slice, a header
+object, and a linking object.
+
+**CompleteMultipartUpload** — finalizes the multipart upload:
+- Arbitrary (out-of-order) parts are re-uploaded into the correct chain position. All object hashes are recalculated
+  if any part was re-uploaded.
+- All parts are collected and validated.
+- A **Final Header Object** (no payload) is created representing the complete S3 object. It carries user
+  metadata, `FilePath`, `S3-Completed-Parts`, encryption attributes, and the full-object payload / homomorphic
+  hashes reconstructed from intermediate hash states.
+- A zero-payload **Last Part Object** links to the previous part in the global chain and references the Final
+  Header Object as parent.
+- A **Final Linking Object** lists all measured objects and references the Final Header Object, making the
+  complete S3 object resolvable by NeoFS.
+- Old versions of the object (in unversioned buckets) are deleted asynchronously.
+
 ### Multipart Info Object
 
 This object is required for listing multipart
@@ -78,7 +135,6 @@ Includes the following attributes:
 
 - `S3-MetaType: multipartPart`
 - `S3-MP-PartNumber`
-- `S3-MP-ElementId`
 - `S3-MP-TotalSize`
 - `S3-MP-Hash`
 - `S3-MP-HomoHash`
@@ -95,11 +151,6 @@ Stores the part number for multipart uploads.
 Note: Per [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html), the first valid
 part number is `1`.  
 An internal part `0` exist but is hidden from users.
-
-### `S3-MP-ElementId`
-
-Since each part can be up to 5 GB (and NeoFS atomic max object size smaller), this attribute tracks internal slices that
-form a full part.
 
 ### `S3-MP-TotalSize`
 
