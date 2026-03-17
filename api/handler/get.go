@@ -204,36 +204,13 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		linkingObjectID, err := h.obj.SearchLinkingObject(r.Context(), bktInfo, info.ID)
+		completedParts, _, err := h.obj.GetMultipartParts(r.Context(), bktInfo, info.ID)
 		if err != nil {
-			h.logAndSendError(w, "linking object search failed", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
+			h.logAndSendError(w, "linking object, get multipart parts", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
 			return
 		}
 
-		if linkingObjectID.IsZero() {
-			h.logAndSendError(w, "linking object not found", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
-			return
-		}
-
-		linkingObject, err := h.obj.GetLinkingObject(r.Context(), bktInfo, linkingObjectID)
-		if err != nil {
-			h.logAndSendError(w, "linking object get failed", reqInfo, s3errors.GetAPIError(s3errors.ErrInternalError))
-			return
-		}
-
-		var measuredObjects = linkingObject.Objects()
-		// two meta parts + as minimum one payload part.
-		if len(measuredObjects) < 3 {
-			h.logAndSendError(w, "linking object should have at least 3 parts", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidRequest))
-			return
-		}
-
-		var (
-			// first and last elements are metadata parts with zero length.
-			completedParts = measuredObjects[1 : len(measuredObjects)-1]
-			totalParts     = len(completedParts)
-		)
-
+		var totalParts = len(completedParts)
 		if partNumber > totalParts {
 			h.logAndSendError(w, "requested part not found", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber))
 			return

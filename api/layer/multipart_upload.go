@@ -1290,7 +1290,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	var multipartObjetSize int64
 	var encMultipartObjectSize uint64
 	var lastPartID int
-	var completedPartsHeader strings.Builder
 
 	splitFirstID, err := oid.DecodeString(multipartInfo.UploadID)
 	if err != nil {
@@ -1323,14 +1322,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 				return nil, nil, fmt.Errorf("compute encrypted size: %w", err)
 			}
 			encMultipartObjectSize += encPartSize
-		}
-
-		partInfoStr := partInfo.ToHeaderString()
-		if i != len(p.Parts)-1 {
-			partInfoStr += ","
-		}
-		if _, err = completedPartsHeader.WriteString(partInfoStr); err != nil {
-			return nil, nil, err
 		}
 
 		if part.PartNumber > lastPartID {
@@ -1378,8 +1369,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 	}
 
-	initMetadata := make(map[string]string, len(multipartInfo.Meta)+1)
-	initMetadata[s3headers.UploadCompletedParts] = completedPartsHeader.String()
+	initMetadata := make(map[string]string, len(multipartInfo.Meta))
 
 	uploadData := &UploadData{
 		TagSet:     make(map[string]string),
@@ -1490,6 +1480,9 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			HeaderObject: header,
 			SplitFirstID: &splitFirstID,
 			Link:         &linkObj,
+		},
+		Attributes: map[string]string{
+			s3headers.MultipartUpload: p.Info.UploadID,
 		},
 	}
 
