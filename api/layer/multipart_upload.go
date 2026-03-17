@@ -43,8 +43,8 @@ const (
 	MaxSizePartsList    = 1000
 	UploadMinPartNumber = 1
 	UploadMaxPartNumber = 10000
-	uploadMinSize       = 5 * 1048576    // 5MB
-	uploadMaxSize       = 5 * 1073741824 // 5GB
+	uploadMinSize       = 5 * 1048576          // 5MB
+	uploadMaxSize       = (4 * 1073741824) - 1 // 4GB
 )
 
 type (

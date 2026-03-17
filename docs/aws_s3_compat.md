@@ -135,15 +135,20 @@ For now there are some limitations:
 
 ## Multipart
 
-|    | Method                  | Comments |
-|----|-------------------------|----------|
-| 🟢 | AbortMultipartUpload    |          |
-| 🟢 | CompleteMultipartUpload |          |
-| 🟢 | CreateMultipartUpload   |          |
-| 🟢 | ListMultipartUploads    |          |
-| 🟢 | ListParts               |          |
-| 🟢 | UploadPart              |          |
-| 🟢 | UploadPartCopy          |          |
+|    | Method                  | Comments                  |
+|----|-------------------------|---------------------------|
+| 🟢 | AbortMultipartUpload    |                           |
+| 🟢 | CompleteMultipartUpload |                           |
+| 🟢 | CreateMultipartUpload   |                           |
+| 🟢 | ListMultipartUploads    |                           |
+| 🟢 | ListParts               |                           |
+| 🟢 | UploadPart              | Part size, 5 MiB to 4 GiB |
+| 🟢 | UploadPartCopy          | Part size, 5 MiB to 4 GiB |
+  
+**UploadPart**, **UploadPartCopy**
+
+According to [S3 multipart upload limits](https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html), the part size
+must be in the 5 MiB to 5 GiB range. The gate has an additional limitation on the maximum part size, which is 4 GiB.
 
 ## Tagging
 
