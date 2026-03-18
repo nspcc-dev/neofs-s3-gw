@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -39,6 +40,9 @@ type PrmContainerCreate struct {
 	// Token of the container's creation session. Nil means session absence.
 	SessionToken *session.Container
 
+	// Token of the container's creation session. Nil means session absence.
+	SessionTokenV2 *session2.Token
+
 	// Basic ACL of the container.
 	BasicACL acl.Basic
 
@@ -57,7 +61,8 @@ type ContainerPutExecutor interface {
 // PrmAuth groups authentication parameters for the NeoFS operation.
 type PrmAuth struct {
 	// Bearer token to be used for the operation. Overlaps PrivateKey. Optional.
-	BearerToken *bearer.Token
+	BearerToken    *bearer.Token
+	SessionTokenV2 *session2.Token
 }
 
 // PrmObjectRead groups parameters of NeoFS.ReadObject operation.
@@ -233,10 +238,10 @@ type NeoFS interface {
 	// extended ACL is modified within session if session token is not nil.
 	//
 	// It returns any error encountered which prevented the eACL from being saved.
-	SetContainerEACL(context.Context, eacl.Table, *session.Container) error
+	SetContainerEACL(context.Context, eacl.Table, *session.Container, *session2.Token) error
 
 	// CreateContainerAndSetEACL creates container and sets EACL using the same rawClient.
-	CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionToken *session.Container) (cid.ID, error)
+	CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) (cid.ID, error)
 
 	// ContainerEACL reads the container eACL from NeoFS by the container ID.
 	//
@@ -249,7 +254,7 @@ type NeoFS interface {
 	// Successful return does not guarantee actual removal.
 	//
 	// It returns any error encountered which prevented the removal request from being sent.
-	DeleteContainer(context.Context, cid.ID, *session.Container) error
+	DeleteContainer(context.Context, cid.ID, *session.Container, *session2.Token) error
 
 	// ReadObject reads a part of the object from the NeoFS container by identifier.
 	// Exact part is returned according to the parameters:
@@ -320,10 +325,10 @@ type NeoFS interface {
 	SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error)
 
 	// SetContainerAttribute sets corresponding container attribute. It requires session token with VerbContainerSetAttribute verb.
-	SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionToken *session.Container) error
+	SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionToken *session.Container, sessionTokenV2 *session2.Token) error
 
 	// RemoveContainerAttribute removes corresponding container attribute. It requires session token with VerbContainerRemoveAttribute verb.
-	RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionToken *session.Container) error
+	RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionToken *session.Container, sessionTokenV2 *session2.Token) error
 }
 
 // WritePayload writes bts to each available hash.

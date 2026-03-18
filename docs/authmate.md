@@ -303,6 +303,7 @@ and the other (for `gate-wallet.json`) interactively:
 $ AUTHMATE_WALLET_PASSPHRASE=some-pwd \
 neofs-s3-authmate obtain-secret --wallet wallet.json \
 --peer 192.168.130.71:8080 \
+--rpc-endpoint http://192.168.130.71:30333 \
 --gate-wallet gate-wallet.json \
 --access-key-id 5g933dyLEkXbbAspouhPPTiyLZRg4axBW1axSPD87eVT0AiXsH4AjYy1iTJ4C1WExzjBrSobJsQFWEyKLREe5sQYM
 

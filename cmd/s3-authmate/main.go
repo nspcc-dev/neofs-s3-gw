@@ -472,6 +472,13 @@ func obtainSecret() *cli.Command {
 				Destination: &peerAddressFlag,
 			},
 			&cli.StringFlag{
+				Name:        "rpc-endpoint",
+				Value:       "",
+				Usage:       "address of neofs RPC endpoint to connect to. https://localhost:30333 (with schema)",
+				Required:    true,
+				Destination: &rpcAddressFlag,
+			},
+			&cli.StringFlag{
 				Name:        "gate-wallet",
 				Value:       "",
 				Usage:       "path to the wallet",
@@ -566,8 +573,9 @@ func obtainSecret() *cli.Command {
 			secretAddress := strings.Replace(accessKeyIDFlag, "0", "/", 1)
 
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
-				SecretAddress:  secretAddress,
-				GatePrivateKey: gateCreds,
+				SecretAddress:    secretAddress,
+				GatePrivateKey:   gateCreds,
+				RPCHTTPEndpoints: []string{rpcAddressFlag},
 			}
 
 			var tcancel context.CancelFunc
@@ -710,8 +718,9 @@ func resetBucketEACL() *cli.Command {
 			secretAddress := strings.Replace(accessKeyIDFlag, "0", "/", 1)
 
 			obtainSecretOptions := &authmate.ObtainSecretOptions{
-				SecretAddress:  secretAddress,
-				GatePrivateKey: gateCreds,
+				SecretAddress:    secretAddress,
+				GatePrivateKey:   gateCreds,
+				RPCHTTPEndpoints: []string{peerAddressFlag},
 			}
 
 			agent := authmate.New(log, neoFS)
@@ -748,7 +757,7 @@ func resetBucketEACL() *cli.Command {
 				ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
 				defer tcancel()
 
-				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenForSetEACL); err != nil {
+				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenForSetEACL, or.SessionTokenV2); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
 				}
 			} else {

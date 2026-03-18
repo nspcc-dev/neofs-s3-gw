@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -23,9 +24,10 @@ type (
 	}
 
 	cred struct {
-		key   *keys.PrivateKey
-		neoFS NeoFS
-		cache *cache.AccessBoxCache
+		key      *keys.PrivateKey
+		neoFS    NeoFS
+		cache    *cache.AccessBoxCache
+		resolver session2.NNSResolver
 	}
 )
 
@@ -75,8 +77,8 @@ var (
 var _ = New
 
 // New creates a new Credentials instance using the given cli and key.
-func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config) Credentials {
-	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config)}
+func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config, resolver session2.NNSResolver) Credentials {
+	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config), resolver: resolver}
 }
 
 func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, error) {
@@ -90,7 +92,7 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 		return nil, fmt.Errorf("get access box: %w", err)
 	}
 
-	cachedBox, err = box.GetBox(c.key)
+	cachedBox, err = box.GetBox(c.key, c.resolver)
 	if err != nil {
 		return nil, fmt.Errorf("get box: %w", err)
 	}
