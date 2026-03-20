@@ -256,7 +256,7 @@ type (
 		DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 
 		PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error)
-
+		HeadObject(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error)
 		CopyObject(ctx context.Context, p *CopyObjectParams) (*data.ExtendedObjectInfo, error)
 
 		ListObjectsV1(ctx context.Context, p *ListObjectsParamsV1) (*ListObjectsInfoV1, error)
@@ -282,10 +282,16 @@ type (
 		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
 
 		// SearchLinkingObject searches link object for corresponding parentID.
-		SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (oid.ID, error)
+		SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (LinkingObjectSearchResult, error)
 
 		// GetLinkingObject gets linking object.
 		GetLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, linkObjID oid.ID) (object.Link, error)
+
+		// GetMultipartParts finds linking object and extracts payload parts (ignoring first and last meta parts) as []object.MeasuredObject.
+		GetMultipartParts(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) ([]object.MeasuredObject, string, error)
+
+		// SearchParts search parts metadata.
+		SearchParts(ctx context.Context, bktInfo *data.BucketInfo, uploadID string) ([]PartSearchResult, error)
 	}
 
 	authAssigner interface {
@@ -508,7 +514,14 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 				return fmt.Errorf("creating part decrypter: %w", err)
 			}
 		} else {
-			decReader, err = getDecrypter(p)
+			multipartParts, _, err := n.GetMultipartParts(ctx, p.BucketInfo, p.ObjectInfo.ID)
+			if err != nil {
+				if !errors.Is(err, ErrLinkingObjectNotFound) {
+					return fmt.Errorf("get multipart parts: %w", err)
+				}
+			}
+
+			decReader, err = getDecrypter(p, multipartParts)
 			if err != nil {
 				return fmt.Errorf("creating decrypter: %w", err)
 			}
@@ -558,14 +571,13 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 	return nil
 }
 
-func getDecrypter(p *GetObjectParams) (*encryption.Decrypter, error) {
+func getDecrypter(p *GetObjectParams, multipartParts []object.MeasuredObject) (*encryption.Decrypter, error) {
 	var encRange *encryption.Range
 	if p.Range != nil {
 		encRange = &encryption.Range{Start: p.Range.Start, End: p.Range.End}
 	}
 
-	header := p.ObjectInfo.Headers[s3headers.UploadCompletedParts]
-	if len(header) == 0 {
+	if len(multipartParts) == 0 {
 		return encryption.NewDecrypter(p.Encryption, uint64(p.ObjectInfo.Size), encRange)
 	}
 
@@ -574,14 +586,9 @@ func getDecrypter(p *GetObjectParams) (*encryption.Decrypter, error) {
 		return nil, fmt.Errorf("parse decrypted size: %w", err)
 	}
 
-	splits := strings.Split(header, ",")
-	sizes := make([]uint64, len(splits))
-	for i, splitInfo := range splits {
-		part, err := ParseCompletedPartHeader(splitInfo)
-		if err != nil {
-			return nil, fmt.Errorf("parse completed part: %w", err)
-		}
-		sizes[i] = uint64(part.Size)
+	sizes := make([]uint64, len(multipartParts))
+	for i, part := range multipartParts {
+		sizes[i] = uint64(part.ObjectSize())
 	}
 
 	return encryption.NewMultipartDecrypter(p.Encryption, decryptedObjectSize, sizes, encRange)
@@ -1067,63 +1074,42 @@ func (n *layer) putDeleteMarker(ctx context.Context, bktInfo *data.BucketInfo, o
 }
 
 // SearchLinkingObject searches link object for corresponding parentID.
-func (n *layer) SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (oid.ID, error) {
+func (n *layer) SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (LinkingObjectSearchResult, error) {
 	var (
 		opts                client.SearchObjectsOptions
-		filters             = make(object.SearchFilters, 0, 2)
+		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
-			object.FilterType,
-			object.AttributeTimestamp,
+			object.FilterParentID,
+			s3headers.MultipartUpload,
 		}
 	)
 
+	opts.SetCount(1)
 	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
-	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLink)
 	filters.AddParentIDFilter(object.MatchStringEqual, parentID)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeLink)
 
 	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+			return LinkingObjectSearchResult{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
-		return oid.ID{}, fmt.Errorf("search object version: %w", err)
+		return LinkingObjectSearchResult{}, fmt.Errorf("search object version: %w", err)
 	}
 
-	if len(searchResultItems) == 0 {
-		return oid.ID{}, nil
+	// No results or empty UploadID.
+	if len(searchResultItems) == 0 || searchResultItems[0].Attributes[1] == "" {
+		return LinkingObjectSearchResult{}, nil
 	}
 
-	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
-
-	for _, item := range searchResultItems {
-		var psr = baseSearchResult{
-			ID: item.ID,
-		}
-
-		if item.Attributes[1] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
-			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		searchResults = append(searchResults, psr)
+	var psr = LinkingObjectSearchResult{
+		ID:              searchResultItems[0].ID,
+		MultipartUpload: searchResultItems[0].Attributes[1],
 	}
 
-	sortFunc := func(a, b baseSearchResult) int {
-		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
-			return c
-		}
-
-		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return b.ID.Compare(a.ID) // reverse order.
-	}
-
-	slices.SortFunc(searchResults, sortFunc)
-
-	return searchResults[0].ID, nil
+	return psr, nil
 }
 
 // GetLinkingObject gets linking object.
@@ -1149,4 +1135,73 @@ func (n *layer) GetLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, 
 	}
 
 	return link, nil
+}
+
+// SearchLinkingObject searches link object for corresponding parentID.
+func (n *layer) SearchParts(ctx context.Context, bktInfo *data.BucketInfo, uploadID string) ([]PartSearchResult, error) {
+	var (
+		opts                client.SearchObjectsOptions
+		filters             = make(object.SearchFilters, 0, 2)
+		returningAttributes = []string{
+			s3headers.MultipartUpload,
+			object.AttributeTimestamp,
+			s3headers.MultipartPartHash,
+			s3headers.MultipartPartNumber,
+		}
+	)
+
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
+
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+
+	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search object version: %w", err)
+	}
+
+	if len(searchResultItems) == 0 {
+		return nil, nil
+	}
+
+	var searchResults = make([]PartSearchResult, 0, len(searchResultItems))
+
+	for _, item := range searchResultItems {
+		var psr = PartSearchResult{
+			ID:       item.ID,
+			Checksum: item.Attributes[2],
+		}
+
+		if item.Attributes[1] != "" {
+			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
+			}
+		}
+
+		if item.Attributes[3] != "" {
+			psr.PartNumber, err = strconv.ParseInt(item.Attributes[3], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid part number %s: %w", item.Attributes[3], err)
+			}
+		}
+
+		searchResults = append(searchResults, psr)
+	}
+
+	sortFunc := func(a, b PartSearchResult) int {
+		if c := cmp.Compare(a.PartNumber, b.PartNumber); c != 0 { // direct order
+			return c
+		}
+
+		return cmp.Compare(b.CreationTimestamp, a.CreationTimestamp) // revese order
+	}
+
+	slices.SortFunc(searchResults, sortFunc)
+
+	return searchResults, nil
 }

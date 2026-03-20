@@ -682,9 +682,12 @@ func checkFilters(obj *object.Object, filters object.SearchFilters) bool {
 
 		switch f.Operation() {
 		case object.MatchStringEqual:
-			if f.Header() == "$Object:objectType" {
+			switch f.Header() {
+			case "$Object:objectType":
 				isOk = isOk && obj.Type().String() == f.Value()
-			} else {
+			case "$Object:split.parent":
+				isOk = isOk && obj.GetParentID().String() == f.Value()
+			default:
 				isOk = isOk && val == f.Value()
 			}
 		case object.MatchStringNotEqual:

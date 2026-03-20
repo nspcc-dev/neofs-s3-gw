@@ -108,6 +108,20 @@ type (
 		CreationTimestamp int64
 	}
 
+	// PartSearchResult contains some part metadata.
+	PartSearchResult struct {
+		ID                oid.ID
+		CreationTimestamp int64
+		Checksum          string
+		PartNumber        int64
+	}
+
+	// LinkingObjectSearchResult contains search result for multiparted linking object.
+	LinkingObjectSearchResult struct {
+		ID              oid.ID
+		MultipartUpload string
+	}
+
 	multipartHeadObjectParams struct {
 		PutObject         PutObjectParams
 		PayloadHash       hash.Hash
@@ -202,28 +216,6 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 	}
 
 	return r, encSize, nil
-}
-
-func ParseCompletedPartHeader(hdr string) (*Part, error) {
-	// partInfo[0] -- part number, partInfo[1] -- part size, partInfo[2] -- checksum
-	partInfo := strings.Split(hdr, "-")
-	if len(partInfo) != 3 {
-		return nil, fmt.Errorf("invalid completed part header")
-	}
-	num, err := strconv.Atoi(partInfo[0])
-	if err != nil {
-		return nil, fmt.Errorf("invalid completed part number '%s': %w", partInfo[0], err)
-	}
-	size, err := strconv.Atoi(partInfo[1])
-	if err != nil {
-		return nil, fmt.Errorf("invalid completed part size '%s': %w", partInfo[1], err)
-	}
-
-	return &Part{
-		ETag:       partInfo[2],
-		PartNumber: num,
-		Size:       int64(size),
-	}, nil
 }
 
 // PutObject stores object into NeoFS, took payload from io.Reader.
@@ -1614,4 +1606,9 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 	}
 
 	return oids, nil
+}
+
+// HeadObject get object header.
+func (n *layer) HeadObject(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
+	return n.objectHead(ctx, bktInfo, idObj)
 }

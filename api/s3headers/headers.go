@@ -71,7 +71,6 @@ const (
 	AttributeHMACKey             = NeoFSSystemMetadataPrefix + "HMAC-Key"
 	AttributeVersioningState     = NeoFSSystemMetadataPrefix + "VersioningState"
 	AttributeDeleteMarker        = NeoFSSystemMetadataPrefix + "DeleteMarker"
-	UploadCompletedParts         = NeoFSSystemMetadataPrefix + "Completed-Parts"
 
 	// Result: S3-Meta-Tag-.
 	NeoFSSystemMetadataTagPrefix = NeoFSSystemMetadataPrefix + "Tag-"

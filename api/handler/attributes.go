@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,7 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"go.uber.org/zap"
 )
 
@@ -43,12 +45,15 @@ type (
 	}
 
 	GetObjectAttributesArgs struct {
-		MaxParts         int
-		PartNumberMarker int
-		Attributes       []string
-		VersionID        string
-		Conditional      *conditionalArgs
+		MaxParts             int
+		PartNumberMarker     int
+		Attributes           []string
+		VersionID            string
+		Conditional          *conditionalArgs
+		MultipartPartsGetter func(context.Context) ([]object.MeasuredObject, string, error)
 	}
+
+	partChecksumSearcher func(ctx context.Context, bktInfo *data.BucketInfo, uploadID string) ([]layer.PartSearchResult, error)
 )
 
 const (
@@ -117,7 +122,11 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	response, err := encodeToObjectAttributesResponse(info, params)
+	params.MultipartPartsGetter = func(ctx context.Context) ([]object.MeasuredObject, string, error) {
+		return h.obj.GetMultipartParts(ctx, bktInfo, info.ID)
+	}
+
+	response, err := encodeToObjectAttributesResponse(r.Context(), info, params, bktInfo, h.obj.SearchParts)
 	if err != nil {
 		h.logAndSendError(w, "couldn't encode object info to response", reqInfo, err)
 		return
@@ -179,7 +188,7 @@ func parseGetObjectAttributeArgs(r *http.Request) (*GetObjectAttributesArgs, err
 	return res, err
 }
 
-func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttributesArgs) (*GetObjectAttributesResponse, error) {
+func encodeToObjectAttributesResponse(ctx context.Context, info *data.ObjectInfo, p *GetObjectAttributesArgs, bktInfo *data.BucketInfo, partChecksumSearcher partChecksumSearcher) (*GetObjectAttributesResponse, error) {
 	resp := &GetObjectAttributesResponse{}
 
 	for _, attr := range p.Attributes {
@@ -193,7 +202,22 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 		case checksum:
 			resp.Checksum = &Checksum{ChecksumSHA256: info.HashSum}
 		case objectParts:
-			parts, err := formUploadAttributes(info, p.MaxParts, p.PartNumberMarker)
+			if p.MultipartPartsGetter == nil {
+				resp.ObjectParts = nil
+				continue
+			}
+
+			measuredObjects, uploadID, err := p.MultipartPartsGetter(ctx)
+			if err != nil {
+				if errors.Is(err, layer.ErrLinkingObjectNotFound) {
+					resp.ObjectParts = nil
+					continue
+				}
+
+				return nil, errors.New("get multipart parts")
+			}
+
+			parts, err := formUploadAttributes(ctx, bktInfo, measuredObjects, p.MaxParts, p.PartNumberMarker, partChecksumSearcher, uploadID)
 			if err != nil {
 				return nil, fmt.Errorf("form upload attributes: %w", err)
 			}
@@ -206,23 +230,27 @@ func encodeToObjectAttributesResponse(info *data.ObjectInfo, p *GetObjectAttribu
 	return resp, nil
 }
 
-func formUploadAttributes(info *data.ObjectInfo, maxParts, marker int) (*ObjectParts, error) {
-	completedParts, ok := info.Headers[s3headers.UploadCompletedParts]
-	if !ok {
-		return nil, nil
+func formUploadAttributes(ctx context.Context, bktInfo *data.BucketInfo, partInfos []object.MeasuredObject, maxParts, marker int, partChecksumSearcher partChecksumSearcher, uploadID string) (*ObjectParts, error) {
+	searchResults, err := partChecksumSearcher(ctx, bktInfo, uploadID)
+	if err != nil {
+		return nil, err
 	}
 
-	partInfos := strings.Split(completedParts, ",")
+	var mp = make(map[int64]layer.PartSearchResult, len(searchResults))
+	for _, part := range searchResults {
+		mp[part.PartNumber] = part
+	}
+
 	parts := make([]Part, len(partInfos))
 	for i, p := range partInfos {
-		part, err := layer.ParseCompletedPartHeader(p)
-		if err != nil {
-			return nil, fmt.Errorf("invalid completed part: %w", err)
+		partWithHash, ok := mp[int64(i+1)]
+		if !ok {
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidPartNumber)
 		}
 		parts[i] = Part{
-			PartNumber:     part.PartNumber,
-			Size:           int(part.Size),
-			ChecksumSHA256: part.ETag,
+			PartNumber:     i + 1,
+			Size:           int(p.ObjectSize()),
+			ChecksumSHA256: partWithHash.Checksum,
 		}
 	}
 

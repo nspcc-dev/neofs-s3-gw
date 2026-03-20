@@ -2,7 +2,6 @@ package data
 
 import (
 	"cmp"
-	"strconv"
 	"time"
 
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -79,11 +78,6 @@ type ElementInfo struct {
 	Attributes map[string]string
 	Size       int64
 	TotalSize  int64
-}
-
-// ToHeaderString form short part representation to use in S3-Completed-Parts header.
-func (p *PartInfo) ToHeaderString() string {
-	return strconv.Itoa(p.Number) + "-" + strconv.FormatInt(p.Size, 10) + "-" + p.ETag
 }
 
 // SortPartInfo sorts PartInfo for Number ASC, ServerCreated ASC.

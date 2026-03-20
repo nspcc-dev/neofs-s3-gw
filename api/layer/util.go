@@ -3,6 +3,7 @@ package layer
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
 type (
@@ -46,6 +48,11 @@ type (
 		DeleteMarker        []*data.ExtendedObjectInfo
 		VersionIDMarker     string
 	}
+)
+
+var (
+	// ErrLinkingObjectNotFound means there is no linking object for parent.
+	ErrLinkingObjectNotFound = errors.New("linking object not found")
 )
 
 func userHeaders(attrs []object.Attribute) map[string]string {
@@ -155,4 +162,31 @@ func GetBoxData(ctx context.Context) (*accessbox.Box, error) {
 		boxData.Gate = &accessbox.GateData{}
 	}
 	return boxData, nil
+}
+
+func (n *layer) GetMultipartParts(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) ([]object.MeasuredObject, string, error) {
+	searchLinkingObject, err := n.SearchLinkingObject(ctx, bktInfo, parentID)
+	if err != nil {
+		return nil, "", fmt.Errorf("linking object search failed: %w", err)
+	}
+
+	if searchLinkingObject.ID.IsZero() {
+		return nil, "", ErrLinkingObjectNotFound
+	}
+
+	linkingObject, err := n.GetLinkingObject(ctx, bktInfo, searchLinkingObject.ID)
+	if err != nil {
+		return nil, "", fmt.Errorf("linking object get failed: %w", err)
+	}
+
+	var measuredObjects = linkingObject.Objects()
+	// two meta parts + as minimum one payload part.
+	if len(measuredObjects) < 3 {
+		return nil, "", errors.New("linking object should have at least 3 parts")
+	}
+
+	// first and last elements are metadata parts with zero length.
+	var completedParts = measuredObjects[1 : len(measuredObjects)-1]
+
+	return completedParts, searchLinkingObject.MultipartUpload, nil
 }

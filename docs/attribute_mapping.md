@@ -105,7 +105,7 @@ object, and a linking object.
   if any part was re-uploaded.
 - All parts are collected and validated.
 - A **Final Header Object** (no payload) is created representing the complete S3 object. It carries user
-  metadata, `FilePath`, `S3-Completed-Parts`, encryption attributes, and the full-object payload / homomorphic
+  metadata, `FilePath`, encryption attributes, and the full-object payload / homomorphic
   hashes reconstructed from intermediate hash states.
 - A zero-payload **Last Part Object** links to the previous part in the global chain and references the Final
   Header Object as parent.
@@ -238,10 +238,6 @@ Contains salt for encryption algorith, if encryption is enabled.
 ### S3-HMAC-Key
 
 Contains key for encryption algorith, if encryption is enabled.
-
-### S3-Completed-Parts
-
-Contains info about all multipart parts for object. It is stored in the final object attributes.
 
 ### S3-Meta-Tag-*
 

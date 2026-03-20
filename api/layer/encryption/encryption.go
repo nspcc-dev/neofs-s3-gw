@@ -130,8 +130,8 @@ func (p Params) MatchObjectEncryption(encInfo ObjectEncryption) error {
 func NewMultipartDecrypter(p Params, decryptedObjectSize uint64, partsSizes []uint64, r *Range) (*Decrypter, error) {
 	parts := make([]encryptedPart, len(partsSizes))
 
-	for i, size := range partsSizes {
-		encPartSize, err := sio.EncryptedSize(size)
+	for i, encPartSize := range partsSizes {
+		size, err := sio.DecryptedSize(encPartSize)
 		if err != nil {
 			return nil, fmt.Errorf("compute encrypted size: %w", err)
 		}
