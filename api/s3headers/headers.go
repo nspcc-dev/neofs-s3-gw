@@ -9,10 +9,6 @@ const (
 
 	// MultipartIsArbitraryPart describes multipart which has been uploaded in not the subsequent order.
 	MultipartIsArbitraryPart = multipartPrefix + "IsArbitrary"
-	// MultipartTotalSize describes payload size for all manually sliced elements for part.
-	// Size of the last element in chain is a whole part size.
-	MultipartTotalSize = multipartPrefix + "TotalSize"
-
 	// MultipartObjectKey contains object key for multipart object.
 	// It is important to store it separately with object.AttributeFilePath attribute during multipart upload.
 	// Multipart uploading object shouldn't be available for user until CompleteMultipartUpload.

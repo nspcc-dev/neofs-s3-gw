@@ -91,7 +91,7 @@ Each **part** is stored as a NeoFS split chain:
 - **Payload slices**: one or more NeoFS objects, each up to `MaxObjectSize`, carrying actual payload data.
   They form a local split chain with `SplitFirstID` / `SplitPreviousID` links.
 - **Part Header Object**: a zero-payload object that acts as the virtual "parent" of the local chain. It carries
-  per-part attributes (`S3-MP-PartNumber`, `S3-MP-TotalSize`, `S3-MP-Hash`, etc.) and the correct payload hash /
+  per-part attributes (`S3-MP-PartNumber`, `S3-MP-Hash`, etc.) and the correct payload hash /
   homomorphic hash computed over the entire part payload. Its `ObjectID` is the value returned to the user
   as the part identifier.
 - **Part Linking Object**: references the Part Header Object as parent and lists all slices (measured objects)
@@ -135,7 +135,6 @@ Includes the following attributes:
 
 - `S3-MetaType: multipartPart`
 - `S3-MP-PartNumber`
-- `S3-MP-TotalSize`
 - `S3-MP-Hash`
 - `S3-MP-HomoHash`
 - `S3-MP-IsArbitrary`
@@ -151,10 +150,6 @@ Stores the part number for multipart uploads.
 Note: Per [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html), the first valid
 part number is `1`.  
 An internal part `0` exist but is hidden from users.
-
-### `S3-MP-TotalSize`
-
-Describes the total size of all sliced elements that comprise a part.
 
 ### `S3-MP-Hash`
 

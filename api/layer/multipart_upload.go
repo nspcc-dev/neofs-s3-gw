@@ -478,7 +478,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 
 	attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	attributes[s3headers.MultipartPartNumber] = "0"
-	attributes[s3headers.MultipartTotalSize] = "0"
 	attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
 
 	if tzHash != nil {
@@ -913,9 +912,7 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[s3headers.MultipartPartNumber], err)
 		}
 
-		if element.TotalSize, err = strconv.ParseInt(element.Attributes[s3headers.MultipartTotalSize], 10, 64); err != nil {
-			return nil, fmt.Errorf("convert multipart %s MultipartTotalSize %s: %w", uploadID, element.Attributes[s3headers.MultipartTotalSize], err)
-		}
+		element.TotalSize = element.Size
 
 		if decSize, ok := element.Attributes[s3headers.AttributeDecryptedSize]; ok && decSize != "" {
 			element.TotalSize, err = strconv.ParseInt(decSize, 10, 64)
@@ -994,7 +991,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			s3headers.MultipartUpload,
 			s3headers.MultipartPartNumber,
 			s3headers.MultipartPartHash,
-			s3headers.MultipartTotalSize,
+			object.FilterPayloadSize,
 			s3headers.AttributeDecryptedSize,
 		}
 	)
@@ -1913,7 +1910,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 		return id, fmt.Errorf("marshalBinary: %w", err)
 	}
 	partHeaders[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
-	partHeaders[s3headers.MultipartTotalSize] = strconv.FormatInt(totalBytes, 10)
 	partHeaders[s3headers.MultipartPartHash] = hex.EncodeToString(prm.Multipart.MultipartHashes.PartHash.Sum(nil))
 
 	if prm.Multipart.MultipartHashes.HomoHash != nil {
@@ -2034,7 +2030,6 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	params.attributes[s3headers.MultipartPartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
 	params.attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
 	params.attributes[s3headers.MultipartIsArbitraryPart] = "true"
-	params.attributes[s3headers.MultipartTotalSize] = strconv.FormatInt(params.decSize, 10)
 
 	prm := PrmObjectCreate{
 		Container:    params.bktInfo.CID,
