@@ -676,7 +676,6 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 
 		payloadMap = map[string]string{
 			s3headers.MultipartObjectKey: info.Key,
-			s3headers.MultipartOwner:     info.Owner.EncodeToString(),
 			s3headers.MultipartCreated:   strconv.FormatInt(info.Created.UTC().UnixMilli(), 10),
 		}
 	)
@@ -701,7 +700,7 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
-		Creator:      bktInfo.Owner,
+		Creator:      info.Owner,
 		Attributes:   attributes,
 		CreationTime: info.Created.UTC(),
 		Payload:      bytes.NewReader(payload),
@@ -826,14 +825,11 @@ func (n *layer) parseMultipartInfoObject(uploadID string, obj *object.Object) (d
 	var multipartInfo = data.MultipartInfo{
 		ID:       obj.GetID(),
 		UploadID: uploadID,
+		Owner:    obj.Owner(),
 	}
 
 	if err := json.Unmarshal(obj.Payload(), &payloadMap); err != nil {
 		return data.MultipartInfo{}, fmt.Errorf("unmarshal multipart %s payload: %w", uploadID, err)
-	}
-
-	if err := multipartInfo.Owner.DecodeString(payloadMap[s3headers.MultipartOwner]); err != nil {
-		return data.MultipartInfo{}, fmt.Errorf("unmarshal multipart %s owner %s : %w", uploadID, payloadMap[s3headers.MultipartOwner], err)
 	}
 
 	if utcMilli, err := strconv.ParseInt(payloadMap[s3headers.MultipartCreated], 10, 64); err == nil {
