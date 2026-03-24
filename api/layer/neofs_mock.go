@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -661,6 +662,9 @@ func fillResultObject(obj *object.Object, attributes []string) searchedItem {
 			resultItem.Attributes[i] = strconv.FormatUint(obj.CreationEpoch(), 10)
 		case object.FilterPayloadSize:
 			resultItem.Attributes[i] = strconv.FormatUint(obj.PayloadSize(), 10)
+		case object.FilterPayloadChecksum:
+			cs, _ := obj.PayloadChecksum()
+			resultItem.Attributes[i] = hex.EncodeToString(cs.Value())
 		}
 	}
 

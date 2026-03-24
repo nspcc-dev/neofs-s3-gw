@@ -169,9 +169,6 @@ to users until `CompleteMultipartUpload` is called.
 
 Stores the multipart upload ID.
 
-### `S3-MP-PartHash`
-
-Stores the hash of the entire part (including slices).
 
 ### `S3-MP-Owner`
 

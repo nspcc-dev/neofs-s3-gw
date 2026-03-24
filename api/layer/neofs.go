@@ -146,8 +146,6 @@ type MultipartHashes struct {
 	Hash hash.Hash
 	// HomoHash contains homo hash (if enabled) for the payload of the whole "big" multipart uploaded object.
 	HomoHash hash.Hash
-	// PartHash contains hash for separate part in multipart upload.
-	PartHash hash.Hash
 }
 
 // Multipart contains info for local object slicing inside s3-gate during multipart upload operation.
@@ -333,7 +331,7 @@ type NeoFS interface {
 
 // WritePayload writes bts to each available hash.
 func (h *MultipartHashes) WritePayload(bts []byte) error {
-	for _, hash := range []hash.Hash{h.Hash, h.HomoHash, h.PartHash} {
+	for _, hash := range []hash.Hash{h.Hash, h.HomoHash} {
 		if hash == nil {
 			continue
 		}

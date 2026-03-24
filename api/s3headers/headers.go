@@ -20,8 +20,6 @@ const (
 	MultipartHash = multipartPrefix + "Hash"
 	// MultipartHomoHash contains hash.Hash state to calculate final object homo hash.
 	MultipartHomoHash = multipartPrefix + "HomoHash"
-	// MultipartPartHash contains hash for MultipartPartNumber.
-	MultipartPartHash = multipartPrefix + "PartHash"
 	// MultipartOwner contains object owner for uploading object.
 	MultipartOwner = multipartPrefix + "Owner"
 	// MultipartMeta contains original object attributes.
