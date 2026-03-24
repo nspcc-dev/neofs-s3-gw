@@ -143,7 +143,6 @@ type (
 	uploadPartAsSlotParams struct {
 		bktInfo          *data.BucketInfo
 		multipartInfo    *data.MultipartInfo
-		tzHash           hash.Hash
 		attributes       map[string]string
 		uploadPartParams *UploadPartParams
 		creationTime     time.Time
@@ -285,12 +284,11 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	}
 	reqInfo := api.GetReqInfo(ctx)
 
-	// The previous part is not uploaded yet.
-	if lastPart == nil {
+	// The previous part is not uploaded yet or was uploaded out of sequence.
+	if lastPart == nil || len(lastPart.MultipartHash) == 0 {
 		params := uploadPartAsSlotParams{
 			bktInfo:          bktInfo,
 			multipartInfo:    multipartInfo,
-			tzHash:           tzHash,
 			attributes:       attributes,
 			uploadPartParams: p,
 			creationTime:     creationTime,
@@ -618,12 +616,23 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		multipartHash, homoHash []byte
 	)
 
-	if multipartHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHash]); err != nil {
-		return nil, fmt.Errorf("convert %s:%s multipartHash %s: %w", uploadID, lastElement.ID.String(), lastElement.Attributes[s3headers.MultipartHash], err)
+	mpHashStr := lastElement.Attributes[s3headers.MultipartHash]
+	if mpHashStr == "" {
+		// Part was uploaded out of sequence (no accumulated hash chain).
+		return &data.PartInfo{
+			OID: lastElement.ID,
+		}, nil
 	}
 
-	if homoHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHomoHash]); err != nil {
-		return nil, fmt.Errorf("convert %s:%s homoHash %s: %w", uploadID, lastElement.ID.String(), lastElement.Attributes[s3headers.MultipartHomoHash], err)
+	if multipartHash, err = hex.DecodeString(mpHashStr); err != nil {
+		return nil, fmt.Errorf("convert %s:%s multipartHash %s: %w", uploadID, lastElement.ID.String(), mpHashStr, err)
+	}
+
+	homoHashStr := lastElement.Attributes[s3headers.MultipartHomoHash]
+	if homoHashStr != "" {
+		if homoHash, err = hex.DecodeString(homoHashStr); err != nil {
+			return nil, fmt.Errorf("convert %s:%s homoHash %s: %w", uploadID, lastElement.ID.String(), homoHashStr, err)
+		}
 	}
 
 	partInfo := data.PartInfo{
@@ -651,16 +660,19 @@ func convertElementsToPartInfo(uploadID string, number int, elements []data.Elem
 		}
 	)
 
-	if partInfo.MultipartHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHash]); err != nil {
-		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, lastElement.Attributes[s3headers.MultipartHash], err)
+	mpHashStr := lastElement.Attributes[s3headers.MultipartHash]
+	if mpHashStr == "" {
+		// Part was uploaded out of sequence (no accumulated hash chain).
+		partInfo.Elements = nil
+		return partInfo, nil
+	}
+
+	if partInfo.MultipartHash, err = hex.DecodeString(mpHashStr); err != nil {
+		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, mpHashStr, err)
 	}
 
 	if partInfo.HomoHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHomoHash]); err != nil {
 		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHomoHash %s: %w", uploadID, lastElement.Attributes[s3headers.MultipartHomoHash], err)
-	}
-
-	if v, ok := lastElement.Attributes[s3headers.MultipartIsArbitraryPart]; ok && v == "true" {
-		partInfo.Elements = nil
 	}
 
 	return partInfo, nil
@@ -1999,37 +2011,9 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 // uploadPartAsSlot uploads multipart part, but without correct link to previous part because we don't have it.
 // It uses zero part as pivot. Actual link will be set on CompleteMultipart.
 func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotParams) (*data.ObjectInfo, error) {
-	var (
-		id                         oid.ID
-		multipartHash              = sha256.New()
-		mpHashBytes, homoHashBytes []byte
-	)
-
-	// encoding hash.Hash state to save it the object metadata.
-	// the required interface is guaranteed according to the docs, so just cast without checks.
-	binaryMarshaler := multipartHash.(encoding.BinaryMarshaler)
-	mpHashBytes, err := binaryMarshaler.MarshalBinary()
-	if err != nil {
-		return nil, fmt.Errorf("marshalBinary: %w", err)
-	}
-
-	params.attributes[s3headers.MultipartHash] = hex.EncodeToString(mpHashBytes)
-
-	if params.tzHash != nil {
-		binaryMarshaler = params.tzHash.(encoding.BinaryMarshaler)
-		homoHashBytes, err = binaryMarshaler.MarshalBinary()
-
-		if err != nil {
-			return nil, fmt.Errorf("marshalBinary: %w", err)
-		}
-
-		params.attributes[s3headers.MultipartHomoHash] = hex.EncodeToString(homoHashBytes)
-	}
-
 	params.attributes[s3headers.MultipartUpload] = params.multipartInfo.UploadID
 	params.attributes[s3headers.MultipartPartNumber] = strconv.FormatInt(int64(params.uploadPartParams.PartNumber), 10)
 	params.attributes[s3headers.MetaType] = s3headers.TypeMultipartPart
-	params.attributes[s3headers.MultipartIsArbitraryPart] = "true"
 
 	prm := PrmObjectCreate{
 		Container:    params.bktInfo.CID,
@@ -2072,7 +2056,7 @@ func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, buck
 	var filters object.SearchFilters
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MultipartIsArbitraryPart, "true", object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartHash, "", object.MatchNotPresent)
 
 	var opts client.SearchObjectsOptions
 	attachTokenToParams(ctx, bucketInfo.Owner, &opts)

@@ -137,7 +137,6 @@ Includes the following attributes:
 - `S3-MP-PartNumber`
 - `S3-MP-Hash`
 - `S3-MP-HomoHash`
-- `S3-MP-IsArbitrary`
 - `S3-MP-Upload`
 
 ---
@@ -153,24 +152,11 @@ An internal part `0` exist but is hidden from users.
 
 ### `S3-MP-Hash`
 
-Stores the intermediate hash state used to compute the final object hash.
+Stores the intermediate hash state used to compute the final object hash. It's set only when uploads are made consecutively.
 
 ### `S3-MP-HomoHash`
 
-Stores the intermediate state for computing a homomorphic hash, if enabled.
-
-### `S3-MP-IsArbitrary`
-
-Indicates whether a part was uploaded out of sequence.
-
-**Possible values:**
-
-- `true`
-
-**Example:**
-
-- Upload part 1
-- Upload part 3 → This will be marked with `S3-MP-IsArbitrary: true` because part 2 is missing.
+Stores the intermediate state for computing a homomorphic hash, if enabled. It's set only when uploads are made consecutively.
 
 ### `S3-MP-ObjectKey`
 

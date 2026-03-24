@@ -7,8 +7,6 @@ const (
 const (
 	multipartPrefix = attributePrefix + "MP-"
 
-	// MultipartIsArbitraryPart describes multipart which has been uploaded in not the subsequent order.
-	MultipartIsArbitraryPart = multipartPrefix + "IsArbitrary"
 	// MultipartObjectKey contains object key for multipart object.
 	// It is important to store it separately with object.AttributeFilePath attribute during multipart upload.
 	// Multipart uploading object shouldn't be available for user until CompleteMultipartUpload.
