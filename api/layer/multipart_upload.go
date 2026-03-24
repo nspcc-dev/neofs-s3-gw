@@ -252,9 +252,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		bktInfo       = p.Info.Bkt
 		payloadReader = p.Reader
 		decSize       = p.Size
-		attributes    = map[string]string{
-			s3headers.MultipartObjectKey: multipartInfo.Key,
-		}
+		attributes    = make(map[string]string)
 	)
 
 	if p.Info.Encryption.Enabled() {
