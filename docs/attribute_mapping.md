@@ -91,7 +91,7 @@ Each **part** is stored as a NeoFS split chain:
 - **Payload slices**: one or more NeoFS objects, each up to `MaxObjectSize`, carrying actual payload data.
   They form a local split chain with `SplitFirstID` / `SplitPreviousID` links.
 - **Part Header Object**: a zero-payload object that acts as the virtual "parent" of the local chain. It carries
-  per-part attributes (`S3-MP-PartNumber`, `S3-MP-TotalSize`, `S3-MP-Hash`, etc.) and the correct payload hash /
+  per-part attributes (`S3-MP-PartNumber`, `S3-MP-Hash`, etc.) and the correct payload hash /
   homomorphic hash computed over the entire part payload. Its `ObjectID` is the value returned to the user
   as the part identifier.
 - **Part Linking Object**: references the Part Header Object as parent and lists all slices (measured objects)
@@ -123,7 +123,7 @@ Includes the following attributes:
 - `S3-MetaType: multipartInfo`
 - `S3-MP-ObjectKey`
 - `S3-MP-Upload`
-- `S3-MP-Meta`, contains base64 encoded map with: `S3-MP-ObjectKey`, `S3-MP-Owner`, `S3-MP-Created`,
+- `S3-MP-Meta`, contains base64 encoded map with: `S3-MP-ObjectKey`, `S3-MP-Created`,
 
 ### Multipart Part Object
 
@@ -135,10 +135,8 @@ Includes the following attributes:
 
 - `S3-MetaType: multipartPart`
 - `S3-MP-PartNumber`
-- `S3-MP-TotalSize`
 - `S3-MP-Hash`
 - `S3-MP-HomoHash`
-- `S3-MP-IsArbitrary`
 - `S3-MP-Upload`
 
 ---
@@ -152,30 +150,13 @@ Note: Per [AWS documentation](https://docs.aws.amazon.com/AmazonS3/latest/usergu
 part number is `1`.  
 An internal part `0` exist but is hidden from users.
 
-### `S3-MP-TotalSize`
-
-Describes the total size of all sliced elements that comprise a part.
-
 ### `S3-MP-Hash`
 
-Stores the intermediate hash state used to compute the final object hash.
+Stores the intermediate hash state used to compute the final object hash. It's set only when uploads are made consecutively.
 
 ### `S3-MP-HomoHash`
 
-Stores the intermediate state for computing a homomorphic hash, if enabled.
-
-### `S3-MP-IsArbitrary`
-
-Indicates whether a part was uploaded out of sequence.
-
-**Possible values:**
-
-- `true`
-
-**Example:**
-
-- Upload part 1
-- Upload part 3 → This will be marked with `S3-MP-IsArbitrary: true` because part 2 is missing.
+Stores the intermediate state for computing a homomorphic hash, if enabled. It's set only when uploads are made consecutively.
 
 ### `S3-MP-ObjectKey`
 
@@ -188,13 +169,6 @@ to users until `CompleteMultipartUpload` is called.
 
 Stores the multipart upload ID.
 
-### `S3-MP-PartHash`
-
-Stores the hash of the entire part (including slices).
-
-### `S3-MP-Owner`
-
-Stores the owner of the uploading object.
 
 ### `S3-MP-Meta`
 

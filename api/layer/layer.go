@@ -1145,7 +1145,7 @@ func (n *layer) SearchParts(ctx context.Context, bktInfo *data.BucketInfo, uploa
 		returningAttributes = []string{
 			s3headers.MultipartUpload,
 			object.AttributeTimestamp,
-			s3headers.MultipartPartHash,
+			object.FilterPayloadChecksum,
 			s3headers.MultipartPartNumber,
 		}
 	)

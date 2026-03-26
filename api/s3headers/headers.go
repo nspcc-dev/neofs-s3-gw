@@ -7,12 +7,6 @@ const (
 const (
 	multipartPrefix = attributePrefix + "MP-"
 
-	// MultipartIsArbitraryPart describes multipart which has been uploaded in not the subsequent order.
-	MultipartIsArbitraryPart = multipartPrefix + "IsArbitrary"
-	// MultipartTotalSize describes payload size for all manually sliced elements for part.
-	// Size of the last element in chain is a whole part size.
-	MultipartTotalSize = multipartPrefix + "TotalSize"
-
 	// MultipartObjectKey contains object key for multipart object.
 	// It is important to store it separately with object.AttributeFilePath attribute during multipart upload.
 	// Multipart uploading object shouldn't be available for user until CompleteMultipartUpload.
@@ -26,10 +20,6 @@ const (
 	MultipartHash = multipartPrefix + "Hash"
 	// MultipartHomoHash contains hash.Hash state to calculate final object homo hash.
 	MultipartHomoHash = multipartPrefix + "HomoHash"
-	// MultipartPartHash contains hash for MultipartPartNumber.
-	MultipartPartHash = multipartPrefix + "PartHash"
-	// MultipartOwner contains object owner for uploading object.
-	MultipartOwner = multipartPrefix + "Owner"
 	// MultipartMeta contains original object attributes.
 	MultipartMeta = multipartPrefix + "Meta"
 	// MultipartCreated contains final object creation date.
