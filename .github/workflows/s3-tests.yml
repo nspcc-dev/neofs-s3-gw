@@ -143,9 +143,8 @@ jobs:
         with:
           NEOFS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
           NEOFS_WALLET_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
-          NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
-          NEOFS_HTTP_GATE: ${{ vars.TEST_RESULTS_HTTP_GATE }}
           STORE_OBJECTS_CID: ${{ vars.TEST_RESULTS_CID }}
+          HTTP_URL_PREFIX: https://rest.fs.neo.org/${{ vars.TEST_RESULTS_CID }}/
           PR_LIFETIME: ${{ vars.PR_EXPIRATION_PERIOD }}
           MASTER_LIFETIME: ${{ vars.MASTER_EXPIRATION_PERIOD }}
           MANUAL_RUN_LIFETIME: ${{ vars.MANUAL_RUN_EXPIRATION_PERIOD }}
