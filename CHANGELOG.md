@@ -7,16 +7,54 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- Minimal required Go is 1.25 now (#1204)
 
 ### Fixed
 
 ### Updated
 
 ### Removed
+
+### Upgrading from 0.42.0
+
+## [0.43.0] - 2026-03-30
+
+### Added
+- Session token v2 support (#1256)
+
+### Changed
+- Minimal required Go is 1.25 now (#1204)
+- Multipart object to NeoFS object mapping (#1262, #1263, #1267)
+- Limit of a single part of multipart object to 4 GB (#1263)
+
+### Fixed
+- Error getting a part of the multipart object (#1260, #1262)
+- Inability to upload more than 300 parts for a multipart object (#1263)
+
+### Updated
+- go.uber.org/zap dependency from v1.27.0 to v1.27.1 (#1258)
+- github.com/spf13/viper dependency from v1.19.0 to v1.21.0 (#1258)
+- github.com/nspcc-dev/neo-go dependency from v0.116.0 to v0.118.0 (#1258, #1256)
+- github.com/nspcc-dev/neofs-contract dependency from v0.26.0 to v0.26.1 (#1258)
+- github.com/nspcc-dev/tzhash dependency from v1.8.3 to v1.8.4 (#1258)
+- golang.org/x/term dependency from v0.37.0 to v0.40.0 (#1258)
+- github.com/klauspost/reedsolomon dependency from v1.12.5 to v1.13.2 (#1258)
+- github.com/minio/sio dependency from v0.4.1 to v0.4.3 (#1258)
+- github.com/minio/crc64nvme dependency from v1.0.1 to v1.1.1 (#1258)
+- github.com/nats-io/nats.go dependency from v1.37.0 to v1.49.0 (#1258)
+- github.com/cenkalti/backoff/v5 dependency from v5.0.2 to v5.0.3 (#1258)
+- google.golang.org/grpc dependency from v1.75.1 to v1.79.3 (#1258, #1264)
+- github.com/aws/aws-sdk-go-v2 dependency from v1.36.5 to v1.41.2 (#1258)
+- github.com/aws/aws-sdk-go-v2/credentials dependency from v1.17.64 to v1.19.10 (#1258)
+- NeoFS SDK dependency from RC17 to RC18 (#1256, #1268)
+
+### Removed
 - waiter usage and `container_ops_poll_interval` config option (#1254)
 
 ### Upgrading from 0.42.0
+Drop `container_ops_poll_interval` configuration option.
+
+Please upgrade your S3 credentials to use new sessionV2-based tokens, support
+for old (mixed session/bearer) tokens will eventually be removed.
 
 ## [0.42.0] - 2026-02-13
 
@@ -971,4 +1009,5 @@ releases.
 [0.41.4]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.3...v0.41.4
 [0.41.5]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.4...v0.41.5
 [0.42.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.5...v0.42.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.42.0...master
+[0.43.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.42.0...v0.43.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.0...master
