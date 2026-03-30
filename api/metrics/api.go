@@ -27,8 +27,8 @@ type (
 		totalS3Requests   HTTPAPIStats
 		totalS3Errors     HTTPAPIStats
 
-		totalInputBytes  uint64
-		totalOutputBytes uint64
+		totalInputBytes  atomic.Uint64
+		totalOutputBytes atomic.Uint64
 	}
 
 	readCounter struct {
@@ -129,8 +129,8 @@ func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		httpStatsMetric.updateStats(api, statsWriter, r, durationSecs)
 
-		atomic.AddUint64(&httpStatsMetric.totalInputBytes, in.countBytes)
-		atomic.AddUint64(&httpStatsMetric.totalOutputBytes, out.countBytes)
+		httpStatsMetric.totalInputBytes.Add(in.countBytes)
+		httpStatsMetric.totalOutputBytes.Add(out.countBytes)
 	}
 }
 
@@ -167,11 +167,11 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 }
 
 func (st *HTTPStats) getInputBytes() uint64 {
-	return atomic.LoadUint64(&st.totalInputBytes)
+	return st.totalInputBytes.Load()
 }
 
 func (st *HTTPStats) getOutputBytes() uint64 {
-	return atomic.LoadUint64(&st.totalOutputBytes)
+	return st.totalOutputBytes.Load()
 }
 
 // Update statistics from http request and response data.
