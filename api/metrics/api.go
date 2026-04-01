@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"io"
-	"maps"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -13,19 +13,12 @@ import (
 )
 
 type (
-	// HTTPAPIStats holds statistics information about
-	// the API given in the requests.
-	HTTPAPIStats struct {
-		apiStats map[string]int
-		sync.RWMutex
-	}
-
 	// HTTPStats holds statistics information about
 	// HTTP requests made by all clients.
 	HTTPStats struct {
-		currentS3Requests HTTPAPIStats
-		totalS3Requests   HTTPAPIStats
-		totalS3Errors     HTTPAPIStats
+		currentS3Requests map[string]*atomic.Uint64
+		totalS3Requests   map[string]*atomic.Uint64
+		totalS3Errors     map[string]*atomic.Uint64
 
 		totalInputBytes  atomic.Uint64
 		totalOutputBytes atomic.Uint64
@@ -53,7 +46,11 @@ type (
 const systemPath = "/system"
 
 var (
-	httpStatsMetric      = new(HTTPStats)
+	httpStatsMetric = &HTTPStats{
+		currentS3Requests: make(map[string]*atomic.Uint64),
+		totalS3Requests:   make(map[string]*atomic.Uint64),
+		totalS3Errors:     make(map[string]*atomic.Uint64),
+	}
 	httpRequestsDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "neofs_s3_request_seconds",
@@ -67,38 +64,38 @@ var (
 // Collects HTTP metrics for NeoFS S3 Gate in Prometheus specific format
 // and sends to the given channel.
 func collectHTTPMetrics(ch chan<- prometheus.Metric) {
-	for api, value := range httpStatsMetric.currentS3Requests.Load() {
+	for api, value := range httpStatsMetric.currentS3Requests {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(namespace, "requests", "current"),
 				"Total number of running s3 requests in current NeoFS S3 Gate instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
-			float64(value),
+			float64(value.Load()),
 			api,
 		)
 	}
 
-	for api, value := range httpStatsMetric.totalS3Requests.Load() {
+	for api, value := range httpStatsMetric.totalS3Requests {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(namespace, "requests", "total"),
 				"Total number of s3 requests in current NeoFS S3 Gate instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
-			float64(value),
+			float64(value.Load()),
 			api,
 		)
 	}
 
-	for api, value := range httpStatsMetric.totalS3Errors.Load() {
+	for api, value := range httpStatsMetric.totalS3Errors {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(namespace, "errors", "total"),
 				"Total number of s3 errors in current NeoFS S3 Gate instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
-			float64(value),
+			float64(value.Load()),
 			api,
 		)
 	}
@@ -106,9 +103,13 @@ func collectHTTPMetrics(ch chan<- prometheus.Metric) {
 
 // APIStats wraps http handler for api with basic statistics collection.
 func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
+	httpStatsMetric.currentS3Requests[api] = new(atomic.Uint64)
+	httpStatsMetric.totalS3Requests[api] = new(atomic.Uint64)
+	httpStatsMetric.totalS3Errors[api] = new(atomic.Uint64)
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		httpStatsMetric.currentS3Requests.Inc(api)
-		defer httpStatsMetric.currentS3Requests.Dec(api)
+		httpStatsMetric.currentS3Requests[api].Add(1)
+		defer httpStatsMetric.currentS3Requests[api].Add(math.MaxUint64)
 
 		in := &readCounter{ReadCloser: r.Body}
 		out := &writeCounter{ResponseWriter: w}
@@ -134,38 +135,6 @@ func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Inc increments the api stats counter.
-func (stats *HTTPAPIStats) Inc(api string) {
-	if stats == nil {
-		return
-	}
-	stats.Lock()
-	defer stats.Unlock()
-	if stats.apiStats == nil {
-		stats.apiStats = make(map[string]int)
-	}
-	stats.apiStats[api]++
-}
-
-// Dec increments the api stats counter.
-func (stats *HTTPAPIStats) Dec(api string) {
-	if stats == nil {
-		return
-	}
-	stats.Lock()
-	defer stats.Unlock()
-	if val, ok := stats.apiStats[api]; ok && val > 0 {
-		stats.apiStats[api]--
-	}
-}
-
-// Load returns the recorded stats.
-func (stats *HTTPAPIStats) Load() map[string]int {
-	stats.Lock()
-	defer stats.Unlock()
-	return maps.Clone(stats.apiStats)
-}
-
 func (st *HTTPStats) getInputBytes() uint64 {
 	return st.totalInputBytes.Load()
 }
@@ -186,9 +155,9 @@ func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Requ
 	successReq := code >= http.StatusOK && code < http.StatusMultipleChoices
 
 	if !strings.HasSuffix(r.URL.Path, systemPath) {
-		st.totalS3Requests.Inc(api)
+		st.totalS3Requests[api].Add(1)
 		if !successReq && code != 0 {
-			st.totalS3Errors.Inc(api)
+			st.totalS3Errors[api].Add(1)
 		}
 	}
 
