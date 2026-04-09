@@ -869,6 +869,7 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartHash, "", object.MatchStringNotEqual)
 
 	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
