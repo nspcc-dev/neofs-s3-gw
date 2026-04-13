@@ -14,7 +14,15 @@ This document outlines major changes between releases.
 
 ### Removed
 
-### Upgrading from 0.42.0
+### Upgrading from 0.43.1
+
+## [0.43.1] - 2026-04-13
+
+### Changed
+- Reduced metrics collection overhead (#1273)
+
+### Fixed
+- Occasional CompleteMultipartUpload request failures (#1274)
 
 ## [0.43.0] - 2026-03-30
 
@@ -1010,4 +1018,5 @@ releases.
 [0.41.5]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.4...v0.41.5
 [0.42.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.5...v0.42.0
 [0.43.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.42.0...v0.43.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.0...master
+[0.43.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.0...v0.43.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.1...master
