@@ -535,18 +535,27 @@ func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header o
 	return &header, nil
 }
 
-// wraps io.ReadCloser and transforms Read errors related to access violation
-// to neofs.ErrAccessDenied.
+// wraps layer.PayloadReadCloser and transforms streaming errors related to access
+// violation to neofs.ErrAccessDenied.
 type payloadReader struct {
-	io.ReadCloser
+	layer.PayloadReadCloser
 }
 
 func (x payloadReader) Read(p []byte) (int, error) {
-	n, err := x.ReadCloser.Read(p)
+	n, err := x.PayloadReadCloser.Read(p)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return n, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 		}
+	}
+
+	return n, err
+}
+
+func (x payloadReader) WriteTo(w io.Writer) (int64, error) {
+	n, err := x.PayloadReadCloser.WriteTo(w)
+	if reason, ok := isErrAccessDenied(err); ok {
+		return n, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 	}
 
 	return n, err
@@ -618,7 +627,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		}
 
 		return &layer.ObjectPart{
-			Payload: res,
+			Payload: payloadReader{res},
 		}, nil
 	}
 

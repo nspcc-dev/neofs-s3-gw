@@ -47,6 +47,22 @@ type TestNeoFS struct {
 	signer       neofscrypto.Signer
 }
 
+type mockPayloadReadCloser struct {
+	io.Reader
+}
+
+func (m mockPayloadReadCloser) Close() error {
+	return nil
+}
+
+func (m mockPayloadReadCloser) WriteTo(w io.Writer) (int64, error) {
+	if wt, ok := m.Reader.(io.WriterTo); ok {
+		return wt.WriteTo(w)
+	}
+
+	return io.Copy(w, m.Reader)
+}
+
 type searchedItem struct {
 	SearchResultItem client.SearchResultItem
 	FilePath         string
@@ -233,7 +249,7 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 
 	return &ObjectPart{
 		Head:    obj,
-		Payload: io.NopCloser(bytes.NewReader(payload)),
+		Payload: mockPayloadReadCloser{Reader: bytes.NewReader(payload)},
 	}, nil
 }
 
@@ -280,7 +296,7 @@ func (t *TestNeoFS) constructMupltipartObject(ctx context.Context, containerID c
 
 	return &ObjectPart{
 		Head:    headObject,
-		Payload: io.NopCloser(io.MultiReader(payloadReaders...)),
+		Payload: mockPayloadReadCloser{Reader: io.MultiReader(payloadReaders...)},
 	}, nil
 }
 

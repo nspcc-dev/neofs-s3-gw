@@ -158,7 +158,7 @@ func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj 
 
 // initializes payload reader of the NeoFS object.
 // Zero range corresponds to full payload (panics if only offset is set).
-func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (io.Reader, error) {
+func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (PayloadReadCloser, error) {
 	prm := PrmObjectRead{
 		Container:    p.bktInfo.CID,
 		Object:       p.oid,

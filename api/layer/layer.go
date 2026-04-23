@@ -209,7 +209,7 @@ type (
 	// ObjectWithPayloadReader is a response for Client.GetObjectWithPayloadReader.
 	ObjectWithPayloadReader struct {
 		Head       *object.Object
-		Payload    io.ReadCloser
+		Payload    PayloadReadCloser
 		ObjectInfo *data.ObjectInfo
 	}
 
@@ -543,24 +543,17 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 		return fmt.Errorf("init object payload reader: %w", err)
 	}
 
-	bufSize := uint64(32 * 1024) // configure?
-	if params.ln != 0 && params.ln < bufSize {
-		bufSize = params.ln
-	}
-
-	// alloc buffer for copying
-	buf := make([]byte, bufSize) // sync-pool it?
-
-	r := payload
+	var written int64
 	if decReader != nil {
 		if err = decReader.SetReader(payload); err != nil {
 			return fmt.Errorf("set reader to decrypter: %w", err)
 		}
-		r = io.LimitReader(decReader, int64(decReader.DecryptedLength()))
+		r := io.LimitReader(decReader, int64(decReader.DecryptedLength()))
+		written, err = io.Copy(p.Writer, r)
+	} else {
+		written, err = payload.WriteTo(p.Writer)
 	}
 
-	// copy full payload
-	written, err := io.CopyBuffer(p.Writer, r, buf)
 	if err != nil {
 		if decReader != nil {
 			return fmt.Errorf("copy object payload written: '%d', decLength: '%d', params.ln: '%d' : %w", written, decReader.DecryptedLength(), params.ln, err)
