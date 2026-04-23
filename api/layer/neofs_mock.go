@@ -419,6 +419,7 @@ func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header
 	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
 
 	if homomorphicChecksum != nil {
+		//nolint:staticcheck // removed after node 0.53.0
 		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
 	}
 

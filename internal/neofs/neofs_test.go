@@ -71,8 +71,9 @@ func Benchmark(b *testing.B) {
 	require.NoError(b, err)
 
 	neofsCfg := Config{
-		MaxObjectSize:        int64(ni.MaxObjectSize()),
-		IsSlicerEnabled:      false,
+		MaxObjectSize:   int64(ni.MaxObjectSize()),
+		IsSlicerEnabled: false,
+		//nolint:staticcheck // removed after node 0.53.0
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
@@ -167,8 +168,9 @@ func TestConcurrencyAndConsistency(t *testing.T) {
 	gorutines := runtime.GOMAXPROCS(0)
 
 	neofsCfg := Config{
-		MaxObjectSize:        int64(ni.MaxObjectSize()),
-		IsSlicerEnabled:      false,
+		MaxObjectSize:   int64(ni.MaxObjectSize()),
+		IsSlicerEnabled: false,
+		//nolint:staticcheck // removed after node 0.53.0
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 

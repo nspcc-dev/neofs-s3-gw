@@ -72,7 +72,9 @@ func FormObjectHeaderForECPart(signer neofscrypto.Signer, parent object.Object, 
 
 	obj.SetPayloadSize(uint64(len(part)))
 	obj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(part)))
+	//nolint:staticcheck // removed after node 0.53.0
 	if _, ok := parent.PayloadHomomorphicHash(); ok {
+		//nolint:staticcheck // removed after node 0.53.0
 		obj.SetPayloadHomomorphicHash(checksum.NewTillichZemor(tz.Sum(part)))
 	}
 

@@ -166,7 +166,14 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 	cnr.SetCreationTime(creationTime)
 
-	if !x.IsHomomorphicHashingEnabled() {
+	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		return cid.ID{}, fmt.Errorf("get network info via client: %w", err)
+	}
+
+	//nolint:staticcheck // removed after node 0.53.0
+	if networkInfo.HomomorphicHashingDisabled() {
+		//nolint:staticcheck // removed after node 0.53.0
 		cnr.DisableHomomorphicHashing()
 	}
 
@@ -185,11 +192,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	if prm.Policy.Consistency == ContainerMetaDataPolicyStrict ||
 		prm.Policy.Consistency == ContainerMetaDataPolicyOptimistic {
 		cnr.SetAttribute(containerMetaDataPolicyAttribute, prm.Policy.Consistency)
-	}
-
-	err := client.SyncContainerWithNetwork(ctx, &cnr, x.pool)
-	if err != nil {
-		return cid.ID{}, fmt.Errorf("sync container with the network state: %w", err)
 	}
 
 	var prmPut client.PrmContainerPut
@@ -296,6 +298,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 func (x *NeoFS) signMultipartObject(obj *object.Object, signer neofscrypto.Signer, payloadHash, homoHash hash.Hash) error {
 	obj.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, payloadHash))
 	if homoHash != nil {
+		//nolint:staticcheck // removed after node 0.53.0
 		obj.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homoHash))
 	}
 
@@ -425,6 +428,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		opts.SetPayloadBuffer(*chunk)
 
 		if x.cfg.IsHomomorphicEnabled {
+			//nolint:staticcheck // removed after node 0.53.0
 			opts.CalculateHomomorphicChecksum()
 		}
 
@@ -524,6 +528,7 @@ func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header o
 	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
 
 	if homomorphicChecksum != nil {
+		//nolint:staticcheck // removed after node 0.53.0
 		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
 	}
 
