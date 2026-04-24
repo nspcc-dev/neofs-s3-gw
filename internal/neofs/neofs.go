@@ -166,7 +166,14 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 	cnr.SetCreationTime(creationTime)
 
-	if !x.IsHomomorphicHashingEnabled() {
+	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	if err != nil {
+		return cid.ID{}, fmt.Errorf("get network info via client: %w", err)
+	}
+
+	//nolint:staticcheck // removed after node 0.53.0
+	if networkInfo.HomomorphicHashingDisabled() {
+		//nolint:staticcheck // removed after node 0.53.0
 		cnr.DisableHomomorphicHashing()
 	}
 
@@ -185,11 +192,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	if prm.Policy.Consistency == ContainerMetaDataPolicyStrict ||
 		prm.Policy.Consistency == ContainerMetaDataPolicyOptimistic {
 		cnr.SetAttribute(containerMetaDataPolicyAttribute, prm.Policy.Consistency)
-	}
-
-	err := client.SyncContainerWithNetwork(ctx, &cnr, x.pool)
-	if err != nil {
-		return cid.ID{}, fmt.Errorf("sync container with the network state: %w", err)
 	}
 
 	var prmPut client.PrmContainerPut
@@ -296,6 +298,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 func (x *NeoFS) signMultipartObject(obj *object.Object, signer neofscrypto.Signer, payloadHash, homoHash hash.Hash) error {
 	obj.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, payloadHash))
 	if homoHash != nil {
+		//nolint:staticcheck // removed after node 0.53.0
 		obj.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homoHash))
 	}
 
@@ -425,6 +428,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		opts.SetPayloadBuffer(*chunk)
 
 		if x.cfg.IsHomomorphicEnabled {
+			//nolint:staticcheck // removed after node 0.53.0
 			opts.CalculateHomomorphicChecksum()
 		}
 
@@ -524,6 +528,7 @@ func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header o
 	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
 
 	if homomorphicChecksum != nil {
+		//nolint:staticcheck // removed after node 0.53.0
 		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
 	}
 
@@ -535,18 +540,27 @@ func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header o
 	return &header, nil
 }
 
-// wraps io.ReadCloser and transforms Read errors related to access violation
-// to neofs.ErrAccessDenied.
+// wraps layer.PayloadReadCloser and transforms streaming errors related to access
+// violation to neofs.ErrAccessDenied.
 type payloadReader struct {
-	io.ReadCloser
+	layer.PayloadReadCloser
 }
 
 func (x payloadReader) Read(p []byte) (int, error) {
-	n, err := x.ReadCloser.Read(p)
+	n, err := x.PayloadReadCloser.Read(p)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return n, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 		}
+	}
+
+	return n, err
+}
+
+func (x payloadReader) WriteTo(w io.Writer) (int64, error) {
+	n, err := x.PayloadReadCloser.WriteTo(w)
+	if reason, ok := isErrAccessDenied(err); ok {
+		return n, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 	}
 
 	return n, err
@@ -618,7 +632,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		}
 
 		return &layer.ObjectPart{
-			Payload: res,
+			Payload: payloadReader{res},
 		}, nil
 	}
 

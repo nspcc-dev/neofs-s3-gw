@@ -623,8 +623,9 @@ func createNeoFS(ctx context.Context, log *zap.Logger, cfg PoolConfig, anonSigne
 	}
 
 	neofsCfg := neofs.Config{
-		MaxObjectSize:        int64(ni.MaxObjectSize()),
-		IsSlicerEnabled:      isSlicerEnabled,
+		MaxObjectSize:   int64(ni.MaxObjectSize()),
+		IsSlicerEnabled: isSlicerEnabled,
+		//nolint:staticcheck // removed after node 0.53.0
 		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 

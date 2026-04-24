@@ -98,14 +98,20 @@ type GetObject struct {
 	Object oid.ID
 }
 
+// PayloadReadCloser is a streaming object payload reader with direct write support.
+type PayloadReadCloser interface {
+	io.ReadCloser
+	io.WriterTo
+}
+
 // ObjectPart represents partially read NeoFS object.
 type ObjectPart struct {
 	// Object header with optional in-memory payload part.
 	Head *object.Object
 
-	// Object payload part encapsulated in io.Reader primitive.
+	// Object payload part encapsulated in a streaming primitive.
 	// Returns ErrAccessDenied on read access violation.
-	Payload io.ReadCloser
+	Payload PayloadReadCloser
 }
 
 // PrmObjectCreate groups parameters of NeoFS.CreateObject operation.

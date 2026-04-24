@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,10 +22,6 @@ type conditionalArgs struct {
 	IfMatch           string
 	IfNoneMatch       string
 }
-
-const (
-	defaultBufferSize = 128 * 1024
-)
 
 func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
 	const prefix = "bytes="
@@ -281,13 +276,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var bufferSize = min(info.Size, defaultBufferSize)
-	if bufferSize == 0 {
-		bufferSize = defaultBufferSize
-	}
-
-	buf := make([]byte, bufferSize)
-	if _, err = io.CopyBuffer(w, objectWithPayloadReader.Payload, buf); err != nil {
+	if _, err = objectWithPayloadReader.Payload.WriteTo(w); err != nil {
 		h.logAndSendError(w, "could write object output", reqInfo, err)
 	}
 
