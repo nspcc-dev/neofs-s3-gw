@@ -73,8 +73,6 @@ func Benchmark(b *testing.B) {
 	neofsCfg := Config{
 		MaxObjectSize:   int64(ni.MaxObjectSize()),
 		IsSlicerEnabled: false,
-		//nolint:staticcheck // removed after node 0.53.0
-		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
 	neo := NewNeoFS(p, signer, anonSigner, neofsCfg, ni)
@@ -170,8 +168,6 @@ func TestConcurrencyAndConsistency(t *testing.T) {
 	neofsCfg := Config{
 		MaxObjectSize:   int64(ni.MaxObjectSize()),
 		IsSlicerEnabled: false,
-		//nolint:staticcheck // removed after node 0.53.0
-		IsHomomorphicEnabled: !ni.HomomorphicHashingDisabled(),
 	}
 
 	neo := NewNeoFS(p, signer, anonSigner, neofsCfg, ni)
