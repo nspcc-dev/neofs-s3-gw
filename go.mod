@@ -16,7 +16,6 @@ require (
 	github.com/nspcc-dev/neo-go v0.118.0
 	github.com/nspcc-dev/neofs-contract v0.26.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.18.0.20260423125015-8fc4072be8c5
-	github.com/nspcc-dev/tzhash v1.8.4
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
@@ -44,6 +43,7 @@ require (
 	github.com/nspcc-dev/bbolt v0.0.0-20250911202005-807225ebb0c8 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20260302080601-ff7471f924b3 // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.4 // indirect
+	github.com/nspcc-dev/tzhash v1.8.4 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect

@@ -110,10 +110,8 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	}
 
 	neofsCfg := neofs.Config{
-		MaxObjectSize:   int64(ni.MaxObjectSize()),
-		IsSlicerEnabled: v.GetBool(cfgSlicerEnabled),
-		//nolint:staticcheck // removed after node 0.53.0
-		IsHomomorphicEnabled:    !ni.HomomorphicHashingDisabled(),
+		MaxObjectSize:           int64(ni.MaxObjectSize()),
+		IsSlicerEnabled:         v.GetBool(cfgSlicerEnabled),
 		ContainerMetadataPolicy: v.GetString(cfgContainerMetadataPolicy),
 	}
 
