@@ -125,7 +125,6 @@ type (
 	multipartHeadObjectParams struct {
 		PutObject         PutObjectParams
 		PayloadHash       hash.Hash
-		HomoHash          hash.Hash
 		PayloadLength     uint64
 		VersioningEnabled bool
 		SplitFirstID      oid.ID
@@ -455,7 +454,7 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, prm multipartHea
 		headerObject.SetPreviousID(prm.SplitPreviousID)
 	}
 
-	multipartHeader, err := n.neoFS.FinalizeObjectWithPayloadChecksums(ctx, headerObject, prm.PayloadHash, prm.HomoHash, prm.PayloadLength)
+	multipartHeader, err := n.neoFS.FinalizeObjectWithPayloadChecksums(ctx, headerObject, prm.PayloadHash, prm.PayloadLength)
 	if err != nil {
 		return nil, fmt.Errorf("FinalizeObjectWithPayloadChecksums: %w", err)
 	}
