@@ -150,8 +150,6 @@ type PrmObjectCreate struct {
 type MultipartHashes struct {
 	// Hash contains hash for the payload of the whole "big" multipart uploaded object.
 	Hash hash.Hash
-	// HomoHash contains homo hash (if enabled) for the payload of the whole "big" multipart uploaded object.
-	HomoHash hash.Hash
 }
 
 // Multipart contains info for local object slicing inside s3-gate during multipart upload operation.
@@ -169,8 +167,6 @@ type Multipart struct {
 	Link *object.Link
 	// PayloadHash contains precalculated hash for object.
 	PayloadHash hash.Hash
-	// HomoHash contains precalculated homomorphic hash for object if enabled.
-	HomoHash hash.Hash
 	// Storage policy of the container to upload data into. Ignored if Link is set.
 	ContainerPolicy netmap.PlacementPolicy
 }
@@ -292,7 +288,7 @@ type NeoFS interface {
 	CreateObject(context.Context, PrmObjectCreate) (oid.ID, error)
 
 	// FinalizeObjectWithPayloadChecksums fills and signs header object for complete multipart object.
-	FinalizeObjectWithPayloadChecksums(context.Context, object.Object, hash.Hash, hash.Hash, uint64) (*object.Object, error)
+	FinalizeObjectWithPayloadChecksums(context.Context, object.Object, hash.Hash, uint64) (*object.Object, error)
 
 	// DeleteObject marks the object to be removed from the NeoFS container by identifier.
 	// Successful return does not guarantee actual removal.
@@ -312,9 +308,6 @@ type NeoFS interface {
 
 	// MaxObjectSize returns configured payload size limit for object slicing when enabled.
 	MaxObjectSize() int64
-
-	// IsHomomorphicHashingEnabled shows if homomorphic hashing is enabled in config.
-	IsHomomorphicHashingEnabled() bool
 
 	// CurrentEpoch returns current epoch.
 	CurrentEpoch() uint64
@@ -337,7 +330,7 @@ type NeoFS interface {
 
 // WritePayload writes bts to each available hash.
 func (h *MultipartHashes) WritePayload(bts []byte) error {
-	for _, hash := range []hash.Hash{h.Hash, h.HomoHash} {
+	for _, hash := range []hash.Hash{h.Hash} {
 		if hash == nil {
 			continue
 		}

@@ -37,14 +37,12 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
-	"github.com/nspcc-dev/tzhash/tz"
 )
 
 // Config allows to configure some [NeoFS] parameters.
 type Config struct {
 	MaxObjectSize           int64
 	IsSlicerEnabled         bool
-	IsHomomorphicEnabled    bool
 	ContainerMetadataPolicy string
 }
 
@@ -166,17 +164,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 	cnr.SetCreationTime(creationTime)
 
-	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		return cid.ID{}, fmt.Errorf("get network info via client: %w", err)
-	}
-
-	//nolint:staticcheck // removed after node 0.53.0
-	if networkInfo.HomomorphicHashingDisabled() {
-		//nolint:staticcheck // removed after node 0.53.0
-		cnr.DisableHomomorphicHashing()
-	}
-
 	if prm.Name != "" {
 		var d container.Domain
 		d.SetName(prm.Name)
@@ -295,12 +282,8 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.C
 	return nil
 }
 
-func (x *NeoFS) signMultipartObject(obj *object.Object, signer neofscrypto.Signer, payloadHash, homoHash hash.Hash) error {
+func (x *NeoFS) signMultipartObject(obj *object.Object, signer neofscrypto.Signer, payloadHash hash.Hash) error {
 	obj.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, payloadHash))
-	if homoHash != nil {
-		//nolint:staticcheck // removed after node 0.53.0
-		obj.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homoHash))
-	}
 
 	if err := obj.SetIDWithSignature(signer); err != nil {
 		return fmt.Errorf("set id with signature: %w", err)
@@ -373,11 +356,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			prm.Multipart.PayloadHash = sha256.New()
 			prm.Multipart.PayloadHash.Write(obj.Payload())
 
-			if x.IsHomomorphicHashingEnabled() {
-				prm.Multipart.HomoHash = tz.New()
-				prm.Multipart.HomoHash.Write(obj.Payload())
-			}
-
 			// Link object should never have a previous one.
 			obj.ResetPreviousID()
 		}
@@ -386,7 +364,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			&obj,
 			signer,
 			prm.Multipart.PayloadHash,
-			prm.Multipart.HomoHash,
 		); err != nil {
 			return oid.ID{}, errors.New("failed to sign object")
 		}
@@ -426,11 +403,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 
 		opts.SetPayloadBuffer(*chunk)
-
-		if x.cfg.IsHomomorphicEnabled {
-			//nolint:staticcheck // removed after node 0.53.0
-			opts.CalculateHomomorphicChecksum()
-		}
 
 		if prm.SessionTokenV2 != nil {
 			opts.SetSessionV2(*prm.SessionTokenV2)
@@ -521,16 +493,11 @@ func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, bTok *be
 }
 
 // FinalizeObjectWithPayloadChecksums implements neofs.NeoFS interface method.
-func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
+func (x *NeoFS) FinalizeObjectWithPayloadChecksums(ctx context.Context, header object.Object, metaChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
 	header.SetOwner(x.signer(ctx).UserID())
 	header.SetCreationEpoch(x.epochGetter.CurrentEpoch())
 
 	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
-
-	if homomorphicChecksum != nil {
-		//nolint:staticcheck // removed after node 0.53.0
-		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
-	}
 
 	header.SetPayloadSize(payloadLength)
 	if err := header.SetIDWithSignature(x.signer(ctx)); err != nil {
@@ -710,11 +677,6 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 // MaxObjectSize returns configured payload size limit for object slicing when enabled.
 func (x *NeoFS) MaxObjectSize() int64 {
 	return x.cfg.MaxObjectSize
-}
-
-// IsHomomorphicHashingEnabled shows if homomorphic hashing is enabled in config.
-func (x *NeoFS) IsHomomorphicHashingEnabled() bool {
-	return x.cfg.IsHomomorphicEnabled
 }
 
 // CurrentEpoch returns current epoch.

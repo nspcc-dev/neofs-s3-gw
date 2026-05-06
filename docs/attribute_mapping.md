@@ -91,8 +91,8 @@ Each **part** is stored as a NeoFS split chain:
 - **Payload slices**: one or more NeoFS objects, each up to `MaxObjectSize`, carrying actual payload data.
   They form a local split chain with `SplitFirstID` / `SplitPreviousID` links.
 - **Part Header Object**: a zero-payload object that acts as the virtual "parent" of the local chain. It carries
-  per-part attributes (`S3-MP-PartNumber`, `S3-MP-Hash`, etc.) and the correct payload hash /
-  homomorphic hash computed over the entire part payload. Its `ObjectID` is the value returned to the user
+  per-part attributes (`S3-MP-PartNumber`, `S3-MP-Hash`, etc.) and the correct payload hash
+  computed over the entire part payload. Its `ObjectID` is the value returned to the user
   as the part identifier.
 - **Part Linking Object**: references the Part Header Object as parent and lists all slices (measured objects)
   including the zero-length last-part entry, so NeoFS can reconstruct the split chain.
@@ -105,8 +105,8 @@ object, and a linking object.
   if any part was re-uploaded.
 - All parts are collected and validated.
 - A **Final Header Object** (no payload) is created representing the complete S3 object. It carries user
-  metadata, `FilePath`, encryption attributes, and the full-object payload / homomorphic
-  hashes reconstructed from intermediate hash states.
+  metadata, `FilePath`, encryption attributes, and the full-object payload hash
+  reconstructed from intermediate hash states.
 - A zero-payload **Last Part Object** links to the previous part in the global chain and references the Final
   Header Object as parent.
 - A **Final Linking Object** lists all measured objects and references the Final Header Object, making the
@@ -136,7 +136,6 @@ Includes the following attributes:
 - `S3-MetaType: multipartPart`
 - `S3-MP-PartNumber`
 - `S3-MP-Hash`
-- `S3-MP-HomoHash`
 - `S3-MP-Upload`
 
 ---
@@ -153,10 +152,6 @@ An internal part `0` exist but is hidden from users.
 ### `S3-MP-Hash`
 
 Stores the intermediate hash state used to compute the final object hash. It's set only when uploads are made consecutively.
-
-### `S3-MP-HomoHash`
-
-Stores the intermediate state for computing a homomorphic hash, if enabled. It's set only when uploads are made consecutively.
 
 ### `S3-MP-ObjectKey`
 

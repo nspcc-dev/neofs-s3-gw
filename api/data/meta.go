@@ -66,8 +66,6 @@ type PartInfo struct {
 
 	// MultipartHash contains internal state of the [hash.Hash] to calculate whole object payload hash.
 	MultipartHash []byte
-	// HomoHash contains internal state of the [hash.Hash] to calculate whole object homomorphic payload hash.
-	HomoHash []byte
 	// Elements contain [oid.ID] and size for each element for the current part.
 	Elements []ElementInfo
 }

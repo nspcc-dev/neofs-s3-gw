@@ -18,8 +18,6 @@ const (
 	MultipartPartNumber = multipartPrefix + "PartNumber"
 	// MultipartHash contains hash.Hash state to calculate final object hash.
 	MultipartHash = multipartPrefix + "Hash"
-	// MultipartHomoHash contains hash.Hash state to calculate final object homo hash.
-	MultipartHomoHash = multipartPrefix + "HomoHash"
 	// MultipartMeta contains original object attributes.
 	MultipartMeta = multipartPrefix + "Meta"
 	// MultipartCreated contains final object creation date.
