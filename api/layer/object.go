@@ -103,11 +103,6 @@ type (
 		IsVersioned       bool
 	}
 
-	baseSearchResult struct {
-		ID                oid.ID
-		CreationTimestamp int64
-	}
-
 	// PartSearchResult contains some part metadata.
 	PartSearchResult struct {
 		ID                oid.ID
@@ -1400,103 +1395,6 @@ func tryDirectoryName(filePath string, prefix, delimiter string) string {
 	}
 
 	return ""
-}
-
-func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.BucketInfo, objType string) (oid.ID, error) {
-	var (
-		opts                client.SearchObjectsOptions
-		owner               = n.Owner(ctx)
-		filters             = make(object.SearchFilters, 0, 2)
-		returningAttributes = []string{
-			s3headers.MetaType,
-			object.AttributeTimestamp,
-		}
-	)
-
-	attachTokenToParams(ctx, owner, &opts)
-
-	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
-	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return oid.ID{}, fmt.Errorf("search object version: %w", err)
-	}
-
-	if len(searchResultItems) == 0 {
-		return oid.ID{}, nil
-	}
-
-	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
-
-	for _, item := range searchResultItems {
-		var psr = baseSearchResult{
-			ID: item.ID,
-		}
-
-		if item.Attributes[1] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
-			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		searchResults = append(searchResults, psr)
-	}
-
-	sortFunc := func(a, b baseSearchResult) int {
-		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
-			return c
-		}
-
-		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return b.ID.Compare(a.ID) // reverse order.
-	}
-
-	slices.SortFunc(searchResults, sortFunc)
-
-	return searchResults[0].ID, nil
-}
-
-func (n *layer) deleteBucketMetaObjects(ctx context.Context, bktInfo *data.BucketInfo, objType string) error {
-	var (
-		opts                client.SearchObjectsOptions
-		owner               = n.Owner(ctx)
-		filters             = make(object.SearchFilters, 0, 2)
-		returningAttributes = []string{
-			s3headers.MetaType,
-		}
-	)
-
-	attachTokenToParams(ctx, owner, &opts)
-
-	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
-	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return fmt.Errorf("search object version: %w", err)
-	}
-
-	if len(searchResultItems) == 0 {
-		return nil
-	}
-
-	for _, item := range searchResultItems {
-		if err = n.objectDelete(ctx, bktInfo, item.ID); err != nil {
-			return fmt.Errorf("remove %s metaobject for %s: %w", objType, bktInfo.CID.EncodeToString(), err)
-		}
-	}
-
-	return nil
 }
 
 func extractLockDataFromAttrubute(lsr *locksSearchResult, attributeValue string) error {

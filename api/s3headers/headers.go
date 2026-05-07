@@ -29,23 +29,12 @@ const (
 	// Result: S3-MetaType.
 	MetaType = attributePrefix + "MetaType"
 
-	TypeTags              = "tags"
-	TypeBucketTags        = "bucketTags"
-	TypeBucketNotifConfig = "bucketNotifConf"
-	TypeBucketCORS        = "bucketCORS"
-	TypeBucketSettings    = "bucketSettings"
-	TypeMultipartInfo     = "multipartInfo"
-	TypeMultipartPart     = "multipartPart"
+	TypeTags          = "tags"
+	TypeMultipartInfo = "multipartInfo"
+	TypeMultipartPart = "multipartPart"
 )
 
 const (
-	bucketSettingsPrefix = attributePrefix + "BucketSettings-"
-
-	// BucketSettingsVersioning contains versioning setting for bucket.
-	BucketSettingsVersioning = bucketSettingsPrefix + "Versioning"
-	// BucketSettingsMetaVersion contains version of bucket settings file.
-	BucketSettingsMetaVersion = bucketSettingsPrefix + "MetaVersion"
-
 	AttributeObjectNonce = "__NEOFS__NONCE"
 
 	// Result: S3-Lock-Meta.

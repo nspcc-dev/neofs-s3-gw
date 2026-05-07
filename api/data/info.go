@@ -10,16 +10,9 @@ import (
 )
 
 const (
-	bktSettingsObject                  = ".s3-settings"
-	bktCORSConfigurationObject         = ".s3-cors"
-	bktNotificationConfigurationObject = ".s3-notifications"
-
 	VersioningUnversioned = "Unversioned"
 	VersioningEnabled     = "Enabled"
 	VersioningSuspended   = "Suspended"
-
-	// BucketSettingsV1 describes v1 version identifier for the bucket settings file.
-	BucketSettingsV1 = "1"
 )
 
 const (
@@ -123,16 +116,6 @@ func NotificationInfoFromObject(objInfo *ObjectInfo) *NotificationInfo {
 		Size:    objInfo.Size,
 		HashSum: objInfo.HashSum,
 	}
-}
-
-// SettingsObjectName is a system name for a bucket settings file.
-func (b *BucketInfo) SettingsObjectName() string { return bktSettingsObject }
-
-// CORSObjectName returns a system name for a bucket CORS configuration file.
-func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject }
-
-func (b *BucketInfo) NotificationConfigurationObjectName() string {
-	return bktNotificationConfigurationObject
 }
 
 // VersionID returns object version from ObjectInfo.
