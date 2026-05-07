@@ -10,6 +10,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	settingsCacheKeySuffix      = ".settings"
+	corsCacheKeySuffix          = ".cors"
+	notificationsCacheKeySuffix = ".notifications"
+)
+
 type Cache struct {
 	logger         *zap.Logger
 	listsCache     *cache.ObjectsListCache
@@ -188,20 +194,20 @@ func (c *Cache) PutLockInfo(owner user.ID, key string, lockInfo *data.LockInfo) 
 }
 
 func (c *Cache) GetSettings(bktInfo *data.BucketInfo) *data.BucketSettings {
-	key := bktInfo.Name + bktInfo.SettingsObjectName()
+	key := bktInfo.Name + settingsCacheKeySuffix
 
 	return c.systemCache.GetSettings(key)
 }
 
 func (c *Cache) PutSettings(bktInfo *data.BucketInfo, settings *data.BucketSettings) {
-	key := bktInfo.Name + bktInfo.SettingsObjectName()
+	key := bktInfo.Name + settingsCacheKeySuffix
 	if err := c.systemCache.PutSettings(key, settings); err != nil {
 		c.logger.Warn("couldn't cache bucket settings", zap.String("bucket", bktInfo.Name), zap.Error(err))
 	}
 }
 
 func (c *Cache) GetCORS(owner user.ID, bkt *data.BucketInfo) *data.CORSConfiguration {
-	key := bkt.Name + bkt.CORSObjectName()
+	key := bkt.Name + corsCacheKeySuffix
 
 	if !c.accessCache.Get(owner, key) {
 		return nil
@@ -211,7 +217,7 @@ func (c *Cache) GetCORS(owner user.ID, bkt *data.BucketInfo) *data.CORSConfigura
 }
 
 func (c *Cache) PutCORS(owner user.ID, bkt *data.BucketInfo, cors *data.CORSConfiguration) {
-	key := bkt.Name + bkt.CORSObjectName()
+	key := bkt.Name + corsCacheKeySuffix
 
 	if err := c.systemCache.PutCORS(key, cors); err != nil {
 		c.logger.Warn("couldn't cache cors", zap.String("bucket", bkt.Name), zap.Error(err))
@@ -223,11 +229,11 @@ func (c *Cache) PutCORS(owner user.ID, bkt *data.BucketInfo, cors *data.CORSConf
 }
 
 func (c *Cache) DeleteCORS(bktInfo *data.BucketInfo) {
-	c.systemCache.Delete(bktInfo.Name + bktInfo.CORSObjectName())
+	c.systemCache.Delete(bktInfo.Name + corsCacheKeySuffix)
 }
 
 func (c *Cache) GetNotificationConfiguration(owner user.ID, bktInfo *data.BucketInfo) *data.NotificationConfiguration {
-	key := bktInfo.Name + bktInfo.NotificationConfigurationObjectName()
+	key := bktInfo.Name + notificationsCacheKeySuffix
 
 	if !c.accessCache.Get(owner, key) {
 		return nil
@@ -237,7 +243,7 @@ func (c *Cache) GetNotificationConfiguration(owner user.ID, bktInfo *data.Bucket
 }
 
 func (c *Cache) PutNotificationConfiguration(owner user.ID, bktInfo *data.BucketInfo, configuration *data.NotificationConfiguration) {
-	key := bktInfo.Name + bktInfo.NotificationConfigurationObjectName()
+	key := bktInfo.Name + notificationsCacheKeySuffix
 	if err := c.systemCache.PutNotificationConfiguration(key, configuration); err != nil {
 		c.logger.Warn("couldn't cache notification configuration", zap.String("bucket", bktInfo.Name), zap.Error(err))
 	}

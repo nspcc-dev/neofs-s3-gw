@@ -3,12 +3,10 @@ package layer
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
@@ -41,46 +39,13 @@ func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo 
 		return conf, nil
 	}
 
-	var conf = data.NotificationConfiguration{}
+	var conf = &data.NotificationConfiguration{}
 	if bktInfo.AttributeNotifications != "" {
-		if err := json.Unmarshal([]byte(bktInfo.AttributeNotifications), &conf); err != nil {
+		if err := json.Unmarshal([]byte(bktInfo.AttributeNotifications), conf); err != nil {
 			return nil, fmt.Errorf("malformed data: %w", err)
 		}
-
-		n.cache.PutNotificationConfiguration(n.Owner(ctx), bktInfo, &conf)
-		return &conf, nil
 	}
 
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig)
-	if err != nil {
-		return nil, fmt.Errorf("search: %w", err)
-	}
-
-	if id.IsZero() {
-		return &conf, nil
-	}
-
-	obj, err := n.objectGet(ctx, bktInfo, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
-		return nil, fmt.Errorf("unmarshal notify configuration: %w", err)
-	}
-
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		// Migrate notification settings.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeNotifications, conf, boxData.Gate.SessionTokenV2); err != nil {
-			return nil, fmt.Errorf("migrate bucket notification settings: %w", err)
-		}
-		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig); err != nil {
-			return nil, fmt.Errorf("delete bucket notification settings: %w", err)
-		}
-	}
-
-	n.cache.PutNotificationConfiguration(owner, bktInfo, &conf)
-
-	return &conf, nil
+	n.cache.PutNotificationConfiguration(owner, bktInfo, conf)
+	return conf, nil
 }
