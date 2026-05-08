@@ -18,7 +18,6 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
@@ -273,7 +272,7 @@ func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo)
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		// Migrate bucket settings.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeSettings, settings, boxData.Gate.SessionTokenForSetAttribute(), boxData.Gate.SessionTokenV2); err != nil {
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeSettings, settings, boxData.Gate.SessionTokenV2); err != nil {
 			return nil, fmt.Errorf("store bucket settings object: %w", err)
 		}
 		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings); err != nil {
@@ -330,17 +329,13 @@ func decodeBucketSettings(settingsObj *object.Object) (*data.BucketSettings, err
 
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	var (
-		sessionToken   *session.Container
-		sessionTokenV2 *session2.Token
-	)
+	var sessionTokenV2 *session2.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeSettings, p.Settings, sessionToken, sessionTokenV2); err != nil {
+	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeSettings, p.Settings, sessionTokenV2); err != nil {
 		return fmt.Errorf("store bucket settings: %w", err)
 	}
 

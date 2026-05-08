@@ -22,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -30,7 +29,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -156,26 +154,22 @@ type (
 	}
 	// CreateBucketParams stores bucket create request parameters.
 	CreateBucketParams struct {
-		Name                     string
-		Policy                   PlacementPolicy
-		EACL                     *eacl.Table
-		SessionContainerCreation *session.Container
-		SessionEACL              *session.Container
-		SessionTokenV2           *session2.Token
-		LocationConstraint       string
-		ObjectLockEnabled        bool
+		Name               string
+		Policy             PlacementPolicy
+		EACL               *eacl.Table
+		SessionTokenV2     *session2.Token
+		LocationConstraint string
+		ObjectLockEnabled  bool
 	}
 	// PutBucketACLParams stores put bucket acl request parameters.
 	PutBucketACLParams struct {
 		BktInfo        *data.BucketInfo
 		EACL           *eacl.Table
-		SessionToken   *session.Container
 		SessionTokenV2 *session2.Token
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
 		BktInfo        *data.BucketInfo
-		SessionToken   *session.Container
 		SessionTokenV2 *session2.Token
 	}
 
@@ -296,7 +290,6 @@ type (
 
 	authAssigner interface {
 		WithSessionTokenV2(st session2.Token)
-		WithBearerToken(bt bearer.Token)
 	}
 )
 
@@ -379,7 +372,7 @@ func TimeNow(ctx context.Context) time.Time {
 	return time.Now()
 }
 
-// Owner returns owner id from BearerToken (context) or from client owner.
+// Owner returns owner id from session token v2 or from client owner.
 func (n *layer) Owner(ctx context.Context) user.ID {
 	bd, ok := ctx.Value(api.BoxData).(*accessbox.Box)
 	if !ok || bd == nil || bd.Gate == nil {
@@ -388,8 +381,6 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 
 	if bd.Gate.SessionTokenV2 != nil {
 		return bd.Gate.SessionTokenV2.OriginalIssuer()
-	} else if bd.Gate.BearerToken != nil {
-		return bd.Gate.BearerToken.ResolveIssuer()
 	}
 
 	return n.anonymous
@@ -403,8 +394,6 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwne
 
 	if bd.Gate.SessionTokenV2 != nil && bd.Gate.SessionTokenV2.OriginalIssuer() == bktOwner {
 		prm.SessionTokenV2 = bd.Gate.SessionTokenV2
-	} else if bd.Gate.BearerToken != nil && bktOwner == bd.Gate.BearerToken.ResolveIssuer() {
-		prm.BearerToken = bd.Gate.BearerToken
 	}
 }
 
@@ -416,8 +405,6 @@ func attachTokenToParams(ctx context.Context, bktOwner user.ID, params authAssig
 
 	if bd.Gate.SessionTokenV2 != nil && bd.Gate.SessionTokenV2.OriginalIssuer() == bktOwner {
 		params.WithSessionTokenV2(*bd.Gate.SessionTokenV2)
-	} else if bd.Gate.BearerToken != nil && bktOwner == bd.Gate.BearerToken.ResolveIssuer() {
-		params.WithBearerToken(*bd.Gate.BearerToken)
 	}
 }
 
@@ -462,7 +449,7 @@ func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*Bu
 
 // PutBucketACL puts bucket acl by name.
 func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) error {
-	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL, param.SessionToken, param.SessionTokenV2)
+	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL, param.SessionTokenV2)
 }
 
 // ListBuckets returns all user containers. The name of the bucket is a container
@@ -995,9 +982,6 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 		return nil, err
 	}
 
-	if p.SessionContainerCreation != nil && session.IssuedBy(*p.SessionContainerCreation, bktInfo.Owner) {
-		return nil, s3errors.GetAPIError(s3errors.ErrBucketAlreadyOwnedByYou)
-	}
 	if p.SessionTokenV2 != nil && (*p.SessionTokenV2).OriginalIssuer() == bktInfo.Owner {
 		return nil, s3errors.GetAPIError(s3errors.ErrBucketAlreadyOwnedByYou)
 	}
@@ -1042,7 +1026,7 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 	}
 
 	n.cache.DeleteBucket(p.BktInfo.Name)
-	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionToken, p.SessionTokenV2)
+	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionTokenV2)
 }
 
 func (n *layer) putDeleteMarker(ctx context.Context, bktInfo *data.BucketInfo, objectName string) (oid.ID, error) {

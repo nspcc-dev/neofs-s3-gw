@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 type (
@@ -15,7 +15,7 @@ type (
 	}
 
 	sessionTokenContext struct {
-		verb        session.ContainerVerb
+		verb        session.Verb
 		containerID cid.ID
 	}
 )

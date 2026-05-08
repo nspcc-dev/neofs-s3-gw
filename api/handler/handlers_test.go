@@ -21,10 +21,20 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+func newTestSessionTokenV2(t *testing.T, signer user.Signer) *session2.Token {
+	var tok session2.Token
+	tok.SetVersion(session2.TokenCurrentVersion)
+	tok.SetIssuer(signer.UserID())
+	require.NoError(t, tok.SetSubjects([]session2.Target{session2.NewTargetUser(signer.UserID())}))
+	require.NoError(t, tok.Sign(signer))
+	return &tok
+}
 
 type contResolver struct {
 	layer *layer.TestNeoFS

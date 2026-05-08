@@ -22,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -266,18 +265,13 @@ func (h *handler) authTokenIssuer(ctx context.Context) (user.ID, error) {
 		return user.ID{}, err
 	}
 
-	if box.Gate.SessionTokenV2 != nil {
-		iss := box.Gate.SessionTokenV2.OriginalIssuer()
-		if iss.IsZero() {
-			return user.ID{}, errors.New("can't resolve issuer from session v2 token")
-		}
-
-		return iss, nil
+	if box.Gate.SessionTokenV2 == nil {
+		return user.ID{}, errors.New("missing session v2 token")
 	}
 
-	iss := box.Gate.BearerToken.ResolveIssuer()
+	iss := box.Gate.SessionTokenV2.OriginalIssuer()
 	if iss.IsZero() {
-		return user.ID{}, errors.New("can't resolve issuer from bearer token")
+		return user.ID{}, errors.New("can't resolve issuer from session v2 token")
 	}
 
 	return iss, nil
@@ -291,7 +285,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, tokenv2, err := getSessionTokenSetEACL(r.Context())
+	tokenv2, err := getSessionTokenSetEACL(r.Context())
 	if err != nil {
 		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
 		return
@@ -336,14 +330,14 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err = h.updateBucketACL(r, astBucket, bktInfo, token, tokenv2); err != nil {
+	if _, err = h.updateBucketACL(r, astBucket, bktInfo, tokenv2); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionToken *session.Container, sessionTokenV2 *session2.Token) (bool, error) {
+func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionTokenV2 *session2.Token) (bool, error) {
 	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return false, fmt.Errorf("could not get bucket eacl: %w", err)
@@ -371,7 +365,6 @@ func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.
 	p := &layer.PutBucketACLParams{
 		BktInfo:        bktInfo,
 		EACL:           table,
-		SessionToken:   sessionToken,
 		SessionTokenV2: sessionTokenV2,
 	}
 
@@ -423,7 +416,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, tokenv2, err := getSessionTokenSetEACL(r.Context())
+	tokenv2, err := getSessionTokenSetEACL(r.Context())
 	if err != nil {
 		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
 		return
@@ -493,7 +486,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.updateBucketACL(r, astObject, bktInfo, token, tokenv2)
+	updated, err := h.updateBucketACL(r, astObject, bktInfo, tokenv2)
 	if err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
@@ -559,7 +552,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	token, tokenv2, err := getSessionTokenSetEACL(r.Context())
+	tokenv2, err := getSessionTokenSetEACL(r.Context())
 	if err != nil {
 		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
 		return
@@ -612,7 +605,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 		astPolicy.Resources = slices.Delete(astPolicy.Resources, index, index+1)
 	}
 
-	if _, err = h.updateBucketACL(r, astPolicy, bktInfo, token, tokenv2); err != nil {
+	if _, err = h.updateBucketACL(r, astPolicy, bktInfo, tokenv2); err != nil {
 		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
 		return
 	}

@@ -9,8 +9,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
-	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
@@ -96,14 +94,11 @@ func newTestAccessBox(t *testing.T, key *keys.PrivateKey) *accessbox.Box {
 		require.NoError(t, err)
 	}
 
-	var btoken bearer.Token
-	btoken.SetEACLTable(eacl.Table{})
-	err = btoken.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
-	require.NoError(t, err)
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
 	return &accessbox.Box{
 		Gate: &accessbox.GateData{
-			BearerToken: &btoken,
+			SessionTokenV2: newTestSessionTokenV2(t, signer),
 		},
 	}
 }

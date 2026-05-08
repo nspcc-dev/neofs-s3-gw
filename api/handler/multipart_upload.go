@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
@@ -393,8 +392,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	var (
-		sessionTokenSetEACL *session.Container
-		sessionTokenEACLV2  *session2.Token
+		sessionTokenEACLV2 *session2.Token
 
 		uploadID   = r.URL.Query().Get(uploadIDHeaderName)
 		uploadInfo = &layer.UploadInfoParams{
@@ -465,12 +463,12 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 			return
 		}
 
-		if sessionTokenSetEACL, sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
+		if sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
 			h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
 			return
 		}
 
-		if _, err = h.updateBucketACL(r, astObject, bktInfo, sessionTokenSetEACL, sessionTokenEACLV2); err != nil {
+		if _, err = h.updateBucketACL(r, astObject, bktInfo, sessionTokenEACLV2); err != nil {
 			h.logAndSendError(w, "could not update bucket acl while completing multipart upload", reqInfo, err, additional...)
 			return
 		}

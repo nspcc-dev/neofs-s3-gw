@@ -1,24 +1,19 @@
 package accessbox
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
-	neofsecdsa "github.com/nspcc-dev/neofs-sdk-go/crypto/ecdsa"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
+	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
-
-func assertBearerToken(t *testing.T, exp, act bearer.Token) {
-	// compare binary representations since deep equal is not guaranteed
-	require.Equal(t, exp.Marshal(), act.Marshal())
-}
 
 func TestTokensEncryptDecrypt(t *testing.T) {
 	var (
@@ -43,147 +38,76 @@ func TestTokensEncryptDecrypt(t *testing.T) {
 	err = tkn2.Unmarshal(rawTkn2)
 	require.NoError(t, err)
 
-	assertBearerToken(t, tkn, tkn2)
+	require.Equal(t, tkn.Marshal(), tkn2.Marshal())
 }
 
-func TestBearerTokenInAccessBox(t *testing.T) {
-	var (
-		box  *AccessBox
-		box2 AccessBox
-		tkn  bearer.Token
-	)
+func TestAccessBoxV2RoundTrip(t *testing.T) {
+	const numGates = 3
 
-	sec, err := keys.NewPrivateKey()
+	issuerKey, err := keys.NewPrivateKey()
 	require.NoError(t, err)
-
-	cred, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-
-	tkn.SetEACLTable(eacl.Table{})
-	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
+	issuerSigner := user.NewAutoIDSignerRFC6979(issuerKey.PrivateKey)
 
 	ephemeralKey, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	gate := NewGateData(cred.PublicKey(), &tkn)
-	box, _, err = PackTokens([]*GateData{gate}, ephemeralKey, generateSecret())
-	require.NoError(t, err)
+	secret := generateSecret()
 
-	data, err := box.Marshal()
-	require.NoError(t, err)
+	gateKeys := make([]*keys.PrivateKey, numGates)
+	targets := make([]session2.Target, numGates)
+	var appData bytes.Buffer
+	for i := range gateKeys {
+		gk, err := keys.NewPrivateKey()
+		require.NoError(t, err)
+		gateKeys[i] = gk
+		targets[i] = session2.NewTargetUser(user.NewFromScriptHash(gk.PublicKey().GetScriptHash()))
 
-	err = box2.Unmarshal(data)
-	require.NoError(t, err)
-
-	tkns, err := box2.GetTokens(cred, nil)
-	require.NoError(t, err)
-
-	assertBearerToken(t, tkn, *tkns.BearerToken)
-}
-
-func TestSessionTokenInAccessBox(t *testing.T) {
-	var (
-		box  *AccessBox
-		box2 AccessBox
-		tkn  = new(session.Container)
-	)
-
-	sec, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-
-	cred, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-
-	tkn.SetID(uuid.New())
-	tkn.SetAuthKey((*neofsecdsa.PublicKey)(sec.PublicKey()))
-	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
-
-	ephemeralKey, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-
-	var newTkn bearer.Token
-	gate := NewGateData(cred.PublicKey(), &newTkn)
-	gate.SessionTokens = []*session.Container{tkn}
-	box, _, err = PackTokens([]*GateData{gate}, ephemeralKey, generateSecret())
-	require.NoError(t, err)
-
-	data, err := box.Marshal()
-	require.NoError(t, err)
-
-	err = box2.Unmarshal(data)
-	require.NoError(t, err)
-
-	tkns, err := box2.GetTokens(cred, nil)
-	require.NoError(t, err)
-
-	require.Equal(t, []*session.Container{tkn}, tkns.SessionTokens)
-}
-
-func TestAccessboxMultipleKeys(t *testing.T) {
-	var (
-		box *AccessBox
-		tkn bearer.Token
-	)
-
-	sec, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-
-	tkn.SetEACLTable(eacl.Table{})
-	require.NoError(t, tkn.Sign(user.NewAutoIDSignerRFC6979(sec.PrivateKey)))
-
-	count := 10
-	gates := make([]*GateData, 0, count)
-	privateKeys := make([]*keys.PrivateKey, 0, count)
-	{ // generate keys
-		for range count {
-			cred, err := keys.NewPrivateKey()
-			require.NoError(t, err)
-
-			gates = append(gates, NewGateData(cred.PublicKey(), &tkn))
-			privateKeys = append(privateKeys, cred)
-		}
+		enc, err := accessbox.Encrypt(ephemeralKey, gk.PublicKey(), secret)
+		require.NoError(t, err)
+		_, err = appData.Write(enc)
+		require.NoError(t, err)
 	}
 
-	ephemeralKey, err := keys.NewPrivateKey()
-	require.NoError(t, err)
+	gates := make([]*GateData, numGates)
+	for i := range gates {
+		var tok session2.Token
+		tok.SetVersion(session2.TokenCurrentVersion)
+		tok.SetIssuer(issuerSigner.UserID())
+		require.NoError(t, tok.SetSubjects(targets))
+		require.NoError(t, tok.SetAppData(appData.Bytes()))
+		require.NoError(t, tok.Sign(issuerSigner))
 
-	box, _, err = PackTokens(gates, ephemeralKey, generateSecret())
-	require.NoError(t, err)
-
-	for i, k := range privateKeys {
-		tkns, err := box.GetTokens(k, nil)
-		require.NoError(t, err, "key #%d: %s failed", i, k)
-		assertBearerToken(t, tkn, *tkns.BearerToken)
+		gates[i] = &GateData{SessionTokenV2: &tok}
 	}
-}
 
-func TestUnknownKey(t *testing.T) {
-	var (
-		box *AccessBox
-		tkn bearer.Token
-	)
-
-	sec, err := keys.NewPrivateKey()
+	box, _, err := PackTokens(gates, ephemeralKey, secret)
 	require.NoError(t, err)
 
-	cred, err := keys.NewPrivateKey()
+	marshaled, err := box.Marshal()
 	require.NoError(t, err)
 
-	wrongCred, err := keys.NewPrivateKey()
+	var box2 AccessBox
+	require.NoError(t, box2.Unmarshal(marshaled))
+
+	expectedAccessKey := hex.EncodeToString(secret)
+	for i, gk := range gateKeys {
+		got, err := box2.GetTokens(gk, nil)
+		require.NoError(t, err, "gate %d", i)
+		require.NotNil(t, got.SessionTokenV2)
+		require.Equal(t, issuerSigner.UserID(), got.SessionTokenV2.OriginalIssuer())
+		require.Equal(t, expectedAccessKey, got.AccessKey)
+	}
+
+	// A key not bound to any subject should fail.
+	other, err := keys.NewPrivateKey()
 	require.NoError(t, err)
-
-	tkn.SetEACLTable(eacl.Table{})
-	require.NoError(t, tkn.Sign(user.NewAutoIDSigner(sec.PrivateKey)))
-
-	ephemeralKey, err := keys.NewPrivateKey()
-	require.NoError(t, err)
-
-	gate := NewGateData(cred.PublicKey(), &tkn)
-	box, _, err = PackTokens([]*GateData{gate}, ephemeralKey, generateSecret())
-	require.NoError(t, err)
-
-	_, err = box.GetTokens(wrongCred, nil)
+	_, err = box2.GetTokens(other, nil)
 	require.Error(t, err)
+
+	// A box with an unknown version must be rejected up-front.
+	box2.Version = accessBoxVersionSessionV2 + 1
+	_, err = box2.GetTokens(gateKeys[0], nil)
+	require.ErrorContains(t, err, "unsupported access box version")
 }
 
 func generateSecret() []byte {

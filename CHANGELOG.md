@@ -13,6 +13,7 @@ This document outlines major changes between releases.
 ### Updated
 
 ### Removed
+- Support for legacy access boxes carrying session token v1 and bearer tokens (#1271)
 
 ### Upgrading from 0.44.0
 

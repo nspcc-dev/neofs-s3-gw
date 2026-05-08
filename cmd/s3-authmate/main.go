@@ -756,7 +756,7 @@ func resetBucketEACL() *cli.Command {
 				ctx, tcancel = context.WithTimeout(ctx, timeoutFlag)
 				defer tcancel()
 
-				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenForSetEACL, or.SessionTokenV2); err != nil {
+				if err = neoFS.SetContainerEACL(ctx, *oldEacl, or.SessionTokenV2); err != nil {
 					return cli.Exit(fmt.Sprintf("failed to setup eacl: %s", err), 1)
 				}
 			} else {

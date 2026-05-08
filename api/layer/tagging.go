@@ -19,7 +19,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
@@ -314,7 +313,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		// Migrate bucket tags to contract.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tags, boxData.Gate.SessionTokenForSetAttribute(), boxData.Gate.SessionTokenV2); err != nil {
+		if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tags, boxData.Gate.SessionTokenV2); err != nil {
 			return nil, fmt.Errorf("bucket tags migration: %w", err)
 		}
 
@@ -330,17 +329,13 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 }
 
 func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	var (
-		sessionToken   *session.Container
-		sessionTokenV2 *session2.Token
-	)
+	var sessionTokenV2 *session2.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForSetAttribute()
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tagSet, sessionToken, sessionTokenV2); err != nil {
+	if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tagSet, sessionTokenV2); err != nil {
 		return fmt.Errorf("couldn't store bucket tags: %w", err)
 	}
 
@@ -355,17 +350,13 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 		return fmt.Errorf("couldn't delete bucket tags: %w", err)
 	}
 
-	var (
-		sessionToken   *session.Container
-		sessionTokenV2 *session2.Token
-	)
+	var sessionTokenV2 *session2.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForRemoveAttribute()
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeTags, sessionToken, sessionTokenV2); err != nil {
+	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeTags, sessionTokenV2); err != nil {
 		return fmt.Errorf("couldn't remove bucket tags: %w", err)
 	}
 

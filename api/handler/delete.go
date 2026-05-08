@@ -13,7 +13,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -275,20 +274,15 @@ func (h *handler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		sessionToken   *session.Container
-		sessionTokenV2 *session2.Token
-	)
+	var sessionTokenV2 *session2.Token
 
 	boxData, err := layer.GetBoxData(r.Context())
 	if err == nil {
-		sessionToken = boxData.Gate.SessionTokenForDelete()
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
 	if err = h.obj.DeleteBucket(r.Context(), &layer.DeleteBucketParams{
 		BktInfo:        bktInfo,
-		SessionToken:   sessionToken,
 		SessionTokenV2: sessionTokenV2,
 	}); err != nil {
 		h.logAndSendError(w, "couldn't delete bucket", reqInfo, err)

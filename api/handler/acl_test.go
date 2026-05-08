@@ -21,13 +21,11 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofscryptotest "github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
@@ -1482,19 +1480,11 @@ func createAccessBox(t *testing.T) (*accessbox.Box, *keys.PrivateKey) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
 
-	var bearerToken bearer.Token
-	err = bearerToken.Sign(user.NewAutoIDSignerRFC6979(key.PrivateKey))
-	require.NoError(t, err)
+	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
-	tok := new(session.Container)
-	tok.ForVerb(session.VerbContainerSetEACL)
-
-	tok2 := new(session.Container)
-	tok2.ForVerb(session.VerbContainerPut)
 	box := &accessbox.Box{
 		Gate: &accessbox.GateData{
-			SessionTokens: []*session.Container{tok, tok2},
-			BearerToken:   &bearerToken,
+			SessionTokenV2: newTestSessionTokenV2(t, signer),
 		},
 	}
 

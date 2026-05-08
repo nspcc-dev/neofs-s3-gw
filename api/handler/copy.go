@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
@@ -46,7 +45,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		versionID          string
 		metadata           map[string]string
 		tagSet             map[string]string
-		sessionTokenEACL   *session.Container
 		sessionTokenEACLV2 *session2.Token
 
 		reqInfo = api.GetReqInfo(r.Context())
@@ -134,7 +132,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			r.Header.Set(api.AmzACL, "")
 		}
 
-		if sessionTokenEACL, sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
+		if sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
 			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
 			return
 		}
@@ -257,7 +255,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		p := &layer.PutBucketACLParams{
 			BktInfo:        dstBktInfo,
 			EACL:           newEaclTable,
-			SessionToken:   sessionTokenEACL,
 			SessionTokenV2: sessionTokenEACLV2,
 		}
 
