@@ -1017,7 +1017,7 @@ func getParentResource(parent *ast, resource *astResource) *astResource {
 func astToTable(ast *ast) (*eacl.Table, error) {
 	var records []eacl.Record
 
-	for i := len(ast.Resources) - 1; i >= 0; i-- {
+	for i := range slices.Backward(ast.Resources) {
 		recs, err := formRecords(ast.Resources[i])
 		if err != nil {
 			return nil, fmt.Errorf("form records: %w", err)
@@ -1066,7 +1066,7 @@ func tryServiceRecord(record eacl.Record) *ServiceRecord {
 func formRecords(resource *astResource) ([]*eacl.Record, error) {
 	var res []*eacl.Record
 
-	for i := len(resource.Operations) - 1; i >= 0; i-- {
+	for i := range slices.Backward(resource.Operations) {
 		astOp := resource.Operations[i]
 
 		record := eacl.ConstructRecord(astOp.Action, astOp.Op, []eacl.Target{})

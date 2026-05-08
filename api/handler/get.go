@@ -191,6 +191,9 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	var pInfo *layer.Part
 	if partNumberStr := reqInfo.URL.Query().Get("partNumber"); len(partNumberStr) > 0 {
+		// unfortunately this reader is useless for us in this case, we have to re-read another one.
+		_ = objectWithPayloadReader.Payload.Close()
+
 		var partNumber int
 
 		partNumber, err = strconv.Atoi(partNumberStr)

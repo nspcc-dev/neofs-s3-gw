@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -924,14 +925,14 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 	}
 
 	// Order of these loops is important for test.
-	for i := len(writeOps) - 1; i >= 0; i-- {
+	for i := range slices.Backward(writeOps) {
 		op := writeOps[i]
 		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
 		applyFilters(record)
 		records = append(records, *record)
 	}
-	for i := len(readOps) - 1; i >= 0; i-- {
+	for i := range slices.Backward(readOps) {
 		op := readOps[i]
 		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
@@ -939,14 +940,14 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		records = append(records, *record)
 	}
 
-	for i := len(writeOps) - 1; i >= 0; i-- {
+	for i := range slices.Backward(writeOps) {
 		op := writeOps[i]
 		record := getOthersRecord(op, eacl.ActionDeny)
 
 		applyFilters(record)
 		records = append(records, *record)
 	}
-	for i := len(readOps) - 1; i >= 0; i-- {
+	for i := range slices.Backward(readOps) {
 		op := readOps[i]
 		record := getOthersRecord(op, eacl.ActionDeny)
 
