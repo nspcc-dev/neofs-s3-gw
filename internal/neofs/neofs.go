@@ -54,6 +54,7 @@ type NeoFS struct {
 	cfg         Config
 	epochGetter EpochGetter
 	buffers     *sync.Pool
+	httpCli     *httpClient
 }
 
 // SetEACLExecutor sets EACL.
@@ -86,6 +87,7 @@ func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, cfg Conf
 		cfg:         cfg,
 		epochGetter: epochGetter,
 		buffers:     &buffers,
+		httpCli:     newHTTPClient(),
 	}
 }
 
@@ -573,18 +575,20 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			Head: hdr,
 		}, nil
 	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
-		_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
+		op, err := x.getObjectHTTP(ctx, layer.GetObject{
+			PrmAuth:   prm.PrmAuth,
+			Container: prm.Container,
+			Object:    prm.Object,
+		})
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 			}
 
-			return nil, fmt.Errorf("init full payload range reading via connection pool: %w", err)
+			return nil, fmt.Errorf("init full payload reading via SN HTTP transport: %w", err)
 		}
 
-		return &layer.ObjectPart{
-			Payload: payloadReader{res},
-		}, nil
+		return &layer.ObjectPart{Payload: op.Payload}, nil
 	}
 
 	var prmRange client.PrmObjectGet
@@ -611,27 +615,16 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 // GetObject implements neofs.NeoFS interface method.
 func (x *NeoFS) GetObject(ctx context.Context, prm layer.GetObject) (*layer.ObjectPart, error) {
-	var (
-		prmGet client.PrmObjectGet
-	)
-
-	if prm.SessionTokenV2 != nil {
-		prmGet.WithinSessionV2(*prm.SessionTokenV2)
-	}
-
-	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
+	op, err := x.getObjectHTTP(ctx, prm)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 		}
 
-		return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
+		return nil, fmt.Errorf("init full object reading via SN HTTP transport: %w", err)
 	}
 
-	return &layer.ObjectPart{
-		Head:    &header,
-		Payload: payloadReader{res},
-	}, nil
+	return op, nil
 }
 
 // DeleteObject implements neofs.NeoFS interface method.
