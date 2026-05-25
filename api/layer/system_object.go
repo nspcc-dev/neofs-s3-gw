@@ -233,19 +233,7 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 }
 
 func (n *layer) GetBucketSettings(_ context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	if settings := n.cache.GetSettings(bktInfo); settings != nil {
-		return settings, nil
-	}
-
-	var settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	if bktInfo.AttributeSettings != "" {
-		if err := json.Unmarshal([]byte(bktInfo.AttributeSettings), settings); err != nil {
-			return nil, fmt.Errorf("malformed data: %w", err)
-		}
-	}
-
-	n.cache.PutSettings(bktInfo, settings)
-	return settings, nil
+	return bktInfo.Settings, nil
 }
 
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
@@ -260,7 +248,6 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("store bucket settings: %w", err)
 	}
 
-	n.cache.PutSettings(p.BktInfo, p.Settings)
 	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil

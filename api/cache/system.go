@@ -71,54 +71,6 @@ func (o *SystemCache) GetLockInfo(key string) *data.LockInfo {
 	return result
 }
 
-func (o *SystemCache) GetCORS(key string) *data.CORSConfiguration {
-	entry, err := o.cache.Get(key)
-	if err != nil {
-		return nil
-	}
-
-	result, ok := entry.(*data.CORSConfiguration)
-	if !ok {
-		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", fmt.Sprintf("%T", result)))
-		return nil
-	}
-
-	return result
-}
-
-func (o *SystemCache) GetSettings(key string) *data.BucketSettings {
-	entry, err := o.cache.Get(key)
-	if err != nil {
-		return nil
-	}
-
-	result, ok := entry.(*data.BucketSettings)
-	if !ok {
-		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", fmt.Sprintf("%T", result)))
-		return nil
-	}
-
-	return result
-}
-
-func (o *SystemCache) GetNotificationConfiguration(key string) *data.NotificationConfiguration {
-	entry, err := o.cache.Get(key)
-	if err != nil {
-		return nil
-	}
-
-	result, ok := entry.(*data.NotificationConfiguration)
-	if !ok {
-		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
-			zap.String("expected", fmt.Sprintf("%T", result)))
-		return nil
-	}
-
-	return result
-}
-
 // GetTagging returns tags of a bucket or an object.
 func (o *SystemCache) GetTagging(key string) map[string]string {
 	entry, err := o.cache.Get(key)
@@ -142,18 +94,6 @@ func (o *SystemCache) PutObject(key string, obj *data.ObjectInfo) error {
 // PutLockInfo puts an object to cache.
 func (o *SystemCache) PutLockInfo(key string, lockInfo *data.LockInfo) error {
 	return o.cache.Set(key, lockInfo)
-}
-
-func (o *SystemCache) PutCORS(key string, obj *data.CORSConfiguration) error {
-	return o.cache.Set(key, obj)
-}
-
-func (o *SystemCache) PutSettings(key string, settings *data.BucketSettings) error {
-	return o.cache.Set(key, settings)
-}
-
-func (o *SystemCache) PutNotificationConfiguration(key string, obj *data.NotificationConfiguration) error {
-	return o.cache.Set(key, obj)
 }
 
 // PutTagging puts tags of a bucket or an object.
