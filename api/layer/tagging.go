@@ -19,7 +19,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 type GetObjectTaggingParams struct {
@@ -329,7 +329,7 @@ func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) 
 }
 
 func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
-	var sessionTokenV2 *session2.Token
+	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
@@ -350,7 +350,7 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 		return fmt.Errorf("couldn't delete bucket tags: %w", err)
 	}
 
-	var sessionTokenV2 *session2.Token
+	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2

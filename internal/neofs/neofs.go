@@ -33,7 +33,7 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/slicer"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -199,7 +199,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 }
 
 // CreateContainerAndSetEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table, sessionTokenV2 *session2.Token) (cid.ID, error) {
+func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table, sessionTokenV2 *session.Token) (cid.ID, error) {
 	cl, err := x.pool.RawClient()
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("get node connection: %w", err)
@@ -229,12 +229,12 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
 	return x.setContainerEACL(ctx, x.pool, table, sessionTokenV2)
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) setContainerEACL(ctx context.Context, executor SetEACLExecutor, table eacl.Table, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) setContainerEACL(ctx context.Context, executor SetEACLExecutor, table eacl.Table, sessionTokenV2 *session.Token) error {
 	var prm client.PrmContainerSetEACL
 	if sessionTokenV2 != nil {
 		prm.WithinSessionV2(*sessionTokenV2)
@@ -260,7 +260,7 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 }
 
 // DeleteContainer implements neofs.NeoFS interface method.
-func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, tokenV2 *session2.Token) error {
+func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, tokenV2 *session.Token) error {
 	var prm client.PrmContainerDelete
 	if tokenV2 != nil {
 		prm.WithinSessionV2(*tokenV2)
@@ -434,7 +434,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload, prm.PayloadSize)
 }
 
-func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session2.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64) (oid.ID, error) {
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64) (oid.ID, error) {
 	var prmObjPutInit client.PrmObjectPutInit
 
 	if sessionv2 != nil {
@@ -746,7 +746,7 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 }
 
 // SetContainerEACL implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session2.Token) error {
+func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
 	return x.neoFS.SetContainerEACL(ctx, table, sessionTokenV2)
 }
 
@@ -828,7 +828,7 @@ func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filte
 }
 
 // SetContainerAttribute sets container attribute via NeoFS api.
-func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionTokenV2 *session.Token) error {
 	var (
 		prm = client.SetContainerAttributeParameters{
 			ID:         cid,
@@ -856,7 +856,7 @@ func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attribute
 }
 
 // RemoveContainerAttribute removes container attribute via NeoFS api.
-func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionTokenV2 *session.Token) error {
 	var (
 		prm = client.RemoveContainerAttributeParameters{
 			ID:         cid,

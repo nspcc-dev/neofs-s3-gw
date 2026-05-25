@@ -13,7 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -159,7 +159,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	return bktInfo, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionTokenV2 *session2.Token) error {
+func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionTokenV2 *session.Token) error {
 	table.SetCID(idCnr)
 
 	err := n.neoFS.SetContainerEACL(ctx, *table, sessionTokenV2)

@@ -10,7 +10,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
@@ -54,13 +54,13 @@ func TestAccessBoxV2RoundTrip(t *testing.T) {
 	secret := generateSecret()
 
 	gateKeys := make([]*keys.PrivateKey, numGates)
-	targets := make([]session2.Target, numGates)
+	targets := make([]session.Target, numGates)
 	var appData bytes.Buffer
 	for i := range gateKeys {
 		gk, err := keys.NewPrivateKey()
 		require.NoError(t, err)
 		gateKeys[i] = gk
-		targets[i] = session2.NewTargetUser(user.NewFromScriptHash(gk.PublicKey().GetScriptHash()))
+		targets[i] = session.NewTargetUser(user.NewFromScriptHash(gk.PublicKey().GetScriptHash()))
 
 		enc, err := accessbox.Encrypt(ephemeralKey, gk.PublicKey(), secret)
 		require.NoError(t, err)
@@ -70,8 +70,8 @@ func TestAccessBoxV2RoundTrip(t *testing.T) {
 
 	gates := make([]*GateData, numGates)
 	for i := range gates {
-		var tok session2.Token
-		tok.SetVersion(session2.TokenCurrentVersion)
+		var tok session.Token
+		tok.SetVersion(session.TokenCurrentVersion)
 		tok.SetIssuer(issuerSigner.UserID())
 		require.NoError(t, tok.SetSubjects(targets))
 		require.NoError(t, tok.SetAppData(appData.Bytes()))

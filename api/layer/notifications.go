@@ -9,7 +9,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 type PutBucketNotificationConfigurationParams struct {
@@ -19,7 +19,7 @@ type PutBucketNotificationConfigurationParams struct {
 }
 
 func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBucketNotificationConfigurationParams) error {
-	var sessionTokenV2 *session2.Token
+	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2

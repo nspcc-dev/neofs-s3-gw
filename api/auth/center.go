@@ -24,7 +24,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 // authorizationFieldRegexp -- is regexp for credentials with Base58 encoded cid and oid and '0' (zero) as delimiter.
@@ -106,7 +106,7 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *cache.Config, resolver session2.NNSResolver) Center {
+func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *cache.Config, resolver session.NNSResolver) Center {
 	return &center{
 		cli:                        tokens.New(neoFS, key, config, resolver),
 		reg:                        NewRegexpMatcher(authorizationFieldRegexp),

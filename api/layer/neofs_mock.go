@@ -30,7 +30,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -147,13 +147,13 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	return id, nil
 }
 
-func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session2.Token) error {
+func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.Token) error {
 	delete(t.containers, cnrID.EncodeToString())
 
 	return nil
 }
 
-func (t *TestNeoFS) CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionTokenV2 *session2.Token) (cid.ID, error) {
+func (t *TestNeoFS) CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionTokenV2 *session.Token) (cid.ID, error) {
 	cnrID, err := t.CreateContainer(ctx, prm)
 	if err != nil {
 		return cid.ID{}, err
@@ -464,7 +464,7 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 	return result
 }
 
-func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session2.Token) error {
+func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Token) error {
 	cnrID := table.GetCID()
 	if cnrID.IsZero() {
 		return errors.New("invalid cid")
@@ -633,11 +633,11 @@ func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, fil
 	return result, nextCursor, nil
 }
 
-func (t *TestNeoFS) SetContainerAttribute(_ context.Context, _ cid.ID, _, _ string, _ *session2.Token) error {
+func (t *TestNeoFS) SetContainerAttribute(_ context.Context, _ cid.ID, _, _ string, _ *session.Token) error {
 	return nil
 }
 
-func (t *TestNeoFS) RemoveContainerAttribute(_ context.Context, _ cid.ID, _ string, _ *session2.Token) error {
+func (t *TestNeoFS) RemoveContainerAttribute(_ context.Context, _ cid.ID, _ string, _ *session.Token) error {
 	return nil
 }
 

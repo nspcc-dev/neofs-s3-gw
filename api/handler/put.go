@@ -27,7 +27,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/internal/models"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -186,7 +186,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err                error
 		newEaclTable       *eacl.Table
-		sessionTokenEACLV2 *session2.Token
+		sessionTokenEACLV2 *session.Token
 		containsACL        = containsACLHeaders(r)
 		reqInfo            = api.GetReqInfo(r.Context())
 	)
@@ -377,7 +377,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	var (
 		newEaclTable            *eacl.Table
 		tagSet                  map[string]string
-		sessionTokenEACLTokenV2 *session2.Token
+		sessionTokenEACLTokenV2 *session.Token
 		reqInfo                 = api.GetReqInfo(r.Context())
 		metadata                = make(map[string]string)
 		containsACL             = containsACLHeaders(r)

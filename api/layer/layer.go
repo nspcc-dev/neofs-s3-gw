@@ -29,7 +29,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
@@ -157,7 +157,7 @@ type (
 		Name               string
 		Policy             PlacementPolicy
 		EACL               *eacl.Table
-		SessionTokenV2     *session2.Token
+		SessionTokenV2     *session.Token
 		LocationConstraint string
 		ObjectLockEnabled  bool
 	}
@@ -165,12 +165,12 @@ type (
 	PutBucketACLParams struct {
 		BktInfo        *data.BucketInfo
 		EACL           *eacl.Table
-		SessionTokenV2 *session2.Token
+		SessionTokenV2 *session.Token
 	}
 	// DeleteBucketParams stores delete bucket request parameters.
 	DeleteBucketParams struct {
 		BktInfo        *data.BucketInfo
-		SessionTokenV2 *session2.Token
+		SessionTokenV2 *session.Token
 	}
 
 	// ListObjectVersionsParams stores list objects versions parameters.
@@ -289,7 +289,7 @@ type (
 	}
 
 	authAssigner interface {
-		WithSessionTokenV2(st session2.Token)
+		WithSessionTokenV2(st session.Token)
 	}
 )
 

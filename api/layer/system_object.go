@@ -18,7 +18,7 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 type PutLockInfoParams struct {
@@ -329,7 +329,7 @@ func decodeBucketSettings(settingsObj *object.Object) (*data.BucketSettings, err
 
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
-	var sessionTokenV2 *session2.Token
+	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2

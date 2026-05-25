@@ -11,7 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -392,7 +392,7 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	var (
-		sessionTokenEACLV2 *session2.Token
+		sessionTokenEACLV2 *session.Token
 
 		uploadID   = r.URL.Query().Get(uploadIDHeaderName)
 		uploadInfo = &layer.UploadInfoParams{

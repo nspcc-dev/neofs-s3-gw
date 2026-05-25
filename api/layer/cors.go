@@ -17,7 +17,7 @@ import (
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 
 var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
 
-func (n *layer) storeAttribute(ctx context.Context, cID cid.ID, attributeName string, payload any, sessionTokenV2 *session2.Token) error {
+func (n *layer) storeAttribute(ctx context.Context, cID cid.ID, attributeName string, payload any, sessionTokenV2 *session.Token) error {
 	pl, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -63,7 +63,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return err
 	}
 
-	var sessionTokenV2 *session2.Token
+	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
@@ -145,7 +145,7 @@ func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 		return fmt.Errorf("delete bucket CORS: %w", err)
 	}
 
-	var sessionTokenV2 *session2.Token
+	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2

@@ -13,7 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -125,7 +125,7 @@ func parseRange(s string) (*layer.RangeParams, error) {
 	}, nil
 }
 
-func getSessionTokenSetEACL(ctx context.Context) (*session2.Token, error) {
+func getSessionTokenSetEACL(ctx context.Context) (*session.Token, error) {
 	boxData, err := layer.GetBoxData(ctx)
 	if err != nil {
 		return nil, err

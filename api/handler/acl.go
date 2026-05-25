@@ -22,7 +22,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
 )
@@ -337,7 +337,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionTokenV2 *session2.Token) (bool, error) {
+func (h *handler) updateBucketACL(r *http.Request, astChild *ast, bktInfo *data.BucketInfo, sessionTokenV2 *session.Token) (bool, error) {
 	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
 	if err != nil {
 		return false, fmt.Errorf("could not get bucket eacl: %w", err)

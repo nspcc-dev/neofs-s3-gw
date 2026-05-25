@@ -9,7 +9,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/protobuf/proto"
 )
@@ -35,7 +35,7 @@ type ContainerPolicy struct {
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
 	AccessKey      string
-	SessionTokenV2 *session2.Token
+	SessionTokenV2 *session.Token
 }
 
 var errDecodeFailed = errors.New("failed to decode accessbox")
@@ -70,7 +70,7 @@ func PackTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []b
 }
 
 // GetTokens returns gate tokens from AccessBox.
-func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session2.NNSResolver) (*GateData, error) {
+func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session.NNSResolver) (*GateData, error) {
 	if x.Version != accessBoxVersionSessionV2 {
 		return nil, fmt.Errorf("unsupported access box version %d (current: %d)", x.Version, accessBoxVersionSessionV2)
 	}
@@ -129,7 +129,7 @@ func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 }
 
 // GetBox parses AccessBox to Box.
-func (x *AccessBox) GetBox(owner *keys.PrivateKey, resolver session2.NNSResolver) (*Box, error) {
+func (x *AccessBox) GetBox(owner *keys.PrivateKey, resolver session.NNSResolver) (*Box, error) {
 	tokens, err := x.GetTokens(owner, resolver)
 	if err != nil {
 		return nil, fmt.Errorf("get tokens: %w", err)
@@ -184,7 +184,7 @@ func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Pub
 	}
 
 	var (
-		stv2       session2.Token
+		stv2       session.Token
 		gateUserID = user.NewFromScriptHash(owner.GetScriptHash())
 		index      = -1
 	)
