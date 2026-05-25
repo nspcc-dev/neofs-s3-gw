@@ -633,11 +633,36 @@ func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, fil
 	return result, nextCursor, nil
 }
 
-func (t *TestNeoFS) SetContainerAttribute(_ context.Context, _ cid.ID, _, _ string, _ *session.Token) error {
+func (t *TestNeoFS) SetContainerAttribute(_ context.Context, id cid.ID, key, value string, _ *session.Token) error {
+	cnr, ok := t.containers[id.EncodeToString()]
+	if !ok {
+		return fmt.Errorf("container not found %s", id.EncodeToString())
+	}
+
+	cnr.SetAttribute(key, value)
 	return nil
 }
 
-func (t *TestNeoFS) RemoveContainerAttribute(_ context.Context, _ cid.ID, _ string, _ *session.Token) error {
+func (t *TestNeoFS) RemoveContainerAttribute(_ context.Context, id cid.ID, key string, _ *session.Token) error {
+	cnr, ok := t.containers[id.EncodeToString()]
+	if !ok {
+		return fmt.Errorf("container not found %s", id.String())
+	}
+
+	// The SDK container keeps attributes in a private slice with no removal
+	// API, so rebuild the container without the dropped attribute.
+	var rebuilt container.Container
+	rebuilt.Init()
+	rebuilt.SetOwner(cnr.Owner())
+	rebuilt.SetPlacementPolicy(cnr.PlacementPolicy())
+	rebuilt.SetBasicACL(cnr.BasicACL())
+	for k, v := range cnr.Attributes() {
+		if k != key {
+			rebuilt.SetAttribute(k, v)
+		}
+	}
+
+	t.containers[id.EncodeToString()] = &rebuilt
 	return nil
 }
 

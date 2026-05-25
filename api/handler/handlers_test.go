@@ -191,6 +191,10 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 	err = hc.Layer().PutBucketSettings(hc.Context(), sp)
 	require.NoError(hc.t, err)
 
+	// Writing invalidates the cached settings, we need to get refreshed.
+	bktInfo, err = hc.Layer().GetBucketInfo(hc.Context(), bktName)
+	require.NoError(hc.t, err)
+
 	return bktInfo
 }
 

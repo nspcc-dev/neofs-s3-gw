@@ -11,11 +11,7 @@ import (
 
 func TestObjectLockAttributes(t *testing.T) {
 	tc := prepareContext(t)
-	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{Versioning: data.VersioningEnabled},
-	})
-	require.NoError(t, err)
+	tc.putBucketSettings(&data.BucketSettings{Versioning: data.VersioningEnabled})
 
 	obj := tc.putObject([]byte("content obj1 v1"))
 
@@ -32,7 +28,7 @@ func TestObjectLockAttributes(t *testing.T) {
 		},
 	}
 
-	err = tc.layer.PutLockInfo(tc.ctx, p)
+	err := tc.layer.PutLockInfo(tc.ctx, p)
 	require.NoError(t, err)
 
 	foundLock, err := tc.layer.GetLockInfo(tc.ctx, p.ObjVersion)

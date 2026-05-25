@@ -1,7 +1,9 @@
 package data
 
 import (
+	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -45,6 +47,7 @@ type (
 		AttributeTags          string
 		AttributeSettings      string
 		AttributeNotifications string
+		SettingsItem           *BucketSettingsCacheItem
 	}
 
 	// ObjectInfo holds S3 object data.
@@ -106,6 +109,14 @@ type (
 		ExposeHeaders  []string `xml:"ExposeHeader" json:"ExposeHeaders"`
 		MaxAgeSeconds  int      `xml:"MaxAgeSeconds,omitempty" json:"MaxAgeSeconds,omitempty"`
 	}
+
+	// BucketSettingsCacheItem holds the bucket-level configuration.
+	BucketSettingsCacheItem struct {
+		Settings      *BucketSettings
+		CORS          *CORSConfiguration
+		Tags          map[string]string
+		Notifications *NotificationConfiguration
+	}
 )
 
 // NotificationInfoFromObject creates new NotificationInfo from ObjectInfo.
@@ -139,4 +150,46 @@ func (b BucketSettings) VersioningEnabled() bool {
 
 func (b BucketSettings) VersioningSuspended() bool {
 	return b.Versioning == VersioningSuspended
+}
+
+// NewBucketSettingsCacheItem parses the bucket configuration container attributes into a cache item.
+func NewBucketSettingsCacheItem(b *BucketInfo) (*BucketSettingsCacheItem, error) {
+	var item = &BucketSettingsCacheItem{
+		Settings:      &BucketSettings{Versioning: VersioningUnversioned},
+		Notifications: &NotificationConfiguration{},
+	}
+
+	if b.AttributeSettings != "" {
+		settings := &BucketSettings{Versioning: VersioningUnversioned}
+		if err := json.Unmarshal([]byte(b.AttributeSettings), settings); err != nil {
+			return nil, fmt.Errorf("malformed bucket settings: %w", err)
+		}
+		item.Settings = settings
+	}
+
+	if b.AttributeCors != "" {
+		var corsRules []CORSRule
+		if err := json.Unmarshal([]byte(b.AttributeCors), &corsRules); err != nil {
+			return nil, fmt.Errorf("malformed bucket CORS: %w", err)
+		}
+		item.CORS = &CORSConfiguration{CORSRules: corsRules}
+	}
+
+	if b.AttributeTags != "" {
+		var tags map[string]string
+		if err := json.Unmarshal([]byte(b.AttributeTags), &tags); err != nil {
+			return nil, fmt.Errorf("malformed bucket tags: %w", err)
+		}
+		item.Tags = tags
+	}
+
+	if b.AttributeNotifications != "" {
+		conf := &NotificationConfiguration{}
+		if err := json.Unmarshal([]byte(b.AttributeNotifications), conf); err != nil {
+			return nil, fmt.Errorf("malformed bucket notifications: %w", err)
+		}
+		item.Notifications = conf
+	}
+
+	return item, nil
 }

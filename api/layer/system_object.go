@@ -232,20 +232,21 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 	return ".lock." + objVersion.BktInfo.CID.EncodeToString() + "." + objVersion.ObjectName + "." + objVersion.VersionID
 }
 
+func (n *layer) bucketSettingsItem(bktInfo *data.BucketInfo) (*data.BucketSettingsCacheItem, error) {
+	if bktInfo.SettingsItem != nil {
+		return bktInfo.SettingsItem, nil
+	}
+
+	return data.NewBucketSettingsCacheItem(bktInfo)
+}
+
 func (n *layer) GetBucketSettings(_ context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	if settings := n.cache.GetSettings(bktInfo); settings != nil {
-		return settings, nil
+	item, err := n.bucketSettingsItem(bktInfo)
+	if err != nil {
+		return nil, err
 	}
 
-	var settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	if bktInfo.AttributeSettings != "" {
-		if err := json.Unmarshal([]byte(bktInfo.AttributeSettings), settings); err != nil {
-			return nil, fmt.Errorf("malformed data: %w", err)
-		}
-	}
-
-	n.cache.PutSettings(bktInfo, settings)
-	return settings, nil
+	return item.Settings, nil
 }
 
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
@@ -260,7 +261,6 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("store bucket settings: %w", err)
 	}
 
-	n.cache.PutSettings(p.BktInfo, p.Settings)
 	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil

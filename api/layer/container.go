@@ -65,6 +65,14 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 	info.AttributeSettings = cnr.Attribute(attributeSettings)
 	info.AttributeNotifications = cnr.Attribute(attributeNotifications)
 
+	settingsItem, err := data.NewBucketSettingsCacheItem(info)
+	if err != nil {
+		log.Error("could not parse bucket settings from container attributes", zap.Error(err), zap.Stringer("cid", idCnr))
+		return nil, err
+	}
+
+	info.SettingsItem = settingsItem
+
 	attrLockEnabled := cnr.Attribute(AttributeLockEnabled)
 	if len(attrLockEnabled) > 0 {
 		info.ObjectLockEnabled, err = strconv.ParseBool(attrLockEnabled)
@@ -124,6 +132,10 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Created:            TimeNow(ctx),
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
+		SettingsItem: &data.BucketSettingsCacheItem{
+			Settings:      &data.BucketSettings{Versioning: data.VersioningUnversioned},
+			Notifications: &data.NotificationConfiguration{},
+		},
 	}
 
 	var attributes [][2]string

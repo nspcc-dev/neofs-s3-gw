@@ -68,31 +68,22 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return fmt.Errorf("store bucket CORS: %w", err)
 	}
 
-	n.cache.PutCORS(n.Owner(ctx), p.BktInfo, cors)
 	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil
 }
 
-func (n *layer) GetBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
-	var owner = n.Owner(ctx)
-
-	if cors := n.cache.GetCORS(owner, bktInfo); cors != nil {
-		return cors, nil
+func (n *layer) GetBucketCORS(_ context.Context, bktInfo *data.BucketInfo) (*data.CORSConfiguration, error) {
+	item, err := n.bucketSettingsItem(bktInfo)
+	if err != nil {
+		return nil, err
 	}
 
-	if bktInfo.AttributeCors == "" {
+	if item.CORS == nil {
 		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchCORSConfiguration)
 	}
 
-	var corsRules []data.CORSRule
-	if err := json.Unmarshal([]byte(bktInfo.AttributeCors), &corsRules); err != nil {
-		return nil, fmt.Errorf("malformed data: %w", err)
-	}
-
-	cors := &data.CORSConfiguration{CORSRules: corsRules}
-	n.cache.PutCORS(owner, bktInfo, cors)
-	return cors, nil
+	return item.CORS, nil
 }
 
 func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) error {
@@ -106,7 +97,6 @@ func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 		return fmt.Errorf("remove bucket CORS: %w", err)
 	}
 
-	n.cache.DeleteCORS(bktInfo)
 	n.cache.DeleteBucket(bktInfo.Name)
 
 	return nil
