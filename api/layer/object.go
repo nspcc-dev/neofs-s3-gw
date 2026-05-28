@@ -242,6 +242,17 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		p.Size = int64(encSize)
 	}
 
+	oldVersions, oldVersionsErr := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
+	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
+		n.log.Warn("search old object versions failed",
+			zap.String("object", p.Object),
+			zap.String("bucket", p.BktInfo.Name),
+			zap.Stringer("cid", p.BktInfo.CID),
+			zap.Error(oldVersionsErr))
+
+		return nil, fmt.Errorf("search all versions in neofs: %w", oldVersionsErr)
+	}
+
 	if r != nil {
 		if len(p.Header[api.ContentType]) == 0 {
 			if contentType := MimeByFilePath(p.Object); len(contentType) == 0 {
@@ -276,18 +287,9 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Attributes:   p.Header,
 	}
 
-	var (
-		oldVersions    []allVersionsSearchResult
-		oldVersionsErr error
-		wg             sync.WaitGroup
-	)
-
 	if bktSettings.VersioningEnabled() {
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
-	} else {
-		wg.Go(func() {
-			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
-		})
+		oldVersions = nil
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
@@ -295,16 +297,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		return nil, err
 	}
 
-	// We need new object id to filter it out.
-	wg.Wait()
-
-	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
-		n.log.Warn("search old object versions failed",
-			zap.String("object", p.Object),
-			zap.String("bucket", p.BktInfo.Name),
-			zap.Stringer("cid", p.BktInfo.CID),
-			zap.Error(oldVersionsErr))
-	}
+	var wg sync.WaitGroup
 
 	if len(oldVersions) > 0 {
 		wg.Go(func() {
