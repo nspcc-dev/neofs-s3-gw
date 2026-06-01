@@ -413,15 +413,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	return obj.GetID(), nil
 }
 
-func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, metaChecksum hash.Hash, homomorphicChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
+func (t *TestNeoFS) FinalizeObjectWithPayloadChecksums(_ context.Context, header object.Object, metaChecksum hash.Hash, payloadLength uint64) (*object.Object, error) {
 	header.SetCreationEpoch(t.currentEpoch)
 
 	header.SetPayloadChecksum(checksum.NewFromHash(checksum.SHA256, metaChecksum))
-
-	if homomorphicChecksum != nil {
-		//nolint:staticcheck // removed after node 0.53.0
-		header.SetPayloadHomomorphicHash(checksum.NewFromHash(checksum.TillichZemor, homomorphicChecksum))
-	}
 
 	header.SetPayloadSize(payloadLength)
 	if err := header.SetIDWithSignature(t.signer); err != nil {
@@ -454,10 +449,6 @@ func (t *TestNeoFS) TimeToEpoch(_ context.Context, now, futureTime time.Time) (u
 func (t *TestNeoFS) MaxObjectSize() int64 {
 	// 64 MB
 	return 67108864
-}
-
-func (t *TestNeoFS) IsHomomorphicHashingEnabled() bool {
-	return false
 }
 
 func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {

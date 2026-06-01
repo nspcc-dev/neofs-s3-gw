@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"slices"
 	"strconv"
@@ -31,7 +30,6 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/nspcc-dev/neofs-sdk-go/version"
-	"github.com/nspcc-dev/tzhash/tz"
 	"go.uber.org/zap"
 )
 
@@ -268,13 +266,8 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 	var (
 		splitPreviousID oid.ID
 		multipartHash   = sha256.New()
-		tzHash          hash.Hash
 		creationTime    = TimeNow(ctx)
 	)
-
-	if n.neoFS.IsHomomorphicHashingEnabled() {
-		tzHash = tz.New()
-	}
 
 	lastPart, err := n.multipartMetaGetPartByNumber(ctx, bktInfo, multipartInfo.UploadID, p.PartNumber-1)
 	if err != nil {
@@ -315,13 +308,6 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		return nil, fmt.Errorf("unmarshal previous part hash: %w", err)
 	}
 
-	if tzHash != nil {
-		binaryUnmarshaler = tzHash.(encoding.BinaryUnmarshaler)
-		if err = binaryUnmarshaler.UnmarshalBinary(lastPart.HomoHash); err != nil {
-			return nil, fmt.Errorf("unmarshal previous part homo hash: %w", err)
-		}
-	}
-
 	splitPreviousID = lastPart.OID
 
 	splitFirstID, err := oid.DecodeString(multipartInfo.UploadID)
@@ -338,8 +324,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		CreationTime: creationTime,
 		Multipart: &Multipart{
 			MultipartHashes: &MultipartHashes{
-				Hash:     multipartHash,
-				HomoHash: tzHash,
+				Hash: multipartHash,
 			},
 			ContainerPolicy: cnr.PlacementPolicy(),
 		},
@@ -420,17 +405,12 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		bktInfo       = p.Bkt
 		attributes    = make(map[string]string)
 		multipartHash = sha256.New()
-		tzHash        hash.Hash
 		id            oid.ID
 		creationTime  = TimeNow(ctx)
 	)
 
 	if p.Encryption.Enabled() {
 		attributes[s3headers.AttributeDecryptedSize] = "0"
-	}
-
-	if n.neoFS.IsHomomorphicHashingEnabled() {
-		tzHash = tz.New()
 	}
 
 	attrs := make([]object.Attribute, 0, len(multipartInfo.Meta)+1)
@@ -470,17 +450,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	attributes[s3headers.MultipartPartNumber] = "0"
 	attributes[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
 
-	if tzHash != nil {
-		binaryMarshaler = tzHash.(encoding.BinaryMarshaler)
-		stateBytes, err = binaryMarshaler.MarshalBinary()
-
-		if err != nil {
-			return nil, fmt.Errorf("marshalBinary: %w", err)
-		}
-
-		attributes[s3headers.MultipartHomoHash] = hex.EncodeToString(stateBytes)
-	}
-
 	prm := PrmObjectCreate{
 		Container:    bktInfo.CID,
 		Creator:      bktInfo.Owner,
@@ -492,10 +461,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 			ContainerPolicy: cnr.PlacementPolicy(),
 		},
 		Payload: bytes.NewBuffer(nil),
-	}
-
-	if n.neoFS.IsHomomorphicHashingEnabled() {
-		prm.Multipart.HomoHash = tz.New()
 	}
 
 	id, err = n.multipartObjectPut(ctx, prm, bktInfo)
@@ -547,10 +512,6 @@ func (n *layer) multipartGetZeroPart(ctx context.Context, bktInfo *data.BucketIn
 		return nil, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, attrs[s3headers.MultipartHash], err)
 	}
 
-	if partInfo.HomoHash, err = hex.DecodeString(attrs[s3headers.MultipartHomoHash]); err != nil {
-		return nil, fmt.Errorf("convert multipart %s homoHash %s: %w", uploadID, attrs[s3headers.MultipartHomoHash], err)
-	}
-
 	return &partInfo, nil
 }
 
@@ -570,7 +531,6 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		returningAttributes = []string{
 			s3headers.MultipartUpload,
 			s3headers.MultipartHash,
-			s3headers.MultipartHomoHash,
 		}
 	)
 
@@ -595,8 +555,7 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		e := data.ElementInfo{
 			ID: item.ID,
 			Attributes: map[string]string{
-				s3headers.MultipartHash:     item.Attributes[1],
-				s3headers.MultipartHomoHash: item.Attributes[2],
+				s3headers.MultipartHash: item.Attributes[1],
 			},
 		}
 
@@ -604,8 +563,8 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 	}
 
 	var (
-		lastElement             = elements[len(elements)-1]
-		multipartHash, homoHash []byte
+		lastElement   = elements[len(elements)-1]
+		multipartHash []byte
 	)
 
 	mpHashStr := lastElement.Attributes[s3headers.MultipartHash]
@@ -620,17 +579,9 @@ func (n *layer) multipartMetaGetPartByNumber(ctx context.Context, bktInfo *data.
 		return nil, fmt.Errorf("convert %s:%s multipartHash %s: %w", uploadID, lastElement.ID.String(), mpHashStr, err)
 	}
 
-	homoHashStr := lastElement.Attributes[s3headers.MultipartHomoHash]
-	if homoHashStr != "" {
-		if homoHash, err = hex.DecodeString(homoHashStr); err != nil {
-			return nil, fmt.Errorf("convert %s:%s homoHash %s: %w", uploadID, lastElement.ID.String(), homoHashStr, err)
-		}
-	}
-
 	partInfo := data.PartInfo{
 		OID:           lastElement.ID,
 		MultipartHash: multipartHash,
-		HomoHash:      homoHash,
 		Elements:      elements,
 	}
 
@@ -661,10 +612,6 @@ func convertElementsToPartInfo(uploadID string, number int, elements []data.Elem
 
 	if partInfo.MultipartHash, err = hex.DecodeString(mpHashStr); err != nil {
 		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHash %s: %w", uploadID, mpHashStr, err)
-	}
-
-	if partInfo.HomoHash, err = hex.DecodeString(lastElement.Attributes[s3headers.MultipartHomoHash]); err != nil {
-		return data.PartInfo{}, fmt.Errorf("convert multipart %s multipartHomoHash %s: %w", uploadID, lastElement.Attributes[s3headers.MultipartHomoHash], err)
 	}
 
 	return partInfo, nil
@@ -1342,7 +1289,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	multipartHash := sha256.New()
-	var homoHash hash.Hash
 	var splitPreviousID oid.ID
 
 	if lastPartID > 0 {
@@ -1356,17 +1302,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 					binaryUnmarshaler := multipartHash.(encoding.BinaryUnmarshaler)
 					if err = binaryUnmarshaler.UnmarshalBinary(lastPart.MultipartHash); err != nil {
 						return nil, nil, fmt.Errorf("unmarshal last part hash: %w", err)
-					}
-				}
-			}
-
-			if n.neoFS.IsHomomorphicHashingEnabled() && len(lastPart.HomoHash) > 0 {
-				homoHash = tz.New()
-
-				if len(lastPart.HomoHash) > 0 {
-					binaryUnmarshaler := homoHash.(encoding.BinaryUnmarshaler)
-					if err = binaryUnmarshaler.UnmarshalBinary(lastPart.HomoHash); err != nil {
-						return nil, nil, fmt.Errorf("unmarshal last part homo hash: %w", err)
 					}
 				}
 			}
@@ -1429,7 +1364,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	header, err := n.prepareMultipartHeadObject(ctx, multipartHeadObjectParams{
 		PutObject:         prmHeaderObject,
 		PayloadHash:       multipartHash,
-		HomoHash:          homoHash,
 		PayloadLength:     uint64(multipartObjetSize),
 		VersioningEnabled: bktSettings.VersioningEnabled(),
 	})
@@ -1456,10 +1390,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 			ContainerPolicy: cnr.PlacementPolicy(),
 		},
 		Payload: bytes.NewBuffer(nil),
-	}
-
-	if n.neoFS.IsHomomorphicHashingEnabled() {
-		prm.Multipart.HomoHash = tz.New()
 	}
 
 	lastPartObjID, err := n.multipartObjectPut(ctx, prm, p.Info.Bkt)
@@ -1808,7 +1738,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 		localSplitFirstID    oid.ID
 		first                bool
 		hashlessHeaderObject object.Object
-		fullPartHomoHash     hash.Hash
 
 		currentVersion      = version.Current()
 		fullPartPayloadHash = sha256.New()
@@ -1851,16 +1780,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 			prm.Multipart.PayloadHash = sha256.New()
 			prm.Multipart.PayloadHash.Write((chunk)[:nBts])
 			fullPartPayloadHash.Write((chunk)[:nBts])
-
-			if n.neoFS.IsHomomorphicHashingEnabled() {
-				prm.Multipart.HomoHash = tz.New()
-				prm.Multipart.HomoHash.Write((chunk)[:nBts])
-
-				if fullPartHomoHash == nil {
-					fullPartHomoHash = tz.New()
-				}
-				fullPartHomoHash.Write((chunk)[:nBts])
-			}
 
 			if err = prm.Multipart.MultipartHashes.WritePayload((chunk)[:nBts]); err != nil {
 				return id, nil, fmt.Errorf("hash payload write: %w", err)
@@ -1918,17 +1837,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 	}
 	partHeaders[s3headers.MultipartHash] = hex.EncodeToString(stateBytes)
 
-	if prm.Multipart.MultipartHashes.HomoHash != nil {
-		binaryMarshaler = prm.Multipart.MultipartHashes.HomoHash.(encoding.BinaryMarshaler)
-		stateBytes, err = binaryMarshaler.MarshalBinary()
-
-		if err != nil {
-			return id, nil, fmt.Errorf("marshalBinary: %w", err)
-		}
-
-		partHeaders[s3headers.MultipartHomoHash] = hex.EncodeToString(stateBytes)
-	}
-
 	// This is our "full part object". It doesn't have any payload.
 	prmPartObjectHeader := PutObjectParams{
 		BktInfo:    bktInfo,
@@ -1941,7 +1849,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 	partObjectHeader, err := n.prepareMultipartHeadObject(ctx, multipartHeadObjectParams{
 		PutObject:       prmPartObjectHeader,
 		PayloadHash:     fullPartPayloadHash,
-		HomoHash:        fullPartHomoHash,
 		PayloadLength:   uint64(totalBytes),
 		SplitFirstID:    splitFirstID,
 		SplitPreviousID: splitPreviousID,
@@ -1964,10 +1871,6 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 			ContainerPolicy: cnr.PlacementPolicy(),
 		},
 		Payload: bytes.NewBuffer(nil),
-	}
-
-	if n.neoFS.IsHomomorphicHashingEnabled() {
-		prm.Multipart.HomoHash = tz.New()
 	}
 
 	lastPartObjID, err := n.multipartObjectPut(ctx, prm, bktInfo)
