@@ -14,7 +14,19 @@ This document outlines major changes between releases.
 
 ### Removed
 
-### Upgrading from 0.43.1
+### Upgrading from 0.43.2
+
+## [0.43.2] - 2026-06-02
+
+### Fixed
+- Leaking payload reader when it's replaced by part (#1282)
+
+### Updated
+- NeoFS SDK RC19 (#1283)
+
+### Removed
+- Extra buffers on object reads (#1280)
+- Homomorphic hash support (#1283)
 
 ## [0.43.1] - 2026-04-13
 
@@ -1019,4 +1031,5 @@ releases.
 [0.42.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.41.5...v0.42.0
 [0.43.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.42.0...v0.43.0
 [0.43.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.0...v0.43.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.1...master
+[0.43.2]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.1...v0.43.2
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.2...master
