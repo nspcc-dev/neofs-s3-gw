@@ -17,6 +17,7 @@ require (
 	github.com/nspcc-dev/neofs-contract v0.26.1
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.19
 	github.com/prometheus/client_golang v1.23.2
+	github.com/quic-go/quic-go v0.59.1
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
