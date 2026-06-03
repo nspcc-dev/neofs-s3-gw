@@ -603,7 +603,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		}, nil
 	}
 
-	var prmRange client.PrmObjectRange
+	var prmRange client.PrmObjectGet
+	prmRange.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
 
 	if prm.SessionTokenV2 != nil {
 		prmRange.WithinSessionV2(*prm.SessionTokenV2)
@@ -611,7 +612,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		prmRange.WithBearerToken(*prm.BearerToken)
 	}
 
-	res, err := x.pool.ObjectRangeInit(ctx, prm.Container, prm.Object, prm.PayloadRange[0], prm.PayloadRange[1], x.signer(ctx), prmRange) // nolint:staticcheck // SA1019: x.pool.ObjectRangeInit is deprecated: use [Pool.ObjectGetInit] with [client.PrmObjectGet.SetRange] instead.
+	_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmRange)
 
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
