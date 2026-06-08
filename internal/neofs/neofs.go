@@ -21,7 +21,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
@@ -34,8 +33,7 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/slicer"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -184,8 +182,6 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	var prmPut client.PrmContainerPut
 	if prm.SessionTokenV2 != nil {
 		prmPut.WithinSessionV2(*prm.SessionTokenV2)
-	} else if prm.SessionToken != nil {
-		prmPut.WithinSession(*prm.SessionToken)
 	}
 
 	var executor layer.ContainerPutExecutor = x.pool
@@ -203,7 +199,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 }
 
 // CreateContainerAndSetEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) (cid.ID, error) {
+func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table, sessionTokenV2 *session.Token) (cid.ID, error) {
 	cl, err := x.pool.RawClient()
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("get node connection: %w", err)
@@ -218,7 +214,7 @@ func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmCont
 
 	table.SetCID(cnrID)
 
-	return cnrID, x.setContainerEACL(ctx, cl, table, sessionToken, sessionTokenV2)
+	return cnrID, x.setContainerEACL(ctx, cl, table, sessionTokenV2)
 }
 
 // UserContainers implements neofs.NeoFS interface method.
@@ -233,17 +229,15 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
-	return x.setContainerEACL(ctx, x.pool, table, sessionToken, sessionTokenV2)
+func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
+	return x.setContainerEACL(ctx, x.pool, table, sessionTokenV2)
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) setContainerEACL(ctx context.Context, executor SetEACLExecutor, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) setContainerEACL(ctx context.Context, executor SetEACLExecutor, table eacl.Table, sessionTokenV2 *session.Token) error {
 	var prm client.PrmContainerSetEACL
 	if sessionTokenV2 != nil {
 		prm.WithinSessionV2(*sessionTokenV2)
-	} else if sessionToken != nil {
-		prm.WithinSession(*sessionToken)
 	}
 
 	err := executor.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
@@ -266,12 +260,10 @@ func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, erro
 }
 
 // DeleteContainer implements neofs.NeoFS interface method.
-func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, token *session.Container, tokenV2 *session2.Token) error {
+func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, tokenV2 *session.Token) error {
 	var prm client.PrmContainerDelete
 	if tokenV2 != nil {
 		prm.WithinSessionV2(*tokenV2)
-	} else if token != nil {
-		prm.WithinSession(*token)
 	}
 
 	err := x.pool.ContainerDelete(ctx, id, x.signer(ctx), prm)
@@ -406,8 +398,6 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 
 		if prm.SessionTokenV2 != nil {
 			opts.SetSessionV2(*prm.SessionTokenV2)
-		} else if prm.BearerToken != nil {
-			opts.SetBearerToken(*prm.BearerToken)
 		}
 
 		objID, err := slicer.Put(ctx, x.pool, obj, signer, prm.Payload, opts)
@@ -429,7 +419,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 				return oid.ID{}, fmt.Errorf("read full payload: %w", err)
 			}
 
-			if err := x.ecAndSaveReadyObject(ctx, signer, prm.BearerToken, prm.SessionTokenV2, obj, pld, ecRules); err != nil {
+			if err := x.ecAndSaveReadyObject(ctx, signer, prm.SessionTokenV2, obj, pld, ecRules); err != nil {
 				return oid.ID{}, err
 			}
 
@@ -441,16 +431,14 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 	}
 
-	return x.putReadyObject(ctx, signer, prm.BearerToken, prm.SessionTokenV2, obj, prm.Payload, prm.PayloadSize)
+	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload, prm.PayloadSize)
 }
 
-func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, bTok *bearer.Token, sessionv2 *session2.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64) (oid.ID, error) {
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64) (oid.ID, error) {
 	var prmObjPutInit client.PrmObjectPutInit
 
 	if sessionv2 != nil {
 		prmObjPutInit.WithinSessionV2(*sessionv2)
-	} else if bTok != nil {
-		prmObjPutInit.WithBearerToken(*bTok)
 	}
 
 	writer, err := x.pool.ObjectPutInit(ctx, hdr, signer, prmObjPutInit)
@@ -539,8 +527,6 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 	if prm.SessionTokenV2 != nil {
 		prmGet.WithinSessionV2(*prm.SessionTokenV2)
-	} else if prm.BearerToken != nil {
-		prmGet.WithBearerToken(*prm.BearerToken)
 	}
 
 	if prm.WithHeader {
@@ -572,8 +558,6 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 		if prm.SessionTokenV2 != nil {
 			prmHead.WithinSessionV2(*prm.SessionTokenV2)
-		} else if prm.BearerToken != nil {
-			prmHead.WithBearerToken(*prm.BearerToken)
 		}
 
 		hdr, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
@@ -608,8 +592,6 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 
 	if prm.SessionTokenV2 != nil {
 		prmRange.WithinSessionV2(*prm.SessionTokenV2)
-	} else if prm.BearerToken != nil {
-		prmRange.WithBearerToken(*prm.BearerToken)
 	}
 
 	_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmRange)
@@ -635,8 +617,6 @@ func (x *NeoFS) GetObject(ctx context.Context, prm layer.GetObject) (*layer.Obje
 
 	if prm.SessionTokenV2 != nil {
 		prmGet.WithinSessionV2(*prm.SessionTokenV2)
-	} else if prm.BearerToken != nil {
-		prmGet.WithBearerToken(*prm.BearerToken)
 	}
 
 	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
@@ -660,8 +640,6 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 
 	if prm.SessionTokenV2 != nil {
 		prmDelete.WithinSessionV2(*prm.SessionTokenV2)
-	} else if prm.BearerToken != nil {
-		prmDelete.WithBearerToken(*prm.BearerToken)
 	}
 
 	_, err := x.pool.ObjectDelete(ctx, prm.Container, prm.Object, x.signer(ctx), prmDelete)
@@ -768,8 +746,8 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 }
 
 // SetContainerEACL implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
-	return x.neoFS.SetContainerEACL(ctx, table, sessionToken, sessionTokenV2)
+func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
+	return x.neoFS.SetContainerEACL(ctx, table, sessionTokenV2)
 }
 
 // ContainerEACL implements authmate.NeoFS interface method.
@@ -782,8 +760,6 @@ func (x *NeoFS) SearchObjects(ctx context.Context, prm layer.PrmObjectSearch) ([
 	var prmSearch client.PrmObjectSearch
 	if prm.SessionTokenV2 != nil {
 		prmSearch.WithinSessionV2(*prm.SessionTokenV2)
-	} else if prm.BearerToken != nil {
-		prmSearch.WithBearerToken(*prm.BearerToken)
 	}
 
 	prmSearch.SetFilters(prm.Filters)
@@ -852,7 +828,7 @@ func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filte
 }
 
 // SetContainerAttribute sets container attribute via NeoFS api.
-func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attributeName, attributeValue string, sessionTokenV2 *session.Token) error {
 	var (
 		prm = client.SetContainerAttributeParameters{
 			ID:         cid,
@@ -865,8 +841,6 @@ func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attribute
 
 	if sessionTokenV2 != nil {
 		o.AttachSessionToken(*sessionTokenV2)
-	} else if sessionToken != nil {
-		o.AttachSessionTokenV1(*sessionToken)
 	}
 
 	sig, err := client.SignSetContainerAttributeParameters(x.signer(ctx), prm)
@@ -882,7 +856,7 @@ func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attribute
 }
 
 // RemoveContainerAttribute removes container attribute via NeoFS api.
-func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionToken *session.Container, sessionTokenV2 *session2.Token) error {
+func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attributeName string, sessionTokenV2 *session.Token) error {
 	var (
 		prm = client.RemoveContainerAttributeParameters{
 			ID:         cid,
@@ -894,8 +868,6 @@ func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attrib
 
 	if sessionTokenV2 != nil {
 		o.AttachSessionToken(*sessionTokenV2)
-	} else if sessionToken != nil {
-		o.AttachSessionTokenV1(*sessionToken)
 	}
 
 	sig, err := client.SignRemoveContainerAttributeParameters(x.signer(ctx), prm)

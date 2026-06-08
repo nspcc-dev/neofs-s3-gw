@@ -20,12 +20,10 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	accessbox2 "github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/contracts"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
 	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"go.uber.org/zap"
@@ -82,7 +80,7 @@ type NeoFS interface {
 	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
 
 	// SetContainerEACL updates container EACL.
-	SetContainerEACL(ctx context.Context, table eacl.Table, sessionToken *session.Container, sessionTokenV2 *session2.Token) error
+	SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session2.Token) error
 
 	// ContainerEACL gets container EACL.
 	ContainerEACL(ctx context.Context, containerID cid.ID) (*eacl.Table, error)
@@ -151,10 +149,8 @@ type (
 
 	// ObtainingResult contains payload for obtainingSecret command.
 	ObtainingResult struct {
-		BearerToken            *bearer.Token      `json:"-"`
-		SessionTokenForSetEACL *session.Container `json:"-"`
-		SessionTokenV2         *session2.Token    `json:"-"`
-		SecretAccessKey        string             `json:"secret_access_key"`
+		SessionTokenV2  *session2.Token `json:"-"`
+		SecretAccessKey string          `json:"secret_access_key"`
 	}
 )
 
@@ -338,10 +334,8 @@ func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) 
 	}
 
 	return &ObtainingResult{
-		BearerToken:            box.Gate.BearerToken,
-		SecretAccessKey:        box.Gate.AccessKey,
-		SessionTokenForSetEACL: box.Gate.SessionTokenForSetEACL(),
-		SessionTokenV2:         box.Gate.SessionTokenV2,
+		SecretAccessKey: box.Gate.AccessKey,
+		SessionTokenV2:  box.Gate.SessionTokenV2,
 	}, nil
 }
 
@@ -423,29 +417,18 @@ func buildSessionTokensV2(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs [
 	)
 
 	for _, c := range ctxs {
-		var v2Verb session2.Verb
-
 		switch c.verb {
-		case session.VerbContainerPut:
-			v2Verb = session2.VerbContainerPut
-		case session.VerbContainerDelete:
-			v2Verb = session2.VerbContainerDelete
-		case session.VerbContainerSetEACL:
-			v2Verb = session2.VerbContainerSetEACL
-		case session.VerbContainerSetAttribute:
-			v2Verb = session2.VerbContainerSetAttribute
-		case session.VerbContainerRemoveAttribute:
-			v2Verb = session2.VerbContainerRemoveAttribute
+		case session2.VerbContainerPut, session2.VerbContainerDelete, session2.VerbContainerSetEACL, session2.VerbContainerSetAttribute, session2.VerbContainerRemoveAttribute:
 		default:
 			return nil, fmt.Errorf("unknown verb: %v", c.verb)
 		}
 
 		if _, ok := verbsByCnr[c.containerID]; !ok {
-			verbsByCnr[c.containerID] = []session2.Verb{v2Verb}
+			verbsByCnr[c.containerID] = []session2.Verb{c.verb}
 			continue
 		}
 
-		verbsByCnr[c.containerID] = append(verbsByCnr[c.containerID], append(objectOperations, v2Verb)...)
+		verbsByCnr[c.containerID] = append(verbsByCnr[c.containerID], append(objectOperations, c.verb)...)
 	}
 
 	deduplicate, err := deduplicateVerbs(verbsByCnr)

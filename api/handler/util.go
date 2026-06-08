@@ -13,8 +13,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -126,18 +125,17 @@ func parseRange(s string) (*layer.RangeParams, error) {
 	}, nil
 }
 
-func getSessionTokenSetEACL(ctx context.Context) (*session.Container, *session2.Token, error) {
+func getSessionTokenSetEACL(ctx context.Context) (*session.Token, error) {
 	boxData, err := layer.GetBoxData(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	sessionToken := boxData.Gate.SessionTokenForSetEACL()
 	sessionTokenV2 := boxData.Gate.SessionTokenV2
-	if sessionToken == nil && sessionTokenV2 == nil {
-		return nil, nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+	if sessionTokenV2 == nil {
+		return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 	}
 
-	return sessionToken, sessionTokenV2, nil
+	return sessionTokenV2, nil
 }
 
 func contentLengthFromRequest(r *http.Request) (int64, error) {

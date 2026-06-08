@@ -1,7 +1,6 @@
 package accessbox
 
 import (
-	"bytes"
 	"crypto/elliptic"
 	"encoding/hex"
 	"errors"
@@ -9,10 +8,8 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
-	"github.com/nspcc-dev/neofs-sdk-go/bearer"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	"github.com/nspcc-dev/neofs-sdk-go/session"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"google.golang.org/protobuf/proto"
 )
@@ -38,67 +35,10 @@ type ContainerPolicy struct {
 // GateData represents gate tokens in AccessBox.
 type GateData struct {
 	AccessKey      string
-	BearerToken    *bearer.Token
-	SessionTokens  []*session.Container
-	SessionTokenV2 *session2.Token
-	GateKey        *keys.PublicKey
+	SessionTokenV2 *session.Token
 }
 
-var (
-	errDecodeFailed = errors.New("failed to decode accessbox")
-)
-
-// NewGateData returns GateData from the provided bearer token and the public gate key.
-func NewGateData(gateKey *keys.PublicKey, bearerTkn *bearer.Token) *GateData {
-	return &GateData{GateKey: gateKey, BearerToken: bearerTkn}
-}
-
-// SessionTokenForPut returns the first suitable container session context for PUT operation.
-func (g *GateData) SessionTokenForPut() *session.Container {
-	return g.containerSessionToken(session.VerbContainerPut)
-}
-
-// SessionTokenForDelete returns the first suitable container session context for DELETE operation.
-func (g *GateData) SessionTokenForDelete() *session.Container {
-	return g.containerSessionToken(session.VerbContainerDelete)
-}
-
-// SessionTokenForSetEACL returns the first suitable container session context for SetEACL operation.
-func (g *GateData) SessionTokenForSetEACL() *session.Container {
-	return g.containerSessionToken(session.VerbContainerSetEACL)
-}
-
-// SessionTokenForSetAttribute returns the first suitable container session context for SetAttribute operation.
-func (g *GateData) SessionTokenForSetAttribute() *session.Container {
-	return g.containerSessionToken(session.VerbContainerSetAttribute)
-}
-
-// SessionTokenForRemoveAttribute returns the first suitable container session context for RemoveAttribute operation.
-func (g *GateData) SessionTokenForRemoveAttribute() *session.Container {
-	return g.containerSessionToken(session.VerbContainerRemoveAttribute)
-}
-
-func (g *GateData) containerSessionToken(verb session.ContainerVerb) *session.Container {
-	for _, sessionToken := range g.SessionTokens {
-		if isAppropriateContainerContext(sessionToken, verb) {
-			return sessionToken
-		}
-	}
-	return nil
-}
-
-func isAppropriateContainerContext(tok *session.Container, verb session.ContainerVerb) bool {
-	switch verb {
-	case session.VerbContainerSetEACL,
-		session.VerbContainerDelete,
-		session.VerbContainerPut,
-		session.VerbContainerSetAttribute,
-		session.VerbContainerRemoveAttribute:
-		return tok.AssertVerb(verb)
-	default:
-		return false
-	}
-}
+var errDecodeFailed = errors.New("failed to decode accessbox")
 
 // Secrets represents AccessKey and the key to encrypt gate tokens.
 type Secrets struct {
@@ -116,13 +56,13 @@ func (x *AccessBox) Unmarshal(data []byte) error {
 	return proto.Unmarshal(data, x)
 }
 
-// PackTokens adds bearer and session tokens to BearerTokens and SessionToken lists respectively.
-// Session token can be nil.
+// PackTokens adds session tokens to AccessBox.
 func PackTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) (*AccessBox, *Secrets, error) {
 	box := &AccessBox{}
 	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
+	box.Version = accessBoxVersionSessionV2
 
-	if err := box.addTokens(gatesData, ephemeralKey, secret); err != nil {
+	if err := box.addTokens(gatesData); err != nil {
 		return nil, nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
 	}
 
@@ -130,42 +70,19 @@ func PackTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []b
 }
 
 // GetTokens returns gate tokens from AccessBox.
-func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session2.NNSResolver) (*GateData, error) {
+func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session.NNSResolver) (*GateData, error) {
+	if x.Version != accessBoxVersionSessionV2 {
+		return nil, fmt.Errorf("unsupported access box version %d (current: %d)", x.Version, accessBoxVersionSessionV2)
+	}
+
 	sender, err := keys.NewPublicKeyFromBytes(x.OwnerPublicKey, elliptic.P256())
 	if err != nil {
 		return nil, fmt.Errorf("couldn't unmarshal OwnerPublicKey: %w", err)
 	}
-	ownerKey := owner.PublicKey().Bytes()
 	ownerID := user.NewFromScriptHash(owner.PublicKey().GetScriptHash())
 
 	for _, gate := range x.Gates {
-		var gateData *GateData
-
-		if x.Version == accessBoxVersionSessionV2 {
-			gateData, err = decodeGateV2(gate, owner, sender)
-			if err == nil {
-				if gateData.SessionTokenV2 == nil {
-					return nil, fmt.Errorf("session token v2 is null")
-				}
-
-				ok, err := gateData.SessionTokenV2.AssertAuthority(ownerID, resolver)
-				if err != nil {
-					return nil, fmt.Errorf("failed to check authority: %w", err)
-				}
-
-				// this token doesn't belong to this gate.
-				if !ok {
-					continue
-				}
-			}
-		} else {
-			if !bytes.Equal(gate.GatePublicKey, ownerKey) {
-				continue
-			}
-
-			gateData, err = decodeGate(gate, owner, sender)
-		}
-
+		gateData, err := decodeGateV2(gate, owner, sender)
 		if err != nil {
 			if errors.Is(err, errDecodeFailed) {
 				continue
@@ -173,10 +90,25 @@ func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session2.NNSResol
 
 			return nil, fmt.Errorf("failed to decode gate: %w", err)
 		}
+
+		if gateData.SessionTokenV2 == nil {
+			return nil, fmt.Errorf("session token v2 is null")
+		}
+
+		ok, err := gateData.SessionTokenV2.AssertAuthority(ownerID, resolver)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check authority: %w", err)
+		}
+
+		// this token doesn't belong to this gate.
+		if !ok {
+			continue
+		}
+
 		return gateData, nil
 	}
 
-	return nil, fmt.Errorf("no gate data for key  %x was found", ownerKey)
+	return nil, fmt.Errorf("no gate data for key %x was found", owner.PublicKey().Bytes())
 }
 
 // GetPlacementPolicy returns ContainerPolicy from AccessBox.
@@ -197,7 +129,7 @@ func (x *AccessBox) GetPlacementPolicy() ([]*ContainerPolicy, error) {
 }
 
 // GetBox parses AccessBox to Box.
-func (x *AccessBox) GetBox(owner *keys.PrivateKey, resolver session2.NNSResolver) (*Box, error) {
+func (x *AccessBox) GetBox(owner *keys.PrivateKey, resolver session.NNSResolver) (*Box, error) {
 	tokens, err := x.GetTokens(owner, resolver)
 	if err != nil {
 		return nil, fmt.Errorf("get tokens: %w", err)
@@ -214,101 +146,24 @@ func (x *AccessBox) GetBox(owner *keys.PrivateKey, resolver session2.NNSResolver
 	}, nil
 }
 
-func (x *AccessBox) addTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) error {
+func (x *AccessBox) addTokens(gatesData []*GateData) error {
 	for _, gate := range gatesData {
-		var (
-			msg     proto.Message
-			boxGate *AccessBox_Gate
-			err     error
-		)
-
-		if gate.SessionTokenV2 != nil {
-			x.Version = accessBoxVersionSessionV2
-
-			msg = &TokensV2{
-				SessionTokenV2: gate.SessionTokenV2.Marshal(),
-			}
-
-			boxGate, err = encodeGateV2(msg)
-			if err != nil {
-				return fmt.Errorf("encode gate v2: %w", err)
-			}
-		} else {
-			var encBearer []byte
-			if gate.BearerToken != nil {
-				encBearer = gate.BearerToken.Marshal()
-			}
-
-			encSessions := make([][]byte, len(gate.SessionTokens))
-			for i, sessionToken := range gate.SessionTokens {
-				encSessions[i] = sessionToken.Marshal()
-			}
-
-			msg = &Tokens{
-				AccessKey:     secret,
-				BearerToken:   encBearer,
-				SessionTokens: encSessions,
-			}
-
-			boxGate, err = encodeGate(ephemeralKey, gate.GateKey, msg)
-			if err != nil {
-				return fmt.Errorf("encode gate: %w", err)
-			}
+		if gate.SessionTokenV2 == nil {
+			return errors.New("session token v2 is required")
 		}
+
+		msg := &TokensV2{
+			SessionTokenV2: gate.SessionTokenV2.Marshal(),
+		}
+
+		boxGate, err := encodeGateV2(msg)
+		if err != nil {
+			return fmt.Errorf("encode gate v2: %w", err)
+		}
+
 		x.Gates = append(x.Gates, boxGate)
 	}
 	return nil
-}
-
-func encodeGate(ephemeralKey *keys.PrivateKey, ownerKey *keys.PublicKey, tokens proto.Message) (*AccessBox_Gate, error) {
-	data, err := proto.Marshal(tokens)
-	if err != nil {
-		return nil, fmt.Errorf("encode tokens: %w", err)
-	}
-
-	encrypted, err := accessbox.Encrypt(ephemeralKey, ownerKey, data)
-	if err != nil {
-		return nil, fmt.Errorf("ecrypt tokens: %w", err)
-	}
-
-	gate := new(AccessBox_Gate)
-	gate.GatePublicKey = ownerKey.Bytes()
-	gate.Tokens = encrypted
-	return gate, nil
-}
-
-func decodeGate(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.PublicKey) (*GateData, error) {
-	data, err := accessbox.Decrypt(owner, sender, gate.Tokens)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt tokens: %w", err)
-	}
-	tokens := new(Tokens)
-	if err = proto.Unmarshal(data, tokens); err != nil {
-		return nil, fmt.Errorf("unmarshal tokens: %w", err)
-	}
-
-	// The Bearer token is no longer mandatory. We leave it null if it isn't provided.
-	var bearerTkn *bearer.Token
-	if tokens.BearerToken != nil {
-		bearerTkn = &bearer.Token{}
-		if err = bearerTkn.Unmarshal(tokens.BearerToken); err != nil {
-			return nil, fmt.Errorf("unmarshal bearer token: %w", err)
-		}
-	}
-
-	sessionTkns := make([]*session.Container, len(tokens.SessionTokens))
-	for i, encSessionToken := range tokens.SessionTokens {
-		sessionTkn := new(session.Container)
-		if err = sessionTkn.Unmarshal(encSessionToken); err != nil {
-			return nil, fmt.Errorf("unmarshal session token: %w", err)
-		}
-		sessionTkns[i] = sessionTkn
-	}
-
-	gateData := NewGateData(owner.PublicKey(), bearerTkn)
-	gateData.SessionTokens = sessionTkns
-	gateData.AccessKey = hex.EncodeToString(tokens.AccessKey)
-	return gateData, nil
 }
 
 func encodeGateV2(tokens proto.Message) (*AccessBox_Gate, error) {
@@ -329,7 +184,7 @@ func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Pub
 	}
 
 	var (
-		stv2       session2.Token
+		stv2       session.Token
 		gateUserID = user.NewFromScriptHash(owner.GetScriptHash())
 		index      = -1
 	)

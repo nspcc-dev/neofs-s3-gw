@@ -89,66 +89,6 @@ func (x *AccessBox) GetVersion() uint32 {
 	return 0
 }
 
-type Tokens struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessKey     []byte                 `protobuf:"bytes,1,opt,name=accessKey,proto3" json:"accessKey,omitempty"`
-	BearerToken   []byte                 `protobuf:"bytes,2,opt,name=bearerToken,proto3" json:"bearerToken,omitempty"`
-	SessionTokens [][]byte               `protobuf:"bytes,3,rep,name=sessionTokens,proto3" json:"sessionTokens,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Tokens) Reset() {
-	*x = Tokens{}
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Tokens) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Tokens) ProtoMessage() {}
-
-func (x *Tokens) ProtoReflect() protoreflect.Message {
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Tokens.ProtoReflect.Descriptor instead.
-func (*Tokens) Descriptor() ([]byte, []int) {
-	return file_creds_accessbox_accessbox_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Tokens) GetAccessKey() []byte {
-	if x != nil {
-		return x.AccessKey
-	}
-	return nil
-}
-
-func (x *Tokens) GetBearerToken() []byte {
-	if x != nil {
-		return x.BearerToken
-	}
-	return nil
-}
-
-func (x *Tokens) GetSessionTokens() [][]byte {
-	if x != nil {
-		return x.SessionTokens
-	}
-	return nil
-}
-
 type TokensV2 struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	AccessKey      []byte                 `protobuf:"bytes,1,opt,name=accessKey,proto3" json:"accessKey,omitempty"`
@@ -159,7 +99,7 @@ type TokensV2 struct {
 
 func (x *TokensV2) Reset() {
 	*x = TokensV2{}
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[2]
+	mi := &file_creds_accessbox_accessbox_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -171,7 +111,7 @@ func (x *TokensV2) String() string {
 func (*TokensV2) ProtoMessage() {}
 
 func (x *TokensV2) ProtoReflect() protoreflect.Message {
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[2]
+	mi := &file_creds_accessbox_accessbox_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -184,7 +124,7 @@ func (x *TokensV2) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokensV2.ProtoReflect.Descriptor instead.
 func (*TokensV2) Descriptor() ([]byte, []int) {
-	return file_creds_accessbox_accessbox_proto_rawDescGZIP(), []int{2}
+	return file_creds_accessbox_accessbox_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *TokensV2) GetAccessKey() []byte {
@@ -204,14 +144,13 @@ func (x *TokensV2) GetSessionTokenV2() []byte {
 type AccessBox_Gate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tokens        []byte                 `protobuf:"bytes,1,opt,name=tokens,proto3" json:"tokens,omitempty"`
-	GatePublicKey []byte                 `protobuf:"bytes,2,opt,name=gatePublicKey,proto3" json:"gatePublicKey,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AccessBox_Gate) Reset() {
 	*x = AccessBox_Gate{}
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[3]
+	mi := &file_creds_accessbox_accessbox_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -223,7 +162,7 @@ func (x *AccessBox_Gate) String() string {
 func (*AccessBox_Gate) ProtoMessage() {}
 
 func (x *AccessBox_Gate) ProtoReflect() protoreflect.Message {
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[3]
+	mi := &file_creds_accessbox_accessbox_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -246,13 +185,6 @@ func (x *AccessBox_Gate) GetTokens() []byte {
 	return nil
 }
 
-func (x *AccessBox_Gate) GetGatePublicKey() []byte {
-	if x != nil {
-		return x.GatePublicKey
-	}
-	return nil
-}
-
 type AccessBox_ContainerPolicy struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	LocationConstraint string                 `protobuf:"bytes,1,opt,name=locationConstraint,proto3" json:"locationConstraint,omitempty"`
@@ -263,7 +195,7 @@ type AccessBox_ContainerPolicy struct {
 
 func (x *AccessBox_ContainerPolicy) Reset() {
 	*x = AccessBox_ContainerPolicy{}
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[4]
+	mi := &file_creds_accessbox_accessbox_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +207,7 @@ func (x *AccessBox_ContainerPolicy) String() string {
 func (*AccessBox_ContainerPolicy) ProtoMessage() {}
 
 func (x *AccessBox_ContainerPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_creds_accessbox_accessbox_proto_msgTypes[4]
+	mi := &file_creds_accessbox_accessbox_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,22 +241,17 @@ var File_creds_accessbox_accessbox_proto protoreflect.FileDescriptor
 
 const file_creds_accessbox_accessbox_proto_rawDesc = "" +
 	"\n" +
-	"\x1fcreds/accessbox/accessbox.proto\x12\taccessbox\"\xef\x02\n" +
+	"\x1fcreds/accessbox/accessbox.proto\x12\taccessbox\"\xc9\x02\n" +
 	"\tAccessBox\x12&\n" +
 	"\x0eownerPublicKey\x18\x01 \x01(\fR\x0eownerPublicKey\x12/\n" +
 	"\x05gates\x18\x02 \x03(\v2\x19.accessbox.AccessBox.GateR\x05gates\x12N\n" +
 	"\x0fcontainerPolicy\x18\x03 \x03(\v2$.accessbox.AccessBox.ContainerPolicyR\x0fcontainerPolicy\x12\x18\n" +
-	"\aversion\x18\x04 \x01(\rR\aversion\x1aD\n" +
+	"\aversion\x18\x04 \x01(\rR\aversion\x1a\x1e\n" +
 	"\x04Gate\x12\x16\n" +
-	"\x06tokens\x18\x01 \x01(\fR\x06tokens\x12$\n" +
-	"\rgatePublicKey\x18\x02 \x01(\fR\rgatePublicKey\x1aY\n" +
+	"\x06tokens\x18\x01 \x01(\fR\x06tokens\x1aY\n" +
 	"\x0fContainerPolicy\x12.\n" +
 	"\x12locationConstraint\x18\x01 \x01(\tR\x12locationConstraint\x12\x16\n" +
-	"\x06policy\x18\x02 \x01(\fR\x06policy\"n\n" +
-	"\x06Tokens\x12\x1c\n" +
-	"\taccessKey\x18\x01 \x01(\fR\taccessKey\x12 \n" +
-	"\vbearerToken\x18\x02 \x01(\fR\vbearerToken\x12$\n" +
-	"\rsessionTokens\x18\x03 \x03(\fR\rsessionTokens\"P\n" +
+	"\x06policy\x18\x02 \x01(\fR\x06policy\"P\n" +
 	"\bTokensV2\x12\x1c\n" +
 	"\taccessKey\x18\x01 \x01(\fR\taccessKey\x12&\n" +
 	"\x0esessionTokenV2\x18\x02 \x01(\fR\x0esessionTokenV2B;Z9github.com/nspcc-dev/neofs-s3-gw/creds/tokenbox;accessboxb\x06proto3"
@@ -341,17 +268,16 @@ func file_creds_accessbox_accessbox_proto_rawDescGZIP() []byte {
 	return file_creds_accessbox_accessbox_proto_rawDescData
 }
 
-var file_creds_accessbox_accessbox_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_creds_accessbox_accessbox_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_creds_accessbox_accessbox_proto_goTypes = []any{
 	(*AccessBox)(nil),                 // 0: accessbox.AccessBox
-	(*Tokens)(nil),                    // 1: accessbox.Tokens
-	(*TokensV2)(nil),                  // 2: accessbox.TokensV2
-	(*AccessBox_Gate)(nil),            // 3: accessbox.AccessBox.Gate
-	(*AccessBox_ContainerPolicy)(nil), // 4: accessbox.AccessBox.ContainerPolicy
+	(*TokensV2)(nil),                  // 1: accessbox.TokensV2
+	(*AccessBox_Gate)(nil),            // 2: accessbox.AccessBox.Gate
+	(*AccessBox_ContainerPolicy)(nil), // 3: accessbox.AccessBox.ContainerPolicy
 }
 var file_creds_accessbox_accessbox_proto_depIdxs = []int32{
-	3, // 0: accessbox.AccessBox.gates:type_name -> accessbox.AccessBox.Gate
-	4, // 1: accessbox.AccessBox.containerPolicy:type_name -> accessbox.AccessBox.ContainerPolicy
+	2, // 0: accessbox.AccessBox.gates:type_name -> accessbox.AccessBox.Gate
+	3, // 1: accessbox.AccessBox.containerPolicy:type_name -> accessbox.AccessBox.ContainerPolicy
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -370,7 +296,7 @@ func file_creds_accessbox_accessbox_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_creds_accessbox_accessbox_proto_rawDesc), len(file_creds_accessbox_accessbox_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

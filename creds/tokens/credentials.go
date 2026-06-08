@@ -12,7 +12,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
-	session2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 )
 
@@ -27,7 +27,7 @@ type (
 		key      *keys.PrivateKey
 		neoFS    NeoFS
 		cache    *cache.AccessBoxCache
-		resolver session2.NNSResolver
+		resolver session.NNSResolver
 	}
 )
 
@@ -77,7 +77,7 @@ var (
 var _ = New
 
 // New creates a new Credentials instance using the given cli and key.
-func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config, resolver session2.NNSResolver) Credentials {
+func New(neoFS NeoFS, key *keys.PrivateKey, config *cache.Config, resolver session.NNSResolver) Credentials {
 	return &cred{neoFS: neoFS, key: key, cache: cache.NewAccessBoxCache(config), resolver: resolver}
 }
 
