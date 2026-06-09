@@ -349,6 +349,9 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 	prm.SetErrorThreshold(errorThreshold)
 	prm.SetLogger(logger)
 
+	prm.SetClientMTLS(key.PrivateKey)
+	logger.Info("client-mTLS enabled for storage node connections")
+
 	p, err := pool.NewPool(prm)
 	if err != nil {
 		logger.Fatal("failed to create connection pool", zap.Error(err))
