@@ -273,9 +273,6 @@ type (
 
 		// Compound methods for optimizations
 
-		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in a single search invocation.
-		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
-
 		// SearchLinkingObject searches link object for corresponding parentID.
 		SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (LinkingObjectSearchResult, error)
 
