@@ -67,13 +67,15 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "could not get object info", reqInfo, err)
 			return
 		}
-		// There are no tags in separate objects. Try to get tags from the object headers.
-		if comprehensiveInfo.TagSet == nil {
-			comprehensiveInfo.TagSet = make(map[string]string)
-		}
-		for k, v := range info.Headers {
-			if after, ok := strings.CutPrefix(k, s3headers.NeoFSSystemMetadataTagPrefix); ok {
-				comprehensiveInfo.TagSet[after] = v
+		// No tags from a separate object; try to extract inline tags from object headers.
+		if len(comprehensiveInfo.TagSet) == 0 {
+			for k, v := range info.Headers {
+				if after, ok := strings.CutPrefix(k, s3headers.NeoFSSystemMetadataTagPrefix); ok {
+					if comprehensiveInfo.TagSet == nil {
+						comprehensiveInfo.TagSet = make(map[string]string)
+					}
+					comprehensiveInfo.TagSet[after] = v
+				}
 			}
 		}
 	}
