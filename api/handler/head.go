@@ -3,11 +3,13 @@ package handler
 import (
 	"bytes"
 	"net/http"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"go.uber.org/zap"
 )
 
@@ -37,18 +39,44 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
+	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
+		return
 	}
 
-	extendedInfo, err := h.obj.GetExtendedObjectInfo(r.Context(), p)
+	p := &layer.HeadObjectParams{
+		BktInfo:                   bktInfo,
+		Object:                    reqInfo.ObjectName,
+		VersionID:                 reqInfo.URL.Query().Get(api.QueryVersionID),
+		IsBucketVersioningEnabled: bktSettings.VersioningEnabled(),
+	}
+
+	comprehensiveInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
 	if err != nil {
 		h.logAndSendError(w, "could not find object", reqInfo, err)
 		return
 	}
-	info := extendedInfo.ObjectInfo
+
+	var info *data.ObjectInfo
+	if comprehensiveInfo.ObjectInfo != nil {
+		info = comprehensiveInfo.ObjectInfo
+	} else {
+		info, err = h.obj.GetObjectInfoByID(r.Context(), bktInfo, comprehensiveInfo.ID)
+		if err != nil {
+			h.logAndSendError(w, "could not get object info", reqInfo, err)
+			return
+		}
+	}
+
+	// There are no tags in separate objects. Try to get tags from the object headers.
+	if len(comprehensiveInfo.TagSet) == 0 {
+		for k, v := range info.Headers {
+			if after, ok := strings.CutPrefix(k, s3headers.NeoFSSystemMetadataTagPrefix); ok {
+				comprehensiveInfo.TagSet[after] = v
+			}
+		}
+	}
 
 	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
@@ -63,28 +91,6 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
-		return
-	}
-
-	t := &layer.ObjectVersion{
-		BktInfo:    bktInfo,
-		ObjectName: info.Name,
-		VersionID:  info.VersionID(),
-	}
-
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if !bktSettings.VersioningEnabled() {
-		t.VersionID = ""
-	}
-
-	tagSet, lockInfo, err := h.obj.GetObjectTaggingAndLock(r.Context(), t)
-	if err != nil && !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
-		h.logAndSendError(w, "could not get object meta data", reqInfo, err)
 		return
 	}
 
@@ -105,12 +111,12 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err = h.setLockingHeaders(bktInfo, lockInfo, w.Header()); err != nil {
+	if err = h.setLockingHeaders(bktInfo, comprehensiveInfo.LockInfo, w.Header()); err != nil {
 		h.logAndSendError(w, "could not get locking info", reqInfo, err)
 		return
 	}
 
-	writeHeaders(w.Header(), r.Header, extendedInfo.ObjectInfo, len(tagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, info, len(comprehensiveInfo.TagSet), bktSettings.Unversioned())
 	w.WriteHeader(http.StatusOK)
 }
 

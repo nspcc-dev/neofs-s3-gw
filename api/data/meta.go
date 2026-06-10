@@ -31,9 +31,10 @@ type ExtendedObjectInfo struct {
 
 // ComprehensiveObjectInfo represents metasearch result for object, with tags and lock data.
 type ComprehensiveObjectInfo struct {
-	ID       oid.ID
-	TagSet   map[string]string
-	LockInfo *LockInfo
+	ID         oid.ID
+	TagSet     map[string]string
+	LockInfo   *LockInfo
+	ObjectInfo *ObjectInfo
 }
 
 func (e ExtendedObjectInfo) Version() string {

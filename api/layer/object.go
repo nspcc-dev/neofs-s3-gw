@@ -1611,3 +1611,13 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 func (n *layer) HeadObject(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
 	return n.objectHead(ctx, bktInfo, idObj)
 }
+
+// GetObjectInfoByID returns object metadata by its NeoFS object ID.
+func (n *layer) GetObjectInfoByID(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*data.ObjectInfo, error) {
+	meta, err := n.objectHead(ctx, bktInfo, idObj)
+	if err != nil {
+		return nil, err
+	}
+
+	return objectInfoFromMeta(bktInfo, meta), nil
+}
