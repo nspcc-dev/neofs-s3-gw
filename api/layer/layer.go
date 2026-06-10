@@ -234,6 +234,7 @@ type (
 		GetObject(ctx context.Context, p *GetObjectParams) error
 		GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWithPayloadReaderParams) (*ObjectWithPayloadReader, error)
 		GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ObjectInfo, error)
+		GetObjectInfoByID(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*data.ObjectInfo, error)
 		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
 		ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error)
 		GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error)
@@ -271,9 +272,6 @@ type (
 		GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error)
 
 		// Compound methods for optimizations
-
-		// GetObjectTaggingAndLock unifies GetObjectTagging and GetLock methods in a single search invocation.
-		GetObjectTaggingAndLock(ctx context.Context, p *ObjectVersion) (map[string]string, *data.LockInfo, error)
 
 		// SearchLinkingObject searches link object for corresponding parentID.
 		SearchLinkingObject(ctx context.Context, bktInfo *data.BucketInfo, parentID oid.ID) (LinkingObjectSearchResult, error)
@@ -710,9 +708,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		}
 
 		if header, err = n.objectHead(ctx, p.BktInfo, id); err != nil {
-			var errNotFound *apistatus.ObjectNotFound
-
-			if errors.As(err, &errNotFound) {
+			if errors.Is(err, apistatus.ErrObjectNotFound) {
 				return nil, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
 			}
 
@@ -748,10 +744,16 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		zap.String("object", p.Object),
 		zap.Stringer("oid", id))
 
+	var objInfo *data.ObjectInfo
+	if header != nil {
+		objInfo = objectInfoFromMeta(p.BktInfo, header)
+	}
+
 	return &data.ComprehensiveObjectInfo{
-		ID:       id,
-		TagSet:   tagSet,
-		LockInfo: lockInfo,
+		ID:         id,
+		TagSet:     tagSet,
+		LockInfo:   lockInfo,
+		ObjectInfo: objInfo,
 	}, nil
 }
 
