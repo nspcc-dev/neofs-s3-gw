@@ -31,9 +31,11 @@ type ExtendedObjectInfo struct {
 
 // ComprehensiveObjectInfo represents metasearch result for object, with tags and lock data.
 type ComprehensiveObjectInfo struct {
-	ID         oid.ID
-	TagSet     map[string]string
-	LockInfo   *LockInfo
+	ID       oid.ID
+	TagSet   map[string]string
+	LockInfo *LockInfo
+	// ObjectInfo is populated when the object header was already fetched during the comprehensive
+	// search (i.e. when a specific version ID is requested). It is nil for the unversioned path.
 	ObjectInfo *ObjectInfo
 }
 
