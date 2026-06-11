@@ -232,99 +232,21 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 	return ".lock." + objVersion.BktInfo.CID.EncodeToString() + "." + objVersion.ObjectName + "." + objVersion.VersionID
 }
 
-func (n *layer) GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	if settings := n.cache.GetSettings(bktInfo); settings != nil {
-		return settings, nil
+func (n *layer) bucketSettingsItem(bktInfo *data.BucketInfo) (*data.BucketSettingsCacheItem, error) {
+	if bktInfo.SettingsItem != nil {
+		return bktInfo.SettingsItem, nil
 	}
 
-	var settings = &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	if bktInfo.AttributeSettings != "" {
-		if err := json.Unmarshal([]byte(bktInfo.AttributeSettings), settings); err != nil {
-			return nil, fmt.Errorf("malformed data: %w", err)
-		}
-
-		n.cache.PutSettings(bktInfo, settings)
-		return settings, nil
-	}
-
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings)
-	if err != nil {
-		return nil, fmt.Errorf("search: %w", err)
-	}
-
-	if id.IsZero() {
-		n.cache.PutSettings(bktInfo, settings)
-		return settings, nil
-	}
-
-	settingsObj, err := n.objectGet(ctx, bktInfo, id)
-	if err != nil {
-		return nil, fmt.Errorf("get bucket settings object: %w", err)
-	}
-
-	// Took the latest version of the settings file. If you need any migrations,
-	// they should be done inside decodeBucketSettings.
-	settings, err = decodeBucketSettings(settingsObj)
-	if err != nil {
-		return nil, fmt.Errorf("decode bucket settings object: %w", err)
-	}
-
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		// Migrate bucket settings.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeSettings, settings, boxData.Gate.SessionTokenV2); err != nil {
-			return nil, fmt.Errorf("store bucket settings object: %w", err)
-		}
-		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketSettings); err != nil {
-			return nil, fmt.Errorf("delete obsolete bucket settings objects: %w", err)
-		}
-	}
-
-	n.cache.PutSettings(bktInfo, settings)
-	n.cache.DeleteBucket(bktInfo.Name)
-
-	return settings, nil
+	return data.NewBucketSettingsCacheItem(bktInfo)
 }
 
-// decodeBucketSettings decodes and migrates (if required) buket settings file.
-func decodeBucketSettings(settingsObj *object.Object) (*data.BucketSettings, error) {
-	if settingsObj == nil {
-		return nil, fmt.Errorf("bucket settings object is nil")
+func (n *layer) GetBucketSettings(_ context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
+	item, err := n.bucketSettingsItem(bktInfo)
+	if err != nil {
+		return nil, err
 	}
 
-	var (
-		settingsVersion string
-		settings        = data.BucketSettings{Versioning: data.VersioningUnversioned}
-		versioning      string
-	)
-
-	for _, attr := range settingsObj.Attributes() {
-		switch attr.Key() {
-		case s3headers.BucketSettingsMetaVersion:
-			settingsVersion = attr.Value()
-		case s3headers.BucketSettingsVersioning:
-			versioning = attr.Value()
-		default:
-			continue
-		}
-	}
-
-	switch settingsVersion {
-	case data.BucketSettingsV1:
-		if err := json.Unmarshal(settingsObj.Payload(), &settings); err != nil {
-			return nil, fmt.Errorf("decode bucket settings: %w", err)
-		}
-	default:
-		var olc data.ObjectLockConfiguration
-		if err := olc.Decode(string(settingsObj.Payload())); err != nil {
-			return nil, fmt.Errorf("decode bucket settings: %w", err)
-		}
-
-		settings.LockConfiguration = &olc
-		settings.Versioning = versioning
-	}
-
-	return &settings, nil
+	return item.Settings, nil
 }
 
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
@@ -339,7 +261,6 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("store bucket settings: %w", err)
 	}
 
-	n.cache.PutSettings(p.BktInfo, p.Settings)
 	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil

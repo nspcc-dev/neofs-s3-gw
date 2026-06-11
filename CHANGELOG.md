@@ -14,6 +14,7 @@ This document outlines major changes between releases.
 
 ### Removed
 - Support for legacy access boxes carrying session token v1 and bearer tokens (#1271)
+- Backward-compatibility code for legacy bucket settings, CORS, tags and notification meta objects (#1265)
 
 ### Upgrading from 0.44.0
 

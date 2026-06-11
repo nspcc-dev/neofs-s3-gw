@@ -137,60 +137,6 @@ func TestObjectInfoCacheType(t *testing.T) {
 	assertInvalidCacheEntry(t, cache.GetObject(key), observedLog)
 }
 
-func TestCORsCacheType(t *testing.T) {
-	logger, observedLog := getObservedLogger()
-	cache := NewSystemCache(DefaultSystemConfig(logger))
-
-	key := "key"
-	cors := &data.CORSConfiguration{}
-
-	err := cache.PutCORS(key, cors)
-	require.NoError(t, err)
-	val := cache.GetCORS(key)
-	require.Equal(t, cors, val)
-	require.Equal(t, 0, observedLog.Len())
-
-	err = cache.cache.Set(key, "tmp")
-	require.NoError(t, err)
-	assertInvalidCacheEntry(t, cache.GetCORS(key), observedLog)
-}
-
-func TestSettingsCacheType(t *testing.T) {
-	logger, observedLog := getObservedLogger()
-	cache := NewSystemCache(DefaultSystemConfig(logger))
-
-	key := "key"
-	settings := &data.BucketSettings{Versioning: data.VersioningEnabled}
-
-	err := cache.PutSettings(key, settings)
-	require.NoError(t, err)
-	val := cache.GetSettings(key)
-	require.Equal(t, settings, val)
-	require.Equal(t, 0, observedLog.Len())
-
-	err = cache.cache.Set(key, "tmp")
-	require.NoError(t, err)
-	assertInvalidCacheEntry(t, cache.GetSettings(key), observedLog)
-}
-
-func TestNotificationConfigurationCacheType(t *testing.T) {
-	logger, observedLog := getObservedLogger()
-	cache := NewSystemCache(DefaultSystemConfig(logger))
-
-	key := "key"
-	notificationConfig := &data.NotificationConfiguration{}
-
-	err := cache.PutNotificationConfiguration(key, notificationConfig)
-	require.NoError(t, err)
-	val := cache.GetNotificationConfiguration(key)
-	require.Equal(t, notificationConfig, val)
-	require.Equal(t, 0, observedLog.Len())
-
-	err = cache.cache.Set(key, "tmp")
-	require.NoError(t, err)
-	assertInvalidCacheEntry(t, cache.GetNotificationConfiguration(key), observedLog)
-}
-
 func assertInvalidCacheEntry(t *testing.T, val any, observedLog *observer.ObservedLogs) {
 	require.Nil(t, val)
 	require.Equal(t, 1, observedLog.Len())

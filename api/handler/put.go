@@ -275,12 +275,19 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
 	if err != nil {
-		_, err2 := io.Copy(io.Discard, r.Body)
-		err3 := r.Body.Close()
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 			h.logAndSendError(w, "could not upload object", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied), zap.Error(err))
 			return
 		}
+
+		var s3err s3errors.Error
+		if errors.As(err, &s3err) {
+			h.logAndSendError(w, "could not upload object", reqInfo, s3err, zap.Error(err))
+			return
+		}
+
+		_, err2 := io.Copy(io.Discard, r.Body)
+		err3 := r.Body.Close()
 
 		h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
 		return

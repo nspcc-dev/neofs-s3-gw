@@ -254,9 +254,11 @@ func createBucketAndObject(tc *handlerContext, bktName, objName string) (*data.B
 
 func createVersionedBucketAndObject(t *testing.T, tc *handlerContext, bktName, objName string) (*data.BucketInfo, *data.ObjectInfo) {
 	createTestBucket(tc, bktName)
+	putBucketVersioning(t, tc, bktName, true)
+
+	// Writing invalidates the cached settings, we need to get refreshed.
 	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
 	require.NoError(t, err)
-	putBucketVersioning(t, tc, bktName, true)
 
 	objInfo := createTestObject(tc, bktInfo, objName)
 
