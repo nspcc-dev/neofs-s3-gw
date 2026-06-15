@@ -49,12 +49,13 @@ func (e ExtendedObjectInfo) Version() string {
 
 // MultipartInfo is multipart upload information.
 type MultipartInfo struct {
-	ID       oid.ID
-	Key      string
-	UploadID string
-	Owner    user.ID
-	Created  time.Time
-	Meta     map[string]string
+	ID             oid.ID
+	Key            string
+	UploadID       string
+	Owner          user.ID
+	Created        time.Time
+	Meta           map[string]string
+	EncryptionMeta *EncryptionMeta
 }
 
 // PartInfo is upload information about part.

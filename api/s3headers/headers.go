@@ -40,14 +40,12 @@ const (
 	// Result: S3-Lock-Meta.
 	AttributeLockMeta = attributePrefix + "Lock-Meta"
 
+	// Result: S3-Encryption-Meta.
+	AttributeEncryptionMeta = attributePrefix + "Encryption-Meta"
+
 	NeoFSSystemMetadataPrefix = attributePrefix + "Meta-"
-	// Result: S3-Meta-Algorithm.
-	AttributeEncryptionAlgorithm = NeoFSSystemMetadataPrefix + "Algorithm"
-	AttributeDecryptedSize       = NeoFSSystemMetadataPrefix + "Decrypted-Size"
-	AttributeHMACSalt            = NeoFSSystemMetadataPrefix + "HMAC-Salt"
-	AttributeHMACKey             = NeoFSSystemMetadataPrefix + "HMAC-Key"
-	AttributeVersioningState     = NeoFSSystemMetadataPrefix + "VersioningState"
-	AttributeDeleteMarker        = NeoFSSystemMetadataPrefix + "DeleteMarker"
+	AttributeVersioningState  = NeoFSSystemMetadataPrefix + "VersioningState"
+	AttributeDeleteMarker     = NeoFSSystemMetadataPrefix + "DeleteMarker"
 
 	// Result: S3-Meta-Tag-.
 	NeoFSSystemMetadataTagPrefix = NeoFSSystemMetadataPrefix + "Tag-"

@@ -462,10 +462,15 @@ func (n *layer) GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWith
 		return nil, fmt.Errorf("init object reader: %w", err)
 	}
 
+	objInfo, err := objectInfoFromMeta(p.BktInfo, head)
+	if err != nil {
+		return nil, fmt.Errorf("object info from meta: %w", err)
+	}
+
 	return &ObjectWithPayloadReader{
 		Head:       head,
 		Payload:    payload,
-		ObjectInfo: objectInfoFromMeta(p.BktInfo, head),
+		ObjectInfo: objInfo,
 	}, nil
 }
 
@@ -551,10 +556,10 @@ func getDecrypter(p *GetObjectParams, multipartParts []object.MeasuredObject) (*
 		return encryption.NewDecrypter(p.Encryption, uint64(p.ObjectInfo.Size), encRange)
 	}
 
-	decryptedObjectSize, err := strconv.ParseUint(p.ObjectInfo.Headers[s3headers.AttributeDecryptedSize], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse decrypted size: %w", err)
+	if p.ObjectInfo.EncryptionMeta == nil {
+		return nil, fmt.Errorf("missing encryption metadata")
 	}
+	decryptedObjectSize := uint64(p.ObjectInfo.EncryptionMeta.DecryptedSize)
 
 	sizes := make([]uint64, len(multipartParts))
 	for i, part := range multipartParts {
@@ -631,7 +636,10 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		return nil, fmt.Errorf("get head failed: %w", err)
 	}
 
-	objInfo := objectInfoFromMeta(p.BktInfo, meta)
+	objInfo, err := objectInfoFromMeta(p.BktInfo, meta)
+	if err != nil {
+		return nil, fmt.Errorf("object info from meta: %w", err)
+	}
 
 	extObjInfo := &data.ExtendedObjectInfo{
 		ObjectInfo:  objInfo,
@@ -732,7 +740,10 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 
 	var objInfo *data.ObjectInfo
 	if header != nil {
-		objInfo = objectInfoFromMeta(p.BktInfo, header)
+		objInfo, err = objectInfoFromMeta(p.BktInfo, header)
+		if err != nil {
+			return nil, fmt.Errorf("object info from meta: %w", err)
+		}
 	}
 
 	return &data.ComprehensiveObjectInfo{

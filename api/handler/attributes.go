@@ -106,7 +106,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfoFromMeta(info.EncryptionMeta)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}

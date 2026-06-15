@@ -184,7 +184,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(srcObjInfo.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfoFromMeta(srcObjInfo.EncryptionMeta)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}

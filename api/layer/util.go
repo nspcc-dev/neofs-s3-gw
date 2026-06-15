@@ -3,6 +3,7 @@ package layer
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -89,8 +90,14 @@ func extractHeaders(headers map[string]string) (map[string]string, string, time.
 	return headers, mimeType, creation
 }
 
-func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectInfo {
+func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) (*data.ObjectInfo, error) {
 	attributes := userHeaders(meta.Attributes())
+	encMeta, err := unpackEncryptionMeta(attributes[s3headers.AttributeEncryptionMeta])
+	if err != nil {
+		return nil, err
+	}
+
+	delete(attributes, s3headers.AttributeEncryptionMeta)
 	customHeaders, mimeType, creation := extractHeaders(attributes)
 
 	objID := meta.GetID()
@@ -106,38 +113,68 @@ func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) *data.ObjectI
 		CID:   bkt.CID,
 		IsDir: false,
 
-		Bucket:      bkt.Name,
-		Name:        filepathFromObject(meta),
-		Created:     creation,
-		ContentType: mimeType,
-		Headers:     customHeaders,
-		Owner:       meta.Owner(),
-		Size:        int64(meta.PayloadSize()),
-		HashSum:     hex.EncodeToString(payloadChecksum.Value()),
-		Version:     versionID,
-	}
+		Bucket:         bkt.Name,
+		Name:           filepathFromObject(meta),
+		Created:        creation,
+		ContentType:    mimeType,
+		Headers:        customHeaders,
+		EncryptionMeta: encMeta,
+		Owner:          meta.Owner(),
+		Size:           int64(meta.PayloadSize()),
+		HashSum:        hex.EncodeToString(payloadChecksum.Value()),
+		Version:        versionID,
+	}, nil
 }
 
-func FormEncryptionInfo(headers map[string]string) encryption.ObjectEncryption {
-	algorithm := headers[s3headers.AttributeEncryptionAlgorithm]
+func FormEncryptionInfoFromMeta(meta *data.EncryptionMeta) encryption.ObjectEncryption {
+	if meta == nil {
+		return encryption.ObjectEncryption{}
+	}
+
 	return encryption.ObjectEncryption{
-		Enabled:   len(algorithm) > 0,
-		Algorithm: algorithm,
-		HMACKey:   headers[s3headers.AttributeHMACKey],
-		HMACSalt:  headers[s3headers.AttributeHMACSalt],
+		Enabled:   true,
+		Algorithm: meta.Algorithm,
+		HMACKey:   meta.HMACKey,
+		HMACSalt:  meta.HMACSalt,
 	}
 }
 
-func addEncryptionHeaders(meta map[string]string, enc encryption.Params) error {
-	meta[s3headers.AttributeEncryptionAlgorithm] = AESEncryptionAlgorithm
+func newEncryptionMeta(enc encryption.Params, decryptedSize int64) (data.EncryptionMeta, error) {
 	hmacKey, hmacSalt, err := enc.HMAC()
 	if err != nil {
-		return fmt.Errorf("get hmac: %w", err)
+		return data.EncryptionMeta{}, fmt.Errorf("get hmac: %w", err)
 	}
-	meta[s3headers.AttributeHMACKey] = hex.EncodeToString(hmacKey)
-	meta[s3headers.AttributeHMACSalt] = hex.EncodeToString(hmacSalt)
 
-	return nil
+	return data.EncryptionMeta{
+		Algorithm:     AESEncryptionAlgorithm,
+		DecryptedSize: decryptedSize,
+		HMACSalt:      hmacSalt,
+		HMACKey:       hmacKey,
+	}, nil
+}
+
+func packEncryptionMeta(meta data.EncryptionMeta) string {
+	payload, err := json.Marshal(meta)
+	if err != nil {
+		// The data.EncryptionMeta is pretty trivial. It's OK to panic here and simplify packEncryptionMeta()
+		// to not have error returned.
+		panic(fmt.Sprintf("marshal encryption meta: %v", err))
+	}
+
+	return string(payload)
+}
+
+func unpackEncryptionMeta(raw string) (*data.EncryptionMeta, error) {
+	if raw == "" {
+		return nil, nil
+	}
+
+	var meta data.EncryptionMeta
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		return nil, fmt.Errorf("unmarshal encryption meta: %w", err)
+	}
+
+	return &meta, nil
 }
 
 func filepathFromObject(o *object.Object) string {

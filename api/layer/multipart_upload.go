@@ -178,8 +178,15 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 	}
 
 	if p.Info.Encryption.Enabled() {
-		if err := addEncryptionHeaders(info.Meta, p.Info.Encryption); err != nil {
-			return "", fmt.Errorf("add encryption header: %w", err)
+		hmacKey, hmacSalt, err := p.Info.Encryption.HMAC()
+		if err != nil {
+			return "", fmt.Errorf("encryption get hmac: %w", err)
+		}
+
+		info.EncryptionMeta = &data.EncryptionMeta{
+			Algorithm: AESEncryptionAlgorithm,
+			HMACSalt:  hmacSalt,
+			HMACKey:   hmacKey,
 		}
 	}
 
@@ -234,7 +241,7 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 }
 
 func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadPartParams) (*data.ObjectInfo, error) {
-	encInfo := FormEncryptionInfo(multipartInfo.Meta)
+	encInfo := FormEncryptionInfoFromMeta(multipartInfo.EncryptionMeta)
 	if err := p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
@@ -258,7 +265,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ecnrypted reader: %w", err)
 		}
-		attributes[s3headers.AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
+		attributes[s3headers.AttributeEncryptionMeta] = packEncryptionMeta(data.EncryptionMeta{DecryptedSize: p.Size})
 		payloadReader = r
 		p.Size = int64(encSize)
 	}
@@ -389,7 +396,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 }
 
 func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadInfoParams) (*data.PartInfo, error) {
-	encInfo := FormEncryptionInfo(multipartInfo.Meta)
+	encInfo := FormEncryptionInfoFromMeta(multipartInfo.EncryptionMeta)
 	if err := p.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)
@@ -409,10 +416,6 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		creationTime  = TimeNow(ctx)
 	)
 
-	if p.Encryption.Enabled() {
-		attributes[s3headers.AttributeDecryptedSize] = "0"
-	}
-
 	attrs := make([]object.Attribute, 0, len(multipartInfo.Meta)+1)
 	attrs = append(attrs, object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
 
@@ -422,10 +425,8 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 		}
 	}
 
-	if encInfo.Enabled {
-		attrs = append(attrs, object.NewAttribute(s3headers.AttributeEncryptionAlgorithm, encInfo.Algorithm))
-		attrs = append(attrs, object.NewAttribute(s3headers.AttributeHMACKey, encInfo.HMACKey))
-		attrs = append(attrs, object.NewAttribute(s3headers.AttributeHMACSalt, encInfo.HMACSalt))
+	if multipartInfo.EncryptionMeta != nil {
+		attrs = append(attrs, object.NewAttribute(s3headers.AttributeEncryptionMeta, packEncryptionMeta(*multipartInfo.EncryptionMeta)))
 	}
 
 	var hashlessHeaderObject object.Object
@@ -636,6 +637,10 @@ func (n *layer) createMultipartInfoObject(ctx context.Context, bktInfo *data.Buc
 		payloadMap[s3headers.MultipartMeta] = base64.StdEncoding.EncodeToString(objectAttributes)
 	}
 
+	if info.EncryptionMeta != nil {
+		payloadMap[s3headers.AttributeEncryptionMeta] = packEncryptionMeta(*info.EncryptionMeta)
+	}
+
 	payload, err := json.Marshal(payloadMap)
 	if err != nil {
 		return fmt.Errorf("meta marshaling: %w", err)
@@ -796,6 +801,14 @@ func (n *layer) parseMultipartInfoObject(uploadID string, obj *object.Object) (d
 		}
 	}
 
+	if encRaw, ok := payloadMap[s3headers.AttributeEncryptionMeta]; ok {
+		encMeta, err := unpackEncryptionMeta(encRaw)
+		if err != nil {
+			return data.MultipartInfo{}, fmt.Errorf("unpack encryption meta %s: %w", uploadID, err)
+		}
+		multipartInfo.EncryptionMeta = encMeta
+	}
+
 	return multipartInfo, nil
 }
 
@@ -856,6 +869,11 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 			element.Attributes[attr.Key()] = attr.Value()
 		}
 
+		encMeta, err := unpackEncryptionMeta(element.Attributes[s3headers.AttributeEncryptionMeta])
+		if err != nil {
+			return nil, fmt.Errorf("unpack encryption meta for multipart %s: %w", uploadID, err)
+		}
+
 		payloadChecksum, _ := obj.PayloadChecksum()
 		element.Attributes[object.FilterPayloadChecksum] = hex.EncodeToString(payloadChecksum.Value())
 
@@ -864,12 +882,8 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 		}
 
 		element.TotalSize = element.Size
-
-		if decSize, ok := element.Attributes[s3headers.AttributeDecryptedSize]; ok && decSize != "" {
-			element.TotalSize, err = strconv.ParseInt(decSize, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("convert multipart %s s3headers.AttributeDecryptedSize %s: %w", uploadID, element.Attributes[s3headers.AttributeDecryptedSize], err)
-			}
+		if encMeta != nil && encMeta.DecryptedSize > 0 {
+			element.TotalSize = encMeta.DecryptedSize
 		}
 
 		if _, ok := partElementMap[number]; !ok {
@@ -943,7 +957,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			s3headers.MultipartPartNumber,
 			object.FilterPayloadChecksum,
 			object.FilterPayloadSize,
-			s3headers.AttributeDecryptedSize,
+			s3headers.AttributeEncryptionMeta,
 		}
 	)
 
@@ -982,11 +996,13 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 			return nil, fmt.Errorf("convert multipart %s totalSize %s: %w", uploadID, item.Attributes[3], err)
 		}
 
-		if decSize := item.Attributes[4]; decSize != "" {
-			element.TotalSize, err = strconv.ParseInt(decSize, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("convert multipart %s decryptedSize %s: %w", uploadID, item.Attributes[4], err)
-			}
+		encMeta, err := unpackEncryptionMeta(item.Attributes[4])
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal encryption meta for multipart %s: %w", uploadID, err)
+		}
+
+		if encMeta != nil && encMeta.DecryptedSize != 0 {
+			element.TotalSize = encMeta.DecryptedSize
 		}
 
 		if _, ok := partElementMap[number]; !ok {
@@ -1227,8 +1243,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	if err != nil {
 		return nil, nil, err
 	}
-	encInfo := FormEncryptionInfo(multipartInfo.Meta)
-
 	if len(partsInfo) < len(p.Parts) {
 		n.log.Debug(
 			"parts amount mismatch",
@@ -1267,7 +1281,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 		multipartObjetSize += partInfo.Size // even if encryption is enabled size is actual (decrypted)
 
-		if encInfo.Enabled {
+		if multipartInfo.EncryptionMeta != nil {
 			encPartSize, err := sio.EncryptedSize(uint64(partInfo.Size))
 			if err != nil {
 				return nil, nil, fmt.Errorf("compute encrypted size: %w", err)
@@ -1324,13 +1338,15 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		}
 	}
 
-	if encInfo.Enabled {
-		initMetadata[s3headers.AttributeEncryptionAlgorithm] = encInfo.Algorithm
-		initMetadata[s3headers.AttributeHMACKey] = encInfo.HMACKey
-		initMetadata[s3headers.AttributeHMACSalt] = encInfo.HMACSalt
-		initMetadata[s3headers.AttributeDecryptedSize] = strconv.FormatInt(multipartObjetSize, 10)
+	if multipartInfo.EncryptionMeta != nil {
 		n.log.Debug("big object", zap.Int64("size", multipartObjetSize), zap.Uint64("enc_size", encMultipartObjectSize))
 
+		initMetadata[s3headers.AttributeEncryptionMeta] = packEncryptionMeta(data.EncryptionMeta{
+			Algorithm:     multipartInfo.EncryptionMeta.Algorithm,
+			DecryptedSize: multipartObjetSize,
+			HMACSalt:      multipartInfo.EncryptionMeta.HMACSalt,
+			HMACKey:       multipartInfo.EncryptionMeta.HMACKey,
+		})
 		multipartObjetSize = int64(encMultipartObjectSize)
 	}
 
@@ -1590,7 +1606,7 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 		return nil, err
 	}
 
-	encInfo := FormEncryptionInfo(multipartInfo.Meta)
+	encInfo := FormEncryptionInfoFromMeta(multipartInfo.EncryptionMeta)
 	if err = p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidEncryptionParameters)

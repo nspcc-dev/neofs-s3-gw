@@ -351,7 +351,7 @@ func (h *handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = p.Info.Encryption.MatchObjectEncryption(layer.FormEncryptionInfo(srcInfo.Headers)); err != nil {
+	if err = p.Info.Encryption.MatchObjectEncryption(layer.FormEncryptionInfoFromMeta(srcInfo.EncryptionMeta)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
