@@ -689,18 +689,12 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	slices.SortFunc(searchResults, sortFunc)
 
 	if len(searchResults) > 0 {
+		var firstID = searchResults[0].ID.EncodeToString()
 		var lockVersions []locksSearchResult
 
-		if searchResults[0].IsVersioned {
-			var ver = searchResults[0].ID.EncodeToString()
-
-			tagsObjectOID = tagsByVersion[ver]
-			lockVersions = locksByVersions[ver]
-		} else {
-			// empty version
-			tagsObjectOID = tagsByVersion[""]
-			lockVersions = locksByVersions[""]
-		}
+		// Tags and locks are always stored with AssociatedObject = OID string, regardless of versioning.
+		tagsObjectOID = tagsByVersion[firstID]
+		lockVersions = locksByVersions[firstID]
 
 		slices.SortFunc(lockVersions, locksSearchResultsSortFunc)
 		lockInfo = extractLockInfoFromSearch(lockVersions)
