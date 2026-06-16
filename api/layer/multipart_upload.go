@@ -1344,18 +1344,13 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		Encryption: p.Info.Encryption,
 	}
 
-	bktSettings, err := n.GetBucketSettings(ctx, p.Info.Bkt)
-	if err != nil {
-		return nil, nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
-	}
-
 	var (
 		oldVersions    []allVersionsSearchResult
 		oldVersionsErr error
 		wg             sync.WaitGroup
 	)
 
-	if !bktSettings.VersioningEnabled() {
+	if !p.Info.Bkt.Settings.VersioningEnabled() {
 		wg.Go(func() {
 			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, p.Info.Key, true)
 		})
@@ -1365,7 +1360,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		PutObject:         prmHeaderObject,
 		PayloadHash:       multipartHash,
 		PayloadLength:     uint64(multipartObjetSize),
-		VersioningEnabled: bktSettings.VersioningEnabled(),
+		VersioningEnabled: p.Info.Bkt.Settings.VersioningEnabled(),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -1467,7 +1462,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		FilePath:      p.Info.Key,
 		OID:           headerObjectID,
 		ETag:          hex.EncodeToString(multipartHash.Sum(nil)),
-		IsUnversioned: !bktSettings.VersioningEnabled(),
+		IsUnversioned: !p.Info.Bkt.Settings.VersioningEnabled(),
 	}
 
 	n.cache.CleanListCacheEntriesContainingObject(p.Info.Key, p.Info.Bkt.CID)

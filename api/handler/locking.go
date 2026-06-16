@@ -57,14 +57,8 @@ func (h *handler) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
-		return
-	}
-
 	// settings pointer is stored in the cache, so modify a copy of the settings
-	newSettings := *settings
+	newSettings := *bktInfo.Settings
 	newSettings.LockConfiguration = lockingConf
 
 	sp := &layer.PutSettingsParams{
@@ -93,20 +87,15 @@ func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
-		return
+	lockConf := bktInfo.Settings.LockConfiguration
+	if lockConf == nil {
+		lockConf = &data.ObjectLockConfiguration{}
+	}
+	if lockConf.ObjectLockEnabled == "" {
+		lockConf.ObjectLockEnabled = enabledValue
 	}
 
-	if settings.LockConfiguration == nil {
-		settings.LockConfiguration = &data.ObjectLockConfiguration{}
-	}
-	if settings.LockConfiguration.ObjectLockEnabled == "" {
-		settings.LockConfiguration.ObjectLockEnabled = enabledValue
-	}
-
-	if err = api.EncodeToResponse(w, settings.LockConfiguration); err != nil {
+	if err = api.EncodeToResponse(w, lockConf); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
@@ -245,13 +234,7 @@ func (h *handler) PutObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		NewLock: lock,
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
+	if bktInfo.Settings.VersioningEnabled() && p.ObjVersion.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
 			Owner:  bktInfo.Owner,
 			CID:    bktInfo.CID,
@@ -288,19 +271,13 @@ func (h *handler) GetObjectRetentionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	p := &layer.ObjectVersion{
 		BktInfo:    bktInfo,
 		ObjectName: reqInfo.ObjectName,
 		VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	if settings.VersioningEnabled() && p.VersionID == "" {
+	if bktInfo.Settings.VersioningEnabled() && p.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
 			Owner:  bktInfo.Owner,
 			CID:    bktInfo.CID,

@@ -307,10 +307,7 @@ func TestNoVersioningDeleteObject(t *testing.T) {
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
 
-	settings, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
-	require.NoError(t, err)
-
-	tc.deleteObject(tc.obj, "", settings)
+	tc.deleteObject(tc.obj, "", tc.bktInfo.Settings)
 	tc.getObject(tc.obj, "", true)
 	tc.checkListObjects()
 }

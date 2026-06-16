@@ -232,10 +232,6 @@ func lockObjectKey(objVersion *ObjectVersion) string {
 	return ".lock." + objVersion.BktInfo.CID.EncodeToString() + "." + objVersion.ObjectName + "." + objVersion.VersionID
 }
 
-func (n *layer) GetBucketSettings(_ context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error) {
-	return bktInfo.Settings, nil
-}
-
 // PutBucketSettings stores bucket settings. We should save the latest file version only.
 func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) error {
 	var sessionTokenV2 *session.Token

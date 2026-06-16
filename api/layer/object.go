@@ -218,14 +218,11 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error) {
 	owner := n.Owner(ctx)
 
-	bktSettings, err := n.GetBucketSettings(ctx, p.BktInfo)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
-	}
+	var err error
 
 	newVersion := &data.NodeVersion{
 		FilePath:      p.Object,
-		IsUnversioned: !bktSettings.VersioningEnabled(),
+		IsUnversioned: !p.BktInfo.Settings.VersioningEnabled(),
 	}
 
 	r := p.Reader
@@ -287,7 +284,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Attributes:   p.Header,
 	}
 
-	if bktSettings.VersioningEnabled() {
+	if p.BktInfo.Settings.VersioningEnabled() {
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 		oldVersions = nil
 	}
@@ -340,7 +337,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			NewLock: p.Lock,
 		}
 
-		if bktSettings.VersioningEnabled() {
+		if p.BktInfo.Settings.VersioningEnabled() {
 			putLockInfoPrms.ObjVersion.VersionID = id.String()
 		}
 

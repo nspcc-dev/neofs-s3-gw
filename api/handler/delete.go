@@ -72,16 +72,10 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	p := &layer.DeleteObjectParams{
 		BktInfo:  bktInfo,
 		Objects:  versionedObject,
-		Settings: bktSettings,
+		Settings: bktInfo.Settings,
 	}
 	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
 	deletedObject := deletedObjects[0]
@@ -96,7 +90,7 @@ func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	var m *SendNotificationParams
 
-	if bktSettings.VersioningEnabled() && len(versionID) == 0 {
+	if bktInfo.Settings.VersioningEnabled() && len(versionID) == 0 {
 		m = &SendNotificationParams{
 			Event: EventObjectRemovedDeleteMarkerCreated,
 			NotificationInfo: &data.NotificationInfo{
@@ -200,12 +194,6 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	marshaler := zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, obj := range toRemove {
 			encoder.AppendString(obj.String())
@@ -216,7 +204,7 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	p := &layer.DeleteObjectParams{
 		BktInfo:  bktInfo,
 		Objects:  toRemove,
-		Settings: bktSettings,
+		Settings: bktInfo.Settings,
 	}
 	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
 

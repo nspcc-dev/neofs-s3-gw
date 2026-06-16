@@ -116,12 +116,6 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	params.MultipartPartsGetter = func(ctx context.Context) ([]object.MeasuredObject, string, error) {
 		return h.obj.GetMultipartParts(ctx, bktInfo, info.ID)
 	}
@@ -132,7 +126,7 @@ func (h *handler) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeAttributesHeaders(w.Header(), extendedInfo, bktSettings.Unversioned())
+	writeAttributesHeaders(w.Header(), extendedInfo, bktInfo.Settings.Unversioned())
 	if err = api.EncodeToResponse(w, response); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}

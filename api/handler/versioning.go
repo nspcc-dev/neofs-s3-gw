@@ -25,19 +25,13 @@ func (h *handler) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "couldn't get bucket settings", reqInfo, err)
-		return
-	}
-
 	if configuration.Status != data.VersioningEnabled && configuration.Status != data.VersioningSuspended {
 		h.logAndSendError(w, "invalid versioning configuration", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
 		return
 	}
 
 	// settings pointer is stored in the cache, so modify a copy of the settings
-	newSettings := *settings
+	newSettings := *bktInfo.Settings
 	newSettings.Versioning = configuration.Status
 
 	p := &layer.PutSettingsParams{
@@ -67,13 +61,7 @@ func (h *handler) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "couldn't get version settings", reqInfo, err)
-		return
-	}
-
-	if err = api.EncodeToResponse(w, formVersioningConfiguration(settings)); err != nil {
+	if err = api.EncodeToResponse(w, formVersioningConfiguration(bktInfo.Settings)); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err)
 	}
 }
