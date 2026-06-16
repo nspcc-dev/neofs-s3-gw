@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Unknown bucket policy now leads to ErrNoSuchBucketPolicy error (#1290)
 
 ### Fixed
 

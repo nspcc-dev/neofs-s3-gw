@@ -736,7 +736,15 @@ func (h *handler) CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setPolicy(p, userAddr, createParams.LocationConstraint, policies)
+	if err = h.setPolicy(p, userAddr, createParams.LocationConstraint, policies); err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			h.logAndSendError(w, "bucket policy not found", reqInfo, s3errors.GetAPIError(s3errors.ErrNoSuchBucketPolicy))
+			return
+		}
+
+		h.logAndSendError(w, "setPolicy failed", reqInfo, err)
+		return
+	}
 
 	p.ObjectLockEnabled = isLockEnabled(r.Header)
 
@@ -792,11 +800,11 @@ func (h handler) getDefaultPolicy() layer.PlacementPolicy {
 	return def
 }
 
-func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) {
+func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160, locationConstraint string, userPolicies []*accessbox.ContainerPolicy) error {
 	prm.Policy = h.getDefaultPolicy()
 
 	if locationConstraint == "" {
-		return
+		return nil
 	}
 
 	if policy, ok := h.cfg.Policy.Get(locationConstraint); ok {
@@ -806,6 +814,7 @@ func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160,
 			Consistency: h.cfg.ContainerMetadataPolicy,
 		}
 		prm.LocationConstraint = locationConstraint
+		return nil
 	}
 
 	for _, placementPolicy := range userPolicies {
@@ -816,23 +825,19 @@ func (h handler) setPolicy(prm *layer.CreateBucketParams, userAddr util.Uint160,
 				Consistency: h.cfg.ContainerMetadataPolicy,
 			}
 			prm.LocationConstraint = locationConstraint
-			return
+			return nil
 		}
 	}
 
 	policy, err := h.cfg.PlacementPolicyProvider.GetPlacementPolicy(userAddr, locationConstraint)
 	if err != nil {
-		// nothing to do.
-		if errors.Is(err, models.ErrNotFound) {
-			return
-		}
-
-		h.log.Error("get policy from provider", zap.Error(err))
-		return
+		return fmt.Errorf("couldn't get policy from provider: %w", err)
 	}
 
 	prm.Policy = policy
 	prm.LocationConstraint = locationConstraint
+
+	return nil
 }
 
 func isLockEnabled(header http.Header) bool {
