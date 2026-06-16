@@ -217,7 +217,6 @@ type (
 	Client interface {
 		Initialize(ctx context.Context, c EventListener) error
 
-		GetBucketSettings(ctx context.Context, bktInfo *data.BucketInfo) (*data.BucketSettings, error)
 		PutBucketSettings(ctx context.Context, p *PutSettingsParams) error
 
 		PutBucketCORS(ctx context.Context, p *PutCORSParams) error
@@ -585,9 +584,8 @@ func (n *layer) GetObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.O
 // GetExtendedObjectInfo returns meta information and corresponding info about the object.
 func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error) {
 	var (
-		id       oid.ID
-		err      error
-		settings *data.BucketSettings
+		id  oid.ID
+		err error
 	)
 
 	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, p.VersionID == data.UnversionedObjectVersionID)
@@ -612,14 +610,9 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 
 		id = versions[0].ID
 	} else {
-		settings, err = n.GetBucketSettings(ctx, p.BktInfo)
-		if err != nil {
-			return nil, fmt.Errorf("get bucket settings: %w", err)
-		}
-
 		var foundVersion *allVersionsSearchResult
 
-		if settings.VersioningEnabled() {
+		if p.BktInfo.Settings.VersioningEnabled() {
 			for _, version := range versions {
 				if version.ID.EncodeToString() == p.VersionID {
 					foundVersion = &version

@@ -39,17 +39,11 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	p := &layer.HeadObjectParams{
 		BktInfo:                   bktInfo,
 		Object:                    reqInfo.ObjectName,
 		VersionID:                 reqInfo.URL.Query().Get(api.QueryVersionID),
-		IsBucketVersioningEnabled: bktSettings.VersioningEnabled(),
+		IsBucketVersioningEnabled: bktInfo.Settings.VersioningEnabled(),
 	}
 
 	comprehensiveInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
@@ -118,7 +112,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeHeaders(w.Header(), r.Header, info, len(comprehensiveInfo.TagSet), bktSettings.Unversioned())
+	writeHeaders(w.Header(), r.Header, info, len(comprehensiveInfo.TagSet), bktInfo.Settings.Unversioned())
 	w.WriteHeader(http.StatusOK)
 }
 

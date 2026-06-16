@@ -79,13 +79,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settingsSrc, err := h.obj.GetBucketSettings(r.Context(), srcObjPrm.BktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if settingsSrc.VersioningEnabled() && srcObjPrm.VersionID == "" {
+	if srcObjPrm.BktInfo.Settings.VersioningEnabled() && srcObjPrm.VersionID == "" {
 		shortInfoParams := &layer.ShortInfoParams{
 			Owner:  srcObjPrm.BktInfo.Owner,
 			CID:    srcObjPrm.BktInfo.CID,
@@ -117,14 +111,8 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), dstBktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	if containsACL {
-		if settings.BucketOwner == data.BucketOwnerEnforced {
+		if dstBktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
@@ -138,7 +126,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
+	if dstBktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -159,7 +147,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isCopyingToItselfForbidden(reqInfo, srcBucket, srcObject, settings, args) {
+	if isCopyingToItselfForbidden(reqInfo, srcBucket, srcObject, dstBktInfo.Settings, args) {
 		h.logAndSendError(w, "copying to itself without changing anything", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidCopyDest))
 		return
 	}
@@ -225,7 +213,7 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		Encryption: encryptionParams,
 	}
 
-	params.Lock, err = formObjectLock(r.Context(), dstBktInfo, settings.LockConfiguration, r.Header)
+	params.Lock, err = formObjectLock(r.Context(), dstBktInfo, dstBktInfo.Settings.LockConfiguration, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not form object lock", reqInfo, err)
 		return

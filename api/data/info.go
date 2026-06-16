@@ -1,7 +1,9 @@
 package data
 
 import (
+	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"time"
 
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -10,16 +12,9 @@ import (
 )
 
 const (
-	bktSettingsObject                  = ".s3-settings"
-	bktCORSConfigurationObject         = ".s3-cors"
-	bktNotificationConfigurationObject = ".s3-notifications"
-
 	VersioningUnversioned = "Unversioned"
 	VersioningEnabled     = "Enabled"
 	VersioningSuspended   = "Suspended"
-
-	// BucketSettingsV1 describes v1 version identifier for the bucket settings file.
-	BucketSettingsV1 = "1"
 )
 
 const (
@@ -52,6 +47,10 @@ type (
 		AttributeTags          string
 		AttributeSettings      string
 		AttributeNotifications string
+		Settings               *BucketSettings
+		CORS                   *CORSConfiguration
+		Tags                   map[string]string
+		Notifications          *NotificationConfiguration
 	}
 
 	// ObjectInfo holds S3 object data.
@@ -125,16 +124,6 @@ func NotificationInfoFromObject(objInfo *ObjectInfo) *NotificationInfo {
 	}
 }
 
-// SettingsObjectName is a system name for a bucket settings file.
-func (b *BucketInfo) SettingsObjectName() string { return bktSettingsObject }
-
-// CORSObjectName returns a system name for a bucket CORS configuration file.
-func (b *BucketInfo) CORSObjectName() string { return bktCORSConfigurationObject }
-
-func (b *BucketInfo) NotificationConfigurationObjectName() string {
-	return bktNotificationConfigurationObject
-}
-
 // VersionID returns object version from ObjectInfo.
 func (o *ObjectInfo) VersionID() string { return o.ID.EncodeToString() }
 
@@ -156,4 +145,44 @@ func (b BucketSettings) VersioningEnabled() bool {
 
 func (b BucketSettings) VersioningSuspended() bool {
 	return b.Versioning == VersioningSuspended
+}
+
+// ParseSettings parses the container attributes into Settings, CORS, Tags and Notifications.
+func (b *BucketInfo) ParseSettings() error {
+	b.Settings = &BucketSettings{Versioning: VersioningUnversioned}
+	b.Notifications = &NotificationConfiguration{}
+
+	if b.AttributeSettings != "" {
+		settings := &BucketSettings{Versioning: VersioningUnversioned}
+		if err := json.Unmarshal([]byte(b.AttributeSettings), settings); err != nil {
+			return fmt.Errorf("malformed bucket settings: %w", err)
+		}
+		b.Settings = settings
+	}
+
+	if b.AttributeCors != "" {
+		var corsRules []CORSRule
+		if err := json.Unmarshal([]byte(b.AttributeCors), &corsRules); err != nil {
+			return fmt.Errorf("malformed bucket CORS: %w", err)
+		}
+		b.CORS = &CORSConfiguration{CORSRules: corsRules}
+	}
+
+	if b.AttributeTags != "" {
+		var tags map[string]string
+		if err := json.Unmarshal([]byte(b.AttributeTags), &tags); err != nil {
+			return fmt.Errorf("malformed bucket tags: %w", err)
+		}
+		b.Tags = tags
+	}
+
+	if b.AttributeNotifications != "" {
+		conf := &NotificationConfiguration{}
+		if err := json.Unmarshal([]byte(b.AttributeNotifications), conf); err != nil {
+			return fmt.Errorf("malformed bucket notifications: %w", err)
+		}
+		b.Notifications = conf
+	}
+
+	return nil
 }

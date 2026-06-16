@@ -112,14 +112,8 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		Data: &layer.UploadData{},
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
 	if containsACLHeaders(r) {
-		if settings.BucketOwner == data.BucketOwnerEnforced {
+		if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
@@ -139,7 +133,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		p.Data.ACLHeaders = formACLHeadersForMultipart(r.Header)
 	}
 
-	if settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
+	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -484,18 +478,13 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-	}
-
 	response := CompleteMultipartUploadResponse{
 		Bucket: objInfo.Bucket,
 		ETag:   objInfo.HashSum,
 		Key:    objInfo.Name,
 	}
 
-	if bktSettings.VersioningEnabled() {
+	if bktInfo.Settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
 

@@ -2,13 +2,10 @@ package layer
 
 import (
 	"context"
-	"encoding/json"
-	"encoding/xml"
 	"fmt"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
@@ -29,58 +26,11 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return fmt.Errorf("store bucket notification settings: %w", err)
 	}
 
-	n.cache.PutNotificationConfiguration(n.Owner(ctx), p.BktInfo, p.Configuration)
 	n.cache.DeleteBucket(p.BktInfo.Name)
 
 	return nil
 }
 
-func (n *layer) GetBucketNotificationConfiguration(ctx context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
-	owner := n.Owner(ctx)
-	if conf := n.cache.GetNotificationConfiguration(owner, bktInfo); conf != nil {
-		return conf, nil
-	}
-
-	var conf = data.NotificationConfiguration{}
-	if bktInfo.AttributeNotifications != "" {
-		if err := json.Unmarshal([]byte(bktInfo.AttributeNotifications), &conf); err != nil {
-			return nil, fmt.Errorf("malformed data: %w", err)
-		}
-
-		n.cache.PutNotificationConfiguration(n.Owner(ctx), bktInfo, &conf)
-		return &conf, nil
-	}
-
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig)
-	if err != nil {
-		return nil, fmt.Errorf("search: %w", err)
-	}
-
-	if id.IsZero() {
-		return &conf, nil
-	}
-
-	obj, err := n.objectGet(ctx, bktInfo, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = xml.Unmarshal(obj.Payload(), &conf); err != nil {
-		return nil, fmt.Errorf("unmarshal notify configuration: %w", err)
-	}
-
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		// Migrate notification settings.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeNotifications, conf, boxData.Gate.SessionTokenV2); err != nil {
-			return nil, fmt.Errorf("migrate bucket notification settings: %w", err)
-		}
-		if err = n.deleteBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketNotifConfig); err != nil {
-			return nil, fmt.Errorf("delete bucket notification settings: %w", err)
-		}
-	}
-
-	n.cache.PutNotificationConfiguration(owner, bktInfo, &conf)
-
-	return &conf, nil
+func (n *layer) GetBucketNotificationConfiguration(_ context.Context, bktInfo *data.BucketInfo) (*data.NotificationConfiguration, error) {
+	return bktInfo.Notifications, nil
 }

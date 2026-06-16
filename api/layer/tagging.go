@@ -16,7 +16,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
@@ -270,62 +269,16 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 	return n.PutObjectTagging(ctx, &putObjectTaggingParams)
 }
 
-func (n *layer) GetBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
-	var (
-		err   error
-		owner = n.Owner(ctx)
-	)
-
-	if tags := n.cache.GetTagging(owner, bucketTaggingCacheKey(bktInfo.CID)); tags != nil {
-		return tags, nil
-	}
-
-	var tags map[string]string
-	if bktInfo.AttributeTags != "" {
-		if err = json.Unmarshal([]byte(bktInfo.AttributeTags), &tags); err != nil {
-			return nil, fmt.Errorf("malformed data: %w", err)
+func (n *layer) GetBucketTagging(_ context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
+	if len(bktInfo.Tags) == 0 {
+		// Empty tagset was set.
+		if bktInfo.Tags != nil {
+			return nil, nil
 		}
-
-		if len(tags) > 0 {
-			n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
-			return tags, nil
-		}
-	}
-
-	id, err := n.searchBucketMetaObjects(ctx, bktInfo, s3headers.TypeBucketTags)
-	if err != nil {
-		return nil, fmt.Errorf("search: %w", err)
-	}
-
-	if id.IsZero() {
 		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
 	}
 
-	tags, err = n.getTagsByOID(ctx, bktInfo, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(tags) == 0 {
-		return nil, s3errors.GetAPIError(s3errors.ErrBucketTaggingNotFound)
-	}
-
-	boxData, err := GetBoxData(ctx)
-	if err == nil {
-		// Migrate bucket tags to contract.
-		if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tags, boxData.Gate.SessionTokenV2); err != nil {
-			return nil, fmt.Errorf("bucket tags migration: %w", err)
-		}
-
-		if err = n.deleteBucketTagging(ctx, bktInfo); err != nil {
-			return nil, fmt.Errorf("couldn't delete bucket tags: %w", err)
-		}
-	}
-
-	n.cache.PutTagging(owner, bucketTaggingCacheKey(bktInfo.CID), tags)
-	n.cache.DeleteBucket(bktInfo.Name)
-
-	return tags, nil
+	return bktInfo.Tags, nil
 }
 
 func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, tagSet map[string]string) error {
@@ -339,17 +292,12 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 		return fmt.Errorf("couldn't store bucket tags: %w", err)
 	}
 
-	n.cache.PutTagging(n.Owner(ctx), bucketTaggingCacheKey(bktInfo.CID), tagSet)
 	n.cache.DeleteBucket(bktInfo.Name)
 
 	return nil
 }
 
 func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
-	if err := n.deleteBucketTagging(ctx, bktInfo); err != nil {
-		return fmt.Errorf("couldn't delete bucket tags: %w", err)
-	}
-
 	var sessionTokenV2 *session.Token
 	boxData, err := GetBoxData(ctx)
 	if err == nil {
@@ -360,39 +308,6 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 		return fmt.Errorf("couldn't remove bucket tags: %w", err)
 	}
 
-	n.cache.DeleteTagging(bucketTaggingCacheKey(bktInfo.CID))
-	n.cache.DeleteBucket(bktInfo.Name)
-
-	return nil
-}
-
-func (n *layer) deleteBucketTagging(ctx context.Context, bktInfo *data.BucketInfo) error {
-	fs := make(object.SearchFilters, 0, 1)
-	fs.AddFilter(s3headers.MetaType, s3headers.TypeBucketTags, object.MatchStringEqual)
-
-	var opts client.SearchObjectsOptions
-	attachTokenToParams(ctx, bktInfo.Owner, &opts)
-
-	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, fs, nil, opts)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return fmt.Errorf("search object version: %w", err)
-	}
-
-	if len(res) == 0 {
-		return nil
-	}
-
-	for i := range res {
-		if err = n.objectDelete(ctx, bktInfo, res[i].ID); err != nil {
-			return fmt.Errorf("couldn't delete bucket tags object: %w", err)
-		}
-	}
-
-	n.cache.DeleteTagging(bucketTaggingCacheKey(bktInfo.CID))
 	n.cache.DeleteBucket(bktInfo.Name)
 
 	return nil
@@ -400,8 +315,4 @@ func (n *layer) deleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 
 func objectTaggingCacheKey(p *ObjectVersion) string {
 	return ".tagset." + p.BktInfo.CID.EncodeToString() + "." + p.ObjectName + "." + p.VersionID
-}
-
-func bucketTaggingCacheKey(cnrID cid.ID) string {
-	return ".tagset." + cnrID.EncodeToString()
 }

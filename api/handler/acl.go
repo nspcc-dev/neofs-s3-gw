@@ -297,13 +297,7 @@ func (h *handler) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if settings.BucketOwner == data.BucketOwnerEnforced {
+	if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -428,13 +422,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	if settings.BucketOwner == data.BucketOwnerEnforced {
+	if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 		if !isValidOwnerEnforced(r) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
@@ -442,7 +430,7 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set(api.AmzACL, "")
 	}
 
-	if settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
+	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
@@ -584,17 +572,12 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if index >= 0 {
-		settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-		if err != nil {
-			h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-			return
-		}
-
-		settings.BucketOwner = data.BucketOwnerPreferredAndRestricted
+		newSettings := *bktInfo.Settings
+		newSettings.BucketOwner = data.BucketOwnerPreferredAndRestricted
 
 		p := layer.PutSettingsParams{
 			BktInfo:  bktInfo,
-			Settings: settings,
+			Settings: &newSettings,
 		}
 
 		if err = h.obj.PutBucketSettings(r.Context(), &p); err != nil {

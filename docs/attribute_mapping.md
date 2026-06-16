@@ -173,14 +173,6 @@ Contains the original object's attributes.
 
 Contains the final creation timestamp of the object.
 
-### `S3-BucketSettings-Versioning`
-
-Indicates whether bucket versioning is enabled.
-
-### `S3-BucketSettings-MetaVersion`
-
-Specifies the version of the bucket settings object's file structure
-
 ### `__NEOFS__ASSOCIATE`
 
 Used for auxiliary objects like tags and locks, indicates which original object
@@ -222,14 +214,22 @@ Describes special metadata types used for S3 features.
 **Possible values:**
 
 - `tags` – Stores object tags
-- `bucketTags` – Stores bucket tags
-- `bucketNotifConf` – Stores bucket notification configuration
-- `bucketCORS` – Stores bucket CORS configuration
-- `bucketSettings` – Stores bucket settings
 - `multipartInfo` – Stores multipart upload metadata
 - `multipartPart` – Stores information about an individual part
 
 ---
+
+## Bucket-Level Configuration
+
+Bucket settings, CORS, tags and notification configuration are kept as attributes
+on the bucket's container:
+
+| Attribute          | Contents                                 |
+|--------------------|------------------------------------------|
+| `S3_SETTINGS`      | Bucket settings as JSON.                 |
+| `CORS`             | CORS configuration as JSON.              |
+| `S3_TAGS`          | Bucket tags as JSON (map[string]string). |
+| `S3_NOTIFICATIONS` | Notification configuration as JSON.      |
 
 ## Special Meta Objects
 
@@ -263,58 +263,3 @@ the original object's attributes.
 
 - `S3-MetaType: tags`
 - `__NEOFS__ASSOCIATE`
-
-### Bucket Tags Object
-
-Stores tag data for a bucket. Contents is a JSON object with string keys and
-values repsenting tags.
-
-**Attributes:**
-
-- `S3-MetaType: bucketTags`
-
-### Bucket Notifications Object
-
-Stores bucket notification configuration.
-
-**Attributes:**
-
-- `S3-MetaType: bucketNotifConf`
-
-The object payload contains the configuration data.
-
-[Format](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-notificationconfiguration.html)
-> Note `QueueConfigurations` only supported.
-
-### Bucket CORS Object
-
-Stores bucket CORS configuration.
-
-**Attributes:**
-
-- `S3-MetaType: bucketCORS`
-
-The object payload contains the configuration data in XML format.
-[Format](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManageCorsUsing.html)
-
-### Bucket Settings Object
-
-Stores settings configuration for a bucket.
-
-**Attributes:**
-
-- `S3-MetaType: bucketSettings`
-- `S3-BucketSettings-Versioning`
-  Deprecated, replaced by meta version.
-- `S3-BucketSettings-MetaVersion`
-  Stores settings version.
-
-The object payload contains settings data in JSON format. For version 1 it's
-an object with the following fields:
- * "versioning", corresponding to bucket versioning settings
-   (Unversioned/Enabled/Suspended)
- * "lock_configuration" which is an object with "ObjectLockEnabled" and "Rule"
-   members corresponding to XML parameters of lock configuration in S3 API
- * "bucket_owner" which is a number representing object ownership and ACL
-   settings (0 for owner enforced, 1 for owner preferred, 2 for owner
-   preferred and restricted and 3 for object writer owner)

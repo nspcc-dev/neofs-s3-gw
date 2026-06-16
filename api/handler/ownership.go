@@ -59,19 +59,15 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	bktSettings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
+	newSettings := *bktInfo.Settings
 
 	switch params.Rules[0].ObjectOwnership {
 	case amzBucketOwnerEnforced:
-		bktSettings.BucketOwner = data.BucketOwnerEnforced
+		newSettings.BucketOwner = data.BucketOwnerEnforced
 	case amzBucketOwnerPreferred:
-		bktSettings.BucketOwner = data.BucketOwnerPreferred
+		newSettings.BucketOwner = data.BucketOwnerPreferred
 	case amzBucketOwnerObjectWriter:
-		bktSettings.BucketOwner = data.BucketOwnerObjectWriter
+		newSettings.BucketOwner = data.BucketOwnerObjectWriter
 	default:
 		h.logAndSendError(w, "invalid ownership", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
 		return
@@ -85,7 +81,7 @@ func (h *handler) PutBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 
 	sp := &layer.PutSettingsParams{
 		BktInfo:  bktInfo,
-		Settings: bktSettings,
+		Settings: &newSettings,
 	}
 
 	if err = h.obj.PutBucketSettings(r.Context(), sp); err != nil {
@@ -114,13 +110,7 @@ func (h *handler) GetBucketOwnershipControlsHandler(w http.ResponseWriter, r *ht
 		}
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	switch settings.BucketOwner {
+	switch bktInfo.Settings.BucketOwner {
 	case data.BucketOwnerEnforced:
 		response = &putBucketOwnershipControlsParams{
 			Rules: []objectOwnershipRules{{ObjectOwnership: amzBucketOwnerEnforced}},
@@ -160,17 +150,12 @@ func (h *handler) DeleteBucketOwnershipControlsHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	settings, err := h.obj.GetBucketSettings(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket settings", reqInfo, err)
-		return
-	}
-
-	settings.BucketOwner = data.BucketOwnerEnforced
+	newSettings := *bktInfo.Settings
+	newSettings.BucketOwner = data.BucketOwnerEnforced
 
 	p := layer.PutSettingsParams{
 		BktInfo:  bktInfo,
-		Settings: settings,
+		Settings: &newSettings,
 	}
 
 	if err = h.obj.PutBucketSettings(r.Context(), &p); err != nil {

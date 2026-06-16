@@ -39,6 +39,20 @@ func (tc *testContext) putObject(content []byte) *data.ObjectInfo {
 	return extObjInfo.ObjectInfo
 }
 
+func (tc *testContext) putBucketSettings(settings *data.BucketSettings) {
+	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
+		BktInfo:  tc.bktInfo,
+		Settings: settings,
+	})
+	require.NoError(tc.t, err)
+
+	cnr, err := tc.testNeoFS.Container(tc.ctx, tc.bktInfo.CID)
+	require.NoError(tc.t, err)
+
+	tc.bktInfo.AttributeSettings = cnr.Attribute(attributeSettings)
+	require.NoError(tc.t, tc.bktInfo.ParseSettings())
+}
+
 func (tc *testContext) getObject(objectName, versionID string, needError bool) (*data.ObjectInfo, []byte) {
 	objInfo, err := tc.layer.GetObjectInfo(tc.ctx, &HeadObjectParams{
 		BktInfo:   tc.bktInfo,
@@ -181,9 +195,11 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 		ctx:   ctx,
 		layer: NewLayer(logger, tp, layerCfg),
 		bktInfo: &data.BucketInfo{
-			Name:  bktName,
-			Owner: owner,
-			CID:   bktID,
+			Name:          bktName,
+			Owner:         owner,
+			CID:           bktID,
+			Settings:      &data.BucketSettings{Versioning: data.VersioningUnversioned},
+			Notifications: &data.NotificationConfiguration{},
 		},
 		obj:       "obj1",
 		t:         t,
@@ -193,11 +209,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 
 func TestSimpleVersioning(t *testing.T) {
 	tc := prepareContext(t)
-	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: &data.BucketSettings{Versioning: data.VersioningEnabled},
-	})
-	require.NoError(t, err)
+	tc.putBucketSettings(&data.BucketSettings{Versioning: data.VersioningEnabled})
 
 	obj1Content1 := []byte("content obj1 v1")
 	obj1v1 := tc.putObject(obj1Content1)
@@ -233,11 +245,7 @@ func TestSimpleNoVersioning(t *testing.T) {
 func TestVersioningDeleteObject(t *testing.T) {
 	tc := prepareContext(t)
 	settings := &data.BucketSettings{Versioning: data.VersioningEnabled}
-	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: settings,
-	})
-	require.NoError(t, err)
+	tc.putBucketSettings(settings)
 
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
@@ -255,11 +263,7 @@ func TestGetUnversioned(t *testing.T) {
 	objInfo := tc.putObject(objContent)
 
 	settings := &data.BucketSettings{Versioning: data.VersioningUnversioned}
-	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: settings,
-	})
-	require.NoError(t, err)
+	tc.putBucketSettings(settings)
 
 	resInfo, buffer := tc.getObject(tc.obj, data.UnversionedObjectVersionID, false)
 	require.Equal(t, objContent, buffer)
@@ -269,11 +273,7 @@ func TestGetUnversioned(t *testing.T) {
 func TestVersioningDeleteSpecificObjectVersion(t *testing.T) {
 	tc := prepareContext(t)
 	settings := &data.BucketSettings{Versioning: data.VersioningEnabled}
-	err := tc.layer.PutBucketSettings(tc.ctx, &PutSettingsParams{
-		BktInfo:  tc.bktInfo,
-		Settings: settings,
-	})
-	require.NoError(t, err)
+	tc.putBucketSettings(settings)
 
 	tc.putObject([]byte("content obj1 v1"))
 	objV2Info := tc.putObject([]byte("content obj1 v2"))
@@ -307,10 +307,7 @@ func TestNoVersioningDeleteObject(t *testing.T) {
 	tc.putObject([]byte("content obj1 v1"))
 	tc.putObject([]byte("content obj1 v2"))
 
-	settings, err := tc.layer.GetBucketSettings(tc.ctx, tc.bktInfo)
-	require.NoError(t, err)
-
-	tc.deleteObject(tc.obj, "", settings)
+	tc.deleteObject(tc.obj, "", tc.bktInfo.Settings)
 	tc.getObject(tc.obj, "", true)
 	tc.checkListObjects()
 }

@@ -103,11 +103,6 @@ type (
 		IsVersioned       bool
 	}
 
-	baseSearchResult struct {
-		ID                oid.ID
-		CreationTimestamp int64
-	}
-
 	// PartSearchResult contains some part metadata.
 	PartSearchResult struct {
 		ID                oid.ID
@@ -223,14 +218,11 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error) {
 	owner := n.Owner(ctx)
 
-	bktSettings, err := n.GetBucketSettings(ctx, p.BktInfo)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get versioning settings object: %w", err)
-	}
+	var err error
 
 	newVersion := &data.NodeVersion{
 		FilePath:      p.Object,
-		IsUnversioned: !bktSettings.VersioningEnabled(),
+		IsUnversioned: !p.BktInfo.Settings.VersioningEnabled(),
 	}
 
 	r := p.Reader
@@ -245,6 +237,17 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			return nil, fmt.Errorf("create encrypter: %w", err)
 		}
 		p.Size = int64(encSize)
+	}
+
+	oldVersions, oldVersionsErr := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
+	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
+		n.log.Warn("search old object versions failed",
+			zap.String("object", p.Object),
+			zap.String("bucket", p.BktInfo.Name),
+			zap.Stringer("cid", p.BktInfo.CID),
+			zap.Error(oldVersionsErr))
+
+		return nil, fmt.Errorf("search all versions in neofs: %w", oldVersionsErr)
 	}
 
 	if r != nil {
@@ -281,18 +284,9 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		Attributes:   p.Header,
 	}
 
-	var (
-		oldVersions    []allVersionsSearchResult
-		oldVersionsErr error
-		wg             sync.WaitGroup
-	)
-
-	if bktSettings.VersioningEnabled() {
+	if p.BktInfo.Settings.VersioningEnabled() {
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
-	} else {
-		wg.Go(func() {
-			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
-		})
+		oldVersions = nil
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
@@ -300,16 +294,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		return nil, err
 	}
 
-	// We need new object id to filter it out.
-	wg.Wait()
-
-	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
-		n.log.Warn("search old object versions failed",
-			zap.String("object", p.Object),
-			zap.String("bucket", p.BktInfo.Name),
-			zap.Stringer("cid", p.BktInfo.CID),
-			zap.Error(oldVersionsErr))
-	}
+	var wg sync.WaitGroup
 
 	if len(oldVersions) > 0 {
 		wg.Go(func() {
@@ -352,7 +337,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			NewLock: p.Lock,
 		}
 
-		if bktSettings.VersioningEnabled() {
+		if p.BktInfo.Settings.VersioningEnabled() {
 			putLockInfoPrms.ObjVersion.VersionID = id.String()
 		}
 
@@ -1400,103 +1385,6 @@ func tryDirectoryName(filePath string, prefix, delimiter string) string {
 	}
 
 	return ""
-}
-
-func (n *layer) searchBucketMetaObjects(ctx context.Context, bktInfo *data.BucketInfo, objType string) (oid.ID, error) {
-	var (
-		opts                client.SearchObjectsOptions
-		owner               = n.Owner(ctx)
-		filters             = make(object.SearchFilters, 0, 2)
-		returningAttributes = []string{
-			s3headers.MetaType,
-			object.AttributeTimestamp,
-		}
-	)
-
-	attachTokenToParams(ctx, owner, &opts)
-
-	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
-	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return oid.ID{}, fmt.Errorf("search object version: %w", err)
-	}
-
-	if len(searchResultItems) == 0 {
-		return oid.ID{}, nil
-	}
-
-	var searchResults = make([]baseSearchResult, 0, len(searchResultItems))
-
-	for _, item := range searchResultItems {
-		var psr = baseSearchResult{
-			ID: item.ID,
-		}
-
-		if item.Attributes[1] != "" {
-			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
-			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
-			}
-		}
-
-		searchResults = append(searchResults, psr)
-	}
-
-	sortFunc := func(a, b baseSearchResult) int {
-		if c := cmp.Compare(b.CreationTimestamp, a.CreationTimestamp); c != 0 { // reverse order.
-			return c
-		}
-
-		// It is a temporary decision. We can't figure out what object was first and what the second right now.
-		return b.ID.Compare(a.ID) // reverse order.
-	}
-
-	slices.SortFunc(searchResults, sortFunc)
-
-	return searchResults[0].ID, nil
-}
-
-func (n *layer) deleteBucketMetaObjects(ctx context.Context, bktInfo *data.BucketInfo, objType string) error {
-	var (
-		opts                client.SearchObjectsOptions
-		owner               = n.Owner(ctx)
-		filters             = make(object.SearchFilters, 0, 2)
-		returningAttributes = []string{
-			s3headers.MetaType,
-		}
-	)
-
-	attachTokenToParams(ctx, owner, &opts)
-
-	filters.AddFilter(s3headers.MetaType, objType, object.MatchStringEqual)
-	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-
-	searchResultItems, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return fmt.Errorf("search object version: %w", err)
-	}
-
-	if len(searchResultItems) == 0 {
-		return nil
-	}
-
-	for _, item := range searchResultItems {
-		if err = n.objectDelete(ctx, bktInfo, item.ID); err != nil {
-			return fmt.Errorf("remove %s metaobject for %s: %w", objType, bktInfo.CID.EncodeToString(), err)
-		}
-	}
-
-	return nil
 }
 
 func extractLockDataFromAttrubute(lsr *locksSearchResult, attributeValue string) error {
