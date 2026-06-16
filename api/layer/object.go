@@ -689,18 +689,12 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 	slices.SortFunc(searchResults, sortFunc)
 
 	if len(searchResults) > 0 {
+		var firstID = searchResults[0].ID.EncodeToString()
 		var lockVersions []locksSearchResult
 
-		if searchResults[0].IsVersioned {
-			var ver = searchResults[0].ID.EncodeToString()
-
-			tagsObjectOID = tagsByVersion[ver]
-			lockVersions = locksByVersions[ver]
-		} else {
-			// empty version
-			tagsObjectOID = tagsByVersion[""]
-			lockVersions = locksByVersions[""]
-		}
+		// Tags and locks are always stored with AssociatedObject = OID string, regardless of versioning.
+		tagsObjectOID = tagsByVersion[firstID]
+		lockVersions = locksByVersions[firstID]
 
 		slices.SortFunc(lockVersions, locksSearchResultsSortFunc)
 		lockInfo = extractLockInfoFromSearch(lockVersions)
@@ -1610,4 +1604,14 @@ func (n *layer) searchEverythingForRemove(ctx context.Context, bkt *data.BucketI
 // HeadObject get object header.
 func (n *layer) HeadObject(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*object.Object, error) {
 	return n.objectHead(ctx, bktInfo, idObj)
+}
+
+// GetObjectInfoByID returns object metadata by its NeoFS object ID.
+func (n *layer) GetObjectInfoByID(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*data.ObjectInfo, error) {
+	meta, err := n.objectHead(ctx, bktInfo, idObj)
+	if err != nil {
+		return nil, err
+	}
+
+	return objectInfoFromMeta(bktInfo, meta), nil
 }
