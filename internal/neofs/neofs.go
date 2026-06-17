@@ -567,19 +567,11 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		return nil, fmt.Errorf("init object read via connection pool: %w", err)
 	}
 
-	var objPart = new(layer.ObjectPart)
-	if prm.WithHeader { // Also means WithPayload, see above.
-		defer res.Close()
-
-		payload, err := io.ReadAll(res)
-		if err != nil {
-			return nil, fmt.Errorf("read full object payload: %w", err)
-		}
-
-		header.SetPayload(payload)
+	var objPart = &layer.ObjectPart{
+		Payload: payloadReader{res},
+	}
+	if prm.WithHeader {
 		objPart.Head = &header
-	} else {
-		objPart.Payload = payloadReader{res}
 	}
 
 	return objPart, nil

@@ -186,6 +186,14 @@ func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID o
 		return nil, err
 	}
 
+	defer res.Payload.Close()
+
+	payload, err := io.ReadAll(res.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("read full object payload: %w", err)
+	}
+
+	res.Head.SetPayload(payload)
 	return res.Head, nil
 }
 
