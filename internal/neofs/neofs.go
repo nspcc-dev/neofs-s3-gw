@@ -572,6 +572,8 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		return &layer.ObjectPart{
 			Head: hdr,
 		}, nil
+	} else {
+		prmGet.MarkPayloadOnly()
 	}
 
 	if prm.PayloadRange[0]+prm.PayloadRange[1] != 0 {
