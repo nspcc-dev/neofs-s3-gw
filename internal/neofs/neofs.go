@@ -572,22 +572,11 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		return &layer.ObjectPart{
 			Head: hdr,
 		}, nil
-	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
-		_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
-		if err != nil {
-			if reason, ok := isErrAccessDenied(err); ok {
-				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-			}
-
-			return nil, fmt.Errorf("init full payload range reading via connection pool: %w", err)
-		}
-
-		return &layer.ObjectPart{
-			Payload: payloadReader{res},
-		}, nil
 	}
 
-	prmGet.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
+	if prm.PayloadRange[0]+prm.PayloadRange[1] != 0 {
+		prmGet.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
+	}
 
 	_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
 
