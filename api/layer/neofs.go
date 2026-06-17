@@ -265,9 +265,6 @@ type NeoFS interface {
 	// prevented the object header from being read.
 	ReadObject(context.Context, PrmObjectRead) (*ObjectPart, error)
 
-	// GetObject returns object head and payload Reader.
-	GetObject(ctx context.Context, prm GetObject) (*ObjectPart, error)
-
 	// CreateObject creates and saves a parameterized object in the NeoFS container.
 	// It sets 'Timestamp' attribute to the current time.
 	// It returns the ID of the saved object.

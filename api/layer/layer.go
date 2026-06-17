@@ -457,22 +457,15 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 
 // GetObjectWithPayloadReader returns object head and payload Reader.
 func (n *layer) GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWithPayloadReaderParams) (*ObjectWithPayloadReader, error) {
-	var prm = GetObject{
-		Container: p.BktInfo.CID,
-		Object:    p.Object,
-	}
-
-	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.Owner)
-
-	op, err := n.neoFS.GetObject(ctx, prm)
+	head, payload, err := n.initObjectReader(ctx, getParams{bktInfo: p.BktInfo, oid: p.Object})
 	if err != nil {
-		return nil, fmt.Errorf("get object: %w", err)
+		return nil, fmt.Errorf("init object reader: %w", err)
 	}
 
 	return &ObjectWithPayloadReader{
-		Head:       op.Head,
-		Payload:    op.Payload,
-		ObjectInfo: objectInfoFromMeta(p.BktInfo, op.Head),
+		Head:       head,
+		Payload:    payload,
+		ObjectInfo: objectInfoFromMeta(p.BktInfo, head),
 	}, nil
 }
 
