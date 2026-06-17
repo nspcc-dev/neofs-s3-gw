@@ -587,14 +587,9 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		}, nil
 	}
 
-	var prmRange client.PrmObjectGet
-	prmRange.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
+	prmGet.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
 
-	if prm.SessionTokenV2 != nil {
-		prmRange.WithinSessionV2(*prm.SessionTokenV2)
-	}
-
-	_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmRange)
+	_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
 
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
