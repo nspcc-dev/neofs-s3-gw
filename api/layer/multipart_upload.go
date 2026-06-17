@@ -1114,13 +1114,13 @@ func (n *layer) reUploadFollowingParts(ctx context.Context, uploadParams UploadP
 }
 
 func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams, id oid.ID, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
-	obj, err := n.objectGet(ctx, bktInfo, id)
+	obj, pld, err := n.initObjectReader(ctx, getParams{bktInfo: bktInfo, oid: id})
 	if err != nil {
 		return fmt.Errorf("get id=%s: %w", id.String(), err)
 	}
 
 	uploadParams.Size = int64(obj.PayloadSize())
-	uploadParams.Reader = bytes.NewReader(obj.Payload())
+	uploadParams.Reader = pld
 
 	n.log.Debug("reUploadPart", zap.String("oid", id.String()), zap.Int("part", uploadParams.PartNumber), zap.Uint64("payload size", obj.PayloadSize()))
 	if _, err = n.uploadPart(ctx, multipartInfo, &uploadParams); err != nil {

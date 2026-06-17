@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 - Unknown bucket policy now leads to ErrNoSuchBucketPolicy error (#1290)
 
 ### Fixed
+- CompleteMultipartUpload reading parts completely into gateway memory in some cases (#1295)
 
 ### Updated
 
