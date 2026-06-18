@@ -523,37 +523,7 @@ func (x payloadReader) WriteTo(w io.Writer) (int64, error) {
 
 // ReadObject implements neofs.NeoFS interface method.
 func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer.ObjectPart, error) {
-	var prmGet client.PrmObjectGet
-
-	if prm.SessionTokenV2 != nil {
-		prmGet.WithinSessionV2(*prm.SessionTokenV2)
-	}
-
-	if prm.WithHeader {
-		if prm.WithPayload {
-			header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
-			if err != nil {
-				if reason, ok := isErrAccessDenied(err); ok {
-					return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-				}
-
-				return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
-			}
-
-			defer res.Close()
-
-			payload, err := io.ReadAll(res)
-			if err != nil {
-				return nil, fmt.Errorf("read full object payload: %w", err)
-			}
-
-			header.SetPayload(payload)
-
-			return &layer.ObjectPart{
-				Head: &header,
-			}, nil
-		}
-
+	if prm.WithHeader && !prm.WithPayload {
 		var prmHead client.PrmObjectHead
 
 		if prm.SessionTokenV2 != nil {
@@ -572,51 +542,16 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		return &layer.ObjectPart{
 			Head: hdr,
 		}, nil
-	} else if prm.PayloadRange[0]+prm.PayloadRange[1] == 0 {
-		_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
-		if err != nil {
-			if reason, ok := isErrAccessDenied(err); ok {
-				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-			}
-
-			return nil, fmt.Errorf("init full payload range reading via connection pool: %w", err)
-		}
-
-		return &layer.ObjectPart{
-			Payload: payloadReader{res},
-		}, nil
 	}
 
-	var prmRange client.PrmObjectGet
-	prmRange.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
-
-	if prm.SessionTokenV2 != nil {
-		prmRange.WithinSessionV2(*prm.SessionTokenV2)
-	}
-
-	_, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmRange)
-
-	if err != nil {
-		if reason, ok := isErrAccessDenied(err); ok {
-			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-		}
-
-		return nil, fmt.Errorf("init payload range reading via connection pool: %w", err)
-	}
-
-	return &layer.ObjectPart{
-		Payload: payloadReader{res},
-	}, nil
-}
-
-// GetObject implements neofs.NeoFS interface method.
-func (x *NeoFS) GetObject(ctx context.Context, prm layer.GetObject) (*layer.ObjectPart, error) {
-	var (
-		prmGet client.PrmObjectGet
-	)
+	var prmGet client.PrmObjectGet
 
 	if prm.SessionTokenV2 != nil {
 		prmGet.WithinSessionV2(*prm.SessionTokenV2)
+	}
+
+	if prm.PayloadRange[0]+prm.PayloadRange[1] != 0 {
+		prmGet.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
 	}
 
 	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
@@ -625,13 +560,17 @@ func (x *NeoFS) GetObject(ctx context.Context, prm layer.GetObject) (*layer.Obje
 			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
 		}
 
-		return nil, fmt.Errorf("init full object reading via connection pool: %w", err)
+		return nil, fmt.Errorf("init object read via connection pool: %w", err)
 	}
 
-	return &layer.ObjectPart{
-		Head:    &header,
+	var objPart = &layer.ObjectPart{
 		Payload: payloadReader{res},
-	}, nil
+	}
+	if prm.WithHeader {
+		objPart.Head = &header
+	}
+
+	return objPart, nil
 }
 
 // DeleteObject implements neofs.NeoFS interface method.

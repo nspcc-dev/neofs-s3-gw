@@ -170,6 +170,27 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (Paylo
 	return res.Payload, nil
 }
 
+// initializes payload reader of the NeoFS object.
+// Zero range corresponds to full payload (panics if only offset is set).
+func (n *layer) initObjectReader(ctx context.Context, p getParams) (*object.Object, PayloadReadCloser, error) {
+	prm := PrmObjectRead{
+		Container:    p.bktInfo.CID,
+		Object:       p.oid,
+		WithHeader:   true,
+		WithPayload:  true,
+		PayloadRange: [2]uint64{p.off, p.ln},
+	}
+
+	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.bktInfo.Owner)
+
+	res, err := n.neoFS.ReadObject(ctx, prm)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return res.Head, res.Payload, nil
+}
+
 // objectGet returns an object with payload in the object.
 func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID oid.ID) (*object.Object, error) {
 	prm := PrmObjectRead{
@@ -186,6 +207,14 @@ func (n *layer) objectGet(ctx context.Context, bktInfo *data.BucketInfo, objID o
 		return nil, err
 	}
 
+	defer res.Payload.Close()
+
+	payload, err := io.ReadAll(res.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("read full object payload: %w", err)
+	}
+
+	res.Head.SetPayload(payload)
 	return res.Head, nil
 }
 
