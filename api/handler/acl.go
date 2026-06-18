@@ -383,44 +383,40 @@ func (h *handler) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketACL, err := h.obj.GetBucketACL(r.Context(), bktInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not fetch bucket acl", reqInfo, err)
-		return
-	}
-
 	prm := &layer.HeadObjectParams{
 		BktInfo:   bktInfo,
 		Object:    reqInfo.ObjectName,
 		VersionID: reqInfo.URL.Query().Get(api.QueryVersionID),
 	}
 
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), prm)
-	if err != nil {
+	if _, err = h.obj.GetObjectInfo(r.Context(), prm); err != nil {
 		h.logAndSendError(w, "could not object info", reqInfo, err)
 		return
 	}
 
-	if err = api.EncodeToResponse(w, encodeObjectACL(h.log, bucketACL, reqInfo.BucketName, objInfo.VersionID())); err != nil {
+	ownerID := bktInfo.Owner.String()
+	ownerGrantee := NewGrantee(granteeCanonicalUser)
+	ownerGrantee.ID = ownerID
+	ownerGrantee.DisplayName = ownerID
+
+	res := &AccessControlPolicyResponse{
+		Owner: Owner{
+			ID:          ownerID,
+			DisplayName: ownerID,
+		},
+		AccessControlList: []*Grant{{
+			Grantee:    ownerGrantee,
+			Permission: awsPermFullControl,
+		}},
+	}
+
+	if err = api.EncodeToResponse(w, res); err != nil {
 		h.logAndSendError(w, "failed to encode response", reqInfo, err)
 	}
 }
 
 func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
-	versionID := reqInfo.URL.Query().Get(api.QueryVersionID)
-	iss, err := h.authTokenIssuer(r.Context())
-	if err != nil {
-		h.logAndSendError(w, "couldn't get bearer token issues", reqInfo, err)
-		return
-	}
-
-	tokenv2, err := getSessionTokenSetEACL(r.Context())
-	if err != nil {
-		h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
-		return
-	}
-
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
 	if err != nil {
 		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
@@ -432,7 +428,6 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 			return
 		}
-		r.Header.Set(api.AmzACL, "")
 	}
 
 	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
@@ -440,60 +435,11 @@ func (h *handler) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
 			return
 		}
-		r.Header.Set(api.AmzACL, "")
 	}
 
-	p := &layer.HeadObjectParams{
-		BktInfo:   bktInfo,
-		Object:    reqInfo.ObjectName,
-		VersionID: versionID,
-	}
-
-	objInfo, err := h.obj.GetObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not get object info", reqInfo, err)
+	if cannedACL := r.Header.Get(api.AmzACL); cannedACL != "" && cannedACL != basicACLPrivate {
+		h.logAndSendError(w, "object acl not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 		return
-	}
-
-	list := &AccessControlPolicy{}
-	if r.ContentLength == 0 {
-		list, err = parseACLHeaders(r.Header, iss)
-		if err != nil {
-			h.logAndSendError(w, "could not parse bucket acl", reqInfo, err)
-			return
-		}
-	} else if err = xml.NewDecoder(r.Body).Decode(list); err != nil {
-		h.logAndSendError(w, "could not parse bucket acl", reqInfo, s3errors.GetAPIError(s3errors.ErrMalformedXML))
-		return
-	}
-
-	resInfo := &resourceInfo{
-		Bucket:  reqInfo.BucketName,
-		Object:  reqInfo.ObjectName,
-		Version: objInfo.VersionID(),
-	}
-
-	astObject, err := aclToAst(list, resInfo)
-	if err != nil {
-		h.logAndSendError(w, "could not translate acl to ast", reqInfo, err)
-		return
-	}
-
-	updated, err := h.updateBucketACL(r, astObject, bktInfo, tokenv2)
-	if err != nil {
-		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
-		return
-	}
-	if updated {
-		s := &SendNotificationParams{
-			Event:            EventObjectACLPut,
-			NotificationInfo: data.NotificationInfoFromObject(objInfo),
-			BktInfo:          bktInfo,
-			ReqInfo:          reqInfo,
-		}
-		if err = h.sendNotifications(r.Context(), s); err != nil {
-			h.log.Error("couldn't send notification: %w", zap.Error(err))
-		}
 	}
 	w.WriteHeader(http.StatusOK)
 }

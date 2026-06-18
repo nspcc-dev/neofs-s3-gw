@@ -12,7 +12,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -41,15 +40,12 @@ func path2BucketObject(path string) (string, string, error) {
 
 func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err                error
-		versionID          string
-		metadata           map[string]string
-		tagSet             map[string]string
-		sessionTokenEACLV2 *session.Token
+		err       error
+		versionID string
+		metadata  map[string]string
+		tagSet    map[string]string
 
 		reqInfo = api.GetReqInfo(r.Context())
-
-		containsACL = containsACLHeaders(r)
 	)
 
 	src := r.Header.Get(api.AmzCopySource)
@@ -111,18 +107,13 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACL {
+	if containsACLHeaders(r) {
 		if dstBktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
 				return
 			}
 			r.Header.Set(api.AmzACL, "")
-		}
-
-		if sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
-			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
-			return
 		}
 	}
 
@@ -230,26 +221,6 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err = api.EncodeToResponse(w, &CopyObjectResponse{LastModified: dstObjInfo.Created.UTC().Format(time.RFC3339), ETag: dstObjInfo.HashSum}); err != nil {
 		h.logAndSendError(w, "something went wrong", reqInfo, err, additional...)
 		return
-	}
-
-	// In some cases upper in the code, we change ACL headers. We have to check all headers one more time.
-	if containsACLHeaders(r) {
-		newEaclTable, err := h.getNewEAclTable(r, dstBktInfo, dstObjInfo)
-		if err != nil {
-			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
-			return
-		}
-
-		p := &layer.PutBucketACLParams{
-			BktInfo:        dstBktInfo,
-			EACL:           newEaclTable,
-			SessionTokenV2: sessionTokenEACLV2,
-		}
-
-		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
-			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
-			return
-		}
 	}
 
 	if tagSet != nil {
