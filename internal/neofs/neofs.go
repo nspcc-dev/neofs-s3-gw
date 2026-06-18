@@ -550,10 +550,6 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		prmGet.WithinSessionV2(*prm.SessionTokenV2)
 	}
 
-	if !prm.WithHeader {
-		prmGet.MarkPayloadOnly()
-	}
-
 	if prm.PayloadRange[0]+prm.PayloadRange[1] != 0 {
 		prmGet.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
 	}
