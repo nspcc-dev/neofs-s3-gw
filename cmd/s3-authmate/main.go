@@ -562,8 +562,6 @@ func obtainSecret() *cli.Command {
 
 			agent := authmate.New(log, neoFS)
 
-			var _ = agent
-
 			password = wallet.GetPassword(viper.GetViper(), envWalletGatePassphrase)
 			gateCreds, err := wallet.GetKeyFromPath(gateWalletPathFlag, gateAccountAddressFlag, password)
 			if err != nil {
