@@ -255,10 +255,11 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	r := p.Reader
+	var encMeta data.EncryptionMeta
 	if p.Encryption.Enabled() {
-		p.Header[s3headers.AttributeDecryptedSize] = strconv.FormatInt(p.Size, 10)
-		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
-			return nil, fmt.Errorf("add encryption header: %w", err)
+		encMeta, err = newEncryptionMeta(p.Encryption, p.Size)
+		if err != nil {
+			return nil, fmt.Errorf("build encryption meta: %w", err)
 		}
 
 		var encSize uint64
@@ -316,6 +317,10 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	if p.BktInfo.Settings.VersioningEnabled() {
 		prm.Attributes[s3headers.AttributeVersioningState] = data.VersioningEnabled
 		oldVersions = nil
+	}
+
+	if p.Encryption.Enabled() {
+		prm.Attributes[s3headers.AttributeEncryptionMeta] = packEncryptionMeta(encMeta)
 	}
 
 	id, hash, err := n.objectPutAndHash(ctx, prm, p.BktInfo)
@@ -411,15 +416,21 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, prm multipartHea
 	)
 
 	if p.Encryption.Enabled() {
-		decSize := p.Size
+		var (
+			encMeta data.EncryptionMeta
+			decSize = p.Size
+		)
+
 		if prm.DecryptedSize != nil {
 			decSize = *prm.DecryptedSize
 		}
 
-		p.Header[s3headers.AttributeDecryptedSize] = strconv.FormatInt(decSize, 10)
-		if err = addEncryptionHeaders(p.Header, p.Encryption); err != nil {
-			return nil, fmt.Errorf("add encryption header: %w", err)
+		encMeta, err = newEncryptionMeta(p.Encryption, decSize)
+		if err != nil {
+			return nil, fmt.Errorf("build encryption meta: %w", err)
 		}
+
+		p.Header[s3headers.AttributeEncryptionMeta] = packEncryptionMeta(encMeta)
 
 		var encSize uint64
 		if _, encSize, err = encryptionReader(p.Reader, uint64(decSize), p.Encryption.Key()); err != nil {
@@ -815,7 +826,7 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
 			s3headers.AttributeDeleteMarker,
-			s3headers.AttributeDecryptedSize,
+			s3headers.AttributeEncryptionMeta,
 			object.FilterPayloadSize,
 			object.FilterPayloadChecksum,
 		}
@@ -865,11 +876,13 @@ func (n *layer) searchAllVersionsInNeoFSByPrefix(ctx context.Context, bkt *data.
 
 		psr.IsDeleteMarker = item.Attributes[2] != ""
 
-		if item.Attributes[3] != "" {
-			psr.DecryptedSize, err = strconv.ParseInt(item.Attributes[3], 10, 64)
-			if err != nil {
-				return nil, "", fmt.Errorf("invalid decrypted size %s: %w", item.Attributes[3], err)
-			}
+		encMeta, err := unpackEncryptionMeta(item.Attributes[3])
+		if err != nil {
+			return nil, "", fmt.Errorf("unmarshal encryption meta: %w", err)
+		}
+
+		if encMeta != nil && encMeta.DecryptedSize != 0 {
+			psr.DecryptedSize = encMeta.DecryptedSize
 		}
 
 		if item.Attributes[4] != "" {
@@ -1365,7 +1378,11 @@ func (n *layer) objectInfoFromObjectsCacheOrNeoFS(ctx context.Context, bktInfo *
 		return nil
 	}
 
-	oi = objectInfoFromMeta(bktInfo, meta)
+	oi, err = objectInfoFromMeta(bktInfo, meta)
+	if err != nil {
+		n.log.Warn("could not unpack object meta", zap.Error(err))
+		return nil
+	}
 	n.cache.PutObject(owner, &data.ExtendedObjectInfo{ObjectInfo: oi, NodeVersion: node})
 
 	return oi
@@ -1530,5 +1547,5 @@ func (n *layer) GetObjectInfoByID(ctx context.Context, bktInfo *data.BucketInfo,
 		return nil, err
 	}
 
-	return objectInfoFromMeta(bktInfo, meta), nil
+	return objectInfoFromMeta(bktInfo, meta)
 }

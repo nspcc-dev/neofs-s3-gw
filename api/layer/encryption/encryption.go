@@ -5,7 +5,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -22,8 +21,8 @@ type Params struct {
 type ObjectEncryption struct {
 	Enabled   bool
 	Algorithm string
-	HMACKey   string
-	HMACSalt  string
+	HMACKey   []byte
+	HMACSalt  []byte
 }
 
 type encryptedPart struct {
@@ -105,20 +104,10 @@ func (p Params) MatchObjectEncryption(encInfo ObjectEncryption) error {
 		return nil
 	}
 
-	hmacSalt, err := hex.DecodeString(encInfo.HMACSalt)
-	if err != nil {
-		return fmt.Errorf("invalid hmacSalt '%s': %w", encInfo.HMACSalt, err)
-	}
-
-	hmacKey, err := hex.DecodeString(encInfo.HMACKey)
-	if err != nil {
-		return fmt.Errorf("invalid hmacKey '%s': %w", encInfo.HMACKey, err)
-	}
-
 	mac := hmac.New(sha256.New, p.Key())
-	mac.Write(hmacSalt)
+	mac.Write(encInfo.HMACSalt)
 	expectedHmacKey := mac.Sum(nil)
-	if !bytes.Equal(expectedHmacKey, hmacKey) {
+	if !bytes.Equal(expectedHmacKey, encInfo.HMACKey) {
 		return errors.New("mismatched hmac key")
 	}
 

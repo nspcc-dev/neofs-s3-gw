@@ -184,21 +184,16 @@ Contains JSON encoded lock metadata in the next fields:
 - `ComplianceMode`. Indicates whether the object is under a compliance-mode retention lock.
 - `RetentionUntil`. Contains the retention expiration timestamp.
 
-### S3-Algorithm
+### S3-Encryption-Meta
 
-Contains encryption algorith for object payload, if encryption is enabled.
+Contains JSON-encoded encryption metadata for object payload, if encryption is enabled.
+All encryption-related fields are grouped into this single attribute.
 
-### S3-Decrypted-Size
-
-Contains decrypted size for object payload, if encryption is enabled.
-
-### S3-HMAC-Salt
-
-Contains salt for encryption algorith, if encryption is enabled.
-
-### S3-HMAC-Key
-
-Contains key for encryption algorith, if encryption is enabled.
+JSON fields:
+- `algo` – encryption algorithm
+- `decSize` – decrypted payload size
+- `salt` – HMAC salt
+- `key` – HMAC key
 
 ### S3-Meta-Tag-*
 

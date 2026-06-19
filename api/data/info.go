@@ -53,6 +53,14 @@ type (
 		Notifications          *NotificationConfiguration
 	}
 
+	// EncryptionMeta holds server-side encryption metadata for an object.
+	EncryptionMeta struct {
+		Algorithm     string `json:"algo,omitempty"`
+		DecryptedSize int64  `json:"decSize,omitempty"`
+		HMACSalt      []byte `json:"salt,omitempty"`
+		HMACKey       []byte `json:"key,omitempty"`
+	}
+
 	// ObjectInfo holds S3 object data.
 	ObjectInfo struct {
 		ID             oid.ID
@@ -60,15 +68,16 @@ type (
 		IsDir          bool
 		IsDeleteMarker bool
 
-		Bucket      string
-		Name        string
-		Size        int64
-		ContentType string
-		Created     time.Time
-		HashSum     string
-		Owner       user.ID
-		Headers     map[string]string
-		Version     string
+		Bucket         string
+		Name           string
+		Size           int64
+		ContentType    string
+		Created        time.Time
+		HashSum        string
+		Owner          user.ID
+		Headers        map[string]string
+		Version        string
+		EncryptionMeta *EncryptionMeta
 	}
 
 	// ObjectListResponseContent holds response data for object listing.

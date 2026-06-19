@@ -84,8 +84,8 @@ func writeHeaders(h http.Header, requestHeader http.Header, info *data.ObjectInf
 	}
 	h.Set(api.LastModified, info.Created.UTC().Format(http.TimeFormat))
 
-	if len(info.Headers[s3headers.AttributeEncryptionAlgorithm]) > 0 {
-		h.Set(api.ContentLength, info.Headers[s3headers.AttributeDecryptedSize])
+	if info.EncryptionMeta != nil {
+		h.Set(api.ContentLength, strconv.FormatInt(info.EncryptionMeta.DecryptedSize, 10))
 		addSSECHeaders(h, requestHeader)
 	} else {
 		h.Set(api.ContentLength, strconv.FormatInt(info.Size, 10))
@@ -178,7 +178,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfo(info.Headers)); err != nil {
+	if err = encryptionParams.MatchObjectEncryption(layer.FormEncryptionInfoFromMeta(info.EncryptionMeta)); err != nil {
 		h.logAndSendError(w, "encryption doesn't match object", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest), zap.Error(err))
 		return
 	}
@@ -226,11 +226,8 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fullSize := info.Size
-	if encryptionParams.Enabled() {
-		if fullSize, err = strconv.ParseInt(info.Headers[s3headers.AttributeDecryptedSize], 10, 64); err != nil {
-			h.logAndSendError(w, "invalid decrypted size header", reqInfo, s3errors.GetAPIError(s3errors.ErrBadRequest))
-			return
-		}
+	if encryptionParams.Enabled() && info.EncryptionMeta != nil {
+		fullSize = info.EncryptionMeta.DecryptedSize
 	}
 
 	if params, err = fetchRangeHeader(r.Header, uint64(fullSize)); err != nil {

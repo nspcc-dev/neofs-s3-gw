@@ -1,7 +1,6 @@
 package encryption
 
 import (
-	"encoding/hex"
 	"strconv"
 	"testing"
 
@@ -28,8 +27,8 @@ func TestHMAC(t *testing.T) {
 	encInfo := ObjectEncryption{
 		Enabled:   true,
 		Algorithm: "",
-		HMACKey:   hex.EncodeToString(hmacKey),
-		HMACSalt:  hex.EncodeToString(hmacSalt),
+		HMACKey:   hmacKey,
+		HMACSalt:  hmacSalt,
 	}
 
 	err = encParam.MatchObjectEncryption(encInfo)
