@@ -62,7 +62,7 @@ const (
 )
 
 var (
-	deploymentID, _ = uuid.NewRandom()
+	deploymentID = uuid.Must(uuid.NewRandom())
 
 	xmlHeader = []byte(xml.Header)
 )
