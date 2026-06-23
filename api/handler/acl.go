@@ -218,14 +218,19 @@ func (r *resourceInfo) IsBucket() bool {
 	return len(r.Object) == 0
 }
 
-type astOperation struct {
-	Users  []user.ID
-	Op     eacl.Operation
-	Action eacl.Action
-}
+type astGrantee int
 
-func (a astOperation) IsGroupGrantee() bool {
-	return len(a.Users) == 0
+const (
+	astGranteeAccount    astGrantee = iota // specific user accounts
+	astGranteeRoleUser                     // eacl.RoleUser
+	astGranteeRoleOthers                   // eacl.RoleOthers
+)
+
+type astOperation struct {
+	Users   []user.ID
+	Op      eacl.Operation
+	Action  eacl.Action
+	Grantee astGrantee
 }
 
 const (
@@ -847,14 +852,14 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 			switch len(ops) {
 			case 2: // parent contains different actions for the same child operation
 				// potential inconsistency
-				if groupGrantee := astOp.IsGroupGrantee(); groupGrantee {
+				if astOp.Grantee != astGranteeAccount {
 					// it is not likely (such state must be detected early)
 					// inconsistency
 					action := eacl.ActionAllow
 					if astOp.Action == eacl.ActionAllow {
 						action = eacl.ActionDeny
 					}
-					removeAstOp(parentResource, groupGrantee, astOp.Op, action)
+					removeAstOp(parentResource, astOp.Grantee, astOp.Op, action)
 					updated = true
 					continue
 				}
@@ -873,7 +878,7 @@ func mergeAst(parent, child *ast) (*ast, bool) {
 			case 1: // parent contains some action for the same child operation
 				if astOp.Action != ops[0].Action {
 					// potential inconsistency
-					if groupGrantee := astOp.IsGroupGrantee(); groupGrantee {
+					if astOp.Grantee != astGranteeAccount {
 						// inconsistency
 						ops[0].Action = astOp.Action
 						updated = true
@@ -936,16 +941,16 @@ func handleRemoveOperations(parentResource *astResource, astOp, existedOp *astOp
 func getAstOps(resource *astResource, childOp *astOperation) []*astOperation {
 	var res []*astOperation
 	for _, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee() == childOp.IsGroupGrantee() && astOp.Op == childOp.Op {
+		if astOp.Grantee == childOp.Grantee && astOp.Op == childOp.Op {
 			res = append(res, astOp)
 		}
 	}
 	return res
 }
 
-func removeAstOp(resource *astResource, group bool, op eacl.Operation, action eacl.Action) {
+func removeAstOp(resource *astResource, gt astGrantee, op eacl.Operation, action eacl.Action) {
 	for i, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee() == group && astOp.Op == op && astOp.Action == action {
+		if astOp.Grantee == gt && astOp.Op == op && astOp.Action == action {
 			resource.Operations = slices.Delete(resource.Operations, i, i+1)
 			return
 		}
@@ -954,7 +959,7 @@ func removeAstOp(resource *astResource, group bool, op eacl.Operation, action ea
 
 func addUsers(resource *astResource, astO *astOperation, users []user.ID) {
 	for _, astOp := range resource.Operations {
-		if astOp.IsGroupGrantee() == astO.IsGroupGrantee() && astOp.Op == astO.Op && astOp.Action == astO.Action {
+		if astOp.Grantee == astO.Grantee && astOp.Op == astO.Op && astOp.Action == astO.Action {
 			astOp.Users = append(astO.Users, users...)
 			return
 		}
@@ -963,7 +968,7 @@ func addUsers(resource *astResource, astO *astOperation, users []user.ID) {
 
 func removeUsers(resource *astResource, astOperation *astOperation, users []user.ID) {
 	for ind, astOp := range resource.Operations {
-		if !astOp.IsGroupGrantee() && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
+		if astOp.Grantee == astGranteeAccount && astOp.Op == astOperation.Op && astOp.Action == astOperation.Action {
 			filteredUsers := astOp.Users[:0] // new slice without allocation
 			for _, user := range astOp.Users {
 				if !slices.Contains(users, user) {
@@ -1046,7 +1051,8 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 		astOp := resource.Operations[i]
 
 		record := eacl.ConstructRecord(astOp.Action, astOp.Op, []eacl.Target{})
-		if astOp.IsGroupGrantee() {
+		switch astOp.Grantee {
+		case astGranteeRoleOthers:
 			record.SetTargets(eacl.NewTargetByRole(eacl.RoleOthers))
 
 			// Only wide EACL setting works for Allow Search.
@@ -1054,10 +1060,10 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 				wideRecord := eacl.ConstructRecord(astOp.Action, astOp.Op, []eacl.Target{eacl.NewTargetByRole(eacl.RoleOthers)})
 				res = append(res, &wideRecord)
 			}
-		} else {
-			t := eacl.NewTargetByAccounts(astOp.Users)
-
-			record.SetTargets(t)
+		case astGranteeRoleUser:
+			record.SetTargets(eacl.NewTargetByRole(eacl.RoleUser))
+		case astGranteeAccount:
+			record.SetTargets(eacl.NewTargetByAccounts(astOp.Users))
 		}
 
 		var filters []eacl.Filter
@@ -1087,13 +1093,22 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 
 func addToList(operations []*astOperation, rec eacl.Record, target eacl.Target) []*astOperation {
 	var (
-		found       *astOperation
-		groupTarget = target.Role() == eacl.RoleOthers
+		found *astOperation
+		gt    astGrantee
 	)
+
+	switch target.Role() {
+	case eacl.RoleOthers:
+		gt = astGranteeRoleOthers
+	case eacl.RoleUser:
+		gt = astGranteeRoleUser
+	default:
+		gt = astGranteeAccount
+	}
 
 OPLOOP:
 	for _, astOp := range operations {
-		if astOp.Op == rec.Operation() && astOp.Action == rec.Action() && astOp.IsGroupGrantee() == groupTarget {
+		if astOp.Op == rec.Operation() && astOp.Action == rec.Action() && astOp.Grantee == gt {
 			// If record contains marked account, it shouldn't be merged.
 			for _, u := range astOp.Users {
 				if slices.Contains(markerAccounts, u) {
@@ -1108,7 +1123,7 @@ OPLOOP:
 	}
 
 	if found != nil {
-		if !groupTarget {
+		if gt == astGranteeAccount {
 			for _, acc := range target.Accounts() {
 				if !slices.Contains(found.Users, acc) {
 					found.Users = append(found.Users, acc)
@@ -1117,10 +1132,11 @@ OPLOOP:
 		}
 	} else {
 		astOperation := &astOperation{
-			Op:     rec.Operation(),
-			Action: rec.Action(),
+			Op:      rec.Operation(),
+			Action:  rec.Action(),
+			Grantee: gt,
 		}
-		if !groupTarget {
+		if gt == astGranteeAccount {
 			astOperation.Users = append(astOperation.Users, target.Accounts()...)
 		}
 
@@ -1163,9 +1179,9 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			state.Principal.AWS == "" && state.Principal.CanonicalUser == "" {
 			return nil, fmt.Errorf("unsupported principal: %v", state.Principal)
 		}
-		var groupGrantee bool
+		var gt astGrantee
 		if state.Principal.AWS == allUsersWildcard {
-			groupGrantee = true
+			gt = astGranteeRoleOthers
 		}
 		for _, resource := range state.Resource.values {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
@@ -1195,7 +1211,7 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 						}
 					}
 
-					r.Operations = addTo(r.Operations, canonicalUser, op, groupGrantee, toAction)
+					r.Operations = addTo(r.Operations, canonicalUser, op, gt, toAction)
 				}
 			}
 
@@ -1245,16 +1261,18 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 	userOpsMap := make(map[string][]eacl.Operation)
 
 	for _, op := range list {
-		if !op.IsGroupGrantee() {
+		switch op.Grantee {
+		case astGranteeAccount:
 			for _, user := range op.Users {
 				userOps := userOpsMap[user.String()]
 				userOps = append(userOps, op.Op)
 				userOpsMap[user.String()] = userOps
 			}
-		} else {
+		case astGranteeRoleOthers:
 			userOps := userOpsMap[allUsersGroup]
 			userOps = append(userOps, op.Op)
 			userOpsMap[allUsersGroup] = userOps
+		case astGranteeRoleUser:
 		}
 	}
 
@@ -1296,24 +1314,25 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 	return allowed, denied
 }
 
-func addTo(list []*astOperation, userID user.ID, op eacl.Operation, groupGrantee bool, action eacl.Action) []*astOperation {
+func addTo(list []*astOperation, userID user.ID, op eacl.Operation, gt astGrantee, action eacl.Action) []*astOperation {
 	var found *astOperation
 	for _, astop := range list {
-		if astop.Op == op && astop.IsGroupGrantee() == groupGrantee {
+		if astop.Op == op && astop.Grantee == gt {
 			found = astop
 		}
 	}
 
 	if found != nil {
-		if !groupGrantee && !userID.IsZero() {
+		if gt == astGranteeAccount && !userID.IsZero() {
 			found.Users = append(found.Users, userID)
 		}
 	} else {
 		astoperation := &astOperation{
-			Op:     op,
-			Action: action,
+			Op:      op,
+			Action:  action,
+			Grantee: gt,
 		}
-		if !groupGrantee && !userID.IsZero() {
+		if gt == astGranteeAccount && !userID.IsZero() {
 			astoperation.Users = append(astoperation.Users, userID)
 		}
 
@@ -1336,28 +1355,19 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 	if len(acl.AccessControlList) < 2 {
 		for _, op := range ops {
 			operation := &astOperation{
-				Op:     op,
-				Action: eacl.ActionDeny,
+				Op:      op,
+				Action:  eacl.ActionDeny,
+				Grantee: astGranteeRoleOthers,
 			}
 			resource.Operations = append(resource.Operations, operation)
 		}
 	}
 
 	for _, op := range ops {
-		var accounts []user.ID
-
-		if len(acl.Owner.ID) > 0 {
-			account, err := user.DecodeString(acl.Owner.ID)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
-			}
-			accounts = append(accounts, account)
-		}
-
 		operation := &astOperation{
-			Users:  accounts,
-			Op:     op,
-			Action: eacl.ActionAllow,
+			Op:      op,
+			Action:  eacl.ActionAllow,
+			Grantee: astGranteeRoleUser,
 		}
 		resource.Operations = append(resource.Operations, operation)
 	}
@@ -1367,9 +1377,9 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 			return nil, s3errors.GetAPIError(s3errors.ErrNotSupported)
 		}
 
-		var groupGrantee bool
+		var gt astGrantee
 		if grant.Grantee.Type == granteeGroup {
-			groupGrantee = true
+			gt = astGranteeRoleOthers
 		} else if grant.Grantee.ID == acl.Owner.ID {
 			continue
 		}
@@ -1388,7 +1398,7 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 					}
 				}
 
-				resource.Operations = addTo(resource.Operations, id, op, groupGrantee, eacl.ActionAllow)
+				resource.Operations = addTo(resource.Operations, id, op, gt, eacl.ActionAllow)
 			}
 		}
 	}
@@ -1556,10 +1566,13 @@ func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, ob
 				continue
 			}
 
-			if len(op.Users) == 0 {
+			switch op.Grantee {
+			case astGranteeRoleUser:
+				continue
+			case astGranteeRoleOthers:
 				list := append(m[allUsersGroup], op.Op)
 				m[allUsersGroup] = list
-			} else {
+			default:
 				for _, user := range op.Users {
 					list := append(m[user.String()], op.Op)
 					m[user.String()] = list
@@ -1652,12 +1665,16 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		default:
 			return nil, fmt.Errorf("unknown grantee type: %s", grant.Grantee.Type)
 		case granteeCanonicalUser:
-			id, err := user.DecodeString(grant.Grantee.ID)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
-			}
+			if grant.Grantee.ID == acp.Owner.ID {
+				recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithRoleUser(op) }
+			} else {
+				id, err := user.DecodeString(grant.Grantee.ID)
+				if err != nil {
+					return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
+				}
 
-			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
+				recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
+			}
 		case granteeGroup:
 			recordFromOp = func(op eacl.Operation) *eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
 		}
@@ -1669,13 +1686,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 
 	if !found {
 		for _, op := range fullOps {
-			if len(acp.Owner.ID) > 0 {
-				account, err := user.DecodeString(acp.Owner.ID)
-				if err != nil {
-					return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
-				}
-				records = append(records, *getAllowRecordWithUser(op, account))
-			}
+			records = append(records, *getAllowRecordWithRoleUser(op))
 		}
 	}
 
@@ -1696,6 +1707,14 @@ func isValidGrant(grant *Grant) bool {
 func getAllowRecordWithUser(op eacl.Operation, acc user.ID) *eacl.Record {
 	record := eacl.ConstructRecord(eacl.ActionAllow, op,
 		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{acc})},
+	)
+
+	return &record
+}
+
+func getAllowRecordWithRoleUser(op eacl.Operation) *eacl.Record {
+	record := eacl.ConstructRecord(eacl.ActionAllow, op,
+		[]eacl.Target{eacl.NewTargetByRole(eacl.RoleUser)},
 	)
 
 	return &record

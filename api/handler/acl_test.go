@@ -66,8 +66,9 @@ func TestTableToAst(t *testing.T) {
 			{
 				resourceInfo: resourceInfo{Bucket: "bucketName"},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionAllow,
+					Op:      eacl.OperationGet,
+					Action:  eacl.ActionAllow,
+					Grantee: astGranteeRoleOthers,
 				}}},
 			{
 				resourceInfo: resourceInfo{
@@ -127,8 +128,9 @@ func TestPolicyToAst(t *testing.T) {
 					Bucket: "bucketName",
 				},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationPut,
-					Action: eacl.ActionAllow,
+					Op:      eacl.OperationPut,
+					Action:  eacl.ActionAllow,
+					Grantee: astGranteeRoleOthers,
 				}},
 			},
 			{
@@ -136,7 +138,7 @@ func TestPolicyToAst(t *testing.T) {
 					Bucket: "bucketName",
 					Object: "object",
 				},
-				Operations: getReadOps(key, false, eacl.ActionDeny),
+				Operations: getReadOps(key, astGranteeAccount, eacl.ActionDeny),
 			},
 		},
 	}
@@ -153,20 +155,21 @@ func TestPolicyToAst(t *testing.T) {
 	}
 }
 
-func getReadOps(key *keys.PrivateKey, groupGrantee bool, action eacl.Action) []*astOperation {
+func getReadOps(key *keys.PrivateKey, gt astGrantee, action eacl.Action) []*astOperation {
 	var (
 		result []*astOperation
 		users  []user.ID
 	)
-	if !groupGrantee {
+	if gt == astGranteeAccount {
 		users = append(users, user.NewFromScriptHash(key.GetScriptHash()))
 	}
 
 	for _, op := range readOps {
 		result = append(result, &astOperation{
-			Users:  users,
-			Op:     op,
-			Action: action,
+			Users:   users,
+			Op:      op,
+			Action:  action,
+			Grantee: gt,
 		})
 	}
 
@@ -458,8 +461,9 @@ func TestOrder(t *testing.T) {
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationGet,
-						Action: eacl.ActionDeny,
+						Op:      eacl.OperationGet,
+						Action:  eacl.ActionDeny,
+						Grantee: astGranteeRoleOthers,
 					},
 				},
 			},
@@ -475,8 +479,9 @@ func TestOrder(t *testing.T) {
 						Action: eacl.ActionAllow,
 					},
 					{
-						Op:     eacl.OperationPut,
-						Action: eacl.ActionDeny,
+						Op:      eacl.OperationPut,
+						Action:  eacl.ActionDeny,
+						Grantee: astGranteeRoleOthers,
 					},
 				},
 			},
@@ -537,7 +542,7 @@ func TestOrder(t *testing.T) {
 				Bucket: bucketName,
 				Object: childName,
 			},
-			Operations: []*astOperation{{Op: eacl.OperationDelete, Action: eacl.ActionDeny}}}},
+			Operations: []*astOperation{{Op: eacl.OperationDelete, Action: eacl.ActionDeny, Grantee: astGranteeRoleOthers}}}},
 		}
 
 		childRecord := eacl.ConstructRecord(eacl.ActionDeny, eacl.OperationDelete,
@@ -657,8 +662,9 @@ func TestAstToTable(t *testing.T) {
 					Object: "objectName",
 				},
 				Operations: []*astOperation{{
-					Op:     eacl.OperationGet,
-					Action: eacl.ActionDeny,
+					Op:      eacl.OperationGet,
+					Action:  eacl.ActionDeny,
+					Grantee: astGranteeRoleOthers,
 				}},
 			},
 		},
@@ -1174,7 +1180,7 @@ func TestBucketAclToTable(t *testing.T) {
 		records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key2.GetScriptHash())))
 	}
 	for _, op := range fullOps {
-		records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
+		records = append(records, *getAllowRecordWithRoleUser(op))
 	}
 	for _, op := range fullOpsDeny {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
@@ -1226,20 +1232,17 @@ func TestObjectAclToAst(t *testing.T) {
 	}
 
 	var operations []*astOperation
-	for _, op := range readOps {
-		astOp := &astOperation{Users: []user.ID{
-			user.NewFromScriptHash(key.GetScriptHash()),
-			user.NewFromScriptHash(key2.GetScriptHash()),
-		},
-			Op:     op,
-			Action: eacl.ActionAllow,
+	for _, op := range slices.Concat(readOps, writeOps) {
+		astOp := &astOperation{
+			Op:      op,
+			Action:  eacl.ActionAllow,
+			Grantee: astGranteeRoleUser,
 		}
 		operations = append(operations, astOp)
 	}
-
-	for _, op := range writeOps {
+	for _, op := range readOps {
 		astOp := &astOperation{Users: []user.ID{
-			user.NewFromScriptHash(key.GetScriptHash()),
+			user.NewFromScriptHash(key2.GetScriptHash()),
 		},
 			Op:     op,
 			Action: eacl.ActionAllow,
@@ -1296,18 +1299,16 @@ func TestBucketAclToAst(t *testing.T) {
 	}
 
 	var operations []*astOperation
-	for _, op := range readOps {
-		astOp := &astOperation{Users: []user.ID{
-			user.NewFromScriptHash(key.GetScriptHash()),
-		},
-			Op:     op,
-			Action: eacl.ActionAllow,
+	for _, op := range slices.Concat(readOps, writeOps) {
+		astOp := &astOperation{
+			Op:      op,
+			Action:  eacl.ActionAllow,
+			Grantee: astGranteeRoleUser,
 		}
 		operations = append(operations, astOp)
 	}
 	for _, op := range writeOps {
 		astOp := &astOperation{Users: []user.ID{
-			user.NewFromScriptHash(key.GetScriptHash()),
 			user.NewFromScriptHash(key2.GetScriptHash()),
 		},
 			Op:     op,
@@ -1317,8 +1318,9 @@ func TestBucketAclToAst(t *testing.T) {
 	}
 	for _, op := range readOps {
 		astOp := &astOperation{
-			Op:     op,
-			Action: eacl.ActionAllow,
+			Op:      op,
+			Action:  eacl.ActionAllow,
+			Grantee: astGranteeRoleOthers,
 		}
 		operations = append(operations, astOp)
 	}
