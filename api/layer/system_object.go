@@ -244,7 +244,7 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		return fmt.Errorf("store bucket settings: %w", err)
 	}
 
-	n.cache.DeleteBucket(p.BktInfo.Name)
+	n.cache.DeleteBucket(p.BktInfo.Name, p.BktInfo.Namespace)
 
 	return nil
 }

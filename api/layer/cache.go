@@ -60,8 +60,8 @@ func NewCache(cfg *CachesConfig) *Cache {
 	}
 }
 
-func (c *Cache) GetBucket(name string) *data.BucketInfo {
-	return c.bucketCache.Get(name)
+func (c *Cache) GetBucket(name, namespace string) *data.BucketInfo {
+	return c.bucketCache.Get(name, namespace)
 }
 
 func (c *Cache) PutBucket(bktInfo *data.BucketInfo) {
@@ -73,8 +73,8 @@ func (c *Cache) PutBucket(bktInfo *data.BucketInfo) {
 	}
 }
 
-func (c *Cache) DeleteBucket(name string) {
-	c.bucketCache.Delete(name)
+func (c *Cache) DeleteBucket(name, namespace string) {
+	c.bucketCache.Delete(name, namespace)
 }
 
 func (c *Cache) CleanListCacheEntriesContainingObject(objectName string, cnrID cid.ID) {

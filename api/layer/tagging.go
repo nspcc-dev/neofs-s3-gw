@@ -292,7 +292,7 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 		return fmt.Errorf("couldn't store bucket tags: %w", err)
 	}
 
-	n.cache.DeleteBucket(bktInfo.Name)
+	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
 
 	return nil
 }
@@ -308,7 +308,7 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 		return fmt.Errorf("couldn't remove bucket tags: %w", err)
 	}
 
-	n.cache.DeleteBucket(bktInfo.Name)
+	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
 
 	return nil
 }

@@ -38,6 +38,7 @@ type (
 	// BucketInfo stores basic bucket data.
 	BucketInfo struct {
 		Name                   string
+		Namespace              string
 		CID                    cid.ID
 		Owner                  user.ID
 		Created                time.Time

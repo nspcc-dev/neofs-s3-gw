@@ -30,10 +30,10 @@ func NewNNSResolver(readers []*rpcNNS.ContractReader) *NNSResolver {
 }
 
 // ResolveCID looks up the container id by its name via NNS contract.
-func (r *NNSResolver) ResolveCID(_ context.Context, name string) (cid.ID, error) {
+func (r *NNSResolver) ResolveCID(_ context.Context, name, namespace string) (cid.ID, error) {
 	var result cid.ID
 
-	items, err := r.reader().GetRecords(nnsContainerDomain(name), rpcNNS.TXT)
+	items, err := r.reader().GetRecords(nnsContainerDomain(name, namespace), rpcNNS.TXT)
 	if err != nil {
 		return result, fmt.Errorf("nns get: %w", err)
 	}
@@ -68,6 +68,11 @@ func (r *NNSResolver) reader() *rpcNNS.ContractReader {
 	return r.readers[r.index()]
 }
 
-func nnsContainerDomain(name string) string {
-	return fmt.Sprintf("%s.%s", name, defaultZone)
+func nnsContainerDomain(name, namespace string) string {
+	var subdomain string
+	if namespace != "" {
+		subdomain = "." + namespace
+	}
+
+	return fmt.Sprintf("%s%s.%s", name, subdomain, defaultZone)
 }

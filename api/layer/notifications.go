@@ -26,7 +26,7 @@ func (n *layer) PutBucketNotificationConfiguration(ctx context.Context, p *PutBu
 		return fmt.Errorf("store bucket notification settings: %w", err)
 	}
 
-	n.cache.DeleteBucket(p.BktInfo.Name)
+	n.cache.DeleteBucket(p.BktInfo.Name, p.BktInfo.Namespace)
 
 	return nil
 }

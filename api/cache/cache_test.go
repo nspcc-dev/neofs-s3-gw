@@ -35,16 +35,17 @@ func TestBucketsCacheType(t *testing.T) {
 	cache := NewBucketCache(DefaultBucketConfig(logger))
 
 	bktInfo := &data.BucketInfo{Name: "bucket"}
+	var namespace string
 
 	err := cache.Put(bktInfo)
 	require.NoError(t, err)
-	val := cache.Get(bktInfo.Name)
+	val := cache.Get(bktInfo.Name, namespace)
 	require.Equal(t, bktInfo, val)
 	require.Equal(t, 0, observedLog.Len())
 
-	err = cache.cache.Set(bktInfo.Name, "tmp")
+	err = cache.cache.Set(bucketCacheKey(bktInfo.Name, namespace), "tmp")
 	require.NoError(t, err)
-	assertInvalidCacheEntry(t, cache.Get(bktInfo.Name), observedLog)
+	assertInvalidCacheEntry(t, cache.Get(bktInfo.Name, namespace), observedLog)
 }
 
 func TestObjectNamesCacheType(t *testing.T) {

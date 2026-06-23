@@ -71,6 +71,7 @@ var (
 	timeoutFlag              time.Duration
 	slicerEnabledFlag        bool
 	applyFlag                bool
+	namespaceFlag            string
 
 	// pool timeouts flag.
 	poolDialTimeoutFlag        time.Duration
@@ -668,6 +669,12 @@ func resetBucketEACL() *cli.Command {
 				Required:    true,
 				Destination: &containerIDFlag,
 			},
+			&cli.StringFlag{
+				Name:        "namespace",
+				Usage:       "namespace for container name resolution",
+				Required:    false,
+				Destination: &namespaceFlag,
+			},
 			&cli.BoolFlag{
 				Name:        "apply",
 				Usage:       "apply EACL changes to container",
@@ -731,7 +738,7 @@ func resetBucketEACL() *cli.Command {
 				return cli.Exit(fmt.Sprintf("create resolver: %s", err), 5)
 			}
 
-			containerID, err := containerResolver.ResolveCID(ctx, containerIDFlag)
+			containerID, err := containerResolver.ResolveCID(ctx, containerIDFlag, namespaceFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("resolve container: %s", err), 5)
 			}

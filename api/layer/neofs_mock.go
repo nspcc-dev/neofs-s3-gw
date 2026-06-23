@@ -105,8 +105,14 @@ func (t *TestNeoFS) AddObject(key string, obj *object.Object) {
 	t.objectsMutex.Unlock()
 }
 
-func (t *TestNeoFS) ContainerID(name string) (cid.ID, error) {
+func (t *TestNeoFS) ContainerID(name, namespace string) (cid.ID, error) {
 	for id, cnr := range t.containers {
+		if dom := cnr.ReadDomain(); namespace != "" {
+			if dom.Name() == name+"."+namespace {
+				return cid.DecodeString(id)
+			}
+		}
+
 		if cnr.Name() == name {
 			return cid.DecodeString(id)
 		}
@@ -128,8 +134,16 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	cnr.SetCreationTime(creationTime)
 
 	if prm.Name != "" {
-		var d container.Domain
-		d.SetName(prm.Name)
+		var (
+			d    container.Domain
+			name = prm.Name
+		)
+
+		if prm.Namespace != "" {
+			name = prm.Name + "." + prm.Namespace
+		}
+
+		d.SetName(name)
 
 		cnr.WriteDomain(d)
 		cnr.SetName(prm.Name)
