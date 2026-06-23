@@ -1176,7 +1176,7 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
 	}
-	for _, op := range fullOps {
+	for _, op := range fullOpsDeny {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
 
@@ -1462,11 +1462,11 @@ func checkLastRecords(t *testing.T, tc *handlerContext, bktInfo *data.BucketInfo
 
 	length := len(bktACL.EACL.Records())
 
-	if length < 7 {
-		t.Fatalf("length of records is less than 7: '%d'", length)
+	if length < 5 {
+		t.Fatalf("length of records is less than 5: '%d'", length)
 	}
 
-	for _, rec := range bktACL.EACL.Records()[length-7:] {
+	for _, rec := range bktACL.EACL.Records()[length-5:] {
 		if rec.Targets()[0].Role() == eacl.RoleOthers {
 			require.Equal(t, action, rec.Action())
 		} else {
@@ -1556,13 +1556,11 @@ func TestEACLEncode(t *testing.T) {
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationDelete, []eacl.Target{userTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{userTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{userTarget}))
-	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{userTarget}))
 
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{othersTarget}))
-	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
 
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationGet, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationHead, []eacl.Target{othersTarget}))
@@ -1570,7 +1568,6 @@ func TestEACLEncode(t *testing.T) {
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationDelete, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationSearch, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationRange, []eacl.Target{othersTarget}))
-	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationRangeHash, []eacl.Target{othersTarget}))
 
 	acl.EACL.SetRecords(records)
 

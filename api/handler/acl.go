@@ -75,16 +75,16 @@ var (
 		eacl.OperationDelete: {},
 	}
 	readOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead,
-		eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
+		eacl.OperationSearch}
 	readOpsMap = map[eacl.Operation]struct{}{
-		eacl.OperationGet:       {},
-		eacl.OperationHead:      {},
-		eacl.OperationSearch:    {},
-		eacl.OperationRange:     {},
-		eacl.OperationRangeHash: {},
+		eacl.OperationGet:    {},
+		eacl.OperationHead:   {},
+		eacl.OperationSearch: {},
 	}
 	fullOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
-		eacl.OperationDelete, eacl.OperationSearch, eacl.OperationRange, eacl.OperationRangeHash}
+		eacl.OperationDelete, eacl.OperationSearch}
+	fullOpsDeny = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
+		eacl.OperationDelete, eacl.OperationSearch, eacl.OperationRange}
 )
 
 var actionToOpMap = map[string][]eacl.Operation{
@@ -1579,7 +1579,7 @@ func encodeObjectACL(log *zap.Logger, bucketACL *layer.BucketACL, bucketName, ob
 
 		for _, op := range val {
 			// valid operation.
-			if op < eacl.OperationGet || op > eacl.OperationRangeHash {
+			if op < eacl.OperationGet || op > eacl.OperationRange {
 				log.Warn("invalid eACL op", zap.Int("op", int(op)), zap.String("CID", bucketACL.Info.CID.String()))
 				continue
 			}
@@ -1679,7 +1679,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		}
 	}
 
-	for _, op := range fullOps {
+	for _, op := range fullOpsDeny {
 		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 	}
 
