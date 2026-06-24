@@ -1183,7 +1183,9 @@ func TestBucketAclToTable(t *testing.T) {
 		records = append(records, *getAllowRecordWithRoleUser(op))
 	}
 	for _, op := range fullOpsDeny {
-		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
+		if _, ok := readOpsMap[op]; !ok {
+			records = append(records, *getOthersRecord(op, eacl.ActionDeny))
+		}
 	}
 
 	actualTable, err := bucketACLToTable(acl)
@@ -1346,7 +1348,7 @@ func TestPutBucketACL(t *testing.T) {
 	bktName := "bucket-for-acl"
 
 	box, _ := createAccessBox(t)
-	bktInfo := createBucket(t, tc, bktName, box)
+	bktInfo := createBucket(t, tc, bktName, box, nil)
 
 	header := map[string]string{api.AmzACL: "public-read"}
 	// ACLs disabled.
@@ -1361,12 +1363,88 @@ func TestPutBucketACL(t *testing.T) {
 	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny, ownerObjectWriterUserID)
 }
 
+func TestPutBucketACLGrantWrite(t *testing.T) {
+	tc := prepareHandlerContext(t)
+	bktName := "bucket-for-acl-grant"
+
+	box, _ := createAccessBox(t)
+	bktInfo := createBucket(t, tc, bktName, box, map[string]string{api.AmzACL: "public-read"})
+
+	putBucketOwnership(tc, bktName, box, amzBucketOwnerObjectWriter, http.StatusOK)
+
+	grantee, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+	granteeID := user.NewFromScriptHash(grantee.GetScriptHash())
+
+	acl := &AccessControlPolicy{
+		Owner: Owner{
+			ID:          bktInfo.Owner.String(),
+			DisplayName: bktInfo.Owner.String(),
+		},
+		AccessControlList: []*Grant{
+			{
+				Grantee: &Grantee{
+					ID:   bktInfo.Owner.String(),
+					Type: granteeCanonicalUser,
+				},
+				Permission: awsPermFullControl,
+			},
+			{
+				Grantee: &Grantee{
+					ID:   granteeID.String(),
+					Type: granteeCanonicalUser,
+				},
+				Permission: awsPermWrite,
+			},
+		},
+	}
+
+	w, r := prepareTestRequest(tc, bktName, "", acl)
+	ctx := context.WithValue(r.Context(), api.BoxData, box)
+	r = r.WithContext(ctx)
+	tc.Handler().PutBucketACLHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	bktACL, err := tc.Layer().GetBucketACL(tc.Context(), bktInfo)
+	require.NoError(t, err)
+
+	records := bktACL.EACL.Records()
+
+	type recordKey struct {
+		action eacl.Action
+		op     eacl.Operation
+		role   eacl.Role
+	}
+
+	seen := make(map[recordKey]struct{})
+	for _, rec := range records {
+		for _, target := range rec.Targets() {
+			seen[recordKey{rec.Action(), rec.Operation(), target.Role()}] = struct{}{}
+		}
+	}
+
+	for key := range seen {
+		if key.role == eacl.RoleOthers || key.role == eacl.RoleUser {
+			var opposite eacl.Action
+			if key.action == eacl.ActionAllow {
+				opposite = eacl.ActionDeny
+			} else {
+				opposite = eacl.ActionAllow
+			}
+			_, conflict := seen[recordKey{opposite, key.op, key.role}]
+			require.False(t, conflict,
+				"contradictory records: %s %s for role %s has both ALLOW and DENY",
+				key.action, key.op, key.role)
+		}
+	}
+}
+
 func TestBucketPolicy(t *testing.T) {
 	hc := prepareHandlerContext(t)
 	bktName := "bucket-for-policy"
 
 	box, key := createAccessBox(t)
-	createBucket(t, hc, bktName, box)
+	createBucket(t, hc, bktName, box, nil)
 
 	bktPolicy := getBucketPolicy(hc, bktName)
 	for _, st := range bktPolicy.Statement {
@@ -1493,10 +1571,14 @@ func createAccessBox(t *testing.T) (*accessbox.Box, *keys.PrivateKey) {
 	return box, key
 }
 
-func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box) *data.BucketInfo {
+func createBucket(t *testing.T, tc *handlerContext, bktName string, box *accessbox.Box, headers map[string]string) *data.BucketInfo {
 	w, r := prepareTestRequest(tc, bktName, "", nil)
 	ctx := context.WithValue(r.Context(), api.BoxData, box)
 	r = r.WithContext(ctx)
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
+
 	tc.Handler().CreateBucketHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 

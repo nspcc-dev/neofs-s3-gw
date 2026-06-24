@@ -1650,6 +1650,7 @@ func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL)
 func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	var found bool
 	var records []eacl.Record
+	var allowedOpsForOthers = make(map[eacl.Operation]struct{})
 
 	for _, grant := range acp.AccessControlList {
 		if !isValidGrant(grant) {
@@ -1676,7 +1677,10 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 				recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
 			}
 		case granteeGroup:
-			recordFromOp = func(op eacl.Operation) *eacl.Record { return getOthersRecord(op, eacl.ActionAllow) }
+			recordFromOp = func(op eacl.Operation) *eacl.Record {
+				allowedOpsForOthers[op] = struct{}{}
+				return getOthersRecord(op, eacl.ActionAllow)
+			}
 		}
 
 		for _, op := range permissionToOperations(grant.Permission) {
@@ -1691,7 +1695,9 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 	}
 
 	for _, op := range fullOpsDeny {
-		records = append(records, *getOthersRecord(op, eacl.ActionDeny))
+		if _, ok := allowedOpsForOthers[op]; !ok {
+			records = append(records, *getOthersRecord(op, eacl.ActionDeny))
+		}
 	}
 
 	table := eacl.ConstructTable(records)
