@@ -412,7 +412,6 @@ func buildSessionTokensV2(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs [
 			session2.VerbObjectSearch,
 			session2.VerbObjectDelete,
 			session2.VerbObjectRange,
-			session2.VerbObjectRangeHash,
 		}
 	)
 
