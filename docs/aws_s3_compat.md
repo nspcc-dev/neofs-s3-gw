@@ -30,9 +30,12 @@ Reference:
 
 * DeleteObjects limited by max amount of objects which can be deleted per request. See `max_object_to_delete_per_request` parameter.
 * For calculating object ETag, we use SHA256 hash instead of MD5. 
-* PutObject into a container with public-write permissions as an anonymous user (for instance, with CLI option --no-sign-request) is impossible, if try to set custom ACL for the object. It happens because container ACL rules may be changed only by container owner.
-      
+
 ## ACL
+
+Object-level ACLs are not supported. `GetObjectAcl` always returns "private" (owner `FULL_CONTROL`).
+`PutObjectAcl` accepts only `private` canned ACL as a no-op; any other value is rejected with `AccessControlListNotSupported`.
+ACL headers on object upload requests (`PutObject`, `PostObject`, `CopyObject`, `CreateMultipartUpload`) are silently accepted as no-ops.
 
 There are some limitations:
 * [Bucket policy](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html) supports only one `Principal` per `Statement`. 
@@ -102,21 +105,11 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
 * AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
 * Only `CanonicalUser` (with hex encoded public key) and `All Users Group` are supported in [ACL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html).
 `Authenticated Users group` is not supported. It is a part of `All Users Group` and can't be separated from it.
-* It is not possible to remove GRANTS from container owner. Using PutObjectAcl with empty grants has no effect to GRANTS for container owner, despite method completes without error.
-```json
-{
-    "Owner": {"DisplayName": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q","ID": "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"},
-    "Grants": []
-}
-```
-Given that ACLs are disabled by default now and users are expected to use
-alternative mechanisms to manage access improving ACL support is not
-a priority.
 
-|    | Method       | Comments        |
-|----|--------------|-----------------|
-| 🟡 | GetObjectAcl | See Limitations |
-| 🟡 | PutObjectAcl | See Limitations |
+|    | Method       | Comments                                                        |
+|----|--------------|-----------------------------------------------------------------|
+| 🟡 | GetObjectAcl | Always returns "private" (owner FULL_CONTROL)                   |
+| 🟡 | PutObjectAcl | Only `private` canned ACL accepted; others are rejected         |
 
 ## Locking
 
@@ -196,10 +189,10 @@ In some cases `ListObjectVersions` may return fewer elements than `max-keys` req
 
 ## ACL
 
-|    | Method       | Comments            |
-|----|--------------|---------------------|
-| 🟡 | GetBucketAcl | See ACL limitations |
-| 🟡 | PutBucketAcl | See ACL Limitations |
+|    | Method       | Comments                                                        |
+|----|--------------|-----------------------------------------------------------------|
+| 🟡 | GetBucketAcl | See ACL limitations                                             |
+| 🟡 | PutBucketAcl | See ACL limitations                                             |
 
 Bucket ACLs are disabled, by default. See details [here](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html).
 See [Ownership](./aws_s3_compat.md#ownership-controls) section for details.
@@ -313,7 +306,8 @@ Switch to `ObjectWriter` mode with the next command:
 $ aws s3api put-bucket-ownership-controls --endpoint $S3HOST --bucket $BUCKET --ownership-controls "Rules=[{ObjectOwnership=ObjectWriter}]"
 ```
 
-Note: `ObjectWriter` mode means fully enabled ACL.
+Note: `ObjectWriter` mode allows passing ACL headers, but they are silently
+accepted as no-ops. Object-level ACLs are not enforced.
 Pay attention to the fact that object owner in NeoFS is bucket owner in any case.
 
 ## Policy and replication

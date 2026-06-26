@@ -35,7 +35,6 @@ import (
 
 const (
 	metaPrefix = "meta-"
-	aclPrefix  = "acl-"
 
 	MaxSizeUploadsList  = 1000
 	MaxSizePartsList    = 1000
@@ -60,8 +59,7 @@ type (
 	}
 
 	UploadData struct {
-		TagSet     map[string]string
-		ACLHeaders map[string]string
+		TagSet map[string]string
 	}
 
 	UploadPartParams struct {
@@ -152,7 +150,6 @@ type (
 func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartParams) (string, error) {
 	metaSize := len(p.Header)
 	if p.Data != nil {
-		metaSize += len(p.Data.ACLHeaders)
 		metaSize += len(p.Data.TagSet)
 	}
 
@@ -168,10 +165,6 @@ func (n *layer) CreateMultipartUpload(ctx context.Context, p *CreateMultipartPar
 	}
 
 	if p.Data != nil {
-		for key, val := range p.Data.ACLHeaders {
-			info.Meta[aclPrefix+key] = val
-		}
-
 		for key, val := range p.Data.TagSet {
 			info.Meta[tagPrefix+key] = val
 		}
@@ -1325,16 +1318,13 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	initMetadata := make(map[string]string, len(multipartInfo.Meta))
 
 	uploadData := &UploadData{
-		TagSet:     make(map[string]string),
-		ACLHeaders: make(map[string]string),
+		TagSet: make(map[string]string),
 	}
 	for key, val := range multipartInfo.Meta {
 		if after, ok := strings.CutPrefix(key, metaPrefix); ok {
 			initMetadata[after] = val
 		} else if after, ok := strings.CutPrefix(key, tagPrefix); ok {
 			uploadData.TagSet[after] = val
-		} else if after, ok := strings.CutPrefix(key, aclPrefix); ok {
-			uploadData.ACLHeaders[after] = val
 		}
 	}
 

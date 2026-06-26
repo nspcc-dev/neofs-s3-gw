@@ -26,8 +26,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/models"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
-	"github.com/nspcc-dev/neofs-sdk-go/eacl"
-	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -184,19 +182,9 @@ type createBucketParams struct {
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err                error
-		newEaclTable       *eacl.Table
-		sessionTokenEACLV2 *session.Token
-		containsACL        = containsACLHeaders(r)
-		reqInfo            = api.GetReqInfo(r.Context())
+		err     error
+		reqInfo = api.GetReqInfo(r.Context())
 	)
-
-	if containsACL {
-		if sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
-			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
-			return
-		}
-	}
 
 	tagSet, err := parseTaggingHeader(r.Header)
 	if err != nil {
@@ -210,7 +198,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACL {
+	if containsACLHeaders(r) {
 		if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
@@ -298,27 +286,6 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
 	}
 
-	// The bucket policy could change ACL headers. Check actual state.
-	if containsACLHeaders(r) {
-		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
-			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
-			return
-		}
-	}
-
-	if newEaclTable != nil {
-		p := &layer.PutBucketACLParams{
-			BktInfo:        bktInfo,
-			EACL:           newEaclTable,
-			SessionTokenV2: sessionTokenEACLV2,
-		}
-
-		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
-			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
-			return
-		}
-	}
-
 	if bktInfo.Settings.VersioningEnabled() {
 		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
 	}
@@ -376,12 +343,9 @@ func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 
 func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	var (
-		newEaclTable            *eacl.Table
-		tagSet                  map[string]string
-		sessionTokenEACLTokenV2 *session.Token
-		reqInfo                 = api.GetReqInfo(r.Context())
-		metadata                = make(map[string]string)
-		containsACL             = containsACLHeaders(r)
+		tagSet   map[string]string
+		reqInfo  = api.GetReqInfo(r.Context())
+		metadata = make(map[string]string)
 	)
 
 	policy, err := checkPostPolicy(r, reqInfo, metadata)
@@ -395,13 +359,6 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		tagSet, err = readTagSet(buffer)
 		if err != nil {
 			h.logAndSendError(w, "could not read tag set", reqInfo, err)
-			return
-		}
-	}
-
-	if containsACL {
-		if sessionTokenEACLTokenV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
-			h.logAndSendError(w, "could not get eacl session token from a box", reqInfo, err)
 			return
 		}
 	}
@@ -432,7 +389,7 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if containsACL {
+	if containsACLHeaders(r) {
 		if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
@@ -474,36 +431,6 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = h.sendNotifications(r.Context(), s); err != nil {
 		h.log.Error("couldn't send notification: %w", zap.Error(err))
-	}
-
-	if acl := auth.MultipartFormValue(r, "acl"); acl != "" {
-		if api.IsAnonymousRequest(r.Context()) {
-			h.logAndSendError(w, "anonymous can't override ACL rules", reqInfo, s3errors.GetAPIError(s3errors.ErrNotImplemented))
-			return
-		}
-
-		r.Header.Set(api.AmzACL, acl)
-		r.Header.Set(api.AmzGrantFullControl, "")
-		r.Header.Set(api.AmzGrantWrite, "")
-		r.Header.Set(api.AmzGrantRead, "")
-
-		if newEaclTable, err = h.getNewEAclTable(r, bktInfo, objInfo); err != nil {
-			h.logAndSendError(w, "could not get new eacl table", reqInfo, err)
-			return
-		}
-	}
-
-	if newEaclTable != nil {
-		p := &layer.PutBucketACLParams{
-			BktInfo:        bktInfo,
-			EACL:           newEaclTable,
-			SessionTokenV2: sessionTokenEACLTokenV2,
-		}
-
-		if err = h.obj.PutBucketACL(r.Context(), p); err != nil {
-			h.logAndSendError(w, "could not put bucket acl", reqInfo, err)
-			return
-		}
 	}
 
 	if bktInfo.Settings.VersioningEnabled() {
@@ -591,57 +518,6 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 func containsACLHeaders(r *http.Request) bool {
 	return r.Header.Get(api.AmzACL) != "" || r.Header.Get(api.AmzGrantRead) != "" ||
 		r.Header.Get(api.AmzGrantFullControl) != "" || r.Header.Get(api.AmzGrantWrite) != ""
-}
-
-func (h *handler) getNewEAclTable(r *http.Request, bktInfo *data.BucketInfo, objInfo *data.ObjectInfo) (*eacl.Table, error) {
-	var newEaclTable *eacl.Table
-
-	iss, err := h.authTokenIssuer(r.Context())
-	if err != nil {
-		return nil, fmt.Errorf("get bearer token issuer: %w", err)
-	}
-	objectACL, err := parseACLHeaders(r.Header, iss)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse object acl: %w", err)
-	}
-
-	resInfo := &resourceInfo{
-		Bucket:  objInfo.Bucket,
-		Object:  objInfo.Name,
-		Version: objInfo.VersionID(),
-	}
-
-	bktPolicy, err := aclToPolicy(objectACL, resInfo)
-	if err != nil {
-		return nil, fmt.Errorf("could not translate object acl to bucket policy: %w", err)
-	}
-
-	astChild, err := policyToAst(bktPolicy)
-	if err != nil {
-		return nil, fmt.Errorf("could not translate policy to ast: %w", err)
-	}
-
-	bacl, err := h.obj.GetBucketACL(r.Context(), bktInfo)
-	if err != nil {
-		return nil, fmt.Errorf("could not get bucket eacl: %w", err)
-	}
-
-	parentAst := tableToAst(bacl.EACL, objInfo.Bucket)
-	strCID := bacl.Info.CID.EncodeToString()
-
-	for _, resource := range parentAst.Resources {
-		if resource.Bucket == strCID {
-			resource.Bucket = objInfo.Bucket
-		}
-	}
-
-	if resAst, updated := mergeAst(parentAst, astChild); updated {
-		if newEaclTable, err = astToTable(resAst); err != nil {
-			return nil, fmt.Errorf("could not translate ast to table: %w", err)
-		}
-	}
-
-	return newEaclTable, nil
 }
 
 func parseTaggingHeader(header http.Header) (map[string]string, error) {

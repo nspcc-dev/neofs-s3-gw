@@ -11,7 +11,6 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
 )
 
@@ -120,17 +119,6 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 			}
 			r.Header.Set(api.AmzACL, "")
 		}
-
-		iss, err := h.authTokenIssuer(r.Context())
-		if err != nil {
-			h.logAndSendError(w, "couldn't get token issuer", reqInfo, err)
-			return
-		}
-		if _, err = parseACLHeaders(r.Header, iss); err != nil {
-			h.logAndSendError(w, "could not parse acl", reqInfo, err)
-			return
-		}
-		p.Data.ACLHeaders = formACLHeadersForMultipart(r.Header)
 	}
 
 	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
@@ -181,25 +169,6 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		h.logAndSendError(w, "could not encode InitiateMultipartUploadResponse to response", reqInfo, err, additional...)
 		return
 	}
-}
-
-func formACLHeadersForMultipart(header http.Header) map[string]string {
-	result := make(map[string]string)
-
-	if value := header.Get(api.AmzACL); value != "" {
-		result[api.AmzACL] = value
-	}
-	if value := header.Get(api.AmzGrantRead); value != "" {
-		result[api.AmzGrantRead] = value
-	}
-	if value := header.Get(api.AmzGrantFullControl); value != "" {
-		result[api.AmzGrantFullControl] = value
-	}
-	if value := header.Get(api.AmzGrantWrite); value != "" {
-		result[api.AmzGrantWrite] = value
-	}
-
-	return result
 }
 
 func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
@@ -386,8 +355,6 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 	}
 
 	var (
-		sessionTokenEACLV2 *session.Token
-
 		uploadID   = r.URL.Query().Get(uploadIDHeaderName)
 		uploadInfo = &layer.UploadInfoParams{
 			UploadID: uploadID,
@@ -431,39 +398,6 @@ func (h *handler) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.
 		}
 		if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 			h.logAndSendError(w, "could not put tagging file of completed multipart upload", reqInfo, err, additional...)
-			return
-		}
-	}
-
-	if len(uploadData.ACLHeaders) != 0 {
-		iss, err := h.authTokenIssuer(r.Context())
-		if err != nil {
-			h.logAndSendError(w, "couldn't get gate key", reqInfo, err)
-			return
-		}
-		acl, err := parseACLHeaders(r.Header, iss)
-		if err != nil {
-			h.logAndSendError(w, "could not parse acl", reqInfo, err)
-			return
-		}
-
-		resInfo := &resourceInfo{
-			Bucket: objInfo.Bucket,
-			Object: objInfo.Name,
-		}
-		astObject, err := aclToAst(acl, resInfo)
-		if err != nil {
-			h.logAndSendError(w, "could not translate acl of completed multipart upload to ast", reqInfo, err, additional...)
-			return
-		}
-
-		if sessionTokenEACLV2, err = getSessionTokenSetEACL(r.Context()); err != nil {
-			h.logAndSendError(w, "couldn't get eacl token", reqInfo, err)
-			return
-		}
-
-		if _, err = h.updateBucketACL(r, astObject, bktInfo, sessionTokenEACLV2); err != nil {
-			h.logAndSendError(w, "could not update bucket acl while completing multipart upload", reqInfo, err, additional...)
 			return
 		}
 	}
