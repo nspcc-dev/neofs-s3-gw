@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -88,6 +89,53 @@ func TestCustomJSONMarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expectedPolicy, policy)
+}
+
+func TestCreateBucketWithNamespace(t *testing.T) {
+	type (
+		data struct {
+			name       string
+			namespace  string
+			bktName    string
+			wantDomain string
+		}
+	)
+
+	for _, tc := range []data{
+		{
+			name:       "without namespace",
+			bktName:    "bucket-no-ns",
+			wantDomain: "bucket-no-ns",
+		},
+		{
+			name:       "with namespace",
+			namespace:  "customns",
+			bktName:    "bucket-with-ns",
+			wantDomain: "bucket-with-ns.customns",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hc := prepareHandlerContext(t)
+
+			box := newTestAccessBox(t, nil)
+			box.Namespace = tc.namespace
+
+			w, r := prepareTestRequest(hc, tc.bktName, "", nil)
+			r = r.WithContext(context.WithValue(r.Context(), api.BoxData, box))
+			hc.Handler().CreateBucketHandler(w, r)
+			assertStatus(t, w, http.StatusOK)
+
+			cnrID, err := hc.MockedPool().ContainerID(tc.bktName, tc.namespace)
+			require.NoError(t, err)
+
+			cnr, err := hc.MockedPool().Container(hc.Context(), cnrID)
+			require.NoError(t, err)
+			require.Equal(t, tc.bktName, cnr.Name())
+
+			domain := cnr.ReadDomain()
+			require.Equal(t, tc.wantDomain, domain.Name())
+		})
+	}
 }
 
 func TestEmptyPostPolicy(t *testing.T) {

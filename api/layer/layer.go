@@ -101,7 +101,7 @@ type (
 
 	// Resolver allows to map container ID by container name.
 	Resolver interface {
-		ResolveCID(ctx context.Context, containerName string) (cid.ID, error)
+		ResolveCID(ctx context.Context, containerName, namespace string) (cid.ID, error)
 	}
 
 	// RangeParams stores range header request parameters.
@@ -383,6 +383,20 @@ func (n *layer) Owner(ctx context.Context) user.ID {
 	return n.anonymous
 }
 
+// Owner returns the owner ID (from session token v2) and the owner's namespace.
+func (n *layer) OwnerAndNamespace(ctx context.Context) (user.ID, string) {
+	bd, ok := ctx.Value(api.BoxData).(*accessbox.Box)
+	if !ok || bd == nil || bd.Gate == nil {
+		return n.anonymous, ""
+	}
+
+	if bd.Gate.SessionTokenV2 != nil {
+		return bd.Gate.SessionTokenV2.OriginalIssuer(), bd.Namespace
+	}
+
+	return n.anonymous, ""
+}
+
 func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwner user.ID) {
 	bd, ok := ctx.Value(api.BoxData).(*accessbox.Box)
 	if !ok || bd == nil || bd.Gate == nil {
@@ -412,17 +426,19 @@ func (n *layer) GetBucketInfo(ctx context.Context, name string) (*data.BucketInf
 		return nil, fmt.Errorf("unescape bucket name: %w", err)
 	}
 
-	if bktInfo := n.cache.GetBucket(name); bktInfo != nil {
+	_, namespace := n.OwnerAndNamespace(ctx)
+
+	if bktInfo := n.cache.GetBucket(name, namespace); bktInfo != nil {
 		return bktInfo, nil
 	}
 
-	containerID, err := n.ResolveBucket(ctx, name)
+	containerID, err := n.ResolveBucket(ctx, name, namespace)
 	if err != nil {
 		n.log.Debug("bucket not found", zap.Error(err))
 		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchBucket)
 	}
 
-	return n.containerInfo(ctx, containerID)
+	return n.containerInfo(ctx, containerID, namespace)
 }
 
 // GetBucketACL returns bucket acl info by name.
@@ -988,10 +1004,10 @@ func (n *layer) CreateBucket(ctx context.Context, p *CreateBucketParams) (*data.
 	return nil, s3errors.GetAPIError(s3errors.ErrBucketAlreadyExists)
 }
 
-func (n *layer) ResolveBucket(ctx context.Context, name string) (cid.ID, error) {
+func (n *layer) ResolveBucket(ctx context.Context, name, namespace string) (cid.ID, error) {
 	cnrID, err := cid.DecodeString(name)
 	if err != nil {
-		if cnrID, err = n.resolver.ResolveCID(ctx, name); err != nil {
+		if cnrID, err = n.resolver.ResolveCID(ctx, name, namespace); err != nil {
 			return cid.ID{}, err
 		}
 
@@ -1024,7 +1040,7 @@ func (n *layer) DeleteBucket(ctx context.Context, p *DeleteBucketParams) error {
 		return s3errors.GetAPIError(s3errors.ErrBucketNotEmpty)
 	}
 
-	n.cache.DeleteBucket(p.BktInfo.Name)
+	n.cache.DeleteBucket(p.BktInfo.Name, p.BktInfo.Namespace)
 	return n.neoFS.DeleteContainer(ctx, p.BktInfo.CID, p.SessionTokenV2)
 }
 

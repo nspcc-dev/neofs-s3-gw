@@ -68,7 +68,7 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		return fmt.Errorf("store bucket CORS: %w", err)
 	}
 
-	n.cache.DeleteBucket(p.BktInfo.Name)
+	n.cache.DeleteBucket(p.BktInfo.Name, p.BktInfo.Namespace)
 
 	return nil
 }
@@ -92,7 +92,7 @@ func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 		return fmt.Errorf("remove bucket CORS: %w", err)
 	}
 
-	n.cache.DeleteBucket(bktInfo.Name)
+	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
 
 	return nil
 }

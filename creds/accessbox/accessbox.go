@@ -22,8 +22,9 @@ const (
 
 // Box represents friendly AccessBox.
 type Box struct {
-	Gate     *GateData
-	Policies []*ContainerPolicy
+	Gate      *GateData
+	Policies  []*ContainerPolicy
+	Namespace string
 }
 
 // ContainerPolicy represents friendly AccessBox_ContainerPolicy.

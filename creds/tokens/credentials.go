@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -59,13 +60,16 @@ type NeoFS interface {
 	// prevented the object from being created.
 	CreateObject(context.Context, PrmObjectCreate) (oid.ID, error)
 
-	// ReadObjectPayload reads payload of the object from NeoFS network by address
+	// ReadObject reads payload and header of the object from NeoFS network by address
 	// into memory.
 	//
-	// It returns exactly one non-nil value. It returns any error encountered which
-	// prevented the object payload from being read.
-	ReadObjectPayload(context.Context, oid.Address) ([]byte, error)
+	// It returns any error encountered which prevented the object payload from being read.
+	ReadObject(context.Context, oid.Address) ([]byte, *object.Object, error)
 }
+
+const (
+	attributeNamespace = "namespace"
+)
 
 var (
 	// ErrEmptyPublicKeys is returned when no HCS keys are provided.
@@ -87,7 +91,7 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 		return cachedBox, nil
 	}
 
-	box, err := c.getAccessBox(ctx, addr)
+	box, namespace, err := c.getAccessBox(ctx, addr)
 	if err != nil {
 		return nil, fmt.Errorf("get access box: %w", err)
 	}
@@ -97,6 +101,8 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 		return nil, fmt.Errorf("get box: %w", err)
 	}
 
+	cachedBox.Namespace = namespace
+
 	if err = c.cache.Put(addr, cachedBox); err != nil {
 		return nil, fmt.Errorf("put box into cache: %w", err)
 	}
@@ -104,19 +110,27 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 	return cachedBox, nil
 }
 
-func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.AccessBox, error) {
-	data, err := c.neoFS.ReadObjectPayload(ctx, addr)
+func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.AccessBox, string, error) {
+	data, head, err := c.neoFS.ReadObject(ctx, addr)
 	if err != nil {
-		return nil, fmt.Errorf("read payload: %w", err)
+		return nil, "", fmt.Errorf("read payload: %w", err)
 	}
 
 	// decode access box
 	var box accessbox.AccessBox
 	if err = box.Unmarshal(data); err != nil {
-		return nil, fmt.Errorf("unmarhal access box: %w", err)
+		return nil, "", fmt.Errorf("unmarhal access box: %w", err)
 	}
 
-	return &box, nil
+	var namespace string
+	for _, attribute := range head.Attributes() {
+		if attribute.Key() == attributeNamespace {
+			namespace = attribute.Value()
+			break
+		}
+	}
+
+	return &box, namespace, nil
 }
 
 func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (oid.Address, error) {

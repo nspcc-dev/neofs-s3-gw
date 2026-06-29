@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
@@ -30,7 +31,7 @@ const (
 	AttributeLockEnabled        = "LockEnabled"
 )
 
-func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketInfo, error) {
+func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID, namespace string) (*data.BucketInfo, error) {
 	var (
 		err error
 		res *container.Container
@@ -56,7 +57,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID) (*data.BucketIn
 
 	info.Owner = cnr.Owner()
 	if domain := cnr.ReadDomain(); domain.Name() != "" {
-		info.Name = domain.Name()
+		info.Name, _ = strings.CutSuffix(domain.Name(), "."+namespace)
 	}
 	info.Created = cnr.CreatedAt()
 	info.LocationConstraint = cnr.Attribute(attributeLocationConstraint)
@@ -101,9 +102,11 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 		return nil, err
 	}
 
+	_, namespace := n.OwnerAndNamespace(ctx)
+
 	list := make([]*data.BucketInfo, 0, len(res))
 	for i := range res {
-		info, err := n.containerInfo(ctx, res[i])
+		info, err := n.containerInfo(ctx, res[i], namespace)
 		if err != nil {
 			n.log.Error("could not fetch container info",
 				zap.String("request_id", rid),
@@ -118,13 +121,14 @@ func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
 }
 
 func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*data.BucketInfo, error) {
-	ownerID := n.Owner(ctx)
+	ownerID, namespace := n.OwnerAndNamespace(ctx)
 	if p.LocationConstraint == "" {
 		p.LocationConstraint = api.DefaultLocationConstraint // s3tests_boto3.functional.test_s3:test_bucket_get_location
 	}
 
 	bktInfo := &data.BucketInfo{
 		Name:               p.Name,
+		Namespace:          namespace,
 		Owner:              ownerID,
 		Created:            TimeNow(ctx),
 		LocationConstraint: p.LocationConstraint,
@@ -152,6 +156,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		SessionTokenV2:       p.SessionTokenV2,
 		CreationTime:         bktInfo.Created,
 		AdditionalAttributes: attributes,
+		Namespace:            namespace,
 	}, *p.EACL, p.SessionTokenV2)
 	if err != nil {
 		return nil, fmt.Errorf("create container: %w", err)

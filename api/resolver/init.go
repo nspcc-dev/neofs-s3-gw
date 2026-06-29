@@ -22,11 +22,11 @@ type Container struct {
 
 // ResolveCID looks up the container id by its name via NNS contract.
 // The method calls inline resolver.
-func (r *Container) ResolveCID(ctx context.Context, name string) (cid.ID, error) {
+func (r *Container) ResolveCID(ctx context.Context, name, namespace string) (cid.ID, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	return r.resolver.ResolveCID(ctx, name)
+	return r.resolver.ResolveCID(ctx, name, namespace)
 }
 
 // UpdateResolvers allows to update resolver in runtime. Resolvers will be created from scratch.

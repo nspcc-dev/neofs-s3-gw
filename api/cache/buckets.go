@@ -38,8 +38,8 @@ func NewBucketCache(config *Config) *BucketCache {
 }
 
 // Get returns a cached object.
-func (o *BucketCache) Get(key string) *data.BucketInfo {
-	entry, err := o.cache.Get(key)
+func (o *BucketCache) Get(key, namespace string) *data.BucketInfo {
+	entry, err := o.cache.Get(bucketCacheKey(key, namespace))
 	if err != nil {
 		return nil
 	}
@@ -56,10 +56,14 @@ func (o *BucketCache) Get(key string) *data.BucketInfo {
 
 // Put puts an object to cache.
 func (o *BucketCache) Put(bkt *data.BucketInfo) error {
-	return o.cache.Set(bkt.Name, bkt)
+	return o.cache.Set(bucketCacheKey(bkt.Name, bkt.Namespace), bkt)
 }
 
 // Delete deletes an object from cache.
-func (o *BucketCache) Delete(key string) bool {
-	return o.cache.Remove(key)
+func (o *BucketCache) Delete(key, namespace string) bool {
+	return o.cache.Remove(bucketCacheKey(key, namespace))
+}
+
+func bucketCacheKey(name, namespace string) string {
+	return name + "." + namespace
 }

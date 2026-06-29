@@ -163,8 +163,16 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	cnr.SetCreationTime(creationTime)
 
 	if prm.Name != "" {
-		var d container.Domain
-		d.SetName(prm.Name)
+		var (
+			d    container.Domain
+			name = prm.Name
+		)
+
+		if prm.Namespace != "" {
+			name = prm.Name + "." + prm.Namespace
+		}
+
+		d.SetName(name)
 
 		cnr.WriteDomain(d)
 		cnr.SetName(prm.Name)
@@ -657,20 +665,22 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 	})
 }
 
-// ReadObjectPayload implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) ReadObjectPayload(ctx context.Context, addr oid.Address) ([]byte, error) {
+// ReadObject implements authmate.NeoFS interface method.
+func (x *AuthmateNeoFS) ReadObject(ctx context.Context, addr oid.Address) ([]byte, *object.Object, error) {
 	res, err := x.neoFS.ReadObject(ctx, layer.PrmObjectRead{
 		Container:   addr.Container(),
 		Object:      addr.Object(),
 		WithPayload: true,
+		WithHeader:  true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer res.Payload.Close()
+	pl, err := io.ReadAll(res.Payload)
 
-	return io.ReadAll(res.Payload)
+	return pl, res.Head, err
 }
 
 // CreateObject implements authmate.NeoFS interface method.

@@ -46,6 +46,9 @@ type PrmContainerCreate struct {
 
 	// Executor allows to set-up custom executor to the operation.
 	Executor ContainerPutExecutor
+
+	// Namespace for bucket.
+	Namespace string
 }
 
 // ContainerPutExecutor puts container.
