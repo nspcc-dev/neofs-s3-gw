@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -128,7 +129,7 @@ func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {
 	_, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
 		Creator: hc.owner,
 		Name:    bktName,
-	})
+	}, eacl.Table{})
 	require.NoError(hc.t, err)
 
 	bktInfo, err := hc.Layer().GetBucketInfo(hc.Context(), bktName)
@@ -155,7 +156,7 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 		Creator:              hc.owner,
 		Name:                 bktName,
 		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
-	})
+	}, eacl.Table{})
 	require.NoError(hc.t, err)
 
 	var ownerID user.ID
