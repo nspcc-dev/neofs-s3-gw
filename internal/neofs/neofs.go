@@ -145,7 +145,7 @@ var basicACLZero acl.Basic
 // CreateContainer implements neofs.NeoFS interface method.
 //
 // If prm.BasicACL is zero, 'eacl-public-read-write' is used.
-func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate) (cid.ID, error) {
+func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table) (cid.ID, error) {
 	if prm.BasicACL == basicACLZero {
 		prm.BasicACL = acl.PublicRWExtended
 	}
@@ -184,37 +184,18 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		prmPut.WithinSessionV2(*prm.SessionTokenV2)
 	}
 
-	var executor layer.ContainerPutExecutor = x.pool
-	if prm.Executor != nil {
-		executor = prm.Executor
+	if !table.IsZero() {
+		table.SetCID(cid.NewFromMarshalledContainer(cnr.Marshal()))
+		prmPut.WithEACL(table, nil)
 	}
 
 	// send request to save the container
-	idCnr, err := executor.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
+	idCnr, err := x.pool.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
 
 	return idCnr, nil
-}
-
-// CreateContainerAndSetEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) CreateContainerAndSetEACL(ctx context.Context, prm layer.PrmContainerCreate, table eacl.Table, sessionTokenV2 *session.Token) (cid.ID, error) {
-	cl, err := x.pool.RawClient()
-	if err != nil {
-		return cid.ID{}, fmt.Errorf("get node connection: %w", err)
-	}
-
-	prm.Executor = cl
-
-	cnrID, err := x.CreateContainer(ctx, prm)
-	if err != nil {
-		return cid.ID{}, fmt.Errorf("create container: %w", err)
-	}
-
-	table.SetCID(cnrID)
-
-	return cnrID, x.setContainerEACL(ctx, cl, table, sessionTokenV2)
 }
 
 // UserContainers implements neofs.NeoFS interface method.
@@ -230,17 +211,12 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 
 // SetContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
-	return x.setContainerEACL(ctx, x.pool, table, sessionTokenV2)
-}
-
-// SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) setContainerEACL(ctx context.Context, executor SetEACLExecutor, table eacl.Table, sessionTokenV2 *session.Token) error {
 	var prm client.PrmContainerSetEACL
 	if sessionTokenV2 != nil {
 		prm.WithinSessionV2(*sessionTokenV2)
 	}
 
-	err := executor.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
+	err := x.pool.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
 	}
@@ -654,7 +630,7 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 		Policy:   layer.PlacementPolicy{Placement: prm.Policy, Version: layer.PlacementPolicyV1},
 		Name:     prm.FriendlyName,
 		BasicACL: basicACL,
-	})
+	}, eacl.Table{})
 }
 
 // ReadObjectPayload implements authmate.NeoFS interface method.
