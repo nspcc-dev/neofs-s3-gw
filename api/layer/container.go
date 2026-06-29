@@ -145,14 +145,14 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		})
 	}
 
-	idCnr, err := n.neoFS.CreateContainerAndSetEACL(ctx, PrmContainerCreate{
+	idCnr, err := n.neoFS.CreateContainer(ctx, PrmContainerCreate{
 		Creator:              bktInfo.Owner,
 		Policy:               p.Policy,
 		Name:                 p.Name,
 		SessionTokenV2:       p.SessionTokenV2,
 		CreationTime:         bktInfo.Created,
 		AdditionalAttributes: attributes,
-	}, *p.EACL, p.SessionTokenV2)
+	}, *p.EACL)
 	if err != nil {
 		return nil, fmt.Errorf("create container: %w", err)
 	}

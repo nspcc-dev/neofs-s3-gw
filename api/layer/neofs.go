@@ -43,9 +43,6 @@ type PrmContainerCreate struct {
 
 	// Attributes for optional parameters.
 	AdditionalAttributes [][2]string
-
-	// Executor allows to set-up custom executor to the operation.
-	Executor ContainerPutExecutor
 }
 
 // ContainerPutExecutor puts container.
@@ -209,11 +206,11 @@ type NeoFS interface {
 	// It sets 'Timestamp' attribute to the current time.
 	// It returns the ID of the saved container.
 	//
-	// Created container is public with enabled ACL extension.
+	// Created container follows basic ACL passed, EACL is passed as well if set.
 	//
 	// It returns exactly one non-zero value. It returns any error encountered which
 	// prevented the container from being created.
-	CreateContainer(context.Context, PrmContainerCreate) (cid.ID, error)
+	CreateContainer(context.Context, PrmContainerCreate, eacl.Table) (cid.ID, error)
 
 	// Container reads a container from NeoFS by ID.
 	//
@@ -232,9 +229,6 @@ type NeoFS interface {
 	//
 	// It returns any error encountered which prevented the eACL from being saved.
 	SetContainerEACL(context.Context, eacl.Table, *session.Token) error
-
-	// CreateContainerAndSetEACL creates container and sets EACL using the same rawClient.
-	CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionTokenV2 *session.Token) (cid.ID, error)
 
 	// ContainerEACL reads the container eACL from NeoFS by the container ID.
 	//

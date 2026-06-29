@@ -9,6 +9,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
@@ -175,7 +176,7 @@ func prepareContext(t *testing.T, cachesConfig ...*CachesConfig) *testContext {
 	bktName := "testbucket1"
 	bktID, err := tp.CreateContainer(ctx, PrmContainerCreate{
 		Name: bktName,
-	})
+	}, eacl.Table{})
 	require.NoError(t, err)
 
 	config := DefaultCachesConfigs(logger)

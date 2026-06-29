@@ -114,7 +114,7 @@ func (t *TestNeoFS) ContainerID(name string) (cid.ID, error) {
 	return cid.ID{}, fmt.Errorf("not found")
 }
 
-func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (cid.ID, error) {
+func (t *TestNeoFS) CreateContainer(ctx context.Context, prm PrmContainerCreate, table eacl.Table) (cid.ID, error) {
 	var cnr container.Container
 	cnr.Init()
 	cnr.SetOwner(prm.Creator)
@@ -145,6 +145,11 @@ func (t *TestNeoFS) CreateContainer(_ context.Context, prm PrmContainerCreate) (
 	id := cid.NewFromMarshalledContainer(b)
 	t.containers[id.EncodeToString()] = &cnr
 
+	if !table.IsZero() {
+		table.SetCID(id)
+		t.eaclTables[id.EncodeToString()] = &table
+	}
+
 	return id, nil
 }
 
@@ -152,17 +157,6 @@ func (t *TestNeoFS) DeleteContainer(_ context.Context, cnrID cid.ID, _ *session.
 	delete(t.containers, cnrID.EncodeToString())
 
 	return nil
-}
-
-func (t *TestNeoFS) CreateContainerAndSetEACL(ctx context.Context, prm PrmContainerCreate, table eacl.Table, sessionTokenV2 *session.Token) (cid.ID, error) {
-	cnrID, err := t.CreateContainer(ctx, prm)
-	if err != nil {
-		return cid.ID{}, err
-	}
-
-	table.SetCID(cnrID)
-
-	return cnrID, t.SetContainerEACL(ctx, table, sessionTokenV2)
 }
 
 func (t *TestNeoFS) Container(_ context.Context, id cid.ID) (*container.Container, error) {
