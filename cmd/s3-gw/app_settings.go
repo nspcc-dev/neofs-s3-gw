@@ -132,6 +132,9 @@ const ( // Settings.
 	// List of allowed AccessKeyID prefixes.
 	cfgAllowedAccessKeyIDPrefixes = "allowed_access_key_id_prefixes"
 
+	// Namespace binds the gateway to a single namespace. Empty means no binding.
+	cfgNamespace = "namespace"
+
 	// envPrefix is an environment variables prefix used for configuration.
 	envPrefix = "S3_GW"
 

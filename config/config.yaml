@@ -154,3 +154,7 @@ internal_slicer: false
 s3:
   # Maximum number of objects to be deleted per request limit by this value.
   max_object_to_delete_per_request: 1000
+
+# Bind the gateway to a single namespace. When set, every request's AccessBox namespace must match this value.
+# Empty disables the binding.
+namespace: ""
