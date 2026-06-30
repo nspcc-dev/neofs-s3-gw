@@ -5,6 +5,7 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- `namespace` config option (#1302)
 
 ### Changed
 - Unknown bucket policy now leads to ErrNoSuchBucketPolicy error (#1290)

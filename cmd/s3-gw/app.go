@@ -150,6 +150,7 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		neofs.NewAuthmateNeoFS(neoFS),
 		key,
 		v.GetStringSlice(cfgAllowedAccessKeyIDPrefixes),
+		v.GetString(cfgNamespace),
 		getAccessBoxCacheConfig(v, log.logger),
 		contracts.NewNNSResolver(resolvedContracts.NNSContractReader),
 	)

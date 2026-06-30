@@ -50,6 +50,7 @@ type (
 		postReg                    *RegexpSubmatcher
 		cli                        tokens.Credentials
 		allowedAccessKeyIDPrefixes []string // empty slice means all access key ids are allowed
+		namespace                  string
 	}
 
 	prs int
@@ -106,13 +107,22 @@ func (p prs) Seek(_ int64, _ int) (int64, error) {
 var _ io.ReadSeeker = prs(0)
 
 // New creates an instance of AuthCenter.
-func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, config *cache.Config, resolver session.NNSResolver) Center {
+func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, namespace string, config *cache.Config, resolver session.NNSResolver) Center {
 	return &center{
 		cli:                        tokens.New(neoFS, key, config, resolver),
 		reg:                        NewRegexpMatcher(authorizationFieldRegexp),
 		postReg:                    NewRegexpMatcher(postPolicyCredentialRegexp),
 		allowedAccessKeyIDPrefixes: prefixes,
+		namespace:                  namespace,
 	}
+}
+
+func (c *center) checkNamespace(boxNamespace string) error {
+	if c.namespace != "" && c.namespace != boxNamespace {
+		return s3errors.GetAPIError(s3errors.ErrAccessDenied)
+	}
+
+	return nil
 }
 
 func (c *center) parseAuthHeader(header, amzContentSha256Header string) (*authHeader, error) {
@@ -228,6 +238,10 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		return nil, fmt.Errorf("get box: %w", err)
 	}
 
+	if err = c.checkNamespace(box.Namespace); err != nil {
+		return nil, err
+	}
+
 	clonedRequest := cloneRequest(r, authHdr)
 	if err = c.checkSign(authHdr, box, clonedRequest, signatureDateTime); err != nil {
 		return nil, err
@@ -311,6 +325,10 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 	box, err := c.cli.GetBox(r.Context(), addr)
 	if err != nil {
 		return nil, fmt.Errorf("get box: %w", err)
+	}
+
+	if err = c.checkNamespace(box.Namespace); err != nil {
+		return nil, err
 	}
 
 	secret := box.Gate.AccessKey
