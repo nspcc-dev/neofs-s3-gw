@@ -33,7 +33,7 @@ $ neofs-s3-gw -r http://192.168.130.72:30333 -p 192.168.130.72:8080 --listen_add
 $ S3_GW_PEERS_0_ADDRESS=192.168.130.72:8080 \
   S3_GW_FSCHAIN_ENDPOINTS=http://192.168.130.72:30333 \
   S3_GW_SERVER_0_ADDRESS=0.0.0.0:19080 \
-  S3_GW_WALLET=wallet.json \
+  S3_GW_WALLET_PATH=wallet.json \
   neofs-s3-gw
 ```
 It's also possible to specify uri scheme (grpc or grpcs) when using `-p` or environment variables:
@@ -41,7 +41,7 @@ It's also possible to specify uri scheme (grpc or grpcs) when using `-p` or envi
 $ neofs-s3-gw -p grpc://192.168.130.72:8080 --wallet wallet.json
 
 $ S3_GW_PEERS_0_ADDRESS=grpcs://192.168.130.72:8080 \
-  S3_GW_WALLET=wallet.json \
+  S3_GW_WALLET_PATH=wallet.json \
   neofs-s3-gw
 ```
 
