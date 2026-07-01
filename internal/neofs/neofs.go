@@ -553,6 +553,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 	}
 
 	var prmGet client.PrmObjectGet
+	prmGet.SkipChecksumVerification()
 
 	if prm.SessionTokenV2 != nil {
 		prmGet.WithinSessionV2(*prm.SessionTokenV2)
