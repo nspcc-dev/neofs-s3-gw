@@ -54,7 +54,6 @@ var (
 	accountAddressFlag       string
 	peerAddressFlag          string
 	rpcAddressFlag           string
-	eaclRulesFlag            string
 	gateWalletPathFlag       string
 	gateAccountAddressFlag   string
 	accessKeyIDFlag          string
@@ -199,12 +198,6 @@ func issueSecret() *cli.Command {
 				Usage:       "address of a neofs peer to connect to",
 				Required:    true,
 				Destination: &peerAddressFlag,
-			},
-			&cli.StringFlag{
-				Name:        "bearer-rules",
-				Usage:       "rules for bearer token (filepath or a plain json string are allowed)",
-				Required:    false,
-				Destination: &eaclRulesFlag,
 			},
 			&cli.StringSliceFlag{
 				Name:        "gate-public-key",
@@ -352,11 +345,6 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				return cli.Exit(fmt.Sprintf("couldn't parse container policy: %s", err.Error()), 6)
 			}
 
-			bearerRules, err := getJSONRules(eaclRulesFlag)
-			if err != nil {
-				return cli.Exit(fmt.Sprintf("couldn't parse 'bearer-rules' flag: %s", err.Error()), 7)
-			}
-
 			sessionRules, skipSessionRules, err := getSessionRules(sessionTokenFlag)
 			if err != nil {
 				return cli.Exit(fmt.Sprintf("couldn't parse 'session-tokens' flag: %s", err.Error()), 8)
@@ -370,7 +358,6 @@ It will be ceil rounded to the nearest amount of epoch.`,
 				},
 				NeoFSKey:              key,
 				GatesPublicKeys:       gatesPublicKeys,
-				EACLRules:             bearerRules,
 				SessionTokenRules:     sessionRules,
 				SkipSessionRules:      skipSessionRules,
 				ContainerPolicies:     policies,

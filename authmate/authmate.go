@@ -106,7 +106,6 @@ type (
 		Container             ContainerOptions
 		NeoFSKey              *keys.PrivateKey
 		GatesPublicKeys       []*keys.PublicKey
-		EACLRules             []byte
 		SessionTokenRules     []byte
 		SkipSessionRules      bool
 		Lifetime              time.Duration
