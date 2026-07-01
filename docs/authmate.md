@@ -197,22 +197,54 @@ $ neofs-s3-authmate issue-secret --wallet user.wallet.json \
 where content of `session.json`:
 ```json
 [
-  {
-    "verb": "PUT",
-    "containerID": null
-  },
-  {
-    "verb": "DELETE",
-    "containerID": null
-  },
-  {
-    "verb": "SETEACL",
-    "containerID": null
-  }
+   {
+      "verb": "PUT",
+      "containerID": null
+   },
+   {
+      "verb": "DELETE",
+      "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "SETEACL"
+   },
+   {
+      "verb": "DELETE",
+      "ContainerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "CONTAINER_SET_ATTRIBUTE"
+   },
+   {
+      "verb": "CONTAINER_REMOVE_ATTRIBUTE",
+      "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "OBJECT_PUT"
+   },
+   {
+      "verb": "OBJECT_GET"
+   },
+   {
+      "verb": "OBJECT_HEAD"
+   },
+   {
+      "verb": "OBJECT_SEARCH"
+   },
+   {
+      "verb": "OBJECT_DELETE",
+      "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "OBJECT_RANGE"
+   }
 ]
 ```
 
-Available `verb` values: `PUT`, `DELETE`, `SETEACL`.
+Available `verb` values:
+- container operations: `PUT` (or `CONTAINER_PUT`), `DELETE` (or `CONTAINER_DELETE`), `SETEACL` (or `CONTAINER_SET_EACL`),
+`CONTAINER_SET_ATTRIBUTE`, `CONTAINER_REMOVE_ATTRIBUTE`;
+- object operations: `OBJECT_PUT`, `OBJECT_GET`, `OBJECT_HEAD`, `OBJECT_SEARCH`, `OBJECT_DELETE`, `OBJECT_RANGE`.
 
 If `containerID` is `null` or omitted, then session token rule will be applied
 to all containers. Otherwise, specify `containerID` value in human-redabale
@@ -223,8 +255,8 @@ the authmate creates a `SETEACL` session token automatically in case when a user
 forgot about the rule with `SETEACL`.
 
 2. append `--session-tokens` parameter with the value `none` -- no session token will be created
-3. skip the parameter, and `authmate` will create session tokens with default rules (the same as in `session.json`
-in example above)
+3. skip the parameter, and `authmate` will create session tokens with default rules that allow every container and
+object operation listed above for all containers
 
 ### Containers policy
 

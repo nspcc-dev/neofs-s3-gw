@@ -6,6 +6,7 @@ This document outlines major changes between releases.
 
 ### Added
 - `namespace` config option (#1302)
+- Configuration of objects (Put, Get, Head, etc) and container SetAttribute/RemoveAttribute operations for session tokens (#1306)
 
 ### Changed
 - Unknown bucket policy now leads to ErrNoSuchBucketPolicy error (#1290)
