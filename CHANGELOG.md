@@ -5,16 +5,38 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- `namespace` config option (#1302)
+
+### Changed
+
+### Fixed
+
+### Updated
+
+### Removed
+
+### Upgrading from 0.45.0
+
+## [0.45.0] - 2026-07-02
+
+### Added
+- Bucket namespacing and `namespace` config option (#1300, #1302)
 - Configuration of objects (Put, Get, Head, etc) and container SetAttribute/RemoveAttribute operations for session tokens (#1306)
 
 ### Changed
+- Optimized SEARCH in Object Head operation handler (#1291)
 - Unknown bucket policy now leads to ErrNoSuchBucketPolicy error (#1290)
+- Encryption data is stored in a single attribute now (#1293)
+- GETRANGEHASH is no longer used in EACL rules (#1301)
+- More efficient EACL rules used (#1301)
+- Checksum verification is not performed now for objects in Get handler (#1309)
 
 ### Fixed
+- Tag and lock data fetching for unversioned buckets (#1291)
 - CompleteMultipartUpload reading parts completely into gateway memory in some cases (#1295)
+- Duplicating EACL entries (#1301)
 
 ### Updated
+- NeoFS SDK to RC20+ (#1310)
 
 ### Removed
 - Support for legacy access boxes carrying session token v1 and bearer tokens (#1271)
@@ -23,6 +45,8 @@ This document outlines major changes between releases.
 - Authmate `bearer-rules` option (#1306)
 
 ### Upgrading from 0.44.0
+Regenerate access tokens if using old ones with bearer tokens. Use gateway
+0.44.0 to migrate bucket settings/CORS/tags/notifications if not done earlier.
 
 ## [0.44.0] - 2026-06-03
 
@@ -1040,4 +1064,5 @@ releases.
 [0.43.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.42.0...v0.43.0
 [0.43.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.0...v0.43.1
 [0.44.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.1...v0.44.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.44.0...master
+[0.45.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.44.0...v0.45.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.0...master
