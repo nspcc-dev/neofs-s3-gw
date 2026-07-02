@@ -106,7 +106,6 @@ type (
 		Container             ContainerOptions
 		NeoFSKey              *keys.PrivateKey
 		GatesPublicKeys       []*keys.PublicKey
-		EACLRules             []byte
 		SessionTokenRules     []byte
 		SkipSessionRules      bool
 		Lifetime              time.Duration
@@ -404,20 +403,12 @@ func buildSessionTokenV2(key *keys.PrivateKey, lifetime lifetimeOptions, context
 func buildSessionTokensV2(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []sessionTokenContext, gatesKeys []*keys.PublicKey, ephemeralKey *keys.PrivateKey, secret []byte) ([]session2.Token, error) {
 	var (
 		verbsByCnr = make(map[cid.ID][]session2.Verb)
-
-		objectOperations = []session2.Verb{
-			session2.VerbObjectPut,
-			session2.VerbObjectGet,
-			session2.VerbObjectHead,
-			session2.VerbObjectSearch,
-			session2.VerbObjectDelete,
-			session2.VerbObjectRange,
-		}
 	)
 
 	for _, c := range ctxs {
 		switch c.verb {
 		case session2.VerbContainerPut, session2.VerbContainerDelete, session2.VerbContainerSetEACL, session2.VerbContainerSetAttribute, session2.VerbContainerRemoveAttribute:
+		case session2.VerbObjectPut, session2.VerbObjectGet, session2.VerbObjectHead, session2.VerbObjectSearch, session2.VerbObjectDelete, session2.VerbObjectRange:
 		default:
 			return nil, fmt.Errorf("unknown verb: %v", c.verb)
 		}
@@ -427,7 +418,7 @@ func buildSessionTokensV2(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs [
 			continue
 		}
 
-		verbsByCnr[c.containerID] = append(verbsByCnr[c.containerID], append(objectOperations, c.verb)...)
+		verbsByCnr[c.containerID] = append(verbsByCnr[c.containerID], c.verb)
 	}
 
 	deduplicate, err := deduplicateVerbs(verbsByCnr)

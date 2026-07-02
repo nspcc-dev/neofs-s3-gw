@@ -20,7 +20,7 @@ type (
 	}
 )
 
-// JSON strings for supported container session verbs.
+// JSON strings for supported session verbs.
 const (
 	containerSessionVerbPut     = "PUT"
 	containerSessionVerbDelete  = "DELETE"
@@ -35,14 +35,30 @@ func (c *sessionTokenContext) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	switch m.Verb {
-	case containerSessionVerbPut:
+	case containerSessionVerbPut, session.VerbContainerPut.String():
 		c.verb = session.VerbContainerPut
-	case containerSessionVerbSetEACL:
+	case containerSessionVerbSetEACL, session.VerbContainerSetEACL.String():
 		c.verb = session.VerbContainerSetEACL
-	case containerSessionVerbDelete:
+	case containerSessionVerbDelete, session.VerbContainerDelete.String():
 		c.verb = session.VerbContainerDelete
+	case session.VerbContainerSetAttribute.String():
+		c.verb = session.VerbContainerSetAttribute
+	case session.VerbContainerRemoveAttribute.String():
+		c.verb = session.VerbContainerRemoveAttribute
+	case session.VerbObjectPut.String():
+		c.verb = session.VerbObjectPut
+	case session.VerbObjectGet.String():
+		c.verb = session.VerbObjectGet
+	case session.VerbObjectHead.String():
+		c.verb = session.VerbObjectHead
+	case session.VerbObjectSearch.String():
+		c.verb = session.VerbObjectSearch
+	case session.VerbObjectDelete.String():
+		c.verb = session.VerbObjectDelete
+	case session.VerbObjectRange.String():
+		c.verb = session.VerbObjectRange
 	default:
-		return fmt.Errorf("unknown container token verb %s", m.Verb)
+		return fmt.Errorf("unknown session token verb %s", m.Verb)
 	}
 
 	if len(m.ContainerID) > 0 {
@@ -89,5 +105,11 @@ func buildContext(rules []byte) ([]sessionTokenContext, error) {
 		{verb: session.VerbContainerSetEACL},
 		{verb: session.VerbContainerSetAttribute},
 		{verb: session.VerbContainerRemoveAttribute},
+		{verb: session.VerbObjectPut},
+		{verb: session.VerbObjectGet},
+		{verb: session.VerbObjectHead},
+		{verb: session.VerbObjectSearch},
+		{verb: session.VerbObjectDelete},
+		{verb: session.VerbObjectRange},
 	}, nil
 }

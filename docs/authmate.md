@@ -184,60 +184,6 @@ the secret. Format of `access_key_id`: `%cid0%oid`, where 0(zero) is a delimiter
 * `--aws-cli-credentials` - path to the aws cli credentials file, where authmate will write `access_key_id` and 
 `secret_access_key` to
 
-### Bearer tokens
-
-Creation of bearer tokens is mandatory. Users wallet (not gate wallet) should be used in `--wallet` parameter. 
-
-Rules for a bearer token can be set via parameter `--bearer-rules` (json-string and file path allowed):
-```shell
-$ neofs-s3-authmate issue-secret --wallet user.wallet.json \
---peer 192.168.130.71:8080 \
---gate-public-key 025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7 \
---bearer-rules bearer-rules.json  
-```
-where content of `bearer-rules.json`:
-```json
-{
-  "records": [
-    {"operation": "PUT", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-    {"operation": "GET", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-    {"operation": "HEAD", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-    {"operation": "DELETE", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-    {"operation": "SEARCH", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-    {"operation": "GETRANGE", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-    {"operation": "GETRANGEHASH", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]}
-  ]
-}
-```
-
-**Note:** such rules allow all operations for all users (the same behavior when records are empty). 
-To restrict access you MUST provide records with `DENY` action. That's why we recommend always place such records
-at the end of records (see default rules below) to prevent undesirable access violation.
-Since the rules are applied from top to bottom, they do not override what was previously allowed.
-
-If bearer rules are not set, a token will be auto-generated with a value:
-```json
-{
-    "version": {
-       "major": 2,
-       "minor": 11
-    },
-    "containerID": {
-       "value": null
-    },
-    "records": [
-       {"operation": "GET", "action": "ALLOW", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-
-       {"operation": "HEAD", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-       {"operation": "PUT", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-       {"operation": "DELETE", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-       {"operation": "SEARCH", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-       {"operation": "GETRANGE", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]},
-       {"operation": "GETRANGEHASH", "action": "DENY", "filters": [], "targets": [{"role": "OTHERS", "keys": []}]}
-    ]
-}
-```
-
 ### Session tokens
 
 With a session token, there are 3 options: 
@@ -251,22 +197,54 @@ $ neofs-s3-authmate issue-secret --wallet user.wallet.json \
 where content of `session.json`:
 ```json
 [
-  {
-    "verb": "PUT",
-    "containerID": null
-  },
-  {
-    "verb": "DELETE",
-    "containerID": null
-  },
-  {
-    "verb": "SETEACL",
-    "containerID": null
-  }
+   {
+      "verb": "PUT",
+      "containerID": null
+   },
+   {
+      "verb": "DELETE",
+      "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "SETEACL"
+   },
+   {
+      "verb": "DELETE",
+      "ContainerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "CONTAINER_SET_ATTRIBUTE"
+   },
+   {
+      "verb": "CONTAINER_REMOVE_ATTRIBUTE",
+      "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "OBJECT_PUT"
+   },
+   {
+      "verb": "OBJECT_GET"
+   },
+   {
+      "verb": "OBJECT_HEAD"
+   },
+   {
+      "verb": "OBJECT_SEARCH"
+   },
+   {
+      "verb": "OBJECT_DELETE",
+      "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
+   },
+   {
+      "verb": "OBJECT_RANGE"
+   }
 ]
 ```
 
-Available `verb` values: `PUT`, `DELETE`, `SETEACL`.
+Available `verb` values:
+- container operations: `PUT` (or `CONTAINER_PUT`), `DELETE` (or `CONTAINER_DELETE`), `SETEACL` (or `CONTAINER_SET_EACL`),
+`CONTAINER_SET_ATTRIBUTE`, `CONTAINER_REMOVE_ATTRIBUTE`;
+- object operations: `OBJECT_PUT`, `OBJECT_GET`, `OBJECT_HEAD`, `OBJECT_SEARCH`, `OBJECT_DELETE`, `OBJECT_RANGE`.
 
 If `containerID` is `null` or omitted, then session token rule will be applied
 to all containers. Otherwise, specify `containerID` value in human-redabale
@@ -277,8 +255,8 @@ the authmate creates a `SETEACL` session token automatically in case when a user
 forgot about the rule with `SETEACL`.
 
 2. append `--session-tokens` parameter with the value `none` -- no session token will be created
-3. skip the parameter, and `authmate` will create session tokens with default rules (the same as in `session.json`
-in example above)
+3. skip the parameter, and `authmate` will create session tokens with default rules that allow every container and
+object operation listed above for all containers
 
 ### Containers policy
 
