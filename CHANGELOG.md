@@ -11,7 +11,7 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
-- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.20.0.20260728150712-1e97b571756d` (#XXX)
+- `github.com/nspcc-dev/neofs-sdk-go` dependency to `v1.0.0-rc.20.0.20260729094148-873b2293823f` (#XXX)
 - `github.com/nspcc-dev/neo-go` dependency to `v0.121.0` (#XXX)
 
 ### Removed
