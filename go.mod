@@ -13,9 +13,9 @@ require (
 	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.4.3
 	github.com/nats-io/nats.go v1.49.0
-	github.com/nspcc-dev/neo-go v0.118.0
+	github.com/nspcc-dev/neo-go v0.121.0
 	github.com/nspcc-dev/neofs-contract v0.26.1
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.20.0.20260701132011-c8072a564b1f
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.20.0.20260728150712-1e97b571756d
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
@@ -40,7 +40,7 @@ require (
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nspcc-dev/bbolt v0.0.0-20250911202005-807225ebb0c8 // indirect
+	github.com/nspcc-dev/bbolt v0.0.0-20260404200350-24f70ceb2bd9 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20260302080601-ff7471f924b3 // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.4 // indirect
 	github.com/nspcc-dev/tzhash v1.8.4 // indirect
