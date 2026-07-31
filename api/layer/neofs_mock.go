@@ -342,6 +342,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	_, _ = rand.Read(nonce)
 	objectNonceAttr := object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce))
 	attrs = append(attrs, objectNonceAttr)
+	attrs = append(attrs, object.NewAttribute("__NEOFS__SOME_SYSTEM_ATTRIBUTE", "SOME_VALUE"))
 
 	obj := object.New(prm.Container, prm.Creator)
 	obj.SetID(id)
