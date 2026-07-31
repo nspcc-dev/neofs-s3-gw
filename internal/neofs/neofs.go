@@ -439,10 +439,10 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 	}
 
-	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload, prm.PayloadSize)
+	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload)
 }
 
-func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader, pldSize uint64) (oid.ID, error) {
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader) (oid.ID, error) {
 	var prmObjPutInit client.PrmObjectPutInit
 
 	if sessionv2 != nil {
@@ -458,27 +458,8 @@ func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv
 		return oid.ID{}, fmt.Errorf("put init: %w", err)
 	}
 
-	var (
-		chunk        *[]byte
-		returnToPool bool
-	)
-
-	if pldSize > 0 && pldSize < uint64(x.MaxObjectSize()/2) {
-		c := make([]byte, pldSize)
-		chunk = &c
-	} else {
-		data := x.buffers.Get()
-		chunk = data.(*[]byte)
-		returnToPool = true
-	}
-
-	_, err = io.CopyBuffer(writer, pldRdr, *chunk)
-	if returnToPool {
-		x.buffers.Put(chunk)
-	}
-
-	if err != nil {
-		return oid.ID{}, fmt.Errorf("copy payload with buffer: %w", err)
+	if _, err = writer.ReadFrom(pldRdr); err != nil {
+		return oid.ID{}, fmt.Errorf("copy payload: %w", err)
 	}
 
 	if err = writer.Close(); err != nil {

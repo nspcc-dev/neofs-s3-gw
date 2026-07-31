@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Optimized object write buffering (#1318)
 
 ### Fixed
 
