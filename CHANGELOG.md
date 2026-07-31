@@ -7,10 +7,12 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Optimized object write buffering (#1318)
 
 ### Fixed
 
 ### Updated
+- github.com/nspcc-dev/neofs-sdk-go from v1.0.0-rc.20.0.20260701132011-c8072a564b1f to v1.0.0-rc.21 (#1318)
 
 ### Removed
 
