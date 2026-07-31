@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,4 +188,24 @@ func getObjectRange(t *testing.T, tc *handlerContext, bktName, objName string, s
 	body.Close()
 	require.NoError(t, err)
 	return content
+}
+
+func TestGetObject_noNeoFSSystemAttributes(t *testing.T) {
+	tc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-neofs-attributes", "object-to-neofs-attributes"
+	createTestBucket(tc, bktName)
+
+	content := "123456789abcdef1"
+	putObjectContent(tc, bktName, objName, content)
+
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
+	tc.Handler().GetObjectHandler(w, r)
+
+	assertStatus(t, w, http.StatusOK)
+	_ = w.Result().Body.Close()
+
+	for k := range w.Result().Header {
+		require.False(t, strings.HasPrefix(k, "X-Amz-Meta-__NEOFS__"))
+	}
 }
