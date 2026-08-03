@@ -7,17 +7,30 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- Optimized object write buffering (#1318)
-- Ranged GET uses HTTP-alike NeoFS ranges (#1319)
 
 ### Fixed
 
 ### Updated
-- github.com/nspcc-dev/neofs-sdk-go from v1.0.0-rc.20.0.20260701132011-c8072a564b1f to v1.0.0-rc.21 (#1318)
 
 ### Removed
 
-### Upgrading from 0.45.0
+### Upgrading from 0.45.1
+
+## [0.45.1] - 2026-08-04
+
+### Changed
+- Optimized object write buffering (#1318)
+- Optimized ranged GET using extended NeoFS GET ranges (#1319)
+- EACL is set in the same call with container creation (#1304)
+
+### Fixed
+- NeoFS system attributes in returned object metadata (#1321)
+
+### Updated
+- golang.org/x/net dependency from 0.50.0 to 0.55.0 (#1312)
+- golang.org/x/crypto dependency from 0.51.0 to 0.52.0 (#1314)
+- google.golang.org/grpc dependency from 1.79.3 to 1.82.1 (#1315)
+- github.com/nspcc-dev/neofs-sdk-go dependency from v1.0.0-rc.20.0.20260701132011-c8072a564b1f to v1.0.0-rc.21 (#1320)
 
 ## [0.45.0] - 2026-07-02
 
@@ -1068,4 +1081,5 @@ releases.
 [0.43.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.0...v0.43.1
 [0.44.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.1...v0.44.0
 [0.45.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.44.0...v0.45.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.0...master
+[0.45.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.0...v0.45.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.1...master
