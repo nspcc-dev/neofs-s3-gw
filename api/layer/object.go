@@ -39,7 +39,7 @@ import (
 type (
 	getParams struct {
 		// payload range
-		off, ln uint64
+		rng PayloadRange
 
 		oid     oid.ID
 		bktInfo *data.BucketInfo
@@ -151,13 +151,13 @@ func (n *layer) objectHead(ctx context.Context, bktInfo *data.BucketInfo, idObj 
 }
 
 // initializes payload reader of the NeoFS object.
-// Zero range corresponds to full payload (panics if only offset is set).
+// Zero range corresponds to full payload.
 func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (PayloadReadCloser, error) {
 	prm := PrmObjectRead{
 		Container:    p.bktInfo.CID,
 		Object:       p.oid,
 		WithPayload:  true,
-		PayloadRange: [2]uint64{p.off, p.ln},
+		PayloadRange: p.rng,
 	}
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.bktInfo.Owner)
@@ -171,14 +171,14 @@ func (n *layer) initObjectPayloadReader(ctx context.Context, p getParams) (Paylo
 }
 
 // initializes payload reader of the NeoFS object.
-// Zero range corresponds to full payload (panics if only offset is set).
+// Zero range corresponds to full payload.
 func (n *layer) initObjectReader(ctx context.Context, p getParams) (*object.Object, PayloadReadCloser, error) {
 	prm := PrmObjectRead{
 		Container:    p.bktInfo.CID,
 		Object:       p.oid,
 		WithHeader:   true,
 		WithPayload:  true,
-		PayloadRange: [2]uint64{p.off, p.ln},
+		PayloadRange: p.rng,
 	}
 
 	n.prepareAuthParameters(ctx, &prm.PrmAuth, p.bktInfo.Owner)

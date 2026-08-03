@@ -540,14 +540,27 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		prmGet.WithinSessionV2(*prm.SessionTokenV2)
 	}
 
-	if prm.PayloadRange[0]+prm.PayloadRange[1] != 0 {
-		prmGet.SetRange(prm.PayloadRange[0], prm.PayloadRange[1])
+	switch prm.PayloadRange.Mode {
+	case layer.PayloadRangeOffsetLength:
+		prmGet.SetRange(prm.PayloadRange.First, prm.PayloadRange.Second)
+	case layer.PayloadRangeBounds:
+		prmGet.SetRangeBounds(prm.PayloadRange.First, prm.PayloadRange.Second)
+	case layer.PayloadRangeFrom:
+		prmGet.SetRangeFrom(prm.PayloadRange.First)
+	case layer.PayloadRangeSuffix:
+		prmGet.SetRangeSuffix(prm.PayloadRange.First)
+	case layer.PayloadRangeNone:
+		// full payload
 	}
 
 	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
+		}
+
+		if errors.Is(err, apistatus.ErrObjectOutOfRange) {
+			return nil, fmt.Errorf("%w: %w", layer.ErrObjectOutOfRange, err)
 		}
 
 		return nil, fmt.Errorf("init object read via connection pool: %w", err)

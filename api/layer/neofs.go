@@ -61,6 +61,105 @@ type PrmAuth struct {
 	SessionTokenV2 *session.Token
 }
 
+// PayloadRangeMode identifies the type of range.
+type PayloadRangeMode uint8
+
+const (
+	// PayloadRangeNone means no range, full object.
+	PayloadRangeNone PayloadRangeMode = iota
+	// PayloadRangeOffsetLength interprets values as offset and length.
+	PayloadRangeOffsetLength
+	// PayloadRangeBounds interprets a byte range from first to last, inclusive.
+	PayloadRangeBounds
+	// PayloadRangeFrom interprets a byte range from first to the end of the payload.
+	PayloadRangeFrom
+	// PayloadRangeSuffix interprets the last length bytes of the payload.
+	PayloadRangeSuffix
+)
+
+// ErrObjectOutOfRange is returned when the requested payload range can not be satisfied.
+var ErrObjectOutOfRange = errors.New("out of range")
+
+// PayloadRange describes a payload range independently of its full length. The
+// zero value corresponds to the full payload.
+type PayloadRange struct {
+	First  uint64
+	Second uint64
+	Mode   PayloadRangeMode
+}
+
+// NewPayloadRange returns an offset-length payload range.
+func NewPayloadRange(off, ln uint64) PayloadRange {
+	return PayloadRange{First: off, Second: ln, Mode: PayloadRangeOffsetLength}
+}
+
+// NewPayloadRangeBounds returns a payload range with inclusive bounds, it
+// corresponds to the "bytes=first-last" HTTP range.
+func NewPayloadRangeBounds(first, last uint64) PayloadRange {
+	return PayloadRange{First: first, Second: last, Mode: PayloadRangeBounds}
+}
+
+// NewPayloadRangeFrom returns a payload range from first to the payload end, it
+// corresponds to the "bytes=first-" HTTP range.
+func NewPayloadRangeFrom(first uint64) PayloadRange {
+	return PayloadRange{First: first, Mode: PayloadRangeFrom}
+}
+
+// NewPayloadRangeSuffix returns a payload suffix range of the given length, it
+// corresponds to the "bytes=-length" HTTP range.
+func NewPayloadRangeSuffix(ln uint64) PayloadRange {
+	return PayloadRange{First: ln, Mode: PayloadRangeSuffix}
+}
+
+// IsSet reports whether the range is configured.
+func (r PayloadRange) IsSet() bool {
+	return r.Mode != PayloadRangeNone
+}
+
+// Resolve converts the range into offset-length form using the full payload
+// length and validates the result.
+func (r PayloadRange) Resolve(payloadLen uint64) (uint64, uint64, error) {
+	var off, ln uint64
+
+	switch r.Mode {
+	case PayloadRangeNone:
+		ln = payloadLen
+	case PayloadRangeOffsetLength:
+		off, ln = r.First, r.Second
+		if ln == 0 {
+			if off != 0 {
+				return 0, 0, ErrObjectOutOfRange
+			}
+			ln = payloadLen
+		}
+	case PayloadRangeBounds:
+		if r.First > r.Second || r.First >= payloadLen {
+			return 0, 0, ErrObjectOutOfRange
+		}
+		last := min(r.Second, payloadLen-1)
+		off, ln = r.First, last-r.First+1
+	case PayloadRangeFrom:
+		if r.First >= payloadLen {
+			return 0, 0, ErrObjectOutOfRange
+		}
+		off, ln = r.First, payloadLen-r.First
+	case PayloadRangeSuffix:
+		if r.First == 0 {
+			return 0, 0, ErrObjectOutOfRange
+		}
+		ln = min(r.First, payloadLen)
+		off = payloadLen - ln
+	default:
+		return 0, 0, fmt.Errorf("unsupported payload range mode %d", r.Mode)
+	}
+
+	if ln != 0 && (off >= payloadLen || payloadLen-off < ln) {
+		return 0, 0, ErrObjectOutOfRange
+	}
+
+	return off, ln, nil
+}
+
 // PrmObjectRead groups parameters of NeoFS.ReadObject operation.
 type PrmObjectRead struct {
 	// Authentication parameters.
@@ -78,8 +177,8 @@ type PrmObjectRead struct {
 	// Flag to read object payload. False overlaps payload range.
 	WithPayload bool
 
-	// Offset-length range of the object payload to be read.
-	PayloadRange [2]uint64
+	// Range of the object payload to be read. Zero value means full payload.
+	PayloadRange PayloadRange
 }
 
 // GetObject groups parameters of NeoFS.ReadObject operation.
@@ -258,7 +357,9 @@ type NeoFS interface {
 	//   * with payload only: header is nil (zero range means full payload);
 	//   * with header and payload: full in-mem object, payload reader is nil.
 	//
-	// WithHeader or WithPayload is true. Range length is positive if offset is positive.
+	// WithHeader or WithPayload is true.
+	//
+	// It returns ErrObjectOutOfRange if the requested range is unsatisfiable.
 	//
 	// Payload reader should be closed if it is no longer needed.
 	//

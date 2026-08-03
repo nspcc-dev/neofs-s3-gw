@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -45,6 +46,11 @@ type TestNeoFS struct {
 	currentEpoch uint64
 	currentTime  int64
 	signer       neofscrypto.Signer
+	readCounter  atomic.Int64
+}
+
+func (t *TestNeoFS) ReadObjectCalls() int64 {
+	return t.readCounter.Load()
 }
 
 type mockPayloadReadCloser struct {
@@ -203,6 +209,8 @@ func (t *TestNeoFS) UserContainers(_ context.Context, _ user.ID) ([]cid.ID, erro
 }
 
 func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectPart, error) {
+	t.readCounter.Add(1)
+
 	addr := oid.NewAddress(prm.Container, prm.Object)
 
 	sAddr := addr.EncodeToString()
@@ -256,9 +264,13 @@ func (t *TestNeoFS) ReadObject(ctx context.Context, prm PrmObjectRead) (*ObjectP
 
 	payload := obj.Payload()
 
-	if prm.PayloadRange[0]+prm.PayloadRange[1] > 0 {
-		off := prm.PayloadRange[0]
-		payload = payload[off : off+prm.PayloadRange[1]]
+	if prm.PayloadRange.IsSet() {
+		off, ln, err := prm.PayloadRange.Resolve(uint64(len(payload)))
+		if err != nil {
+			return nil, err
+		}
+
+		payload = payload[off : off+ln]
 	}
 
 	return &ObjectPart{
