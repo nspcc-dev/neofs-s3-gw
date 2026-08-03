@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - Optimized object write buffering (#1318)
+- Ranged GET uses HTTP-alike NeoFS ranges (#1319)
 
 ### Fixed
 

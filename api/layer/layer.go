@@ -198,6 +198,8 @@ type (
 		Owner   user.ID
 		BktInfo *data.BucketInfo
 		Object  oid.ID
+		// Range of the payload to read. Zero value means full payload.
+		Range PayloadRange
 	}
 
 	// ObjectWithPayloadReader is a response for Client.GetObjectWithPayloadReader.
@@ -473,8 +475,12 @@ func (n *layer) ListBuckets(ctx context.Context) ([]*data.BucketInfo, error) {
 
 // GetObjectWithPayloadReader returns object head and payload Reader.
 func (n *layer) GetObjectWithPayloadReader(ctx context.Context, p *GetObjectWithPayloadReaderParams) (*ObjectWithPayloadReader, error) {
-	head, payload, err := n.initObjectReader(ctx, getParams{bktInfo: p.BktInfo, oid: p.Object})
+	head, payload, err := n.initObjectReader(ctx, getParams{bktInfo: p.BktInfo, oid: p.Object, rng: p.Range})
 	if err != nil {
+		if errors.Is(err, ErrObjectOutOfRange) {
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
+		}
+
 		return nil, fmt.Errorf("init object reader: %w", err)
 	}
 
@@ -524,15 +530,13 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 				return fmt.Errorf("creating decrypter: %w", err)
 			}
 		}
-		params.off = decReader.EncryptedOffset()
-		params.ln = decReader.EncryptedLength()
+		params.rng = NewPayloadRange(decReader.EncryptedOffset(), decReader.EncryptedLength())
 	} else {
 		if p.Range != nil {
 			if p.Range.Start > p.Range.End {
 				panic("invalid range")
 			}
-			params.ln = p.Range.End - p.Range.Start + 1
-			params.off = p.Range.Start
+			params.rng = NewPayloadRange(p.Range.Start, p.Range.End-p.Range.Start+1)
 		}
 	}
 
@@ -554,7 +558,7 @@ func (n *layer) GetObject(ctx context.Context, p *GetObjectParams) error {
 
 	if err != nil {
 		if decReader != nil {
-			return fmt.Errorf("copy object payload written: '%d', decLength: '%d', params.ln: '%d' : %w", written, decReader.DecryptedLength(), params.ln, err)
+			return fmt.Errorf("copy object payload written: '%d', decLength: '%d', params.ln: '%d' : %w", written, decReader.DecryptedLength(), params.rng.Second, err)
 		}
 		return fmt.Errorf("copy object payload written: '%d': %w", written, err)
 	}

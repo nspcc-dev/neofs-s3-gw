@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"go.uber.org/zap"
 )
 
@@ -23,46 +25,62 @@ type conditionalArgs struct {
 	IfNoneMatch       string
 }
 
-func fetchRangeHeader(headers http.Header, fullSize uint64) (*layer.RangeParams, error) {
+func fetchRangeHeader(headers http.Header) (layer.PayloadRange, error) {
 	const prefix = "bytes="
 	rangeHeader := headers.Get("Range")
 	if len(rangeHeader) == 0 {
-		return nil, nil
-	}
-	if fullSize == 0 {
-		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
+		return layer.PayloadRange{}, nil
 	}
 	if !strings.HasPrefix(rangeHeader, prefix) {
-		return nil, fmt.Errorf("unknown unit in range header")
+		return layer.PayloadRange{}, fmt.Errorf("unknown unit in range header")
 	}
 	arr := strings.Split(strings.TrimPrefix(rangeHeader, prefix), "-")
 	if len(arr) != 2 || (len(arr[0]) == 0 && len(arr[1]) == 0) {
-		return nil, fmt.Errorf("unknown byte-range-set")
+		return layer.PayloadRange{}, fmt.Errorf("unknown byte-range-set")
 	}
 
-	var end, start uint64
-	var err0, err1 error
 	base, bitSize := 10, 64
 
+	// "bytes=-N".
 	if len(arr[0]) == 0 {
-		end, err1 = strconv.ParseUint(arr[1], base, bitSize)
-		start = fullSize - end
-		end = fullSize - 1
-	} else if len(arr[1]) == 0 {
-		start, err0 = strconv.ParseUint(arr[0], base, bitSize)
-		end = fullSize - 1
-	} else {
-		start, err0 = strconv.ParseUint(arr[0], base, bitSize)
-		end, err1 = strconv.ParseUint(arr[1], base, bitSize)
-		if end > fullSize-1 {
-			end = fullSize - 1
+		ln, err := strconv.ParseUint(arr[1], base, bitSize)
+		if err != nil || ln == 0 {
+			return layer.PayloadRange{}, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 		}
+
+		return layer.NewPayloadRangeSuffix(ln), nil
 	}
 
-	if err0 != nil || err1 != nil || start > end || start > fullSize {
+	start, err := strconv.ParseUint(arr[0], base, bitSize)
+	if err != nil {
+		return layer.PayloadRange{}, s3errors.GetAPIError(s3errors.ErrInvalidRange)
+	}
+
+	// "bytes=N-".
+	if len(arr[1]) == 0 {
+		return layer.NewPayloadRangeFrom(start), nil
+	}
+
+	// "bytes=N-M".
+	end, err := strconv.ParseUint(arr[1], base, bitSize)
+	if err != nil || start > end {
+		return layer.PayloadRange{}, s3errors.GetAPIError(s3errors.ErrInvalidRange)
+	}
+
+	return layer.NewPayloadRangeBounds(start, end), nil
+}
+
+func resolveRangeParams(rng layer.PayloadRange, fullSize uint64) (*layer.RangeParams, error) {
+	if !rng.IsSet() {
+		return nil, nil
+	}
+
+	off, ln, err := rng.Resolve(fullSize)
+	if err != nil || ln == 0 {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidRange)
 	}
-	return &layer.RangeParams{Start: start, End: end}, nil
+
+	return &layer.RangeParams{Start: off, End: off + ln - 1}, nil
 }
 
 func overrideResponseHeaders(h http.Header, query url.Values) {
@@ -113,9 +131,29 @@ func writeHeaders(h http.Header, requestHeader http.Header, info *data.ObjectInf
 	}
 }
 
+func (h *handler) readObject(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID, rng layer.PayloadRange, headerOnly bool) (*data.ObjectInfo, layer.PayloadReadCloser, error) {
+	if headerOnly {
+		info, err := h.obj.GetObjectInfoByID(ctx, bktInfo, id)
+
+		return info, nil, err
+	}
+
+	res, err := h.obj.GetObjectWithPayloadReader(ctx, &layer.GetObjectWithPayloadReaderParams{
+		Owner:   bktInfo.Owner,
+		BktInfo: bktInfo,
+		Object:  id,
+		Range:   rng,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return res.ObjectInfo, res.Payload, nil
+}
+
 func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		params *layer.RangeParams
+		payload layer.PayloadReadCloser
 
 		reqInfo = api.GetReqInfo(r.Context())
 	)
@@ -132,6 +170,18 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	encryptionParams, err := formEncryptionParams(r)
+	if err != nil {
+		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
+		return
+	}
+
+	rng, err := fetchRangeHeader(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "could not parse range header", reqInfo, err)
+		return
+	}
+
 	p := &layer.HeadObjectParams{
 		BktInfo:                   bktInfo,
 		Object:                    reqInfo.ObjectName,
@@ -145,36 +195,35 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	objectWithPayloadReader, err := h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
-		Owner:   bktInfo.Owner,
-		BktInfo: bktInfo,
-		Object:  comprehensiveObjectInfo.ID,
-	})
+	var (
+		headerOnly    = encryptionParams.Enabled()
+		partNumberStr = reqInfo.URL.Query().Get("partNumber")
+	)
 
+	info, payload, err := h.readObject(r.Context(), bktInfo, comprehensiveObjectInfo.ID, rng, headerOnly || len(partNumberStr) > 0)
 	if err != nil {
 		h.logAndSendError(w, "could not get object meta", reqInfo, err)
 		return
 	}
 
+	// Closes the stream if it wasn't passed to the client below.
+	defer func() {
+		if payload != nil {
+			_ = payload.Close()
+		}
+	}()
+
 	// There are no tags in separate objects. Try to get tags from the object headers.
-	if len(comprehensiveObjectInfo.TagSet) == 0 && objectWithPayloadReader.ObjectInfo != nil {
-		for k, v := range objectWithPayloadReader.ObjectInfo.Headers {
+	if len(comprehensiveObjectInfo.TagSet) == 0 {
+		for k, v := range info.Headers {
 			if after, ok := strings.CutPrefix(k, s3headers.NeoFSSystemMetadataTagPrefix); ok {
 				comprehensiveObjectInfo.TagSet[after] = v
 			}
 		}
 	}
 
-	info := objectWithPayloadReader.ObjectInfo
-
 	if err = checkPreconditions(info, conditional); err != nil {
 		h.logAndSendError(w, "precondition failed", reqInfo, err)
-		return
-	}
-
-	encryptionParams, err := formEncryptionParams(r)
-	if err != nil {
-		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
 		return
 	}
 
@@ -184,10 +233,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var pInfo *layer.Part
-	if partNumberStr := reqInfo.URL.Query().Get("partNumber"); len(partNumberStr) > 0 {
-		// unfortunately this reader is useless for us in this case, we have to re-read another one.
-		_ = objectWithPayloadReader.Payload.Close()
-
+	if len(partNumberStr) > 0 {
 		var partNumber int
 
 		partNumber, err = strconv.Atoi(partNumberStr)
@@ -210,18 +256,12 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 		part := completedParts[partNumber-1]
 
-		objectWithPayloadReader, err = h.obj.GetObjectWithPayloadReader(r.Context(), &layer.GetObjectWithPayloadReaderParams{
-			Owner:   bktInfo.Owner,
-			BktInfo: bktInfo,
-			Object:  part.ObjectID(),
-		})
-
+		info, payload, err = h.readObject(r.Context(), bktInfo, part.ObjectID(), rng, headerOnly)
 		if err != nil {
 			h.logAndSendError(w, "could not get part object meta", reqInfo, err)
 			return
 		}
 
-		info = objectWithPayloadReader.ObjectInfo
 		w.Header().Set("x-amz-mp-parts-count", strconv.Itoa(totalParts))
 	}
 
@@ -230,8 +270,10 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		fullSize = info.EncryptionMeta.DecryptedSize
 	}
 
-	if params, err = fetchRangeHeader(r.Header, uint64(fullSize)); err != nil {
-		h.logAndSendError(w, "could not parse range header", reqInfo, err)
+	// The range has been resolved by NeoFS, but we need it for the response as well.
+	params, err := resolveRangeParams(rng, uint64(fullSize))
+	if err != nil {
+		h.logAndSendError(w, "could not resolve range header", reqInfo, err)
 		return
 	}
 
@@ -251,10 +293,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	if params != nil || encryptionParams.Enabled() {
-		// unfortunately this reader is useless for us in this case, we have to re-read another one.
-		_ = objectWithPayloadReader.Payload.Close()
-
+	if payload == nil {
 		getParams := &layer.GetObjectParams{
 			ObjectInfo: info,
 			Writer:     w,
@@ -270,13 +309,15 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err = objectWithPayloadReader.Payload.WriteTo(w); err != nil {
+	if _, err = payload.WriteTo(w); err != nil {
 		h.logAndSendError(w, "could write object output", reqInfo, err)
 	}
 
-	if err = objectWithPayloadReader.Payload.Close(); err != nil {
+	if err = payload.Close(); err != nil {
 		h.logAndSendError(w, "close output", reqInfo, err)
 	}
+
+	payload = nil
 }
 
 func checkPreconditions(info *data.ObjectInfo, args *conditionalArgs) error {
