@@ -530,6 +530,10 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		// full payload
 	}
 
+	if !prm.WithHeader {
+		prmGet.MarkPayloadOnly()
+	}
+
 	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
