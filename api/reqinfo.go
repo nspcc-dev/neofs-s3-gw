@@ -105,7 +105,7 @@ func GetSourceIP(r *http.Request) string {
 	return addr
 }
 
-func prepareContext(w http.ResponseWriter, r *http.Request) context.Context {
+func prepareContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -119,7 +119,7 @@ func prepareContext(w http.ResponseWriter, r *http.Request) context.Context {
 	if prefix != "" {
 		object = prefix
 	}
-	return SetReqInfo(r.Context(),
+	return SetReqInfo(ctx,
 		// prepare request info
 		NewReqInfo(w, r, ObjectRequest{
 			Bucket: bucket,

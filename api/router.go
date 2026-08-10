@@ -132,15 +132,13 @@ func setRequestID(h http.Handler) http.Handler {
 		w.Header().Set(hdrAmzRequestID, id.String())
 
 		// set request id into gRPC meta header
-		r = r.WithContext(metadata.AppendToOutgoingContext(
-			r.Context(), hdrAmzRequestID, id.String(),
-		))
+		ctx := metadata.AppendToOutgoingContext(r.Context(), hdrAmzRequestID, id.String())
 
 		// set request info into context
-		r = r.WithContext(prepareContext(w, r)) //nolint:contextcheck // In fact, r.Context() is reused internally
+		ctx = prepareContext(ctx, w, r) //nolint:contextcheck // In fact, r.Context() is reused internally
 
 		// continue execution
-		h.ServeHTTP(w, r)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
