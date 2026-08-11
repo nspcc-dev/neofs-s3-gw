@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
@@ -502,7 +501,7 @@ func (a *App) Serve(ctx context.Context) {
 	// Attach S3 API:
 	domains := a.cfg.GetStringSlice(cfgListenDomains)
 	a.log.Info("fetch domains, prepare to use API", zap.Strings("domains", domains))
-	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
+	router := api.NewRouter()
 	api.Attach(router, domains, a.maxClients, a.api, a.ctr, a.log)
 
 	// Use mux.Router as http.Handler

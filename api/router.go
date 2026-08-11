@@ -206,6 +206,11 @@ func GetWriterRequestID(w http.ResponseWriter) string {
 	return w.Header().Get(hdrAmzRequestID)
 }
 
+// NewRouter creates the router to serve the S3 API with.
+func NewRouter() *mux.Router {
+	return mux.NewRouter().SkipClean(true).UseEncodedPath()
+}
+
 // Attach adds S3 API handlers from h to r for domains with m client limit using
 // center authentication and log logger.
 func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center auth.Center, log *zap.Logger) {
