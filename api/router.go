@@ -208,7 +208,7 @@ func GetWriterRequestID(w http.ResponseWriter) string {
 
 // NewRouter creates the router to serve the S3 API with.
 func NewRouter() *mux.Router {
-	return mux.NewRouter().SkipClean(true).UseEncodedPath()
+	return mux.NewRouter().SkipClean(true)
 }
 
 // Attach adds S3 API handlers from h to r for domains with m client limit using
@@ -244,29 +244,29 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 			appendCORS(h),
 		)
 		bucket.Methods(http.MethodOptions).HandlerFunc(m.Handle(metrics.APIStats("preflight", h.Preflight))).Name("Options")
-		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodHead).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("headobject", h.HeadObjectHandler))).Name("HeadObject")
 		// CopyObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").Headers(hdrAmzCopySource, "").HandlerFunc(m.Handle(metrics.APIStats("uploadpartcopy", h.UploadPartCopy))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").Headers(hdrAmzCopySource, "").HandlerFunc(m.Handle(metrics.APIStats("uploadpartcopy", h.UploadPartCopy))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
 			Name("UploadPartCopy")
 		// PutObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("uploadpart", h.UploadPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}").
 			Name("UploadPart")
 		// ListParts
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("listobjectparts", h.ListPartsHandler))).Queries("uploadId", "{uploadId:.*}").
 			Name("ListObjectParts")
 		// CompleteMultipartUpload
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPost).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("completemutipartupload", h.CompleteMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}").
 			Name("CompleteMultipartUpload")
 		// CreateMultipartUpload
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPost).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("createmultipartupload", h.CreateMultipartUploadHandler))).Queries("uploads", "").
 			Name("CreateMultipartUpload")
 		// AbortMultipartUpload
-		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodDelete).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("abortmultipartupload", h.AbortMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}").
 			Name("AbortMultipartUpload")
 		// ListMultipartUploads
@@ -274,67 +274,67 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 			m.Handle(metrics.APIStats("listmultipartuploads", h.ListMultipartUploadsHandler))).Queries("uploads", "").
 			Name("ListMultipartUploads")
 		// GetObjectACL -- this is a dummy call.
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectacl", h.GetObjectACLHandler))).Queries("acl", "").
 			Name("GetObjectACL")
 		// PutObjectACL -- this is a dummy call.
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("putobjectacl", h.PutObjectACLHandler))).Queries("acl", "").
 			Name("PutObjectACL")
 		// GetObjectTagging
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjecttagging", h.GetObjectTaggingHandler))).Queries("tagging", "").
 			Name("GetObjectTagging")
 		// PutObjectTagging
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("putobjecttagging", h.PutObjectTaggingHandler))).Queries("tagging", "").
 			Name("PutObjectTagging")
 		// DeleteObjectTagging
-		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodDelete).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("deleteobjecttagging", h.DeleteObjectTaggingHandler))).Queries("tagging", "").
 			Name("DeleteObjectTagging")
 		// SelectObjectContent
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPost).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("selectobjectcontent", h.SelectObjectContentHandler))).Queries("select", "").Queries("select-type", "2").
 			Name("SelectObjectContent")
 		// GetObjectRetention
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectretention", h.GetObjectRetentionHandler))).Queries("retention", "").
 			Name("GetObjectRetention")
 		// GetObjectLegalHold
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectlegalhold", h.GetObjectLegalHoldHandler))).Queries("legal-hold", "").
 			Name("GetObjectLegalHold")
 		// GetObjectAttributes
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjectattributes", h.GetObjectAttributesHandler))).Queries("attributes", "").
 			Name("GetObjectAttributes")
 		// GetObjectTorrentHandler
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobjecttorrent", h.GetObjectTorrentHandler))).Queries("torrent", "").
 			Name("GetObjectTorrent")
 		// GetObject
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodGet).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("getobject", h.GetObjectHandler))).
 			Name("GetObject")
 		// CopyObject
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").Headers(hdrAmzCopySource, "").HandlerFunc(m.Handle(metrics.APIStats("copyobject", h.CopyObjectHandler))).
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").Headers(hdrAmzCopySource, "").HandlerFunc(m.Handle(metrics.APIStats("copyobject", h.CopyObjectHandler))).
 			Name("CopyObject")
 		// PutObjectRetention
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("putobjectretention", h.PutObjectRetentionHandler))).Queries("retention", "").
 			Name("PutObjectRetention")
 		// PutObjectLegalHold
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("putobjectlegalhold", h.PutObjectLegalHoldHandler))).Queries("legal-hold", "").
 			Name("PutObjectLegalHold")
 
 		// PutObject
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodPut).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("putobject", h.PutObjectHandler))).
 			Name("PutObject")
 		// DeleteObject
-		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
+		bucket.Methods(http.MethodDelete).Path("/{object:(?s).+}").HandlerFunc(
 			m.Handle(metrics.APIStats("deleteobject", h.DeleteObjectHandler))).
 			Name("DeleteObject")
 

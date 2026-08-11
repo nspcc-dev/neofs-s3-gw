@@ -108,10 +108,9 @@ func GetSourceIP(r *http.Request) string {
 func prepareContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
-	if err != nil {
-		object = vars["object"]
-	}
+	// the router matches on the decoded path, so the object var is already the
+	// key itself and must not be unescaped again.
+	object := vars["object"]
 	prefix, err := url.QueryUnescape(vars["prefix"])
 	if err != nil {
 		prefix = vars["prefix"]

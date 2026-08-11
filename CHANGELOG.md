@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Optimized request routing by matching decoded URL paths (#1317)
 
 ### Fixed
 
