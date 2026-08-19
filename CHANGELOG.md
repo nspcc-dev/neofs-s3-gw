@@ -12,6 +12,7 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
+- NeoFS SDK to RC21+ version (#1330)
 
 ### Removed
 
