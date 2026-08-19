@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"net/http"
@@ -15,7 +16,6 @@ import (
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 // DeleteObjectsRequest -- xml carrying the object key names which should be deleted.
@@ -57,6 +57,10 @@ type DeleteObjectsResponse struct {
 	// Collection of errors deleting certain objects.
 	Errors []DeleteError `xml:"Error,omitempty"`
 }
+
+const (
+	maxObjectsInErrorLog = 10
+)
 
 func (h *handler) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
@@ -194,13 +198,6 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	marshaler := zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-		for _, obj := range toRemove {
-			encoder.AppendString(obj.String())
-		}
-		return nil
-	})
-
 	p := &layer.DeleteObjectParams{
 		BktInfo:  bktInfo,
 		Objects:  toRemove,
@@ -208,7 +205,11 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 	}
 	deletedObjects := h.obj.DeleteObjects(r.Context(), p)
 
-	var errs []error
+	var (
+		errs     []error
+		failed   []*layer.VersionedObject
+		canceled int
+	)
 	for _, obj := range deletedObjects {
 		if obj.Error != nil {
 			var (
@@ -225,7 +226,13 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 				Key:       obj.Name,
 				VersionID: obj.VersionID,
 			})
-			errs = append(errs, obj.Error)
+
+			if errors.Is(obj.Error, context.Canceled) || errors.Is(obj.Error, context.DeadlineExceeded) {
+				canceled++
+			} else {
+				errs = append(errs, obj.Error)
+				failed = append(failed, obj)
+			}
 		} else if !requested.Quiet {
 			deletedObj := DeletedObject{
 				ObjectIdentifier: ObjectIdentifier{
@@ -241,15 +248,33 @@ func (h *handler) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if len(errs) != 0 {
-		fields := []zap.Field{
-			zap.Array("objects", marshaler),
-			zap.Errors("errors", errs),
-		}
+		var (
+			n      = min(maxObjectsInErrorLog, len(errs))
+			fields = []zap.Field{
+				zap.Stringers("objects", failed[:n]),
+				zap.Errors("errors", errs[:n]),
+				zap.Int("total_objects", len(toRemove)),
+				zap.Int("total_errors", len(errs)),
+			}
+		)
+
 		h.log.Error("couldn't delete objects", fields...)
+	}
+	if canceled != 0 {
+		h.log.Debug("deletion interrupted by the client",
+			zap.String("request_id", reqInfo.RequestID),
+			zap.Int("canceled_objects", canceled),
+			zap.Int("total_objects", len(toRemove)))
 	}
 
 	if err = api.EncodeToResponse(w, response); err != nil {
-		h.logAndSendError(w, "could not write response", reqInfo, err, zap.Array("objects", marshaler))
+		// The status and a part of the body are written already, an error response can't be sent anymore.
+		h.log.Error("could not write response",
+			zap.String("request_id", reqInfo.RequestID),
+			zap.String("bucket", reqInfo.BucketName),
+			zap.Error(err),
+			zap.Stringers("objects", toRemove[:min(maxObjectsInErrorLog, len(toRemove))]),
+			zap.Int("total_objects", len(toRemove)))
 		return
 	}
 }
