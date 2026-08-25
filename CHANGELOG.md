@@ -14,6 +14,7 @@ This document outlines major changes between releases.
 
 ### Updated
 - NeoFS SDK to RC21+ version (#1330)
+- github.com/aws/aws-sdk-go-v2 v1.41.2 => v1.43.7 (#1251)
 
 ### Removed
 
