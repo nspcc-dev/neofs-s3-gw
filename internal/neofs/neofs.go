@@ -21,6 +21,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-s3-gw/authmate"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
@@ -636,19 +637,26 @@ func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmCon
 	}, eacl.Table{})
 }
 
-// ReadObject implements authmate.NeoFS interface method.
+// ReadObject implements authmate.NeoFS interface method. It reads no more than
+// [limits.MaxAccessBoxSize] bytes.
 func (x *AuthmateNeoFS) ReadObject(ctx context.Context, addr oid.Address) ([]byte, *object.Object, error) {
 	res, err := x.neoFS.ReadObject(ctx, layer.PrmObjectRead{
-		Container:   addr.Container(),
-		Object:      addr.Object(),
-		WithPayload: true,
-		WithHeader:  true,
+		Container:    addr.Container(),
+		Object:       addr.Object(),
+		WithPayload:  true,
+		WithHeader:   true,
+		PayloadRange: layer.NewPayloadRangeBounds(0, limits.MaxAccessBoxSize-1),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 
 	defer res.Payload.Close()
+
+	if sz := res.Head.PayloadSize(); sz > limits.MaxAccessBoxSize {
+		return nil, nil, fmt.Errorf("access box object is too big: %d > %d", sz, limits.MaxAccessBoxSize)
+	}
+
 	pl, err := io.ReadAll(res.Payload)
 
 	return pl, res.Head, err
