@@ -262,8 +262,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var s3err s3errors.Error
-		if errors.As(err, &s3err) {
+		if s3err, ok := errors.AsType[s3errors.Error](err); ok {
 			h.logAndSendError(w, "could not upload object", reqInfo, s3err, zap.Error(err))
 			return
 		}

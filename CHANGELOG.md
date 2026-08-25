@@ -8,11 +8,18 @@ This document outlines major changes between releases.
 
 ### Changed
 - Optimized request routing by matching decoded URL paths (#1317)
+- Minimal required Go is 1.26 now (#1251)
 
 ### Fixed
 
 ### Updated
 - NeoFS SDK to RC21+ version (#1330)
+- github.com/aws/aws-sdk-go-v2 v1.41.2 => v1.43.7 (#1251)
+- github.com/aws/aws-sdk-go-v2/credentials v1.19.10 => v1.19.37 (#1251)
+- go.uber.org/zap v1.27.1 => v1.28.0 (#1251)
+- golang.org/x/sync v0.20.0 => v0.22.0 (#1251)
+- google.golang.org/protobuf v1.36.11 => v1.36.12 (#1251)
+- google.golang.org/grpc v1.82.1 => v1.83.1 (#1251)
 
 ### Removed
 

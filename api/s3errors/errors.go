@@ -1702,8 +1702,7 @@ var errorCodes = errorCodeMap{
 
 // IsS3Error checks if the provided error is a specific s3 error.
 func IsS3Error(err error, code ErrorCode) bool {
-	var e Error
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[Error](err); ok {
 		return e.ErrCode == code
 	}
 	return false
