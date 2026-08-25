@@ -18,6 +18,7 @@ This document outlines major changes between releases.
 - github.com/aws/aws-sdk-go-v2/credentials v1.19.10 => v1.19.37 (#1251)
 - go.uber.org/zap v1.27.1 => v1.28.0 (#1251)
 - golang.org/x/sync v0.20.0 => v0.22.0 (#1251)
+- google.golang.org/protobuf v1.36.11 => v1.36.12 (#1251)
 
 ### Removed
 
