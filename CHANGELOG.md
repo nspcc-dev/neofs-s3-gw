@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - Optimized request routing by matching decoded URL paths (#1317)
+- Minimal required Go is 1.26 now (#1251)
 
 ### Fixed
 

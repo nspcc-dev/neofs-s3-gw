@@ -36,8 +36,7 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 }
 
 func transformToS3Error(err error) error {
-	var s3Err s3errors.Error
-	if errors.As(err, &s3Err) {
+	if s3Err, ok := errors.AsType[s3errors.Error](err); ok {
 		return s3Err
 	}
 

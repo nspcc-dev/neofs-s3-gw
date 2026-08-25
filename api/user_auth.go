@@ -37,8 +37,7 @@ func AttachUserAuth(router *mux.Router, center auth.Center, log *zap.Logger) {
 					ctx = context.WithValue(r.Context(), AnonymousRequest, true)
 				} else {
 					log.Error("failed to pass authentication", zap.Error(err))
-					var s3err s3errors.Error
-					if !errors.As(err, &s3err) {
+					if _, ok := errors.AsType[s3errors.Error](err); !ok {
 						err = s3errors.GetAPIError(s3errors.ErrAccessDenied)
 					}
 					WriteErrorResponse(w, GetReqInfo(r.Context()), err)
