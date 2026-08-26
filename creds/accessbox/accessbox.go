@@ -14,11 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	accessBoxVersionSessionV2 = 1
-
-	encyptedAccessKeyLength = 76
-)
+const accessBoxVersionSessionV2 = 1
 
 // Box represents friendly AccessBox.
 type Box struct {
@@ -210,12 +206,12 @@ func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Pub
 		return nil, errDecodeFailed
 	}
 
-	startIndex := encyptedAccessKeyLength * index
-	if startIndex+encyptedAccessKeyLength > len(appData) {
+	startIndex := accessbox.EncryptedSecretLength * index
+	if startIndex+accessbox.EncryptedSecretLength > len(appData) {
 		return nil, errors.New("gate component not found in token app data")
 	}
 
-	enc := appData[startIndex : startIndex+encyptedAccessKeyLength]
+	enc := appData[startIndex : startIndex+accessbox.EncryptedSecretLength]
 
 	accessKey, err := accessbox.Decrypt(owner, sender, enc)
 	if err == nil {
