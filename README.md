@@ -87,6 +87,7 @@ The metric exposes the following status codes:
 
 - [Configuration](./docs/configuration.md)
 - [NeoFS S3 AuthMate](./docs/authmate.md)
+- [NeoFS S3 AuthMate service](./docs/authmatesrv.md)
 - [AWS CLI basic usage](./docs/aws_cli.md)
 - [AWS S3 API compatibility](./docs/aws_s3_compat.md)
 
