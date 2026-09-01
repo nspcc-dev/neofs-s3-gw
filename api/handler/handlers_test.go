@@ -9,9 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"testing"
-	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -20,7 +18,6 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -203,9 +200,7 @@ func createTestObject(hc *handlerContext, bktInfo *data.BucketInfo, objName stri
 	content := make([]byte, 1024)
 	_, _ = rand.Read(content)
 
-	header := map[string]string{
-		object.AttributeTimestamp: strconv.FormatInt(time.Now().UTC().Unix(), 10),
-	}
+	header := make(map[string]string)
 
 	extObjInfo, err := hc.Layer().PutObject(hc.Context(), &layer.PutObjectParams{
 		BktInfo: bktInfo,
