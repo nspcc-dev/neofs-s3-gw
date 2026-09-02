@@ -17,6 +17,11 @@ import (
 const (
 	hkdfInfo       = "neofs-s3-gw"
 	hkdfSaltLength = 16
+
+	// EncryptedSecretLength is the length of a 32-byte secret encrypted with
+	// 16 bytes of HKDF salt, 12 bytes of AES-GCM nonce, 32 bytes of ciphertext and 16 bytes of tag.
+	// Total is 76.
+	EncryptedSecretLength = hkdfSaltLength + 12 + 32 + 16
 )
 
 // Encrypt encrypts data with ephemeral key and gate key.

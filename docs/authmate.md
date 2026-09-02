@@ -27,6 +27,9 @@ potentially).
 3. [Obtainment of a secret](#obtainment-of-a-secret-access-key)
 4. [Generate presigned url](#generate-presigned-url)
 
+Credentials can also be issued over HTTP, without handing the user key to
+anything, see [the authmate service](authmatesrv.md).
+
 ## Generation of wallet
 
 To generate a wallet for a gateway, run the following command:

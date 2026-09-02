@@ -10,6 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/klauspost/reedsolomon v1.13.2
+	github.com/labstack/echo/v4 v4.15.4
 	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.4.3
 	github.com/nats-io/nats.go v1.49.0
@@ -39,6 +40,9 @@ require (
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/labstack/gommon v0.5.0 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nspcc-dev/bbolt v0.0.0-20260404200350-24f70ceb2bd9 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20260826165212-78b9a86d413c // indirect
@@ -48,10 +52,13 @@ require (
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 )
 

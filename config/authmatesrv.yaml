@@ -1,0 +1,20 @@
+server:
+  address: 0.0.0.0:8090
+  tls:
+    enabled: false
+    cert_file: /path/to/cert
+    key_file: /path/to/key
+
+logger:
+  level: info
+  encoding: console
+  timestamp: false
+
+# Public keys of the S3 gateways credentials are issued for when a request names none.
+gates:
+  - 025c2b1464fc14c8a1ecea7032c82bc9e6cfef2f0664915b56342d335b31fc6bd7
+  - 0317585fa8274f7afdf1fc5f2a2e7bece549d5175c4e5182e37924f30229aef967
+
+limits:
+  max_lifetime: 720h # Maximum credentials lifetime a client may ask for, and the lifetime when it asks for none.
+  max_request_size: 1048576 # Maximum request body size in bytes.

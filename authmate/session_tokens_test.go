@@ -117,3 +117,62 @@ func TestContainerSessionRulesUnknownVerb(t *testing.T) {
 	_, err := buildContext(jsonRules)
 	require.Error(t, err)
 }
+
+func TestBuildContexts(t *testing.T) {
+	t.Run("default rules", func(t *testing.T) {
+		contexts, err := BuildContexts(nil)
+		require.NoError(t, err)
+
+		// Every default verb applies to every container, so they all collapse
+		// into a single wildcard context.
+		require.Len(t, contexts, 1)
+		require.True(t, contexts[0].Container().IsZero())
+		require.Len(t, contexts[0].Verbs(), 11)
+	})
+
+	t.Run("sorted and deduplicated", func(t *testing.T) {
+		contexts, err := BuildContexts([]byte(`
+[
+  {"verb": "OBJECT_GET"},
+  {"verb": "OBJECT_GET"},
+  {"verb": "OBJECT_PUT", "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"}
+]`))
+		require.NoError(t, err)
+
+		require.Len(t, contexts, 2)
+		require.True(t, contexts[0].Container().IsZero())
+		require.Equal(t, []session.Verb{session.VerbObjectGet}, contexts[0].Verbs())
+		require.False(t, contexts[1].Container().IsZero())
+		require.Equal(t, []session.Verb{session.VerbObjectPut}, contexts[1].Verbs())
+	})
+
+	t.Run("empty rules", func(t *testing.T) {
+		_, err := BuildContexts([]byte(`[]`))
+		require.ErrorContains(t, err, "no session token rules")
+	})
+
+	t.Run("explicit container repeating the wildcard", func(t *testing.T) {
+		_, err := BuildContexts([]byte(`
+[
+  {"verb": "OBJECT_GET"},
+  {"verb": "OBJECT_GET", "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"}
+]`))
+		require.ErrorContains(t, err, "same verbs as the wildcard context")
+	})
+
+	t.Run("unknown verb", func(t *testing.T) {
+		_, err := BuildContexts([]byte(`[{"verb": "UNKNOWN"}]`))
+		require.Error(t, err)
+	})
+}
+
+func TestParseVerb(t *testing.T) {
+	for _, verb := range supportedVerbs {
+		parsed, err := ParseVerb(verb.String())
+		require.NoError(t, err)
+		require.Equal(t, verb, parsed)
+	}
+
+	_, err := ParseVerb(session.VerbUnspecified.String())
+	require.Error(t, err)
+}

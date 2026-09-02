@@ -1,24 +1,19 @@
 package authmate
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
-	"slices"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
-	accessbox2 "github.com/nspcc-dev/neofs-s3-gw/internal/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/neofs/contracts"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
@@ -191,7 +186,8 @@ func checkPolicy(policyString string) (*netmap.PlacementPolicy, error) {
 	return nil, errors.New("can't parse placement policy")
 }
 
-func preparePolicy(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPolicy, error) {
+// ParseContainerPolicies converts a LocationConstraint into the access box representation.
+func ParseContainerPolicies(policy ContainerPolicies) ([]*accessbox.AccessBox_ContainerPolicy, error) {
 	if policy == nil {
 		return nil, nil
 	}
@@ -226,7 +222,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		}
 	)
 
-	policies, err := preparePolicy(options.ContainerPolicies)
+	policies, err := ParseContainerPolicies(options.ContainerPolicies)
 	if err != nil {
 		return fmt.Errorf("prepare policies: %w", err)
 	}
@@ -236,13 +232,15 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("fetch time to epoch: %w", err)
 	}
 
-	secret := generateSecret()
+	// The ephemeral key doubles as the S3 secret, see [TokenParams.Secret].
 	ephemeralKey, err := keys.NewPrivateKey()
 	if err != nil {
 		return fmt.Errorf("create ephemeral key: %w", err)
 	}
 
-	gatesData, err := createTokens(options, lifetime, ephemeralKey, secret)
+	secret := ephemeralKey.Bytes()
+
+	gatesData, err := createTokens(options, lifetime, secret)
 	if err != nil {
 		return fmt.Errorf("create tokens: %w", err)
 	}
@@ -338,155 +336,38 @@ func (a *Agent) ObtainSecret(ctx context.Context, options *ObtainSecretOptions) 
 	}, nil
 }
 
-func buildSessionTokenV2(key *keys.PrivateKey, lifetime lifetimeOptions, contexts []session2.Context, gateKeys []*keys.PublicKey, ephemeralKey *keys.PrivateKey, secret []byte) ([]session2.Token, error) {
-	var (
-		tokens []session2.Token
-
-		// https://github.com/nspcc-dev/neofs-node/pull/3671#discussion_r2709969518
-		tokenIssueTime = lifetime.IssuedAt.Add(-30 * time.Second)
-		signer         = user.NewAutoIDSignerRFC6979(key.PrivateKey)
-		chunks         = slices.Chunk(gateKeys, session2.MaxSubjectsPerToken)
-	)
-
-	for keys := range chunks {
-		var (
-			tokenV2 session2.Token
-			targets = make([]session2.Target, 0, len(keys))
-			b       = bytes.NewBuffer(nil)
-		)
-
-		for _, gateKey := range gateKeys {
-			targets = append(targets, session2.NewTargetUser(user.NewFromScriptHash(gateKey.GetScriptHash())))
-
-			pl, err := accessbox2.Encrypt(ephemeralKey, gateKey, secret)
-			if err != nil {
-				return nil, fmt.Errorf("encrypt secter: %w", err)
-			}
-
-			if _, err = b.Write(pl); err != nil {
-				return nil, fmt.Errorf("concat token v2 app data: %w", err)
-			}
-		}
-
-		if err := tokenV2.SetSubjects(targets); err != nil {
-			return nil, fmt.Errorf("set subjects: %w", err)
-		}
-
-		slices.SortFunc(contexts, func(a, b session2.Context) int {
-			return a.Container().Compare(b.Container())
-		})
-
-		if err := tokenV2.SetContexts(contexts); err != nil {
-			return nil, fmt.Errorf("set contexts: %w", err)
-		}
-
-		if err := tokenV2.SetAppData(b.Bytes()); err != nil {
-			return nil, fmt.Errorf("set app data: %w", err)
-		}
-
-		tokenV2.SetNbf(tokenIssueTime)
-		tokenV2.SetIat(tokenIssueTime)
-		tokenV2.SetExp(lifetime.ExpireAt)
-		tokenV2.SetIssuer(signer.UserID())
-		tokenV2.SetVersion(session2.TokenCurrentVersion)
-
-		if err := tokenV2.Sign(signer); err != nil {
-			return nil, fmt.Errorf("sign: %w", err)
-		}
-
-		tokens = append(tokens, tokenV2)
-	}
-
-	return tokens, nil
-}
-
-func buildSessionTokensV2(key *keys.PrivateKey, lifetime lifetimeOptions, ctxs []sessionTokenContext, gatesKeys []*keys.PublicKey, ephemeralKey *keys.PrivateKey, secret []byte) ([]session2.Token, error) {
-	var (
-		verbsByCnr = make(map[cid.ID][]session2.Verb)
-	)
-
-	for _, c := range ctxs {
-		switch c.verb {
-		case session2.VerbContainerPut, session2.VerbContainerDelete, session2.VerbContainerSetEACL, session2.VerbContainerSetAttribute, session2.VerbContainerRemoveAttribute:
-		case session2.VerbObjectPut, session2.VerbObjectGet, session2.VerbObjectHead, session2.VerbObjectSearch, session2.VerbObjectDelete, session2.VerbObjectRange:
-		default:
-			return nil, fmt.Errorf("unknown verb: %v", c.verb)
-		}
-
-		if _, ok := verbsByCnr[c.containerID]; !ok {
-			verbsByCnr[c.containerID] = []session2.Verb{c.verb}
-			continue
-		}
-
-		verbsByCnr[c.containerID] = append(verbsByCnr[c.containerID], c.verb)
-	}
-
-	deduplicate, err := deduplicateVerbs(verbsByCnr)
-	if err != nil {
-		return nil, fmt.Errorf("deduplicate verbs: %w", err)
-	}
-
-	slices.SortFunc(deduplicate, func(a, b session2.Context) int {
-		return a.Container().Compare(b.Container())
-	})
-
-	sessionTokens, err := buildSessionTokenV2(key, lifetime, deduplicate, gatesKeys, ephemeralKey, secret)
-	if err != nil {
-		return nil, fmt.Errorf("build session tokens v2: %w", err)
-	}
-	return sessionTokens, nil
-}
-
-func deduplicateVerbs(m map[cid.ID][]session2.Verb) ([]session2.Context, error) {
-	var r []session2.Context
-
-	for cnrID, verbs := range m {
-		var uniqueVerbsMap = make(map[session2.Verb]struct{}, len(verbs))
-		for _, verb := range verbs {
-			uniqueVerbsMap[verb] = struct{}{}
-		}
-
-		uniqueVerbs := maps.Keys(uniqueVerbsMap)
-		sortedVerbs := slices.Sorted(uniqueVerbs)
-
-		newContext, err := session2.NewContext(cnrID, sortedVerbs)
-		if err != nil {
-			return nil, fmt.Errorf("session context: %w", err)
-		}
-
-		r = append(r, newContext)
-	}
-
-	return r, nil
-}
-
-func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, ephemeralKey *keys.PrivateKey, secret []byte) ([]*accessbox.GateData, error) {
+func createTokens(options *IssueSecretOptions, lifetime lifetimeOptions, secret []byte) ([]*accessbox.GateData, error) {
 	var gates []*accessbox.GateData
 
 	if !options.SkipSessionRules {
-		sessionRules, err := buildContext(options.SessionTokenRules)
+		contexts, err := BuildContexts(options.SessionTokenRules)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build context for session token: %w", err)
+			return nil, err
 		}
 
-		sessionTokensV2, err := buildSessionTokensV2(options.NeoFSKey, lifetime, sessionRules, options.GatesPublicKeys, ephemeralKey, secret)
+		signer := user.NewAutoIDSignerRFC6979(options.NeoFSKey.PrivateKey)
+
+		sessionTokensV2, err := BuildUnsignedTokens(TokenParams{
+			Issuer:          signer.UserID(),
+			GatesPublicKeys: options.GatesPublicKeys,
+			Contexts:        contexts,
+			// https://github.com/nspcc-dev/neofs-node/pull/3671#discussion_r2709969518
+			IssuedAt: lifetime.IssuedAt.Add(-30 * time.Second),
+			ExpireAt: lifetime.ExpireAt,
+			Secret:   secret,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to build session token v2: %w", err)
 		}
-		for _, sessionTokenV2 := range sessionTokensV2 {
-			var gate = accessbox.GateData{
-				SessionTokenV2: &sessionTokenV2,
+
+		for i := range sessionTokensV2 {
+			if err = sessionTokensV2[i].Sign(signer); err != nil {
+				return nil, fmt.Errorf("failed to sign session token v2: %w", err)
 			}
 
-			gates = append(gates, &gate)
+			gates = append(gates, &accessbox.GateData{SessionTokenV2: &sessionTokensV2[i]})
 		}
 	}
 
 	return gates, nil
-}
-
-func generateSecret() []byte {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b)
-	return b
 }

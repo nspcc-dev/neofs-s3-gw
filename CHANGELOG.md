@@ -5,6 +5,7 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- Authbox service issuing S3 credentials over HTTP (#1333)
 
 ### Changed
 - Optimized request routing by matching decoded URL paths (#1317)

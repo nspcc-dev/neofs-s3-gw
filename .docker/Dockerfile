@@ -19,5 +19,6 @@ WORKDIR /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /src/bin/neofs-s3-gw /bin/neofs-s3-gw
 COPY --from=builder /src/bin/neofs-s3-authmate /bin/neofs-s3-authmate
+COPY --from=builder /src/bin/neofs-s3-authmatesrv /bin/neofs-s3-authmatesrv
 
 ENTRYPOINT ["/bin/neofs-s3-gw"]
