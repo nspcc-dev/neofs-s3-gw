@@ -5,6 +5,20 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Updated
+
+### Removed
+
+### Upgrading from 0.46.0
+
+## [0.46.0] - 2026-09-02
+
+### Added
 - Authbox service issuing S3 credentials over HTTP (#1333)
 
 ### Changed
@@ -13,6 +27,7 @@ This document outlines major changes between releases.
 - Access key objects limited by 64KB for reading (#1332)
 
 ### Fixed
+- Excessive logs for batched operations (#1327)
 
 ### Updated
 - NeoFS SDK to RC22 version (#1330, #1338, #1342)
@@ -23,10 +38,6 @@ This document outlines major changes between releases.
 - golang.org/x/sync v0.20.0 => v0.22.0 (#1251)
 - google.golang.org/protobuf v1.36.11 => v1.36.12 (#1251)
 - google.golang.org/grpc v1.82.1 => v1.83.1 (#1251)
-
-### Removed
-
-### Upgrading from 0.45.1
 
 ## [0.45.1] - 2026-08-04
 
@@ -1094,4 +1105,5 @@ releases.
 [0.44.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.43.1...v0.44.0
 [0.45.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.44.0...v0.45.0
 [0.45.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.0...v0.45.1
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.1...master
+[0.46.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.1...v0.46.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.46.0...master
