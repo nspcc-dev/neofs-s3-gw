@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
 
 ### Fixed
 
