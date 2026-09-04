@@ -117,8 +117,10 @@ const (
 var _ = logErrorResponse
 
 func (lrw *logResponseWriter) WriteHeader(code int) {
+	// only the first code reaches the client, but the last one is what the
+	// request has actually resulted in, so keep tracking it for the log.
+	lrw.statusCode = code
 	lrw.Do(func() {
-		lrw.statusCode = code
 		lrw.ResponseWriter.WriteHeader(code)
 	})
 }

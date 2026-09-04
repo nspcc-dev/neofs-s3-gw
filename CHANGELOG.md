@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
 
 ### Fixed
+- Successful request result logged for a request failed after the response header was sent (#1292)
 
 ### Updated
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
