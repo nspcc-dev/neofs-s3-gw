@@ -12,6 +12,7 @@ This document outlines major changes between releases.
 ### Fixed
 
 ### Updated
+- github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
 
 ### Removed
 
