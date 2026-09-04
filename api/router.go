@@ -100,7 +100,10 @@ type (
 		http.ResponseWriter
 
 		statusCode int
+		sentCode   int
 	}
+
+	writerStatus interface{ Status() int }
 )
 
 const (
@@ -117,10 +120,19 @@ const (
 var _ = logErrorResponse
 
 func (lrw *logResponseWriter) WriteHeader(code int) {
+	// only the first code reaches the client, but the last one is what the
+	// request has actually resulted in, so keep tracking it for the log.
+	lrw.statusCode = code
 	lrw.Do(func() {
-		lrw.statusCode = code
+		lrw.sentCode = code
 		lrw.ResponseWriter.WriteHeader(code)
 	})
+}
+
+// Status returns the status code sent to the client, zero if the response
+// header is not written yet.
+func (lrw *logResponseWriter) Status() int {
+	return lrw.sentCode
 }
 
 func setRequestID(h http.Handler) http.Handler {
@@ -204,6 +216,15 @@ func GetContextRequestID(ctx context.Context) string {
 // GetWriterRequestID extracts request ID from the response writer.
 func GetWriterRequestID(w http.ResponseWriter) string {
 	return w.Header().Get(hdrAmzRequestID)
+}
+
+// GetWriterStatus returns the status code already sent to the client by w.
+func GetWriterStatus(w http.ResponseWriter) int {
+	if sw, ok := w.(writerStatus); ok {
+		return sw.Status()
+	}
+
+	return 0
 }
 
 // NewRouter creates the router to serve the S3 API with.
