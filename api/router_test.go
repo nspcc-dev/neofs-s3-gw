@@ -9,8 +9,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type (
@@ -121,4 +124,35 @@ func TestRouterEncodedSlash(t *testing.T) {
 			require.Equal(t, "a/b", h.object)
 		})
 	}
+}
+
+type failingHandler struct {
+	Handler
+}
+
+// GetObjectHandler commits 200 with the payload and only then fails, just like
+// the real one does when object reading breaks in the middle.
+func (h *failingHandler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	WriteErrorResponse(w, GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrInternalError))
+}
+func (h *failingHandler) Preflight(http.ResponseWriter, *http.Request)         {}
+func (h *failingHandler) AppendCORSHeaders(http.ResponseWriter, *http.Request) {}
+
+func TestRouterFailureAfterHeader(t *testing.T) {
+	var (
+		core, logs = observer.New(zapcore.InfoLevel)
+		router     = NewRouter()
+	)
+
+	Attach(router, []string{"s3.test"}, NewMaxClientsMiddleware(100, time.Second), &failingHandler{}, stubCenter{}, zap.New(core))
+
+	var rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/bucket/object", nil))
+
+	// the client still gets 200
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	// but the request has failed, so it must not be logged as a success
+	require.Empty(t, logs.FilterMessage("call method result").All())
 }

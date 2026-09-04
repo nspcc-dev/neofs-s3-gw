@@ -5,7 +5,6 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,7 +34,6 @@ type (
 	}
 
 	responseWrapper struct {
-		sync.Once
 		http.ResponseWriter
 
 		statusCode int
@@ -165,12 +163,11 @@ func (st *HTTPStats) updateStats(api string, w http.ResponseWriter, r *http.Requ
 	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
 }
 
-// WriteHeader -- writes http status code.
+// WriteHeader writes http status code. Only the first code reaches the
+// client, but the last one is an actual result.
 func (w *responseWrapper) WriteHeader(code int) {
-	w.Do(func() {
-		w.statusCode = code
-		w.ResponseWriter.WriteHeader(code)
-	})
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
 }
 
 // Flush -- calls the underlying Flush.
