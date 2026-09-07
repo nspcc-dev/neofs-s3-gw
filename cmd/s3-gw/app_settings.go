@@ -106,7 +106,8 @@ const ( // Settings.
 	cfgListenDomains = "listen_domains"
 
 	// Peers.
-	cfgPeers = "peers"
+	cfgPeers           = "peers"
+	cfgPeersFromNetmap = "peers_from_netmap"
 
 	// NeoGo.
 	cfgRPCEndpoints = "fschain.endpoints"
