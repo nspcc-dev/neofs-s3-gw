@@ -22,9 +22,19 @@ const (
 )
 
 func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo *api.ReqInfo, err error, additional ...zap.Field) {
-	code := api.WriteErrorResponse(w, reqInfo, transformToS3Error(err))
+	var (
+		code = api.WriteErrorResponse(w, reqInfo, transformToS3Error(err))
+		sent = code
+	)
+
+	if s := api.GetWriterStatus(w); s != 0 {
+		// the header was already flushed, so the client got another code.
+		sent = s
+	}
+
 	fields := []zap.Field{
-		zap.Int("status", code),
+		zap.Int("status", sent),
+		zap.Int("internal_status", code),
 		zap.String("request_id", reqInfo.RequestID),
 		zap.String("method", reqInfo.API),
 		zap.String("bucket", reqInfo.BucketName),
@@ -32,7 +42,7 @@ func (h *handler) logAndSendError(w http.ResponseWriter, logText string, reqInfo
 		zap.String("description", logText),
 		zap.Error(err)}
 	fields = append(fields, additional...)
-	h.log.Error("call method", fields...)
+	h.log.Error("call method result", fields...)
 }
 
 func transformToS3Error(err error) error {
