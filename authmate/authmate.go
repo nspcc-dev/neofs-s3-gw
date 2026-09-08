@@ -136,7 +136,6 @@ type (
 	issuingResult struct {
 		AccessKeyID     string `json:"access_key_id"`
 		SecretAccessKey string `json:"secret_access_key"`
-		OwnerPrivateKey string `json:"owner_private_key"`
 		WalletPublicKey string `json:"wallet_public_key"`
 		ContainerID     string `json:"container_id"`
 	}
@@ -232,20 +231,17 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("fetch time to epoch: %w", err)
 	}
 
-	// The ephemeral key doubles as the S3 secret, see [TokenParams.Secret].
-	ephemeralKey, err := keys.NewPrivateKey()
-	if err != nil {
-		return fmt.Errorf("create ephemeral key: %w", err)
-	}
-
-	secret := ephemeralKey.Bytes()
+	var (
+		secret          = NewSecret()
+		secretAccessKey = hex.EncodeToString(secret)
+	)
 
 	gatesData, err := createTokens(options, lifetime, secret)
 	if err != nil {
 		return fmt.Errorf("create tokens: %w", err)
 	}
 
-	box, secrets, err := accessbox.PackTokens(gatesData, ephemeralKey, secret)
+	box, err = accessbox.PackTokens(gatesData)
 	if err != nil {
 		return fmt.Errorf("pack tokens: %w", err)
 	}
@@ -267,7 +263,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		zap.Stringer("owner_tkn", idOwner))
 
 	addr, err := tokens.
-		New(a.neoFS, secrets.EphemeralKey, cache.DefaultAccessBoxConfig(a.log), contracts.NewNoOpNNSResolver()).
+		New(a.neoFS, nil, cache.DefaultAccessBoxConfig(a.log), contracts.NewNoOpNNSResolver()).
 		Put(ctx, id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
@@ -280,8 +276,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	ir := &issuingResult{
 		AccessKeyID:     accessKeyID,
-		SecretAccessKey: secrets.AccessKey,
-		OwnerPrivateKey: hex.EncodeToString(secrets.EphemeralKey.Bytes()),
+		SecretAccessKey: secretAccessKey,
 		WalletPublicKey: hex.EncodeToString(options.NeoFSKey.PublicKey().Bytes()),
 		ContainerID:     id.EncodeToString(),
 	}
@@ -303,7 +298,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		}
 		defer file.Close()
 		if _, err = fmt.Fprintf(file, "\n[%s]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
-			profileName, accessKeyID, secrets.AccessKey); err != nil {
+			profileName, accessKeyID, secretAccessKey); err != nil {
 			return fmt.Errorf("fails to write to file: %w", err)
 		}
 	}

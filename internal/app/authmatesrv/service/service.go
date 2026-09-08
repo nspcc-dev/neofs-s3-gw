@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/elliptic"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -103,10 +104,7 @@ func (s *Service) PrepareS3Credentials(ctx echo.Context) error {
 		return s.badRequest(ctx, "invalid expiration", err)
 	}
 
-	ephemeralKey, err := keys.NewPrivateKey()
-	if err != nil {
-		return s.internalError(ctx, "ephemeral key", err)
-	}
+	var secret = authmate.NewSecret()
 
 	tokens, err := authmate.BuildUnsignedTokens(
 		authmate.TokenParams{
@@ -115,48 +113,31 @@ func (s *Service) PrepareS3Credentials(ctx echo.Context) error {
 			Contexts:        contexts,
 			IssuedAt:        issuedAt,
 			ExpireAt:        expireAt,
-			Secret:          ephemeralKey.Bytes(),
+			Secret:          secret,
 		})
 	if err != nil {
 		return s.badRequest(ctx, "build session tokens", err)
 	}
 
-	var (
-		state = issuanceState{EphemeralKey: ephemeralKey.Bytes()}
-
-		resp = S3CredentialsResponse{
-			Tokens:    make([]string, 0, len(tokens)),
-			ExpiresAt: expireAt.UTC().Format(time.RFC3339),
-		}
-	)
+	var resp = S3CredentialsResponse{
+		Tokens:          make([]string, 0, len(tokens)),
+		SecretAccessKey: hex.EncodeToString(secret),
+		ExpiresAt:       expireAt.UTC().Format(time.RFC3339),
+	}
 
 	for i := range tokens {
 		resp.Tokens = append(resp.Tokens, base64.StdEncoding.EncodeToString(tokens[i].SignedData()))
-	}
-
-	if resp.State, err = state.encode(); err != nil {
-		return s.internalError(ctx, "encode state", err)
 	}
 
 	return ctx.JSON(http.StatusOK, resp)
 }
 
 // CompleteS3Credentials verifies the token signatures and returns the assembled
-// access box together with the S3 secret access key.
+// access box.
 func (s *Service) CompleteS3Credentials(ctx echo.Context) error {
 	var req CompleteS3CredentialsRequest
 	if err := ctx.Bind(&req); err != nil {
 		return s.badRequest(ctx, "bind", err)
-	}
-
-	state, err := decodeState(req.State)
-	if err != nil {
-		return s.badRequest(ctx, "invalid state", err)
-	}
-
-	ephemeralKey, err := keys.NewPrivateKeyFromBytes(state.EphemeralKey)
-	if err != nil {
-		return s.badRequest(ctx, "invalid state", fmt.Errorf("ephemeral key: %w", err))
 	}
 
 	if len(req.Tokens) == 0 {
@@ -164,6 +145,7 @@ func (s *Service) CompleteS3Credentials(ctx echo.Context) error {
 	}
 
 	var (
+		err       error
 		issuer    user.ID
 		tokens    = make([]session2.Token, len(req.Tokens))
 		gatesData = make([]*accessbox.GateData, 0, len(req.Tokens))
@@ -183,7 +165,7 @@ func (s *Service) CompleteS3Credentials(ctx echo.Context) error {
 		gatesData = append(gatesData, &accessbox.GateData{SessionTokenV2: &tokens[i]})
 	}
 
-	box, secrets, err := accessbox.PackTokens(gatesData, ephemeralKey, ephemeralKey.Bytes())
+	box, err := accessbox.PackTokens(gatesData)
 	if err != nil {
 		return s.internalError(ctx, "pack tokens", err)
 	}
@@ -204,9 +186,8 @@ func (s *Service) CompleteS3Credentials(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, CompleteS3CredentialsResponse{
-		SecretAccessKey: secrets.AccessKey,
-		AccessBox:       base64.StdEncoding.EncodeToString(payload),
-		ExpiresAt:       tokens[0].Exp().UTC().Format(time.RFC3339),
+		AccessBox: base64.StdEncoding.EncodeToString(payload),
+		ExpiresAt: tokens[0].Exp().UTC().Format(time.RFC3339),
 	})
 }
 

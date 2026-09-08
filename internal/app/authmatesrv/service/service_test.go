@@ -145,7 +145,7 @@ func TestCredentialsFlow(t *testing.T) {
 	rec, prepared := testService.requestPrepare(t, S3CredentialsRequest{Issuer: testService.issuer.EncodeToString()})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	require.Len(t, prepared.Tokens, 1)
-	require.NotEmpty(t, prepared.State)
+	require.Len(t, prepared.SecretAccessKey, 64) // 32 bytes, hex encoded.
 
 	// The client can inspect what it is about to sign.
 	body, err := base64.StdEncoding.DecodeString(prepared.Tokens[0])
@@ -158,17 +158,10 @@ func TestCredentialsFlow(t *testing.T) {
 	require.WithinDuration(t, time.Now().Add(720*time.Hour), unsigned.Exp(), time.Minute)
 
 	rec, completed := testService.requestComplete(t, CompleteS3CredentialsRequest{
-		State:  prepared.State,
 		Tokens: signTokens(t, prepared.Tokens, testService.user),
 	})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	require.Len(t, completed.SecretAccessKey, 64) // 32 bytes, hex encoded.
 	require.Equal(t, prepared.ExpiresAt, completed.ExpiresAt)
-
-	// The secret is the ephemeral key the box is packed with.
-	state, err := decodeState(prepared.State)
-	require.NoError(t, err)
-	require.Equal(t, hex.EncodeToString(state.EphemeralKey), completed.SecretAccessKey)
 
 	payload, err := base64.StdEncoding.DecodeString(completed.AccessBox)
 	require.NoError(t, err)
@@ -182,7 +175,7 @@ func TestCredentialsFlow(t *testing.T) {
 	for _, gateKey := range testService.gates {
 		gateData, err := box.GetTokens(gateKey, resolver)
 		require.NoError(t, err)
-		require.Equal(t, completed.SecretAccessKey, gateData.AccessKey)
+		require.Equal(t, prepared.SecretAccessKey, gateData.AccessKey)
 		require.Equal(t, testService.issuer, gateData.SessionTokenV2.Issuer())
 		require.True(t, gateData.SessionTokenV2.VerifySignature())
 		require.NoError(t, gateData.SessionTokenV2.Validate(resolver))
@@ -206,7 +199,6 @@ func TestCredentialsFlowManyGates(t *testing.T) {
 	require.Len(t, prepared.Tokens, 3) // 8 + 8 + 4.
 
 	rec, completed := testService.requestComplete(t, CompleteS3CredentialsRequest{
-		State:  prepared.State,
 		Tokens: signTokens(t, prepared.Tokens, testService.user),
 	})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -220,7 +212,7 @@ func TestCredentialsFlowManyGates(t *testing.T) {
 	for _, gateKey := range testService.gates {
 		gateData, err := box.GetTokens(gateKey, &contracts.NoOpNNSResolver{})
 		require.NoError(t, err)
-		require.Equal(t, completed.SecretAccessKey, gateData.AccessKey)
+		require.Equal(t, prepared.SecretAccessKey, gateData.AccessKey)
 	}
 }
 
@@ -250,7 +242,6 @@ func TestUnconfiguredGate(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	rec, completed := testService.requestComplete(t, CompleteS3CredentialsRequest{
-		State:  prepared.State,
 		Tokens: signTokens(t, prepared.Tokens, testService.user),
 	})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -265,7 +256,7 @@ func TestUnconfiguredGate(t *testing.T) {
 
 	gateData, err := box.GetTokens(stranger, resolver)
 	require.NoError(t, err)
-	require.Equal(t, completed.SecretAccessKey, gateData.AccessKey)
+	require.Equal(t, prepared.SecretAccessKey, gateData.AccessKey)
 
 	// The configured gateways get nothing from a box that did not ask for them.
 	for _, gateKey := range testService.gates {
@@ -427,20 +418,8 @@ func requestPrepare(t *testing.T, testService *testApiService) S3CredentialsResp
 func TestCompleteValidation(t *testing.T) {
 	testService := newTestApiService(t, 2)
 
-	t.Run("malformed state", func(t *testing.T) {
-		p := requestPrepare(t, testService)
-
-		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{
-			State:  "not a state",
-			Tokens: signTokens(t, p.Tokens, testService.user),
-		})
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-	})
-
 	t.Run("no tokens", func(t *testing.T) {
-		p := requestPrepare(t, testService)
-
-		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{State: p.State})
+		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{})
 		require.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
@@ -451,7 +430,6 @@ func TestCompleteValidation(t *testing.T) {
 		require.NoError(t, err)
 
 		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{
-			State:  p.State,
 			Tokens: signTokens(t, p.Tokens, stranger),
 		})
 		require.Equal(t, http.StatusBadRequest, rec.Code)
@@ -464,7 +442,7 @@ func TestCompleteValidation(t *testing.T) {
 		signed := signTokens(t, p.Tokens, testService.user)
 		signed[0].Signature = base64.StdEncoding.EncodeToString(make([]byte, 64))
 
-		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{State: p.State, Tokens: signed})
+		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{Tokens: signed})
 		require.Equal(t, http.StatusBadRequest, rec.Code)
 		require.Contains(t, rec.Body.String(), "invalid signature")
 	})
@@ -475,7 +453,7 @@ func TestCompleteValidation(t *testing.T) {
 		signed := signTokens(t, p.Tokens, testService.user)
 		signed[0].Scheme = "rot13"
 
-		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{State: p.State, Tokens: signed})
+		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{Tokens: signed})
 		require.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
@@ -483,7 +461,6 @@ func TestCompleteValidation(t *testing.T) {
 		p := requestPrepare(t, testService)
 
 		rec, completed := testService.requestComplete(t, CompleteS3CredentialsRequest{
-			State:             p.State,
 			Tokens:            signTokens(t, p.Tokens, testService.user),
 			ContainerPolicies: map[string]string{"rep-3": "REP 3"},
 		})
@@ -505,7 +482,6 @@ func TestCompleteValidation(t *testing.T) {
 		p := requestPrepare(t, testService)
 
 		rec, _ := testService.requestComplete(t, CompleteS3CredentialsRequest{
-			State:             p.State,
 			Tokens:            signTokens(t, p.Tokens, testService.user),
 			ContainerPolicies: map[string]string{"nonsense": "NOT A POLICY"},
 		})
@@ -520,7 +496,6 @@ func TestCompleteValidation(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 		rec, _ = testService.requestComplete(t, CompleteS3CredentialsRequest{
-			State:  p.State,
 			Tokens: signTokens(t, p.Tokens, testService.user),
 		})
 		require.Equal(t, http.StatusBadRequest, rec.Code)

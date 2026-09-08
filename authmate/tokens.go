@@ -1,6 +1,7 @@
 package authmate
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"slices"
@@ -32,11 +33,16 @@ type TokenParams struct {
 	// ExpireAt is the exp claim.
 	ExpireAt time.Time
 
-	// Secret is the S3 secret access key, [SecretLength] bytes long. It doubles as
-	// the ECDH sender key the secret itself is encrypted with, whose public part is
-	// stored in the access box, so it must be a private key produced by
-	// [keys.NewPrivateKey].
+	// Secret is the S3 secret access key, [SecretLength] bytes.
 	Secret []byte
+}
+
+// NewSecret generates a new S3 secret access key.
+func NewSecret() []byte {
+	var secret = make([]byte, SecretLength)
+	_, _ = rand.Read(secret)
+
+	return secret
 }
 
 // BuildUnsignedTokens builds unsigned session v2 tokens for the given parameters.
@@ -49,24 +55,19 @@ func BuildUnsignedTokens(p TokenParams) ([]session2.Token, error) {
 		return nil, fmt.Errorf("invalid secret length: expected %d, got %d", SecretLength, len(p.Secret))
 	}
 
-	ephemeralKey, err := keys.NewPrivateKeyFromBytes(p.Secret)
-	if err != nil {
-		return nil, fmt.Errorf("secret as ephemeral key: %w", err)
-	}
-
 	var tokens []session2.Token
 
 	for chunk := range slices.Chunk(p.GatesPublicKeys, session2.MaxSubjectsPerToken) {
 		var (
 			tokenV2 session2.Token
 			targets = make([]session2.Target, 0, len(chunk))
-			appData = make([]byte, 0, len(chunk)*accessbox.EncryptedSecretLength)
+			appData = make([]byte, 0, len(chunk)*accessbox.EncryptedSecretLengthV2)
 		)
 
 		for _, gateKey := range chunk {
 			targets = append(targets, session2.NewTargetUser(user.NewFromScriptHash(gateKey.GetScriptHash())))
 
-			enc, err := accessbox.Encrypt(ephemeralKey, gateKey, p.Secret)
+			enc, err := accessbox.EncryptV2(gateKey, p.Secret)
 			if err != nil {
 				return nil, fmt.Errorf("encrypt secret: %w", err)
 			}

@@ -8,6 +8,8 @@ This document outlines major changes between releases.
 
 ### Changed
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
+- Access boxes are sealed with HPKE now, this is access box version 2 (#1344)
+- Authmatesrv service returns the S3 secret access key from `POST /v1/auth/s3` (#1344)
 
 ### Fixed
 - Contradictory and duplicate request status in log records (#1292)
@@ -18,6 +20,7 @@ This document outlines major changes between releases.
 - github.com/klauspost/reedsolomon v1.13.2 => v1.14.2 (#1346)
 
 ### Removed
+- `owner_private_key` field from the `issue-secret` output, it duplicated `secret_access_key` (#1344)
 
 ### Upgrading from 0.46.0
 

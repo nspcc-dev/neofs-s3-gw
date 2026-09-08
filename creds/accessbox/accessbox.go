@@ -14,7 +14,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const accessBoxVersionSessionV2 = 1
+const (
+	accessBoxVersionSessionV2 = 1
+	accessBoxVersionHPKE      = 2
+
+	accessBoxVersionCurrent = accessBoxVersionHPKE
+)
 
 // Box represents friendly AccessBox.
 type Box struct {
@@ -37,12 +42,6 @@ type GateData struct {
 
 var errDecodeFailed = errors.New("failed to decode accessbox")
 
-// Secrets represents AccessKey and the key to encrypt gate tokens.
-type Secrets struct {
-	AccessKey    string
-	EphemeralKey *keys.PrivateKey
-}
-
 // Marshal returns the wire-format of AccessBox.
 func (x *AccessBox) Marshal() ([]byte, error) {
 	return proto.Marshal(x)
@@ -54,32 +53,43 @@ func (x *AccessBox) Unmarshal(data []byte) error {
 }
 
 // PackTokens adds session tokens to AccessBox.
-func PackTokens(gatesData []*GateData, ephemeralKey *keys.PrivateKey, secret []byte) (*AccessBox, *Secrets, error) {
+func PackTokens(gatesData []*GateData) (*AccessBox, error) {
 	box := &AccessBox{}
-	box.OwnerPublicKey = ephemeralKey.PublicKey().Bytes()
-	box.Version = accessBoxVersionSessionV2
+	box.Version = accessBoxVersionCurrent
 
 	if err := box.addTokens(gatesData); err != nil {
-		return nil, nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
+		return nil, fmt.Errorf("failed to add tokens to accessbox: %w", err)
 	}
 
-	return box, &Secrets{hex.EncodeToString(secret), ephemeralKey}, nil
+	return box, nil
 }
 
 // GetTokens returns gate tokens from AccessBox.
 func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session.NNSResolver) (*GateData, error) {
-	if x.Version != accessBoxVersionSessionV2 {
-		return nil, fmt.Errorf("unsupported access box version %d (current: %d)", x.Version, accessBoxVersionSessionV2)
-	}
+	var decodeFunc func(*AccessBox_Gate) (*GateData, error)
 
-	sender, err := keys.NewPublicKeyFromBytes(x.OwnerPublicKey, elliptic.P256())
-	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal OwnerPublicKey: %w", err)
+	switch x.Version {
+	case accessBoxVersionSessionV2:
+		// The sender key is a part of the version 1 scheme only, version 2 boxes leave it empty.
+		sender, err := keys.NewPublicKeyFromBytes(x.OwnerPublicKey, elliptic.P256())
+		if err != nil {
+			return nil, fmt.Errorf("couldn't unmarshal OwnerPublicKey: %w", err)
+		}
+
+		decodeFunc = func(gate *AccessBox_Gate) (*GateData, error) {
+			return decodeGateV1(gate, owner, sender)
+		}
+	case accessBoxVersionHPKE:
+		decodeFunc = func(gate *AccessBox_Gate) (*GateData, error) {
+			return decodeGateV2(gate, owner)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported access box version %d (current: %d)", x.Version, accessBoxVersionCurrent)
 	}
 	ownerID := user.NewFromScriptHash(owner.PublicKey().GetScriptHash())
 
 	for _, gate := range x.Gates {
-		gateData, err := decodeGateV2(gate, owner, sender)
+		gateData, err := decodeFunc(gate)
 		if err != nil {
 			if errors.Is(err, errDecodeFailed) {
 				continue
@@ -174,10 +184,12 @@ func encodeGateV2(tokens proto.Message) (*AccessBox_Gate, error) {
 	return gate, nil
 }
 
-func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.PublicKey) (*GateData, error) {
+// gatesData parses the gate session token and returns the token itself along
+// with the slice of its application data belonging to this gate.
+func gatesData(gate *AccessBox_Gate, owner *keys.PrivateKey, componentLen int) (*session.Token, []byte, error) {
 	var tokens TokensV2
 	if err := proto.Unmarshal(gate.Tokens, &tokens); err != nil {
-		return nil, fmt.Errorf("unmarshal tokens: %w", err)
+		return nil, nil, fmt.Errorf("unmarshal tokens: %w", err)
 	}
 
 	var (
@@ -187,12 +199,12 @@ func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Pub
 	)
 
 	if err := stv2.Unmarshal(tokens.SessionTokenV2); err != nil {
-		return nil, fmt.Errorf("unmarshal session token v2: %w", err)
+		return nil, nil, fmt.Errorf("unmarshal session token v2: %w", err)
 	}
 
 	var appData = stv2.AppData()
 	if len(appData) == 0 {
-		return nil, errors.New("empty app data")
+		return nil, nil, errors.New("empty app data")
 	}
 
 	for i, target := range stv2.Subjects() {
@@ -203,24 +215,51 @@ func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.Pub
 	}
 
 	if index == -1 {
-		return nil, errDecodeFailed
+		return nil, nil, errDecodeFailed
 	}
 
-	startIndex := accessbox.EncryptedSecretLength * index
-	if startIndex+accessbox.EncryptedSecretLength > len(appData) {
-		return nil, errors.New("gate component not found in token app data")
+	startIndex := componentLen * index
+	if startIndex+componentLen > len(appData) {
+		return nil, nil, errors.New("gate component not found in token app data")
 	}
 
-	enc := appData[startIndex : startIndex+accessbox.EncryptedSecretLength]
+	return &stv2, appData[startIndex : startIndex+componentLen], nil
+}
 
-	accessKey, err := accessbox.Decrypt(owner, sender, enc)
-	if err == nil {
-		gateData := GateData{
-			AccessKey:      hex.EncodeToString(accessKey),
-			SessionTokenV2: &stv2,
-		}
-		return &gateData, nil
+func decodeGateV1(gate *AccessBox_Gate, owner *keys.PrivateKey, sender *keys.PublicKey) (*GateData, error) {
+	stv2, enc, err := gatesData(gate, owner, accessbox.EncryptedSecretLengthV1)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, err
+	accessKey, err := accessbox.DecryptV1(owner, sender, enc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GateData{
+		AccessKey:      hex.EncodeToString(accessKey),
+		SessionTokenV2: stv2,
+	}, nil
+}
+
+func decodeGateV2(gate *AccessBox_Gate, owner *keys.PrivateKey) (*GateData, error) {
+	stv2, enc, err := gatesData(gate, owner, accessbox.EncryptedSecretLengthV2)
+	if err != nil {
+		return nil, err
+	}
+
+	if n := len(stv2.AppData()); n != len(stv2.Subjects())*accessbox.EncryptedSecretLengthV2 {
+		return nil, fmt.Errorf("app data size %d does not match %d subjects", n, len(stv2.Subjects()))
+	}
+
+	accessKey, err := accessbox.DecryptV2(owner, enc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GateData{
+		AccessKey:      hex.EncodeToString(accessKey),
+		SessionTokenV2: stv2,
+	}, nil
 }

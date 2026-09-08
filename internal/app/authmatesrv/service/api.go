@@ -96,8 +96,9 @@ type (
 		// signed by the issuer and passed back to the complete call.
 		Tokens []string `json:"tokens"`
 
-		// State to pass unchanged to the complete call.
-		State string `json:"state"`
+		// SecretAccessKey is the hex encoded secret access key for S3 requests. The
+		// tokens carry it encrypted for the gateways, the service keeps no copy.
+		SecretAccessKey string `json:"secretAccessKey"`
 
 		// ExpiresAt is the credentials expiration time in RFC3339 format.
 		ExpiresAt string `json:"expiresAt"`
@@ -122,9 +123,6 @@ type (
 
 	// CompleteS3CredentialsRequest carries the signatures for the prepared tokens.
 	CompleteS3CredentialsRequest struct {
-		// State is the state from the prepare call.
-		State string `json:"state"`
-
 		// Tokens are the signed session v2 tokens, in the order the prepare call returned them.
 		Tokens []S3SignedToken `json:"tokens"`
 
@@ -134,9 +132,6 @@ type (
 
 	// CompleteS3CredentialsResponse holds the issued S3 credentials.
 	CompleteS3CredentialsResponse struct {
-		// SecretAccessKey is the hex encoded secret access key for S3 requests.
-		SecretAccessKey string `json:"secretAccessKey"`
-
 		// AccessBox is the base64 encoded credential box.
 		AccessBox string `json:"accessBox"`
 
