@@ -22,12 +22,12 @@ See [authmate.md](authmate.md) for the credentials model itself.
 client -> GET /v1/auth/s3/gates (Default key set suggested by the service)
 
 client -> POST /v1/auth/s3 {issuer, gates, contexts, expiration} -> server builds unsigned session tokens,
-returns these tokens and state
+returns these tokens and secret access key
 
 (sign every token with the issuer key)
 
-client -> POST /v1/auth/s3/complete {state, tokens: [{token, signature}]} -> server verifies the signatures, packs the box.
-Server returns access box + secret access key.
+client -> POST /v1/auth/s3/complete {tokens: [{token, signature}]} -> server verifies the signatures, packs the box.
+Server returns access box.
 
 (client makes whatever it wants with this box)
 ```
@@ -104,21 +104,15 @@ curl -s -X POST http://localhost:8090/v1/auth/s3 -H 'Content-Type: application/j
 ```json
 {
    "tokens":["..."],
-   "state":"...",
+   "secretAccessKey":"770a5f637bd08adba1e7d2a547dab1022a504c526711efd65f4bcc6cbfc93bc2",
    "expiresAt":"2026-08-27T09:17:52Z"}
 ```
 
 Each entry of `tokens` is a base64 encoded session token body. The client must sign every one of them and return them
 all to the complete call.
 
-`state` is base64 encoded JSON carrying the ephemeral key the tokens were built with, which is also the S3 secret the
-complete call returns. The service keeps no copy of it, so the state is a credential: serve the API over TLS and do not
-hand the state to anyone who may not have the credentials. There is nothing instance-specific in it, any instance of
-the service can complete it.
-
-The state and the tokens must come from the same prepare call. Nothing verifies that: a box completed from a state of
-one call and tokens of another is assembled and returned happily, and the gateways then decrypt a secret out of it that
-is not the one the client got.
+`secretAccessKey` is the hex encoded S3 secret the tokens carry encrypted for the gateways. The service keeps no copy
+of it and the complete call does not return it, so keep it until the credentials are issued and serve the API over TLS.
 
 ### POST `/v1/auth/s3/complete`
 
@@ -126,8 +120,7 @@ Verifies the signatures and returns the assembled access box.
 
 | Field               | Required | Description                                                         |
 |---------------------|----------|---------------------------------------------------------------------|
-| `state`             | yes      | The `state` from the prepare call, unchanged.                       |
-| `tokens`            | yes      | The signed tokens of that same prepare call.                        |
+| `tokens`            | yes      | The signed tokens of one prepare call.                              |
 | `containerPolicies` | no       | `LocationConstraint` to NeoFS placement policy mapping for the box. |
 
 Every element of `tokens` is:
@@ -144,7 +137,6 @@ curl -s -X POST http://localhost:8090/v1/auth/s3/complete -H 'Content-Type: appl
 ```
 ```json
 {
-   "secretAccessKey":"770a5f637bd08adba1e7d2a547dab1022a504c526711efd65f4bcc6cbfc93bc2",
    "accessBox":"...",
    "expiresAt":"2026-08-27T09:17:52Z"
 }
@@ -164,8 +156,8 @@ The service stops at handing over the box. To turn it into working AWS credentia
    `Timestamp` attribute and an `__NEOFS__EXPIRATION_EPOCH` matching the credentials expiration.
    If the target gateway runs with a namespace, set the `namespace` object attribute to it,
    otherwise the gateway rejects the box.
-2. Use `<container id>0<object id>` as `aws_access_key_id` and the returned
-   `secretAccessKey` as `aws_secret_access_key`. The `0` is a delimiter: base58 has no zero digit.
+2. Use `<container id>0<object id>` as `aws_access_key_id` and the `secretAccessKey`
+   from the prepare call as `aws_secret_access_key`. The `0` is a delimiter: base58 has no zero digit.
 
 ## Configuration
 
