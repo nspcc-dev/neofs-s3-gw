@@ -21,6 +21,9 @@ peers:
   - address: node3.neofs:8080
     priority: 2
     weight: 0.9
+# Take NeoFS node addresses from the network map instead of the `peers` list above.
+# The gateway does not start if the network map can't be read or has no usable address.
+peers_from_netmap: false
 
 server:
   - address: 0.0.0.0:8080

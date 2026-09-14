@@ -179,6 +179,7 @@ stream_timeout: 60s
 healthcheck_timeout: 15s
 rebalance_interval: 60s
 pool_error_threshold: 100
+peers_from_netmap: false
 
 max_clients_count: 100
 max_clients_deadline: 30s
@@ -199,6 +200,7 @@ namespace: ""
 | `healthcheck_timeout`            | `duration` |               | `15s`         | Timeout to check node health during rebalance.                                                                                            |
 | `rebalance_interval`             | `duration` |               | `60s`         | Interval to check node health.                                                                                                            |
 | `pool_error_threshold`           | `uint32`   |               | `100`         | The number of errors on connection after which node is considered as unhealthy.                                                           |
+| `peers_from_netmap`              | `bool`     |               | `false`       | Take NeoFS node addresses from the network map instead of the `peers` list, see the [`peers` section](#peers-section).                    |
 | `max_clients_count`              | `int`      |               | `100`         | Limits for processing of clients' requests.                                                                                               |
 | `max_clients_deadline`           | `duration` |               | `30s`         | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                   |
 | `allowed_access_key_id_prefixes` | `[]string` |               |               | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                |
@@ -247,6 +249,9 @@ peers:
 | `priority` | `int`    | `1`           | It allows to group nodes and don't switch group until all nodes with the same priority will be unhealthy. The lower the value, the higher the priority. |
 | `weight`   | `float`  | `1`           | Weight of node in the group with the same priority. Distribute requests to nodes proportionally to these values.                                        |
 
+With `peers_from_netmap` enabled the gateway instead takes node addresses from the
+NeoFS network map, which it reads from the `netmap` contract. A node is used if it is online
+in the network map and announces an address the gateway can dial.
 
 ### `placement_policy` section
 

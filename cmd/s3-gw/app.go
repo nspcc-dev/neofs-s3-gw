@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -91,7 +92,14 @@ type (
 )
 
 func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
-	conns, key := getPool(ctx, log.logger, v)
+	var rpcHTTPEndpoints = v.GetStringSlice(cfgRPCEndpoints)
+
+	resolvedContracts, err := contracts.ResolveContracts(ctx, log.logger, rpcHTTPEndpoints)
+	if err != nil {
+		log.logger.Fatal("resolve contracts failed", zap.Error(err), zap.Strings("endpoints", rpcHTTPEndpoints))
+	}
+
+	conns, key := getPool(ctx, log.logger, v, resolvedContracts.NetMapContract)
 
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
@@ -122,21 +130,12 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		log.logger.Fatal("unsupported config value", zap.String("option", cfgContainerMetadataPolicy))
 	}
 
-	var (
-		rpcHTTPEndpoints = v.GetStringSlice(cfgRPCEndpoints)
-		wsEndpoints      = make([]string, len(rpcHTTPEndpoints))
-	)
-
+	var wsEndpoints = make([]string, len(rpcHTTPEndpoints))
 	for i, endpoint := range rpcHTTPEndpoints {
 		wsEndpoints[i], err = httpToWS(endpoint)
 		if err != nil {
 			log.logger.Fatal("endpoint conversion failed", zap.Error(err), zap.String("enpoint", endpoint))
 		}
-	}
-
-	resolvedContracts, err := contracts.ResolveContracts(ctx, log.logger, rpcHTTPEndpoints)
-	if err != nil {
-		log.logger.Fatal("resolve contracts failed", zap.Error(err), zap.Strings("enpoints", rpcHTTPEndpoints))
 	}
 
 	epochListener := neofs.NewEpochListener(wsEndpoints, log.logger, resolvedContracts.NetMapContract)
@@ -298,7 +297,7 @@ func newMaxClients(cfg *viper.Viper) api.MaxClients {
 	return api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline)
 }
 
-func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.Pool, *keys.PrivateKey) {
+func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper, netMapContract util.Uint160) (*pool.Pool, *keys.PrivateKey) {
 	poolStat := metrics.NewPoolMetrics()
 
 	var prm pool.InitParameters
@@ -314,8 +313,27 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper) (*pool.P
 	prm.SetSigner(signer)
 	logger.Info("using credentials", zap.String("pub key", hex.EncodeToString(key.PublicKey().Bytes())), zap.Stringer("userID", signer.UserID()))
 
-	for _, peer := range fetchPeers(logger, cfg) {
-		prm.AddNode(peer)
+	var nodes []pool.NodeParam
+
+	if cfg.GetBool(cfgPeersFromNetmap) {
+		endpoints, err := neofs.NetmapNodes(ctx, logger, cfg.GetStringSlice(cfgRPCEndpoints), netMapContract)
+		if err != nil {
+			logger.Fatal("failed to read network map", zap.Error(err))
+		}
+
+		if len(endpoints) == 0 {
+			logger.Fatal("no usable nodes in network map")
+		}
+
+		logger.Info("using nodes from network map", zap.Strings("addresses", endpoints))
+
+		nodes = pool.NewFlatNodeParams(endpoints)
+	} else {
+		nodes = fetchPeers(logger, cfg)
+	}
+
+	for _, node := range nodes {
+		prm.AddNode(node)
 	}
 
 	connTimeout := cfg.GetDuration(cfgConnectTimeout)
