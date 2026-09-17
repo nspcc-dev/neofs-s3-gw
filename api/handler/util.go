@@ -71,6 +71,10 @@ func transformToS3Error(err error) error {
 		return s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 	}
 
+	if errors.Is(err, layer.ErrInapplicablePolicy) {
+		return s3errors.GetAPIError(s3errors.ErrInvalidLocationConstraint)
+	}
+
 	if errors.Is(err, apistatus.ErrContainerAwaitTimeout) {
 		return s3errors.GetAPIError(s3errors.ErrOperationTimedOut)
 	}

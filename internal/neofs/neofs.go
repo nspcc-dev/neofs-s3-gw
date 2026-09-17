@@ -30,6 +30,7 @@ import (
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
+	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object/slicer"
@@ -188,13 +189,24 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 		cnr.SetAttribute(containerMetaDataPolicyAttribute, prm.Policy.Consistency)
 	}
 
+	var cnrID = cid.NewFromMarshalledContainer(cnr.Marshal())
+
+	nm, err := x.pool.NetMapSnapshot(ctx, client.PrmNetMapSnapshot{})
+	if err != nil {
+		return cid.ID{}, fmt.Errorf("get netmap snapshot: %w", err)
+	}
+
+	if err = checkPlacement(nm, prm.Policy.Placement, cnrID); err != nil {
+		return cid.ID{}, err
+	}
+
 	var prmPut client.PrmContainerPut
 	if prm.SessionTokenV2 != nil {
 		prmPut.WithinSessionV2(*prm.SessionTokenV2)
 	}
 
 	if !table.IsZero() {
-		table.SetCID(cid.NewFromMarshalledContainer(cnr.Marshal()))
+		table.SetCID(cnrID)
 		prmPut.WithEACL(table, nil)
 	}
 
@@ -205,6 +217,18 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	return idCnr, nil
+}
+
+func checkPlacement(nm netmap.NetMap, policy netmap.PlacementPolicy, cnrID cid.ID) error {
+	if _, err := nm.ContainerNodes(policy, cnrID); err != nil {
+		if errors.Is(err, netmap.ErrNotEnoughNodes) {
+			return fmt.Errorf("%w: %w", layer.ErrInapplicablePolicy, err)
+		}
+
+		return fmt.Errorf("check placement policy: %w", err)
+	}
+
+	return nil
 }
 
 // UserContainers implements neofs.NeoFS interface method.
