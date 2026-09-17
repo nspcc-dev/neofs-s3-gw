@@ -24,6 +24,7 @@ import (
 	cidtest "github.com/nspcc-dev/neofs-sdk-go/container/id/test"
 	neofscryptotest "github.com/nspcc-dev/neofs-sdk-go/crypto/test"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
+	netmaptest "github.com/nspcc-dev/neofs-sdk-go/netmap/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -229,6 +230,27 @@ func uploadDownload(ctx context.Context, t *testing.T, neo *NeoFS, p *pool.Pool,
 
 		require.True(t, bytes.Equal(payload, pl))
 	}
+}
+
+func TestCheckPlacement(t *testing.T) {
+	var nm netmap.NetMap
+	nm.SetNodes([]netmap.NodeInfo{netmaptest.NodeInfo()})
+
+	t.Run("applicable", func(t *testing.T) {
+		var policy netmap.PlacementPolicy
+		require.NoError(t, policy.DecodeString("REP 1"))
+
+		require.NoError(t, checkPlacement(nm, policy, cidtest.ID()))
+	})
+
+	t.Run("not enough nodes", func(t *testing.T) {
+		var policy netmap.PlacementPolicy
+		require.NoError(t, policy.DecodeString("REP 3"))
+
+		err := checkPlacement(nm, policy, cidtest.ID())
+		require.ErrorIs(t, err, layer.ErrInapplicablePolicy)
+		require.ErrorIs(t, err, netmap.ErrNotEnoughNodes)
+	})
 }
 
 func TestObjectNonce(t *testing.T) {

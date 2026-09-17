@@ -302,6 +302,9 @@ var ErrTooManyObjectForDeletion = errors.New("to many objects for deletion")
 // ErrDecodeUserID is returned if [user.ID] decode failed.
 var ErrDecodeUserID = errors.New("decode user.ID failed")
 
+// ErrInapplicablePolicy is returned if the placement policy can't be satisfied by the current network map.
+var ErrInapplicablePolicy = errors.New("inapplicable placement policy")
+
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
 	// CreateContainer creates and saves parameterized container in NeoFS.

@@ -92,6 +92,7 @@ const (
 	ErrMissingCredTag
 	ErrCredMalformed
 	ErrInvalidRegion
+	ErrInvalidLocationConstraint
 	ErrInvalidServiceS3
 	ErrInvalidServiceSTS
 	ErrInvalidRequestVersion
@@ -688,6 +689,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrInvalidRegion,
 		Code:           "InvalidRegion",
 		Description:    "Region does not match.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidLocationConstraint: {
+		ErrCode:        ErrInvalidLocationConstraint,
+		Code:           "InvalidLocationConstraint",
+		Description:    "The specified location constraint is not valid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidServiceS3: {
