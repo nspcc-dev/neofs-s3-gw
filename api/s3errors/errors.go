@@ -695,7 +695,7 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrInvalidLocationConstraint,
 		Code:           "InvalidLocationConstraint",
 		Description:    "The specified location constraint is not valid.",
-		HTTPStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrInvalidServiceS3: {
 		ErrCode:        ErrInvalidServiceS3,
