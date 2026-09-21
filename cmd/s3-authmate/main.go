@@ -226,7 +226,7 @@ func issueSecret() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:        "session-tokens",
-				Usage:       "create session tokens with rules, if the rules are set as 'none', no session tokens will be created",
+				Usage:       "create session tokens with given rules",
 				Required:    false,
 				Destination: &sessionTokenFlag,
 				Value:       "",
@@ -425,10 +425,6 @@ func getJSONRules(val string) ([]byte, error) {
 // getSessionRules reads json session rules.
 // It returns true if rules must be skipped.
 func getSessionRules(r string) ([]byte, bool, error) {
-	if r == "none" {
-		return nil, true, nil
-	}
-
 	data, err := getJSONRules(r)
 	return data, false, err
 }

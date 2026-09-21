@@ -145,7 +145,7 @@ the secret. Format of `access_key_id`: `%cid0%oid`, where 0(zero) is a delimiter
 
 NeoFS session tokens allow to limit actions allowed by token, so they can
 be scoped for a particular set of operations and/or containers if needed.
-There are three options:
+There are two options:
 
 1. append `--session-tokens` parameter with your custom rules in json format (as a string or file path). E.g.:
 ```shell
@@ -214,8 +214,7 @@ format (base58 encoded string).
 the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 
 forgot about the rule with `SETEACL`.
 
-2. append `--session-tokens` parameter with the value `none` -- no session token will be created
-3. skip the parameter, and `authmate` will create session tokens with default rules that allow every container and
+2. skip the parameter, and `authmate` will create session tokens with default rules that allow every container and
 object operation listed above for all containers
 
 ### Containers policy
