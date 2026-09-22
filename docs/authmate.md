@@ -2,81 +2,41 @@
 
 Authmate is a tool to create gateway AWS credentials. AWS users
 are authenticated with access key IDs and secrets, while NeoFS users are
-authenticated with key pairs. To complicate things further, we have S3 gateway
-that usually acts on behalf of some user, but the user doesn't necessarily want to
-give their keys to the gateway.
+authenticated with key pairs. S3 gateway needs to act on behalf of some
+user, but the user doesn't necessarily want to give his keys to the gateway.
 
-To solve this, we use NeoFS bearer tokens that are signed by the owner (NeoFS
-"user") and that can implement any kind of policy for NeoFS requests allowed
-to use this token. However, tokens can't be used as AWS credentials directly. Thus,
-they're stored on NeoFS as regular objects, and an access key ID is just an
-address of this object while a secret is generated randomly.
+To solve this, we use NeoFS session tokens that are signed by the owner (NeoFS
+"user") giving a user-controlled set of abilities to a user-controlled set
+of gateways. However, tokens can't be used as AWS credentials directly.
+Therefore, they're stored in NeoFS as regular objects (also known as
+"authboxes" since a set of tokens can be packed into a single object),
+and access key ID is just an address of this object while secret is
+generated randomly.
 
-Tokens are not stored on NeoFS in plaintext, they're encrypted with a set of
-gateway keys. So, in order for a gateway to be able to successfully extract bearer
-token, the object needs to be stored in a container available for the gateway
-to read, and it needs to be encrypted with this gateway's key (among others
-potentially).
+Since secret should be shared between user and gateway, but not accessible
+to others, it's not stored in plaintext. It's encrypted with a set of gateway
+keys. So, in order for a gateway to be able to successfully work with an
+appropriate session token, the authbox object needs to be stored in a container
+available for the gateway to read, and it needs to be encrypted with this
+gateway's key (among others potentially).
 
-1. [Generation of wallet](#generation-of-wallet)
-2. [Issuance of a secret](#issuance-of-a-secret)
-   1. [CLI parameters](#cli-parameters)
-   2. [Bearer tokens](#bearer-tokens)
+1. [Issuance of a secret](#issuance-of-a-secret)
+   1. [Generation of a wallet](#generation-of-a-wallet)
+   2. [CLI parameters](#cli-parameters)
    3. [Session tokens](#session-tokens)
    4. [Containers policy](#containers-policy)
-3. [Obtainment of a secret](#obtainment-of-a-secret-access-key)
-4. [Generate presigned url](#generate-presigned-url)
+2. [Obtainment of a secret](#obtainment-of-a-secret-access-key)
 
-Credentials can also be issued over HTTP, without handing the user key to
-anything, see [the authmate service](authmatesrv.md).
+Credentials can also be issued over HTTP, see [the authmate service](authmatesrv.md).
 
-## Generation of wallet
+## Issuance of a secret
 
-To generate a wallet for a gateway, run the following command:
+To issue a secret means to create a set of session tokens (but it can be a single
+token as well if the set of gateways is limited) and put them as an object into
+a container on the NeoFS network.
 
-```shell
-$ ./neo-go wallet init -a -w gate.wallet.json
-
-Enter the name of the account > GateWallet
-Enter passphrase > 
-Confirm passphrase > 
-
-{
- 	"version": "3.0",
- 	"accounts": [
- 		{
- 			"address": "NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p",
- 			"key": "6PYUFyYpJ1JGyMrYV8NqeUFLKfpEVHsGGjCYtTDkjnKaSgYizRBZxVerte",
- 			"label": "GateWallet",
- 			"contract": {
- 				"script": "DCECXCsUZPwUyKHs6nAyyCvJ5s/vLwZkkVtWNC0zWzH8a9dBVuezJw==",
- 				"parameters": [
- 					{
- 						"name": "parameter0",
- 						"type": "Signature"
- 					}
- 				],
- 				"deployed": false
- 			},
- 			"lock": false,
- 			"isDefault": false
- 		}
- 	],
- 	"scrypt": {
- 		"n": 16384,
- 		"r": 8,
- 		"p": 8
- 	},
- 	"extra": {
- 		"Tokens": null
- 	}
- }
-```
-
-wallet is successfully created, the file location is gate.wallet.json. This wallet should be used in gate config.
-See `wallet` section in gate configuration.
-
-To get the public key from the gate wallet:
+Gateway public keys are supposed to be known, if you're running a gateway
+of your own you can obtain them from wallets using NeoGo like this:
 ```shell
 $ ./bin/neo-go wallet dump-keys -w gate.wallet.json
 
@@ -86,12 +46,7 @@ NhLQpDnerpviUWDF77j5qyjFgavCmasJ4p (simple signature contract):
 
 This public key will be used for user secret issuing.
 
-## Issuance of a secret
-
-To issue a secret means to create Bearer and, optionally, Session tokens and
-put them as an object into a container on the NeoFS network.
-
-### Generation of wallet
+### Generation of a wallet
 
 If you already have a personal wallet, you may skip this step.
 If you don't, generate a new account with `neo-go` CLI:
@@ -188,7 +143,10 @@ the secret. Format of `access_key_id`: `%cid0%oid`, where 0(zero) is a delimiter
 
 ### Session tokens
 
-With a session token, there are 3 options: 
+NeoFS session tokens allow to limit actions allowed by token, so they can
+be scoped for a particular set of operations and/or containers if needed.
+There are two options:
+
 1. append `--session-tokens` parameter with your custom rules in json format (as a string or file path). E.g.:
 ```shell
 $ neofs-s3-authmate issue-secret --wallet user.wallet.json \
@@ -256,8 +214,7 @@ format (base58 encoded string).
 the authmate creates a `SETEACL` session token automatically in case when a user specified the token rule with `PUT` and 
 forgot about the rule with `SETEACL`.
 
-2. append `--session-tokens` parameter with the value `none` -- no session token will be created
-3. skip the parameter, and `authmate` will create session tokens with default rules that allow every container and
+2. skip the parameter, and `authmate` will create session tokens with default rules that allow every container and
 object operation listed above for all containers
 
 ### Containers policy
