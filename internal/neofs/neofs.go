@@ -711,43 +711,6 @@ func (x *AuthmateNeoFS) ContainerEACL(ctx context.Context, containerID cid.ID) (
 	return x.neoFS.ContainerEACL(ctx, containerID)
 }
 
-// SearchObjects implements neofs.NeoFS interface method.
-func (x *NeoFS) SearchObjects(ctx context.Context, prm layer.PrmObjectSearch) ([]oid.ID, error) {
-	var prmSearch client.PrmObjectSearch
-	if prm.SessionTokenV2 != nil {
-		prmSearch.WithinSessionV2(*prm.SessionTokenV2)
-	}
-
-	prmSearch.SetFilters(prm.Filters)
-	prmSearch.WithXHeaders(prm.XHeaders...)
-
-	rdr, err := x.pool.ObjectSearchInit(ctx, prm.Container, x.signer(ctx), prmSearch)
-	if err != nil {
-		if reason, ok := isErrAccessDenied(err); ok {
-			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-		}
-
-		return nil, fmt.Errorf("init object search via connection pool: %w", err)
-	}
-
-	defer func() {
-		_ = rdr.Close()
-	}()
-
-	var oids []oid.ID
-
-	iteratorFunc := func(id oid.ID) bool {
-		oids = append(oids, id)
-		return false
-	}
-
-	if err = rdr.Iterate(iteratorFunc); err != nil {
-		return nil, fmt.Errorf("iterate object search via connection pool: %w", err)
-	}
-
-	return oids, nil
-}
-
 // SearchObjectsV2 implements neofs.NeoFS interface method.
 func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, error) {
 	var (
