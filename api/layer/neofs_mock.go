@@ -518,29 +518,6 @@ func getOwner(ctx context.Context) user.ID {
 	return user.ID{}
 }
 
-// SearchObjects searches objects with corresponding filters.
-func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid.ID, error) {
-	var oids []oid.ID
-
-	t.objectsMutex.RLock()
-	defer t.objectsMutex.RUnlock()
-	if len(prm.Filters) == 0 {
-		for _, obj := range t.objects {
-			oids = append(oids, obj.GetID())
-		}
-
-		return oids, nil
-	}
-
-	for _, obj := range t.objects {
-		if checkFilters(obj, prm.Filters) {
-			oids = append(oids, obj.GetID())
-		}
-	}
-
-	return oids, nil
-}
-
 // SearchObjectsV2 implements neofs.NeoFS interface method.
 func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, _ client.SearchObjectsOptions) ([]client.SearchResultItem, error) {
 	var (

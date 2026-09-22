@@ -18,6 +18,7 @@ This document outlines major changes between releases.
 - Gateway startup with unavailable FS-chain RPC endpoints (#1356)
 
 ### Updated
+- NeoFS SDK to RC23 version (#1244)
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
 - github.com/aws/aws-sdk-go-v2/credentials v1.19.37 => v1.20.2 (#1346)
 - github.com/klauspost/reedsolomon v1.13.2 => v1.14.2 (#1346)
