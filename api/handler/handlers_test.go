@@ -145,6 +145,10 @@ func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {
 	err = hc.Layer().PutBucketACL(hc.Context(), &p)
 	require.NoError(hc.t, err)
 
+	// Writing invalidates the cached info, we need to get refreshed.
+	bktInfo, err = hc.Layer().GetBucketInfo(hc.Context(), bktName)
+	require.NoError(hc.t, err)
+
 	return bktInfo
 }
 

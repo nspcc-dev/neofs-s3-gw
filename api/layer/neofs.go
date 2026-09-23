@@ -232,6 +232,9 @@ type PrmObjectCreate struct {
 	// Associated filepath (optional).
 	Filepath string
 
+	// Container revision to pin for the request. Zero means no pin.
+	ContainerRevision uint64
+
 	// Object payload encapsulated in io.Reader primitive.
 	Payload io.Reader
 
@@ -289,6 +292,10 @@ var ErrDecodeUserID = errors.New("decode user.ID failed")
 
 // ErrInapplicablePolicy is returned if the placement policy can't be satisfied by the current network map.
 var ErrInapplicablePolicy = errors.New("inapplicable placement policy")
+
+// ErrStaleBucketInfo is returned when an object write was into container, which
+// state is changed. It is only returned if the object payload is still untouched.
+var ErrStaleBucketInfo = errors.New("stale bucket info")
 
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {

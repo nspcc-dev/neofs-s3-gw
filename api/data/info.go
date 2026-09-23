@@ -40,6 +40,7 @@ type (
 		Name                   string
 		Namespace              string
 		CID                    cid.ID
+		Revision               uint64
 		Owner                  user.ID
 		Created                time.Time
 		LocationConstraint     string
