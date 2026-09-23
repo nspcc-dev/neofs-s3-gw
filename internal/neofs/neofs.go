@@ -440,14 +440,18 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 	}
 
-	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload)
+	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload, prm.ContainerRevision)
 }
 
-func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader) (oid.ID, error) {
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader, cnrRevision *uint64) (oid.ID, error) {
 	var prmObjPutInit client.PrmObjectPutInit
 
 	if sessionv2 != nil {
 		prmObjPutInit.WithinSessionV2(*sessionv2)
+	}
+
+	if cnrRevision != nil {
+		prmObjPutInit.AttachContainerRevision(*cnrRevision)
 	}
 
 	writer, err := x.pool.ObjectPutInit(ctx, hdr, signer, prmObjPutInit)

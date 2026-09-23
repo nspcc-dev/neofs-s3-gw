@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Object PUT is pinned to the container revision (#1244)
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
 - Access boxes are sealed with HPKE now, this is access box version 2 (#1344)
 - Authmatesrv service returns the S3 secret access key from `POST /v1/auth/s3` (#1344)

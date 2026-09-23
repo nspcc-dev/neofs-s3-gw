@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -173,11 +174,26 @@ const (
 	amzBucketOwnerEnforced     = "BucketOwnerEnforced"
 	amzBucketOwnerPreferred    = "BucketOwnerPreferred"
 	amzBucketOwnerObjectWriter = "ObjectWriter"
+
+	putObjectExtraAttempts = 1
 )
 
 type createBucketParams struct {
 	XMLName            xml.Name `xml:"CreateBucketConfiguration" json:"-"`
 	LocationConstraint string
+}
+
+func (h *handler) retryPutOnStaleBucketInfo(attempt int, err error, reqInfo *api.ReqInfo) bool {
+	if attempt >= putObjectExtraAttempts || !errors.Is(err, layer.ErrStaleBucketInfo) {
+		return false
+	}
+
+	h.log.Debug("container changed during object put, retrying with refreshed bucket info",
+		zap.String("request_id", reqInfo.RequestID),
+		zap.String("bucket", reqInfo.BucketName),
+		zap.String("object", reqInfo.ObjectName))
+
+	return true
 }
 
 func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -192,17 +208,62 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
+	var (
+		bktInfo         *data.BucketInfo
+		extendedObjInfo *data.ExtendedObjectInfo
+
+		hasACLHeaders = containsACLHeaders(r)
+	)
+
+	for attempt := range putObjectExtraAttempts + 1 {
+		var retry bool
+
+		bktInfo, extendedObjInfo, retry = h.putObjectAttempt(w, r, attempt, tagSet, hasACLHeaders)
+		if !retry {
+			break
+		}
+	}
+
+	if bktInfo == nil || extendedObjInfo == nil {
+		// The last attempt has answered the client already.
 		return
 	}
 
-	if containsACLHeaders(r) {
+	objInfo := extendedObjInfo.ObjectInfo
+
+	s := &SendNotificationParams{
+		Event:            EventObjectCreatedPut,
+		NotificationInfo: data.NotificationInfoFromObject(objInfo),
+		BktInfo:          bktInfo,
+		ReqInfo:          reqInfo,
+	}
+	if err = h.sendNotifications(r.Context(), s); err != nil {
+		h.log.Error("couldn't send notification: %w", zap.Error(err))
+	}
+
+	if bktInfo.Settings.VersioningEnabled() {
+		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
+	}
+
+	w.Header().Set(api.ETag, objInfo.HashSum)
+	api.WriteSuccessResponseHeadersOnly(w)
+}
+
+func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attempt int, tagSet map[string]string,
+	hasACLHeaders bool) (*data.BucketInfo, *data.ExtendedObjectInfo, bool) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket objInfo", reqInfo, err)
+		return nil, nil, false
+	}
+
+	if hasACLHeaders {
 		if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
 			if !isValidOwnerEnforced(r) {
 				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
-				return
+				return nil, nil, false
 			}
 			r.Header.Set(api.AmzACL, "")
 		}
@@ -211,7 +272,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
 		if !isValidOwnerPreferred(r) {
 			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
-			return
+			return nil, nil, false
 		}
 		r.Header.Set(api.AmzACL, "")
 	}
@@ -230,13 +291,13 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
-		return
+		return nil, nil, false
 	}
 
 	cl, err := contentLengthFromRequest(r)
 	if err != nil {
 		h.logAndSendError(w, "content length parse failed", reqInfo, err)
-		return
+		return nil, nil, false
 	}
 
 	params := &layer.PutObjectParams{
@@ -252,48 +313,37 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	params.Lock, err = formObjectLock(r.Context(), bktInfo, bktInfo.Settings.LockConfiguration, r.Header)
 	if err != nil {
 		h.logAndSendError(w, "could not form object lock", reqInfo, err)
-		return
+		return nil, nil, false
 	}
 
 	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
-	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			h.logAndSendError(w, "could not upload object", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied), zap.Error(err))
-			return
+	if err == nil {
+		if encryptionParams.Enabled() {
+			addSSECHeaders(w.Header(), r.Header)
 		}
 
-		if s3err, ok := errors.AsType[s3errors.Error](err); ok {
-			h.logAndSendError(w, "could not upload object", reqInfo, s3err, zap.Error(err))
-			return
-		}
-
-		_, err2 := io.Copy(io.Discard, r.Body)
-		err3 := r.Body.Close()
-
-		h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
-		return
-	}
-	objInfo := extendedObjInfo.ObjectInfo
-
-	s := &SendNotificationParams{
-		Event:            EventObjectCreatedPut,
-		NotificationInfo: data.NotificationInfoFromObject(objInfo),
-		BktInfo:          bktInfo,
-		ReqInfo:          reqInfo,
-	}
-	if err = h.sendNotifications(r.Context(), s); err != nil {
-		h.log.Error("couldn't send notification: %w", zap.Error(err))
+		return bktInfo, extendedObjInfo, false
 	}
 
-	if bktInfo.Settings.VersioningEnabled() {
-		w.Header().Set(api.AmzVersionID, objInfo.VersionID())
-	}
-	if encryptionParams.Enabled() {
-		addSSECHeaders(w.Header(), r.Header)
+	if h.retryPutOnStaleBucketInfo(attempt, err, reqInfo) {
+		return nil, nil, true
 	}
 
-	w.Header().Set(api.ETag, objInfo.HashSum)
-	api.WriteSuccessResponseHeadersOnly(w)
+	if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+		h.logAndSendError(w, "could not upload object", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied), zap.Error(err))
+		return nil, nil, false
+	}
+
+	if s3err, ok := errors.AsType[s3errors.Error](err); ok {
+		h.logAndSendError(w, "could not upload object", reqInfo, s3err, zap.Error(err))
+		return nil, nil, false
+	}
+
+	_, err2 := io.Copy(io.Discard, r.Body)
+	err3 := r.Body.Close()
+
+	h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
+	return nil, nil, false
 }
 
 func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
@@ -382,44 +432,34 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
+	var (
+		bktInfo         *data.BucketInfo
+		extendedObjInfo *data.ExtendedObjectInfo
 
-	if containsACLHeaders(r) {
-		if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
-			if !isValidOwnerEnforced(r) {
-				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
-				return
-			}
-			r.Header.Set(api.AmzACL, "")
+		hasACLHeaders = containsACLHeaders(r)
+		params        = &layer.PutObjectParams{
+			Object: reqInfo.ObjectName,
+			Reader: contentReader,
+			Size:   size,
+			Header: metadata,
+			Tags:   tagSet,
+		}
+	)
+
+	for attempt := range putObjectExtraAttempts + 1 {
+		var retry bool
+
+		bktInfo, extendedObjInfo, retry = h.postObjectAttempt(w, r, attempt, params, hasACLHeaders)
+		if !retry {
+			break
 		}
 	}
 
-	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
-		if !isValidOwnerPreferred(r) {
-			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
-			return
-		}
-		r.Header.Set(api.AmzACL, "")
-	}
-
-	params := &layer.PutObjectParams{
-		BktInfo: bktInfo,
-		Object:  reqInfo.ObjectName,
-		Reader:  contentReader,
-		Size:    size,
-		Header:  metadata,
-		Tags:    tagSet,
-	}
-
-	extendedObjInfo, err := h.obj.PutObject(r.Context(), params)
-	if err != nil {
-		h.logAndSendError(w, "could not upload object", reqInfo, err)
+	if bktInfo == nil || extendedObjInfo == nil {
+		// The last attempt has answered the client already.
 		return
 	}
+
 	objInfo := extendedObjInfo.ObjectInfo
 
 	s := &SendNotificationParams{
@@ -462,6 +502,53 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(api.ETag, objInfo.HashSum)
 	w.WriteHeader(status)
+}
+
+func (h *handler) postObjectAttempt(w http.ResponseWriter, r *http.Request, attempt int, params *layer.PutObjectParams,
+	hasACLHeaders bool) (*data.BucketInfo, *data.ExtendedObjectInfo, bool) {
+	reqInfo := api.GetReqInfo(r.Context())
+
+	bktInfo, err := h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName)
+	if err != nil {
+		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+		return nil, nil, false
+	}
+
+	if hasACLHeaders {
+		if bktInfo.Settings.BucketOwner == data.BucketOwnerEnforced {
+			if !isValidOwnerEnforced(r) {
+				h.logAndSendError(w, "access control list not supported", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessControlListNotSupported))
+				return nil, nil, false
+			}
+			r.Header.Set(api.AmzACL, "")
+		}
+	}
+
+	if bktInfo.Settings.BucketOwner == data.BucketOwnerPreferredAndRestricted {
+		if !isValidOwnerPreferred(r) {
+			h.logAndSendError(w, "header x-amz-acl:bucket-owner-full-control must be set", reqInfo, s3errors.GetAPIError(s3errors.ErrAccessDenied))
+			return nil, nil, false
+		}
+		r.Header.Set(api.AmzACL, "")
+	}
+
+	// PutObject needs the bucket this attempt resolved and writes into the header map,
+	// so it is given a copy of the parameters.
+	attemptParams := *params
+	attemptParams.BktInfo = bktInfo
+	attemptParams.Header = maps.Clone(params.Header)
+
+	extendedObjInfo, err := h.obj.PutObject(r.Context(), &attemptParams)
+	if err == nil {
+		return bktInfo, extendedObjInfo, false
+	}
+
+	if h.retryPutOnStaleBucketInfo(attempt, err, reqInfo) {
+		return nil, nil, true
+	}
+
+	h.logAndSendError(w, "could not upload object", reqInfo, err)
+	return nil, nil, false
 }
 
 func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]string) (*postPolicy, error) {
