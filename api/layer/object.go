@@ -269,13 +269,20 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		p.Size = int64(encSize)
 	}
 
-	oldVersions, oldVersionsErr := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true)
+	// This search is pinned to the container revision and stays ahead of anything
+	// that reads r. It is the only point where an outdated view of the container can
+	// be noticed while the payload is still untouched and the request replayable.
+	oldVersions, oldVersionsErr := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, true, true)
 	if oldVersionsErr != nil && !errors.Is(oldVersionsErr, ErrNodeNotFound) {
 		n.log.Warn("search old object versions failed",
 			zap.String("object", p.Object),
 			zap.String("bucket", p.BktInfo.Name),
 			zap.Stringer("cid", p.BktInfo.CID),
 			zap.Error(oldVersionsErr))
+
+		if errors.Is(oldVersionsErr, apistatus.ErrContainerRevisionMismatch) {
+			return nil, fmt.Errorf("%w: %w", ErrStaleBucketInfo, oldVersionsErr)
+		}
 
 		return nil, fmt.Errorf("search all versions in neofs: %w", oldVersionsErr)
 	}
@@ -304,14 +311,18 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		p.Header[s3headers.NeoFSSystemMetadataTagPrefix+k] = v
 	}
 
+	// p.BktInfo is the pointer shared with the bucket cache, so make a copy.
+	cnrRevision := p.BktInfo.Revision
+
 	prm := PrmObjectCreate{
-		Container:    p.BktInfo.CID,
-		Creator:      owner,
-		PayloadSize:  uint64(p.Size),
-		Filepath:     p.Object,
-		Payload:      r,
-		CreationTime: TimeNow(ctx),
-		Attributes:   p.Header,
+		Container:         p.BktInfo.CID,
+		Creator:           owner,
+		PayloadSize:       uint64(p.Size),
+		Filepath:          p.Object,
+		Payload:           r,
+		CreationTime:      TimeNow(ctx),
+		Attributes:        p.Header,
+		ContainerRevision: &cnrRevision,
 	}
 
 	if p.BktInfo.Settings.VersioningEnabled() {
@@ -490,13 +501,13 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, prm multipartHea
 // searchAllVersionsInNeoFS returns all version of object by its objectName.
 //
 // Returns ErrNodeNotFound if zero objects found.
-func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool) ([]allVersionsSearchResult, error) {
-	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, objectName, onlyUnversioned, nil, false)
+func (n *layer) searchAllVersionsInNeoFS(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned, pinContainerRevision bool) ([]allVersionsSearchResult, error) {
+	searchResults, _, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, objectName, onlyUnversioned, nil, false, pinContainerRevision)
 
 	return searchResults, err
 }
 
-func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool, cursor *string, isObjectNamePrefix bool) ([]allVersionsSearchResult, string, error) {
+func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *data.BucketInfo, objectName string, onlyUnversioned bool, cursor *string, isObjectNamePrefix, pinContainerRevision bool) ([]allVersionsSearchResult, string, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 4)
 		returningAttributes = []string{
@@ -514,6 +525,10 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 	)
 
 	attachTokenToParams(ctx, bkt.Owner, &opts)
+
+	if pinContainerRevision {
+		opts.AttachContainerRevision(bkt.Revision)
+	}
 
 	matchType := object.MatchCommonPrefix
 	if len(objectName) > 0 && !isObjectNamePrefix {
@@ -535,6 +550,8 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 				return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
 			}
 
+			n.dropBucketCacheOnRevisionMismatch(bkt, err)
+
 			return nil, "", fmt.Errorf("search object version: %w", err)
 		}
 	} else {
@@ -543,6 +560,8 @@ func (n *layer) searchAllVersionsInNeoFSWithCursor(ctx context.Context, bkt *dat
 			if errors.Is(err, apistatus.ErrObjectAccessDenied) {
 				return nil, "", s3errors.GetAPIError(s3errors.ErrAccessDenied)
 			}
+
+			n.dropBucketCacheOnRevisionMismatch(bkt, err)
 
 			return nil, "", fmt.Errorf("search object version: %w", err)
 		}
@@ -1075,6 +1094,8 @@ func (n *layer) objectPutAndHash(ctx context.Context, prm PrmObjectCreate, bktIn
 
 	id, err := n.neoFS.CreateObject(ctx, prm)
 	if err != nil {
+		n.dropBucketCacheOnRevisionMismatch(bktInfo, err)
+
 		return oid.ID{}, nil, err
 	}
 	return id, hash.Sum(nil), nil
@@ -1262,7 +1283,7 @@ func (n *layer) getLatestObjectsVersions(ctx context.Context, p allObjectParams)
 }
 
 func (n *layer) getAllObjectsVersions(ctx context.Context, bkt *data.BucketInfo, prefix, cursor, delimiter string) (map[string][]*data.ExtendedObjectInfo, string, error) {
-	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, prefix, false, &cursor, true)
+	searchResults, nextCursor, err := n.searchAllVersionsInNeoFSWithCursor(ctx, bkt, prefix, false, &cursor, true, false)
 	if err != nil {
 		return nil, "", err
 	}

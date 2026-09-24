@@ -1358,7 +1358,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 
 	if !p.Info.Bkt.Settings.VersioningEnabled() {
 		wg.Go(func() {
-			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, p.Info.Key, true)
+			oldVersions, oldVersionsErr = n.searchAllVersionsInNeoFS(ctx, p.Info.Bkt, p.Info.Key, true, false)
 		})
 	}
 

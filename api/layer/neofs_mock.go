@@ -47,6 +47,42 @@ type TestNeoFS struct {
 	currentTime  int64
 	signer       neofscrypto.Signer
 	readCounter  atomic.Int64
+
+	searchRevisionMismatch int
+}
+
+func (t *TestNeoFS) SetSearchRevisionMismatch(n int) {
+	t.searchRevisionMismatch = n
+}
+
+// containerRevision returns the revision of the stored container, zero for an
+// unknown one.
+func (t *TestNeoFS) containerRevision(id cid.ID) uint64 {
+	cnr, ok := t.containers[id.EncodeToString()]
+	if !ok {
+		return 0
+	}
+
+	return cnr.Revision()
+}
+
+func (t *TestNeoFS) setContainerRevision(cnr *container.Container, revision uint64) {
+	m := cnr.ProtoMessage()
+	m.Revision = revision
+
+	// Test containers often carry an empty placement policy, which does not pass
+	// decoding. It is dropped for the round trip and put back afterwards.
+	policy := cnr.PlacementPolicy()
+	m.PlacementPolicy = nil
+
+	b := make([]byte, m.MarshaledSize())
+	m.MarshalStable(b)
+
+	if err := cnr.Unmarshal(b); err != nil {
+		panic(fmt.Errorf("set container revision: %w", err))
+	}
+
+	cnr.SetPlacementPolicy(policy)
 }
 
 func (t *TestNeoFS) ReadObjectCalls() int64 {
@@ -321,6 +357,10 @@ func (t *TestNeoFS) constructMupltipartObject(ctx context.Context, containerID c
 }
 
 func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID, error) {
+	if prm.ContainerRevision != nil && *prm.ContainerRevision != t.containerRevision(prm.Container) {
+		return oid.ID{}, apistatus.ErrContainerRevisionMismatch
+	}
+
 	b := make([]byte, 32)
 	_, _ = io.ReadFull(rand.Reader, b)
 	id := oid.NewFromObjectHeaderBinary(b)
@@ -498,6 +538,9 @@ func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *ses
 
 	t.eaclTables[cnrID.EncodeToString()] = &table
 
+	cnr := t.containers[cnrID.EncodeToString()]
+	t.setContainerRevision(cnr, cnr.Revision()+1)
+
 	return nil
 }
 
@@ -518,31 +561,13 @@ func getOwner(ctx context.Context) user.ID {
 	return user.ID{}
 }
 
-// SearchObjects searches objects with corresponding filters.
-func (t *TestNeoFS) SearchObjects(_ context.Context, prm PrmObjectSearch) ([]oid.ID, error) {
-	var oids []oid.ID
-
-	t.objectsMutex.RLock()
-	defer t.objectsMutex.RUnlock()
-	if len(prm.Filters) == 0 {
-		for _, obj := range t.objects {
-			oids = append(oids, obj.GetID())
-		}
-
-		return oids, nil
-	}
-
-	for _, obj := range t.objects {
-		if checkFilters(obj, prm.Filters) {
-			oids = append(oids, obj.GetID())
-		}
-	}
-
-	return oids, nil
-}
-
 // SearchObjectsV2 implements neofs.NeoFS interface method.
 func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, _ client.SearchObjectsOptions) ([]client.SearchResultItem, error) {
+	if t.searchRevisionMismatch > 0 {
+		t.searchRevisionMismatch--
+		return nil, apistatus.ErrContainerRevisionMismatch
+	}
+
 	var (
 		searchedItems []searchedItem
 		ignoreFilters = len(filters) == 0
@@ -570,6 +595,11 @@ func (t *TestNeoFS) SearchObjectsV2(_ context.Context, cid cid.ID, filters objec
 
 // SearchObjectsV2WithCursor implements neofs.NeoFS interface method.
 func (t *TestNeoFS) SearchObjectsV2WithCursor(_ context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, p client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
+	if t.searchRevisionMismatch > 0 {
+		t.searchRevisionMismatch--
+		return nil, "", apistatus.ErrContainerRevisionMismatch
+	}
+
 	var (
 		searchedItems []searchedItem
 		nextCursor    string
@@ -662,6 +692,8 @@ func (t *TestNeoFS) SetContainerAttribute(_ context.Context, id cid.ID, key, val
 	}
 
 	cnr.SetAttribute(key, value)
+	t.setContainerRevision(cnr, cnr.Revision()+1)
+
 	return nil
 }
 
@@ -683,6 +715,9 @@ func (t *TestNeoFS) RemoveContainerAttribute(_ context.Context, id cid.ID, key s
 			rebuilt.SetAttribute(k, v)
 		}
 	}
+
+	// The rebuilt container starts at revision zero, carry the counter over.
+	t.setContainerRevision(&rebuilt, cnr.Revision()+1)
 
 	t.containers[id.EncodeToString()] = &rebuilt
 	return nil

@@ -79,6 +79,10 @@ func transformToS3Error(err error) error {
 		return s3errors.GetAPIError(s3errors.ErrOperationTimedOut)
 	}
 
+	if errors.Is(err, apistatus.ErrContainerRevisionMismatch) {
+		return s3errors.GetAPIError(s3errors.ErrOperationAborted)
+	}
+
 	return s3errors.GetAPIError(s3errors.ErrInternalError)
 }
 

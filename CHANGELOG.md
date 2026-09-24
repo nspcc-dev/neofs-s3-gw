@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Object PUT is pinned to the container revision (#1244)
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
 - Access boxes are sealed with HPKE now, this is access box version 2 (#1344)
 - Authmatesrv service returns the S3 secret access key from `POST /v1/auth/s3` (#1344)
@@ -16,6 +17,7 @@ This document outlines major changes between releases.
 - Bucket can be created with inapplicable policy (#1351)
 
 ### Updated
+- NeoFS SDK to RC22 v1.0.0-rc.22.0.20260921152514-a9e144a15933 version (#1244)
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
 - github.com/aws/aws-sdk-go-v2/credentials v1.19.37 => v1.20.2 (#1346)
 - github.com/klauspost/reedsolomon v1.13.2 => v1.14.2 (#1346)

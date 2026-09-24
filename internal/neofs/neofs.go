@@ -440,14 +440,18 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 		}
 	}
 
-	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload)
+	return x.putReadyObject(ctx, signer, prm.SessionTokenV2, obj, prm.Payload, prm.ContainerRevision)
 }
 
-func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader) (oid.ID, error) {
+func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv2 *session.Token, hdr object.Object, pldRdr io.Reader, cnrRevision *uint64) (oid.ID, error) {
 	var prmObjPutInit client.PrmObjectPutInit
 
 	if sessionv2 != nil {
 		prmObjPutInit.WithinSessionV2(*sessionv2)
+	}
+
+	if cnrRevision != nil {
+		prmObjPutInit.AttachContainerRevision(*cnrRevision)
 	}
 
 	writer, err := x.pool.ObjectPutInit(ctx, hdr, signer, prmObjPutInit)
@@ -709,43 +713,6 @@ func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, 
 // ContainerEACL implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) ContainerEACL(ctx context.Context, containerID cid.ID) (*eacl.Table, error) {
 	return x.neoFS.ContainerEACL(ctx, containerID)
-}
-
-// SearchObjects implements neofs.NeoFS interface method.
-func (x *NeoFS) SearchObjects(ctx context.Context, prm layer.PrmObjectSearch) ([]oid.ID, error) {
-	var prmSearch client.PrmObjectSearch
-	if prm.SessionTokenV2 != nil {
-		prmSearch.WithinSessionV2(*prm.SessionTokenV2)
-	}
-
-	prmSearch.SetFilters(prm.Filters)
-	prmSearch.WithXHeaders(prm.XHeaders...)
-
-	rdr, err := x.pool.ObjectSearchInit(ctx, prm.Container, x.signer(ctx), prmSearch)
-	if err != nil {
-		if reason, ok := isErrAccessDenied(err); ok {
-			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
-		}
-
-		return nil, fmt.Errorf("init object search via connection pool: %w", err)
-	}
-
-	defer func() {
-		_ = rdr.Close()
-	}()
-
-	var oids []oid.ID
-
-	iteratorFunc := func(id oid.ID) bool {
-		oids = append(oids, id)
-		return false
-	}
-
-	if err = rdr.Iterate(iteratorFunc); err != nil {
-		return nil, fmt.Errorf("iterate object search via connection pool: %w", err)
-	}
-
-	return oids, nil
 }
 
 // SearchObjectsV2 implements neofs.NeoFS interface method.

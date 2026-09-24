@@ -232,6 +232,9 @@ type PrmObjectCreate struct {
 	// Associated filepath (optional).
 	Filepath string
 
+	// Container revision for the request. Zero is a valid revision, hence the pointer.
+	ContainerRevision *uint64
+
 	// Object payload encapsulated in io.Reader primitive.
 	Payload io.Reader
 
@@ -275,21 +278,6 @@ type PrmObjectDelete struct {
 	Object oid.ID
 }
 
-// PrmObjectSearch groups parameters of NeoFS.SearchObjects operation.
-type PrmObjectSearch struct {
-	// Authentication parameters.
-	PrmAuth
-
-	// Container to read the object header from.
-	Container cid.ID
-
-	// Filters for object filtering.
-	Filters object.SearchFilters
-
-	// XHeaders for object filtering.
-	XHeaders []string
-}
-
 // ErrAccessDenied is returned from NeoFS in case of access violation.
 var ErrAccessDenied = errors.New("access denied")
 
@@ -304,6 +292,10 @@ var ErrDecodeUserID = errors.New("decode user.ID failed")
 
 // ErrInapplicablePolicy is returned if the placement policy can't be satisfied by the current network map.
 var ErrInapplicablePolicy = errors.New("inapplicable placement policy")
+
+// ErrStaleBucketInfo is returned when an object write was into container, which
+// state is changed. It is only returned if the object payload is still untouched.
+var ErrStaleBucketInfo = errors.New("stale bucket info")
 
 // NeoFS represents virtual connection to NeoFS network.
 type NeoFS interface {
@@ -402,9 +394,6 @@ type NeoFS interface {
 
 	// CurrentEpoch returns current epoch.
 	CurrentEpoch() uint64
-
-	// SearchObjects searches objects with corresponding filters.
-	SearchObjects(ctx context.Context, prm PrmObjectSearch) ([]oid.ID, error)
 
 	// SearchObjectsV2 searches objects with corresponding filters and return objectID with requested attributes.
 	SearchObjectsV2(context.Context, cid.ID, object.SearchFilters, []string, client.SearchObjectsOptions) ([]client.SearchResultItem, error)
