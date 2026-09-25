@@ -66,6 +66,9 @@ Using these flag you can configure only one address. To set multiple addresses u
 
 ### RPC endpoint and resolving of bucket names
 
+When multiple FS-chain RPC endpoints are configured, the gateway starts if it
+can initialize at least one of them.
+
 To set RPC endpoint specify a value of parameter `-r` or `--rpc_endpoint`. This endpoint must be set.
 
 ```shell

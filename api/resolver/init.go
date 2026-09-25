@@ -20,6 +20,9 @@ type Container struct {
 	resolver *NNSResolver
 }
 
+// nnsReaderInitializer initializes an NNS reader for an endpoint.
+type nnsReaderInitializer func(context.Context, string) (*nns.ContractReader, error)
+
 // ResolveCID looks up the container id by its name via NNS contract.
 // The method calls inline resolver.
 func (r *Container) ResolveCID(ctx context.Context, name, namespace string) (cid.ID, error) {
@@ -57,30 +60,55 @@ func NewContainer(ctx context.Context, endpoints []string) (*Container, error) {
 
 // NewResolver returns resolver depending on corresponding endpoints.
 //
-// If endpoint is empty, error will be returned.
+// It returns an error if none of the endpoints can be initialized.
 func NewResolver(ctx context.Context, endpoints []string) (*NNSResolver, error) {
+	readers, err := newNNSReaders(ctx, endpoints, newNNSReader)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewNNSResolver(readers), nil
+}
+
+func newNNSReaders(ctx context.Context, endpoints []string, initialize nnsReaderInitializer) ([]*nns.ContractReader, error) {
 	if len(endpoints) == 0 {
 		return nil, errors.New("endpoints must be set")
 	}
 
 	var readers = make([]*nns.ContractReader, 0, len(endpoints))
+	var errs []error
 
 	for _, endpoint := range endpoints {
-		cl, err := rpcClient(ctx, endpoint)
+		nnsReader, err := initialize(ctx, endpoint)
 		if err != nil {
-			return nil, fmt.Errorf("rpcclient: %w", err)
-		}
-
-		inv := invoker.New(cl, nil)
-		nnsReader, err := nns.NewInferredReader(cl, inv)
-		if err != nil {
-			return nil, fmt.Errorf("nns readers instantiation: %w", err)
+			errs = append(errs, fmt.Errorf("%q: %w", endpoint, err))
+			continue
 		}
 
 		readers = append(readers, nnsReader)
 	}
 
-	return NewNNSResolver(readers), nil
+	if len(readers) == 0 {
+		return nil, fmt.Errorf("all RPC endpoints failed: %w", errors.Join(errs...))
+	}
+
+	return readers, nil
+}
+
+func newNNSReader(ctx context.Context, endpoint string) (*nns.ContractReader, error) {
+	cl, err := rpcClient(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("rpcclient: %w", err)
+	}
+
+	inv := invoker.New(cl, nil)
+	nnsReader, err := nns.NewInferredReader(cl, inv)
+	if err != nil {
+		cl.Close()
+		return nil, fmt.Errorf("nns readers instantiation: %w", err)
+	}
+
+	return nnsReader, nil
 }
 
 func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) {
@@ -89,8 +117,8 @@ func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) 
 		return nil, fmt.Errorf("new: %w", err)
 	}
 
-	err = cl.Init()
-	if err != nil {
+	if err = cl.Init(); err != nil {
+		cl.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
 
