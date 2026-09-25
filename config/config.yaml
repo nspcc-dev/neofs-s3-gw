@@ -45,7 +45,7 @@ logger:
   sampling:
     enabled: true
 
-# RPC endpoint and order of resolving of bucket names
+# FS-chain RPC endpoints used to resolve bucket names
 fschain:
   endpoints:
     - http://morph-chain.neofs.devenv:30333
