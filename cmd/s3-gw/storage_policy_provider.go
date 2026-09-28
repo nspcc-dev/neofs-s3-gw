@@ -165,6 +165,7 @@ func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) 
 	}
 
 	if err = cl.Init(); err != nil {
+		cl.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
 
