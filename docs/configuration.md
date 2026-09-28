@@ -17,7 +17,7 @@ basic configuration can be completed with CLI parameters only.
     1. [Nodes and weights](#nodes-and-weights)
     2. [Wallet](#wallet)
     3. [Binding and TLS](#listening-on-address-and-TLS)
-    4. [RPC endpoint and resolving of bucket names](#rpc-endpoint-and-resolving-of-bucket-names)
+    4. [FS-chain RPC endpoints and resolving bucket names](#fs-chain-rpc-endpoints-and-resolving-bucket-names)
     5. [Processing of requests](#processing-of-requests)
     6. [Connection to NeoFS](#connection-to-NeoFS)
     7. [Monitoring and metrics](#monitoring-and-metrics)
@@ -64,13 +64,16 @@ $ neofs-s3-gw --listen_address 192.168.130.130:443 \
 
 Using these flag you can configure only one address. To set multiple addresses use yaml config. 
 
-### RPC endpoint and resolving of bucket names
+### FS-chain RPC endpoints and resolving bucket names
 
-To set RPC endpoint specify a value of parameter `-r` or `--rpc_endpoint`. This endpoint must be set.
+Use `-r` or `--fschain.endpoints` to configure a single FS-chain RPC endpoint:
 
 ```shell
-$ neofs-s3-gw --rpc_endpoint http://morph-chain.neofs.devenv:30333/
+$ neofs-s3-gw -r http://morph-chain.neofs.devenv:30333/
 ```
+
+To configure multiple endpoints, use the YAML or environment-variable forms
+described below.
 
 ### Processing of requests
 
@@ -155,6 +158,7 @@ There are some custom types used for brevity:
 | no section         | [General parameters](#general-section)                      |
 | `wallet`           | [Wallet configuration](#wallet-section)                     |
 | `peers`            | [Nodes configuration](#peers-section)                       |
+| `fschain`          | [FS-chain configuration](#fschain-section)                  |
 | `placement_policy` | [Placement policy configuration](#placement_policy-section) |
 | `server`           | [Server configuration](#server-section)                     |
 | `logger`           | [Logger configuration](#logger-section)                     |
@@ -171,8 +175,6 @@ There are some custom types used for brevity:
 listen_domains:
    - s3dev.neofs.devenv
    - s3dev2.neofs.devenv
-
-rpc_endpoint: http://morph-chain.neofs.devenv:30333
 
 connect_timeout: 10s
 stream_timeout: 60s
@@ -193,7 +195,6 @@ namespace: ""
 | Parameter                        | Type       | SIGHUP reload | Default value | Description                                                                                                                               |
 |----------------------------------|------------|---------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------|
 | `listen_domains`                 | `[]string` |               |               | Domains to be able to use virtual-hosted-style access to bucket.                                                                          |
-| `rpc_endpoint`                   | `string`   | yes           |               | The address of the RPC host to which the gateway connects to resolve bucket names (required to use the `nns` resolver).                   |
 | `connect_timeout`                | `duration` |               | `10s`         | Timeout to connect to a node.                                                                                                             |
 | `stream_timeout`                 | `duration` |               | `60s`         | Timeout for individual operations in streaming RPC.                                                                                       |
 | `healthcheck_timeout`            | `duration` |               | `15s`         | Timeout to check node health during rebalance.                                                                                            |
@@ -203,6 +204,24 @@ namespace: ""
 | `max_clients_deadline`           | `duration` |               | `30s`         | Deadline after which the gate sends error `RequestTimeout` to a client.                                                                   |
 | `allowed_access_key_id_prefixes` | `[]string` |               |               | List of allowed `AccessKeyID` prefixes which S3 GW serve. If the parameter is omitted, all `AccessKeyID` will be accepted.                |
 | `namespace`                      | `string`   |               |               | Bind the gateway to a single namespace. When set, every request's AccessBox namespace must match this value.. Empty disables the binding. |
+
+### `fschain` section
+
+Use this section to configure FS-chain RPC endpoints used to resolve bucket
+names. The gateway starts if it can initialize at least one endpoint.
+
+```yaml
+fschain:
+  endpoints:
+    - http://morph-chain.neofs.devenv:30333
+```
+
+Set `S3_GW_FSCHAIN_ENDPOINTS` to configure endpoints through environment
+variables. Separate multiple endpoints with whitespace.
+
+| Parameter   | Type       | SIGHUP reload | Default value | Description                                          |
+|-------------|------------|---------------|---------------|------------------------------------------------------|
+| `endpoints` | `[]string` | yes           |               | FS-chain RPC endpoints used to resolve bucket names. |
 
 ### `wallet` section
 

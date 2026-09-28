@@ -14,6 +14,7 @@ This document outlines major changes between releases.
 ### Fixed
 - Contradictory and duplicate request status in log records (#1292)
 - Bucket can be created with inapplicable policy (#1351)
+- Gateway startup with unavailable FS-chain RPC endpoints (#1356)
 
 ### Updated
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)

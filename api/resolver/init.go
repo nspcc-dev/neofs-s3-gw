@@ -2,13 +2,13 @@ package resolver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
 	"github.com/nspcc-dev/neofs-contract/rpc/nns"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/fschain"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 )
 
@@ -57,30 +57,39 @@ func NewContainer(ctx context.Context, endpoints []string) (*Container, error) {
 
 // NewResolver returns resolver depending on corresponding endpoints.
 //
-// If endpoint is empty, error will be returned.
+// It returns an error if no endpoint can be initialized at construction time.
 func NewResolver(ctx context.Context, endpoints []string) (*NNSResolver, error) {
-	if len(endpoints) == 0 {
-		return nil, errors.New("endpoints must be set")
-	}
-
-	var readers = make([]*nns.ContractReader, 0, len(endpoints))
-
-	for _, endpoint := range endpoints {
-		cl, err := rpcClient(ctx, endpoint)
+	readers := make([]*nns.ContractReader, 0, len(endpoints))
+	err := fschain.ForEachEndpoint(endpoints, func(endpoint string) error {
+		nnsReader, err := newNNSReader(ctx, endpoint)
 		if err != nil {
-			return nil, fmt.Errorf("rpcclient: %w", err)
-		}
-
-		inv := invoker.New(cl, nil)
-		nnsReader, err := nns.NewInferredReader(cl, inv)
-		if err != nil {
-			return nil, fmt.Errorf("nns readers instantiation: %w", err)
+			return err
 		}
 
 		readers = append(readers, nnsReader)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return NewNNSResolver(readers), nil
+}
+
+func newNNSReader(ctx context.Context, endpoint string) (*nns.ContractReader, error) {
+	cl, err := rpcClient(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("rpcclient: %w", err)
+	}
+
+	inv := invoker.New(cl, nil)
+	nnsReader, err := nns.NewInferredReader(cl, inv)
+	if err != nil {
+		cl.Close()
+		return nil, fmt.Errorf("nns readers instantiation: %w", err)
+	}
+
+	return nnsReader, nil
 }
 
 func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) {
@@ -91,6 +100,7 @@ func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) 
 
 	err = cl.Init()
 	if err != nil {
+		cl.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
 
