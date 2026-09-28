@@ -2,13 +2,13 @@ package resolver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
 	"github.com/nspcc-dev/neofs-contract/rpc/nns"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/fschain"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 )
 
@@ -19,9 +19,6 @@ type Container struct {
 	mu       sync.RWMutex
 	resolver *NNSResolver
 }
-
-// nnsReaderInitializer initializes an NNS reader for an endpoint.
-type nnsReaderInitializer func(context.Context, string) (*nns.ContractReader, error)
 
 // ResolveCID looks up the container id by its name via NNS contract.
 // The method calls inline resolver.
@@ -62,37 +59,21 @@ func NewContainer(ctx context.Context, endpoints []string) (*Container, error) {
 //
 // It returns an error if no endpoint can be initialized at construction time.
 func NewResolver(ctx context.Context, endpoints []string) (*NNSResolver, error) {
-	readers, err := newNNSReaders(ctx, endpoints, newNNSReader)
+	readers := make([]*nns.ContractReader, 0, len(endpoints))
+	err := fschain.ForEachEndpoint(endpoints, func(endpoint string) error {
+		nnsReader, err := newNNSReader(ctx, endpoint)
+		if err != nil {
+			return err
+		}
+
+		readers = append(readers, nnsReader)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return NewNNSResolver(readers), nil
-}
-
-func newNNSReaders(ctx context.Context, endpoints []string, initialize nnsReaderInitializer) ([]*nns.ContractReader, error) {
-	if len(endpoints) == 0 {
-		return nil, errors.New("endpoints must be set")
-	}
-
-	var readers = make([]*nns.ContractReader, 0, len(endpoints))
-	var errs []error
-
-	for _, endpoint := range endpoints {
-		nnsReader, err := initialize(ctx, endpoint)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%q: %w", endpoint, err))
-			continue
-		}
-
-		readers = append(readers, nnsReader)
-	}
-
-	if len(readers) == 0 {
-		return nil, fmt.Errorf("all RPC endpoints failed: %w", errors.Join(errs...))
-	}
-
-	return readers, nil
 }
 
 func newNNSReader(ctx context.Context, endpoint string) (*nns.ContractReader, error) {
