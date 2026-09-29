@@ -5,6 +5,7 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- Ability to take NeoFS node addresses from the network map (#582)
 
 ### Changed
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
