@@ -82,19 +82,6 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 		lockInfo.SetRetention(retentionOID, newLock.Retention.Until.UTC().Format(time.RFC3339), newLock.Retention.IsCompliance)
 	}
 
-	if newLock.LegalHold != nil {
-		if newLock.LegalHold.Enabled && !lockInfo.IsLegalHoldSet() {
-			lock := &data.ObjectLock{LegalHold: newLock.LegalHold}
-			legalHoldOID, err := n.putLockObject(ctx, p.ObjVersion.BktInfo, objectToLock, lock, p.ObjVersion.ObjectName, p.ObjVersion.VersionID)
-			if err != nil {
-				return err
-			}
-			lockInfo.SetLegalHold(legalHoldOID)
-		} else if !newLock.LegalHold.Enabled && lockInfo.IsLegalHoldSet() {
-			return s3errors.GetAPIError(s3errors.ErrNotSupported)
-		}
-	}
-
 	n.cache.PutLockInfo(n.Owner(ctx), lockObjectKey(p.ObjVersion), lockInfo)
 
 	return nil
@@ -268,13 +255,6 @@ func (n *layer) attributesFromLock(ctx context.Context, lock *data.ObjectLock) (
 		if lock.Retention.IsCompliance {
 			lockMetaPayload[s3headers.FieldComplianceMode] = "true"
 		}
-	}
-
-	if lock.LegalHold != nil && lock.LegalHold.Enabled {
-		// todo: (@KirillovDenis) reconsider this when NeoFS will support Legal Hold https://github.com/nspcc-dev/neofs-contract/issues/247
-		// Currently lock object must have an expiration epoch.
-		// Besides we need to override retention expiration epoch since legal hold cannot be deleted yet.
-		expEpoch = math.MaxUint64
 	}
 
 	if expEpoch != 0 {

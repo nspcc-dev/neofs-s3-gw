@@ -54,11 +54,15 @@ func TestFormObjectLock(t *testing.T) {
 			header: map[string][]string{
 				api.AmzObjectLockRetainUntilDate: {time.Now().Add(time.Minute).Format(time.RFC3339)},
 				api.AmzObjectLockMode:            {governanceMode},
-				api.AmzObjectLockLegalHold:       {legalHoldOn},
 			},
 			expectedLock: &data.ObjectLock{
-				LegalHold: &data.LegalHoldLock{Enabled: true},
 				Retention: &data.RetentionLock{Until: time.Now().Add(time.Minute)}},
+		},
+		{
+			name:          "legal hold not supported error",
+			bktInfo:       &data.BucketInfo{ObjectLockEnabled: true},
+			header:        map[string][]string{api.AmzObjectLockLegalHold: {legalHoldOn}},
+			expectedError: true,
 		},
 		{
 			name:          "lock disabled error",
@@ -150,7 +154,6 @@ func TestFormObjectLockFromRetention(t *testing.T) {
 }
 
 func assertObjectLocks(t *testing.T, expected, actual *data.ObjectLock) {
-	require.Equal(t, expected.LegalHold, actual.LegalHold)
 	if expected.Retention != nil {
 		require.Equal(t, expected.Retention.IsCompliance, actual.Retention.IsCompliance)
 		require.InDelta(t, expected.Retention.Until.Unix(), actual.Retention.Until.Unix(), 1)
@@ -452,13 +455,10 @@ func TestObjectLegalHold(t *testing.T) {
 	getObjectLegalHold(hc, bktName, objName, legalHoldOff)
 
 	putObjectLegalHold(hc, bktName, objName, legalHoldOn)
-	getObjectLegalHold(hc, bktName, objName, legalHoldOn)
-
-	// to make sure put hold is an idempotent operation
-	putObjectLegalHold(hc, bktName, objName, legalHoldOn)
+	getObjectLegalHold(hc, bktName, objName, legalHoldOff)
 
 	putObjectLegalHold(hc, bktName, objName, legalHoldOff)
-	getObjectLegalHold(hc, bktName, objName, legalHoldOn)
+	getObjectLegalHold(hc, bktName, objName, legalHoldOff)
 }
 
 func getObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
@@ -470,11 +470,7 @@ func getObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
 func putObjectLegalHold(hc *handlerContext, bktName, objName, status string) {
 	w, r := prepareTestRequest(hc, bktName, objName, &data.LegalHold{Status: status})
 	hc.Handler().PutObjectLegalHoldHandler(w, r)
-	if status == legalHoldOn {
-		assertStatus(hc.t, w, http.StatusOK)
-	} else {
-		assertStatus(hc.t, w, http.StatusNotImplemented)
-	}
+	assertStatus(hc.t, w, http.StatusNotImplemented)
 }
 
 func assertLegalHold(t *testing.T, w *httptest.ResponseRecorder, status string) {
@@ -570,14 +566,13 @@ func TestPutObjectWithLock(t *testing.T) {
 	objOverride := "obj-override-retention"
 	w, r := prepareTestRequest(hc, bktName, objOverride, nil)
 	r.Header.Set(api.AmzObjectLockMode, complianceMode)
-	r.Header.Set(api.AmzObjectLockLegalHold, legalHoldOn)
 	r.Header.Set(api.AmzBypassGovernanceRetention, "true")
 	r.Header.Set(api.AmzObjectLockRetainUntilDate, time.Now().Add(2*24*time.Hour).Format(time.RFC3339))
 	hc.Handler().PutObjectHandler(w, r)
 	assertStatus(t, w, http.StatusOK)
 
 	getObjectRetentionApproximate(hc, bktName, objOverride, complianceMode, time.Now().Add(2*24*time.Hour))
-	getObjectLegalHold(hc, bktName, objOverride, legalHoldOn)
+	getObjectLegalHold(hc, bktName, objOverride, legalHoldOff)
 }
 
 func getObjectRetentionApproximate(hc *handlerContext, bktName, objName, mode string, untilDate time.Time) {

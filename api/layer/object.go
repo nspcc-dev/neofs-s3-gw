@@ -362,7 +362,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	newVersion.OID = id
 	newVersion.ETag = hex.EncodeToString(hash)
 
-	if p.Lock != nil && (p.Lock.Retention != nil || p.Lock.LegalHold != nil) {
+	if p.Lock != nil && p.Lock.Retention != nil {
 		putLockInfoPrms := &PutLockInfoParams{
 			ObjVersion: &ObjectVersion{
 				BktInfo:    p.BktInfo,

@@ -100,68 +100,6 @@ func (h *handler) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *htt
 	}
 }
 
-func (h *handler) PutObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
-	reqInfo := api.GetReqInfo(r.Context())
-
-	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
-	if err != nil {
-		h.logAndSendError(w, "could not get bucket info", reqInfo, err)
-		return
-	}
-
-	if !bktInfo.ObjectLockEnabled {
-		h.logAndSendError(w, "object lock disabled", reqInfo,
-			s3errors.GetAPIError(s3errors.ErrObjectLockConfigurationNotFound))
-		return
-	}
-
-	legalHold := &data.LegalHold{}
-	if err = xml.NewDecoder(r.Body).Decode(legalHold); err != nil {
-		h.logAndSendError(w, "couldn't parse legal hold configuration", reqInfo, err)
-		return
-	}
-
-	if legalHold.Status != legalHoldOn && legalHold.Status != legalHoldOff {
-		h.logAndSendError(w, "invalid legal hold status", reqInfo,
-			fmt.Errorf("invalid status %s", legalHold.Status))
-		return
-	}
-
-	p := &layer.PutLockInfoParams{
-		ObjVersion: &layer.ObjectVersion{
-			BktInfo:    bktInfo,
-			ObjectName: reqInfo.ObjectName,
-			VersionID:  reqInfo.URL.Query().Get(api.QueryVersionID),
-		},
-		NewLock: &data.ObjectLock{
-			LegalHold: &data.LegalHoldLock{
-				Enabled: legalHold.Status == legalHoldOn,
-			},
-		},
-	}
-
-	if p.ObjVersion.VersionID == "" {
-		shortInfoParams := &layer.ShortInfoParams{
-			Owner:  bktInfo.Owner,
-			CID:    bktInfo.CID,
-			Object: reqInfo.ObjectName,
-		}
-
-		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
-		if err != nil {
-			h.logAndSendError(w, "could not find object", reqInfo, err)
-			return
-		}
-
-		p.ObjVersion.VersionID = ei.EncodeToString()
-	}
-
-	if err = h.obj.PutLockInfo(r.Context(), p); err != nil {
-		h.logAndSendError(w, "couldn't head put legal hold", reqInfo, err)
-		return
-	}
-}
-
 func (h *handler) GetObjectLegalHoldHandler(w http.ResponseWriter, r *http.Request) {
 	reqInfo := api.GetReqInfo(r.Context())
 
@@ -370,7 +308,7 @@ func formObjectLock(ctx context.Context, bktInfo *data.BucketInfo, defaultConfig
 	}
 
 	if header.Get(api.AmzObjectLockLegalHold) == legalHoldOn {
-		objectLock.LegalHold = &data.LegalHoldLock{Enabled: true}
+		return nil, s3errors.GetAPIError(s3errors.ErrNotSupported)
 	}
 
 	mode := header.Get(api.AmzObjectLockMode)
