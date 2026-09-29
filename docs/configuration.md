@@ -269,8 +269,10 @@ peers:
 | `weight`   | `float`  | `1`           | Weight of node in the group with the same priority. Distribute requests to nodes proportionally to these values.                                        |
 
 With `peers_from_netmap` enabled the gateway instead takes node addresses from the
-NeoFS network map, which it reads from the `netmap` contract. A node is used if it is online
-in the network map and announces an address the gateway can dial.
+NeoFS network map, which it reads from the `netmap` contract. A node is used
+if it is online in the network map and announces an address the gateway can
+dial. When a new network map version appears, the gateway switches to a new connection pool
+built from the new addresses; the previous pool is closed a minute later.
 
 ### `placement_policy` section
 

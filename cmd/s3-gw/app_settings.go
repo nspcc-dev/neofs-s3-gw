@@ -24,6 +24,7 @@ const (
 	defaultConnectTimeout     = 10 * time.Second
 	defaultStreamTimeout      = 10 * time.Second
 	defaultShutdownTimeout    = 15 * time.Second
+	poolCloseDelay            = time.Minute
 
 	defaultPoolErrorThreshold uint32 = 100
 

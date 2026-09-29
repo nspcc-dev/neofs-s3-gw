@@ -14,6 +14,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -50,7 +51,7 @@ type Config struct {
 // It is used to provide an interface to dependent packages
 // which work with NeoFS.
 type NeoFS struct {
-	pool        *pool.Pool
+	pool        atomic.Pointer[pool.Pool]
 	gateSigner  user.Signer
 	anonSigner  user.Signer
 	cfg         Config
@@ -81,14 +82,28 @@ func NewNeoFS(p *pool.Pool, signer user.Signer, anonSigner user.Signer, cfg Conf
 		return &b
 	}
 
-	return &NeoFS{
-		pool:        p,
+	var x = &NeoFS{
 		gateSigner:  signer,
 		anonSigner:  anonSigner,
 		cfg:         cfg,
 		epochGetter: epochGetter,
 		buffers:     &buffers,
 	}
+	x.pool.Store(p)
+
+	return x
+}
+
+// Pool returns the connection pool currently in use.
+func (x *NeoFS) Pool() *pool.Pool {
+	return x.pool.Load()
+}
+
+// SetPool replaces the connection pool and returns the previous one. Calls
+// already started keep using the previous pool, so it should be closed only
+// after they are done.
+func (x *NeoFS) SetPool(p *pool.Pool) *pool.Pool {
+	return x.pool.Swap(p)
 }
 
 func (x *NeoFS) signer(ctx context.Context) user.Signer {
@@ -107,7 +122,7 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uin
 			futureTime.Format(time.RFC3339), now.Format(time.RFC3339))
 	}
 
-	networkInfo, err := x.pool.NetworkInfo(ctx, client.PrmNetworkInfo{})
+	networkInfo, err := x.pool.Load().NetworkInfo(ctx, client.PrmNetworkInfo{})
 	if err != nil {
 		return 0, 0, fmt.Errorf("get network info via client: %w", err)
 	}
@@ -134,7 +149,7 @@ func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uin
 // Container implements neofs.NeoFS interface method.
 func (x *NeoFS) Container(ctx context.Context, idCnr cid.ID) (*container.Container, error) {
 	var prm client.PrmContainerGet
-	res, err := x.pool.ContainerGet(ctx, idCnr, prm)
+	res, err := x.pool.Load().ContainerGet(ctx, idCnr, prm)
 	if err != nil {
 		return nil, fmt.Errorf("read container via connection pool: %w", err)
 	}
@@ -191,7 +206,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 
 	var cnrID = cid.NewFromMarshalledContainer(cnr.Marshal())
 
-	nm, err := x.pool.NetMapSnapshot(ctx, client.PrmNetMapSnapshot{})
+	nm, err := x.pool.Load().NetMapSnapshot(ctx, client.PrmNetMapSnapshot{})
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("get netmap snapshot: %w", err)
 	}
@@ -211,7 +226,7 @@ func (x *NeoFS) CreateContainer(ctx context.Context, prm layer.PrmContainerCreat
 	}
 
 	// send request to save the container
-	idCnr, err := x.pool.ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
+	idCnr, err := x.pool.Load().ContainerPut(ctx, cnr, x.signer(ctx), prmPut)
 	if err != nil {
 		return cid.ID{}, fmt.Errorf("save container via connection pool: %w", err)
 	}
@@ -234,7 +249,7 @@ func checkPlacement(nm netmap.NetMap, policy netmap.PlacementPolicy, cnrID cid.I
 // UserContainers implements neofs.NeoFS interface method.
 func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error) {
 	var prm client.PrmContainerList
-	r, err := x.pool.ContainerList(ctx, id, prm)
+	r, err := x.pool.Load().ContainerList(ctx, id, prm)
 	if err != nil {
 		return nil, fmt.Errorf("list user containers via connection pool: %w", err)
 	}
@@ -251,7 +266,7 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionT
 
 	prm.AttachContainerRevision(cnrRevision)
 
-	err := x.pool.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
+	err := x.pool.Load().ContainerSetEACL(ctx, table, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("save eACL via connection pool: %w", err)
 	}
@@ -262,7 +277,7 @@ func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionT
 // ContainerEACL implements neofs.NeoFS interface method.
 func (x *NeoFS) ContainerEACL(ctx context.Context, id cid.ID) (*eacl.Table, error) {
 	var prm client.PrmContainerEACL
-	res, err := x.pool.ContainerEACL(ctx, id, prm)
+	res, err := x.pool.Load().ContainerEACL(ctx, id, prm)
 	if err != nil {
 		return nil, fmt.Errorf("read eACL via connection pool: %w", err)
 	}
@@ -277,7 +292,7 @@ func (x *NeoFS) DeleteContainer(ctx context.Context, id cid.ID, tokenV2 *session
 		prm.WithinSessionV2(*tokenV2)
 	}
 
-	err := x.pool.ContainerDelete(ctx, id, x.signer(ctx), prm)
+	err := x.pool.Load().ContainerDelete(ctx, id, x.signer(ctx), prm)
 	if err != nil {
 		return fmt.Errorf("delete container via connection pool: %w", err)
 	}
@@ -411,7 +426,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			opts.SetSessionV2(*prm.SessionTokenV2)
 		}
 
-		objID, err := slicer.Put(ctx, x.pool, obj, signer, prm.Payload, opts)
+		objID, err := slicer.Put(ctx, x.pool.Load(), obj, signer, prm.Payload, opts)
 		if returnToPool {
 			x.buffers.Put(chunk)
 		}
@@ -456,7 +471,7 @@ func (x *NeoFS) putReadyObject(ctx context.Context, signer user.Signer, sessionv
 		prmObjPutInit.AttachContainerRevision(cnrRevision)
 	}
 
-	writer, err := x.pool.ObjectPutInit(ctx, hdr, signer, prmObjPutInit)
+	writer, err := x.pool.Load().ObjectPutInit(ctx, hdr, signer, prmObjPutInit)
 	if err != nil {
 		reason, ok := isErrAccessDenied(err)
 		if ok {
@@ -526,7 +541,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 			prmHead.WithinSessionV2(*prm.SessionTokenV2)
 		}
 
-		hdr, err := x.pool.ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
+		hdr, err := x.pool.Load().ObjectHead(ctx, prm.Container, prm.Object, x.signer(ctx), prmHead)
 		if err != nil {
 			if reason, ok := isErrAccessDenied(err); ok {
 				return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -564,7 +579,7 @@ func (x *NeoFS) ReadObject(ctx context.Context, prm layer.PrmObjectRead) (*layer
 		prmGet.MarkPayloadOnly()
 	}
 
-	header, res, err := x.pool.ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
+	header, res, err := x.pool.Load().ObjectGetInit(ctx, prm.Container, prm.Object, x.signer(ctx), prmGet)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return nil, fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -595,7 +610,7 @@ func (x *NeoFS) DeleteObject(ctx context.Context, prm layer.PrmObjectDelete) err
 		prmDelete.WithinSessionV2(*prm.SessionTokenV2)
 	}
 
-	_, err := x.pool.ObjectDelete(ctx, prm.Container, prm.Object, x.signer(ctx), prmDelete)
+	_, err := x.pool.Load().ObjectDelete(ctx, prm.Container, prm.Object, x.signer(ctx), prmDelete)
 	if err != nil {
 		if reason, ok := isErrAccessDenied(err); ok {
 			return fmt.Errorf("%w: %s", layer.ErrAccessDenied, reason)
@@ -749,7 +764,7 @@ func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.
 
 // SearchObjectsV2WithCursor implements neofs.NeoFS interface method.
 func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
-	items, cursor, err := x.pool.SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
+	items, cursor, err := x.pool.Load().SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
 	if err != nil && !errors.Is(err, apistatus.ErrIncomplete) {
 		return nil, "", fmt.Errorf("search objects: %w", err)
 	}
@@ -778,7 +793,7 @@ func (x *NeoFS) SetContainerAttribute(ctx context.Context, cid cid.ID, attribute
 		return fmt.Errorf("sign set container attribute: %w", err)
 	}
 
-	if err = x.pool.SetContainerAttribute(ctx, prm, sig, o); err != nil {
+	if err = x.pool.Load().SetContainerAttribute(ctx, prm, sig, o); err != nil {
 		return fmt.Errorf("set container attribute: %w", err)
 	}
 
@@ -805,7 +820,7 @@ func (x *NeoFS) RemoveContainerAttribute(ctx context.Context, cid cid.ID, attrib
 		return fmt.Errorf("sign remove container attribute: %w", err)
 	}
 
-	if err = x.pool.RemoveContainerAttribute(ctx, prm, sig, o); err != nil {
+	if err = x.pool.Load().RemoveContainerAttribute(ctx, prm, sig, o); err != nil {
 		return fmt.Errorf("set remove attribute: %w", err)
 	}
 

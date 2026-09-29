@@ -6,6 +6,7 @@ This document outlines major changes between releases.
 
 ### Added
 - Ability to take NeoFS node addresses from the network map (#582)
+- Update of NeoFS node addresses on network map change (#1361)
 
 ### Changed
 - Object PUT is pinned to the container revision (#1244)

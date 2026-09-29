@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
@@ -13,8 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// NetmapNodes returns addresses of the storage nodes that are online in the NeoFS network map.
-func NetmapNodes(ctx context.Context, log *zap.Logger, rpcEndpoints []string, netMapContract util.Uint160) ([]string, error) {
+// NetmapNodes returns the current NeoFS network map version and addresses of
+// the storage nodes that are online in it.
+func NetmapNodes(ctx context.Context, log *zap.Logger, rpcEndpoints []string, netMapContract util.Uint160) (uint64, []string, error) {
 	var opts rpcclient.Options
 
 	log = log.Named("netmapNodes")
@@ -32,22 +34,31 @@ func NetmapNodes(ctx context.Context, log *zap.Logger, rpcEndpoints []string, ne
 			continue
 		}
 
-		var inv = invoker.New(cl, nil)
+		var (
+			inv    = invoker.New(cl, nil)
+			reader = netmap.NewReader(inv, netMapContract)
+		)
 
-		nodes, err := listNodes(inv, netmap.NewReader(inv, netMapContract))
+		version, err := reader.NetworkMapVersion()
+		if err != nil {
+			log.Info("could not get network map version", zap.String("endpoint", endpoint), zap.Error(err))
+			continue
+		}
+
+		nodes, err := listNodes(inv, reader, version)
 		if err != nil {
 			log.Info("could not list netmap nodes", zap.String("endpoint", endpoint), zap.Error(err))
 			continue
 		}
 
-		return netmapEndpoints(log, nodes), nil
+		return version.Uint64(), netmapEndpoints(log, nodes), nil
 	}
 
-	return nil, errors.New("could not read network map from any RPC endpoint")
+	return 0, nil, errors.New("could not read network map from any RPC endpoint")
 }
 
-func listNodes(inv *invoker.Invoker, reader *netmap.ContractReader) ([]*netmap.NetmapNode2, error) {
-	sess, iter, err := reader.ListNodes()
+func listNodes(inv *invoker.Invoker, reader *netmap.ContractReader, version *big.Int) ([]*netmap.NetmapNode2, error) {
+	sess, iter, err := reader.ListNodesVersion(version)
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
