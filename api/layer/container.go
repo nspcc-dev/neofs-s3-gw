@@ -188,14 +188,18 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 func (n *layer) setContainerEACLTable(ctx context.Context, bktInfo *data.BucketInfo, table *eacl.Table, sessionTokenV2 *session.Token) error {
 	table.SetCID(bktInfo.CID)
 
-	err := n.neoFS.SetContainerEACL(ctx, *table, sessionTokenV2)
-	if err == nil {
-		n.cache.PutBucketACL(bktInfo.CID, table)
-		// An eACL changes the container revision.
-		n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+	err := n.neoFS.SetContainerEACL(ctx, *table, sessionTokenV2, bktInfo.Revision)
+	if err != nil {
+		n.dropBucketCacheOnRevisionMismatch(bktInfo, err)
+
+		return err
 	}
 
-	return err
+	n.cache.PutBucketACL(bktInfo.CID, table)
+	// An eACL changes the container revision.
+	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+
+	return nil
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table, error) {

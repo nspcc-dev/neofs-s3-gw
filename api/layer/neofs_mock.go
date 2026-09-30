@@ -526,19 +526,23 @@ func (t *TestNeoFS) AllObjects(cnrID cid.ID) []oid.ID {
 	return result
 }
 
-func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Token) error {
+func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *session.Token, cnrRevision uint64) error {
 	cnrID := table.GetCID()
 	if cnrID.IsZero() {
 		return errors.New("invalid cid")
 	}
 
-	if _, ok := t.containers[cnrID.EncodeToString()]; !ok {
+	cnr, ok := t.containers[cnrID.EncodeToString()]
+	if !ok {
 		return errors.New("not found")
+	}
+
+	if cnrRevision != cnr.Revision() {
+		return apistatus.ErrContainerRevisionMismatch
 	}
 
 	t.eaclTables[cnrID.EncodeToString()] = &table
 
-	cnr := t.containers[cnrID.EncodeToString()]
 	t.setContainerRevision(cnr, cnr.Revision()+1)
 
 	return nil

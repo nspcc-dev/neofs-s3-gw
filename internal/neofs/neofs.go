@@ -243,11 +243,13 @@ func (x *NeoFS) UserContainers(ctx context.Context, id user.ID) ([]cid.ID, error
 }
 
 // SetContainerEACL implements neofs.NeoFS interface method.
-func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
+func (x *NeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token, cnrRevision uint64) error {
 	var prm client.PrmContainerSetEACL
 	if sessionTokenV2 != nil {
 		prm.WithinSessionV2(*sessionTokenV2)
 	}
+
+	prm.AttachContainerRevision(cnrRevision)
 
 	err := x.pool.ContainerSetEACL(ctx, table, x.signer(ctx), prm)
 	if err != nil {
@@ -707,7 +709,12 @@ func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCr
 
 // SetContainerEACL implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session.Token) error {
-	return x.neoFS.SetContainerEACL(ctx, table, sessionTokenV2)
+	cnr, err := x.neoFS.Container(ctx, table.GetCID())
+	if err != nil {
+		return fmt.Errorf("get container via connection pool: %w", err)
+	}
+
+	return x.neoFS.SetContainerEACL(ctx, table, sessionTokenV2, cnr.Revision())
 }
 
 // ContainerEACL implements authmate.NeoFS interface method.
