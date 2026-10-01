@@ -8,9 +8,11 @@ This document outlines major changes between releases.
 - Ability to take NeoFS node addresses from the network map (#582)
 
 ### Changed
+- Object PUT is pinned to the container revision (#1244)
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
 - Access boxes are sealed with HPKE now, this is access box version 2 (#1344)
 - Authmatesrv service returns the S3 secret access key from `POST /v1/auth/s3` (#1344)
+- Bucket ACL update is pinned to the container revision (#1244)
 
 ### Fixed
 - Contradictory and duplicate request status in log records (#1292)
@@ -18,6 +20,7 @@ This document outlines major changes between releases.
 - Gateway startup with unavailable FS-chain RPC endpoints (#1356)
 
 ### Updated
+- NeoFS SDK to RC23 version (#1244)
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
 - github.com/aws/aws-sdk-go-v2/credentials v1.19.37 => v1.20.2 (#1346)
 - github.com/klauspost/reedsolomon v1.13.2 => v1.14.2 (#1346)

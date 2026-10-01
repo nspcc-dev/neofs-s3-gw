@@ -1363,6 +1363,32 @@ func TestPutBucketACL(t *testing.T) {
 	checkLastRecords(t, tc, bktInfo, eacl.ActionDeny, ownerObjectWriterUserID)
 }
 
+func TestPutBucketACLOnStaleContainerRevision(t *testing.T) {
+	tc := prepareHandlerContext(t)
+	bktName := "bucket-for-acl-revision"
+
+	box, _ := createAccessBox(t)
+	createBucket(t, tc, bktName, box, nil)
+
+	putBucketOwnership(tc, bktName, box, amzBucketOwnerObjectWriter, http.StatusOK)
+
+	// Caches the bucket info the eACL update below is planned against.
+	bktInfo, err := tc.Layer().GetBucketInfo(tc.Context(), bktName)
+	require.NoError(t, err)
+
+	// Another gateway turns versioning on, keeping the rest of the settings.
+	settings := *bktInfo.Settings
+	settings.Versioning = data.VersioningEnabled
+	putBucketSettingsBehindCache(t, tc, bktInfo, &settings)
+
+	header := map[string]string{api.AmzACL: "public-read"}
+	// The table is merged into an eACL read at a revision the container has left.
+	putBucketACL(t, tc, bktName, box, header, http.StatusConflict)
+
+	// The stale bucket info has been dropped, so repeating the request works.
+	putBucketACL(t, tc, bktName, box, header, http.StatusOK)
+}
+
 func TestPutBucketACLGrantWrite(t *testing.T) {
 	tc := prepareHandlerContext(t)
 	bktName := "bucket-for-acl-grant"

@@ -464,7 +464,7 @@ func (n *layer) GetBucketACL(ctx context.Context, bktInfo *data.BucketInfo) (*Bu
 
 // PutBucketACL puts bucket acl by name.
 func (n *layer) PutBucketACL(ctx context.Context, param *PutBucketACLParams) error {
-	return n.setContainerEACLTable(ctx, param.BktInfo.CID, param.EACL, param.SessionTokenV2)
+	return n.setContainerEACLTable(ctx, param.BktInfo, param.EACL, param.SessionTokenV2)
 }
 
 // ListBuckets returns all user containers. The name of the bucket is a container
@@ -606,7 +606,7 @@ func (n *layer) GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) 
 		err error
 	)
 
-	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, p.VersionID == data.UnversionedObjectVersionID)
+	versions, err := n.searchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object, p.VersionID == data.UnversionedObjectVersionID, false)
 	if err != nil {
 		if errors.Is(err, ErrNodeNotFound) {
 			if len(p.VersionID) == 0 {

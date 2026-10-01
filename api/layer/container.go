@@ -29,6 +29,8 @@ type (
 const (
 	attributeLocationConstraint = ".s3-location-constraint"
 	AttributeLockEnabled        = "LockEnabled"
+
+	initialContainerRevision = 1
 )
 
 func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID, namespace string) (*data.BucketInfo, error) {
@@ -56,6 +58,7 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID, namespace strin
 	cnr := *res
 
 	info.Owner = cnr.Owner()
+	info.Revision = cnr.Revision()
 	if domain := cnr.ReadDomain(); domain.Name() != "" {
 		info.Name, _ = strings.CutSuffix(domain.Name(), "."+namespace)
 	}
@@ -85,6 +88,19 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID, namespace strin
 	n.cache.PutBucket(info)
 
 	return info, nil
+}
+
+func (n *layer) dropBucketCacheOnRevisionMismatch(bkt *data.BucketInfo, err error) {
+	if !errors.Is(err, apistatus.ErrContainerRevisionMismatch) {
+		return
+	}
+
+	n.log.Debug("container revision mismatch, dropping cached bucket info",
+		zap.String("bucket", bkt.Name),
+		zap.Stringer("cid", bkt.CID),
+		zap.Uint64("revision", bkt.Revision))
+
+	n.cache.DeleteBucket(bkt.Name, bkt.Namespace)
 }
 
 func (n *layer) containerList(ctx context.Context) ([]*data.BucketInfo, error) {
@@ -133,6 +149,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Created:            TimeNow(ctx),
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
+		Revision:           initialContainerRevision,
 		Settings:           &data.BucketSettings{Versioning: data.VersioningUnversioned},
 		Notifications:      &data.NotificationConfiguration{},
 	}
@@ -171,15 +188,21 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 	return bktInfo, nil
 }
 
-func (n *layer) setContainerEACLTable(ctx context.Context, idCnr cid.ID, table *eacl.Table, sessionTokenV2 *session.Token) error {
-	table.SetCID(idCnr)
+func (n *layer) setContainerEACLTable(ctx context.Context, bktInfo *data.BucketInfo, table *eacl.Table, sessionTokenV2 *session.Token) error {
+	table.SetCID(bktInfo.CID)
 
-	err := n.neoFS.SetContainerEACL(ctx, *table, sessionTokenV2)
-	if err == nil {
-		n.cache.PutBucketACL(idCnr, table)
+	err := n.neoFS.SetContainerEACL(ctx, *table, sessionTokenV2, bktInfo.Revision)
+	if err != nil {
+		n.dropBucketCacheOnRevisionMismatch(bktInfo, err)
+
+		return err
 	}
 
-	return err
+	n.cache.PutBucketACL(bktInfo.CID, table)
+	// An eACL changes the container revision.
+	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+
+	return nil
 }
 
 func (n *layer) GetContainerEACL(ctx context.Context, idCnr cid.ID) (*eacl.Table, error) {

@@ -51,6 +51,7 @@ func (tc *testContext) putBucketSettings(settings *data.BucketSettings) {
 	require.NoError(tc.t, err)
 
 	tc.bktInfo.AttributeSettings = cnr.Attribute(attributeSettings)
+	tc.bktInfo.Revision = cnr.Revision()
 	require.NoError(tc.t, tc.bktInfo.ParseSettings())
 }
 
