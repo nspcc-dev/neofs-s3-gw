@@ -25,6 +25,7 @@ This document outlines major changes between releases.
 ### Removed
 - `owner_private_key` field from the `issue-secret` output, it duplicated `secret_access_key` (#1344)
 - Unusable "none" option for session-tokens authmate parameter (#1355)
+- PutObjectLegalHold support (#1358)
 
 ### Upgrading from 0.46.0
 

@@ -115,16 +115,17 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
 
 For now there are some limitations:
 * Retention period can't be shortened, only extended.
-* You can't delete locks or object with unexpired lock. This means PutObjectLegalHold with OFF status raise Unsupported error.
+* You can't delete locks or object with unexpired lock.
+* Legal hold can't be set: PutObjectLegalHold and `X-Amz-Object-Lock-Legal-Hold: ON` header raise Unsupported error.
 
-|     | Method                     | Comments                  |
-|-----|----------------------------|---------------------------|
-| 🟡  | GetObjectLegalHold         |                           |
-| 🟢  | GetObjectLockConfiguration | GetBucketObjectLockConfig |
-| 🟡  | GetObjectRetention         |                           |
-| 🟡  | PutObjectLegalHold         |                           |
-| 🟢  | PutObjectLockConfiguration | PutBucketObjectLockConfig |
-| 🟡  | PutObjectRetention         |                           |
+|    | Method                     | Comments                  |
+|----|----------------------------|---------------------------|
+| 🟡 | GetObjectLegalHold         |                           |
+| 🟢 | GetObjectLockConfiguration | GetBucketObjectLockConfig |
+| 🟡 | GetObjectRetention         |                           |
+| 🔴 | PutObjectLegalHold         |                           |
+| 🟢 | PutObjectLockConfiguration | PutBucketObjectLockConfig |
+| 🟡 | PutObjectRetention         |                           |
 
 ## Multipart
 

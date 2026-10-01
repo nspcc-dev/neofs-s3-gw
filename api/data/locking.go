@@ -37,12 +37,7 @@ type (
 	}
 
 	ObjectLock struct {
-		LegalHold *LegalHoldLock
 		Retention *RetentionLock
-	}
-
-	LegalHoldLock struct {
-		Enabled bool
 	}
 
 	RetentionLock struct {
