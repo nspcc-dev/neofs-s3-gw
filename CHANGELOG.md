@@ -5,14 +5,28 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
-- Ability to take NeoFS node addresses from the network map (#582)
-- Update of NeoFS node addresses on network map change (#1361)
+
+### Changed
+
+### Fixed
+
+### Updated
+
+### Removed
+
+### Upgrading from 0.47.0
+
+## [0.47.0] - 2026-10-01
+
+### Added
+- Ability to take NeoFS node addresses from the network map with autoupdate (#582, #1361)
 
 ### Changed
 - Object PUT is pinned to the container revision (#1244)
 - GW now sets `payload_only` flag in NeoFS GET request when header is not needed (#1325)
-- Access boxes are sealed with HPKE now, this is access box version 2 (#1344)
+- Access boxes are sealed with HPKE (RFC 9180) now, this is access box version 2 (#1344)
 - Authmatesrv service returns the S3 secret access key from `POST /v1/auth/s3` (#1344)
+- Inapplicable bucket policy returns 409 code instead of 400 now (#1354)
 - Bucket ACL update is pinned to the container revision (#1244)
 
 ### Fixed
@@ -25,6 +39,7 @@ This document outlines major changes between releases.
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
 - github.com/aws/aws-sdk-go-v2/credentials v1.19.37 => v1.20.2 (#1346)
 - github.com/klauspost/reedsolomon v1.13.2 => v1.14.2 (#1346)
+- google.golang.org/grpc dependency from 1.83.1 to 1.83.2 (#1350)
 - github.com/nspcc-dev/neofs-contract v0.26.1 => v0.27.0 (#1361)
 
 ### Removed
@@ -33,6 +48,9 @@ This document outlines major changes between releases.
 - PutObjectLegalHold support (#1358)
 
 ### Upgrading from 0.46.0
+Notice that this release requires NeoFS node 0.57.0.
+
+Support for old (pre-HPKE) keyboxes will be removed in half a year.
 
 ## [0.46.0] - 2026-09-02
 
