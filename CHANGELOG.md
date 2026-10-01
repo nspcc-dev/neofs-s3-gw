@@ -6,6 +6,7 @@ This document outlines major changes between releases.
 
 ### Added
 - Ability to take NeoFS node addresses from the network map (#582)
+- Update of NeoFS node addresses on network map change (#1361)
 
 ### Changed
 - Object PUT is pinned to the container revision (#1244)
@@ -24,6 +25,7 @@ This document outlines major changes between releases.
 - github.com/aws/aws-sdk-go-v2 v1.43.7 => v1.45.1 (#1346)
 - github.com/aws/aws-sdk-go-v2/credentials v1.19.37 => v1.20.2 (#1346)
 - github.com/klauspost/reedsolomon v1.13.2 => v1.14.2 (#1346)
+- github.com/nspcc-dev/neofs-contract v0.26.1 => v0.27.0 (#1361)
 
 ### Removed
 - `owner_private_key` field from the `issue-secret` output, it duplicated `secret_access_key` (#1344)

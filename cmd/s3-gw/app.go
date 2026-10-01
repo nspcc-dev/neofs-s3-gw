@@ -43,7 +43,7 @@ type (
 		ctr     auth.Center
 		log     *zap.Logger
 		cfg     *viper.Viper
-		pool    *pool.Pool
+		neoFS   *neofs.NeoFS
 		gateKey *keys.PrivateKey
 		nc      *notifications.Controller
 		obj     layer.Client
@@ -59,6 +59,8 @@ type (
 
 		webDone chan struct{}
 		wrkDone chan struct{}
+
+		poolPrm pool.InitParameters
 	}
 
 	appSettings struct {
@@ -99,7 +101,25 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		log.logger.Fatal("resolve contracts failed", zap.Error(err), zap.Strings("endpoints", rpcHTTPEndpoints))
 	}
 
-	conns, key := getPool(ctx, log.logger, v, resolvedContracts.NetMapContract)
+	poolPrm, key := getPoolParams(log.logger, v)
+
+	var (
+		conns         *pool.Pool
+		netmapVersion uint64
+	)
+
+	if v.GetBool(cfgPeersFromNetmap) {
+		var peers []string
+
+		netmapVersion, peers = getNetmapPeers(ctx, log.logger, v, resolvedContracts.NetMapContract)
+		conns, err = dialPool(ctx, poolPrm, pool.NewFlatNodeParams(peers))
+	} else {
+		conns, err = dialPool(ctx, poolPrm, fetchPeers(log.logger, v))
+	}
+
+	if err != nil {
+		log.logger.Fatal("failed to create connection pool", zap.Error(err))
+	}
 
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 
@@ -139,8 +159,6 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 	}
 
 	epochListener := neofs.NewEpochListener(wsEndpoints, log.logger, resolvedContracts.NetMapContract)
-	epochListener.ListenNotifications(ctx)
-
 	neoFS := neofs.NewNeoFS(conns, signer, anonSigner, neofsCfg, epochListener)
 
 	// prepare auth center
@@ -157,24 +175,32 @@ func newApp(ctx context.Context, log *Logger, v *viper.Viper) *App {
 		ctr:     ctr,
 		log:     log.logger,
 		cfg:     v,
-		pool:    conns,
+		neoFS:   neoFS,
 		gateKey: key,
 
 		webDone: make(chan struct{}, 1),
 		wrkDone: make(chan struct{}, 1),
 
+		poolPrm: poolPrm,
+
 		maxClients: newMaxClients(v),
 		settings:   newAppSettings(ctx, log, v),
 	}
 
-	app.init(ctx, anonSigner, neoFS, conns)
+	if v.GetBool(cfgPeersFromNetmap) {
+		go app.watchNetmap(ctx, epochListener.WatchNetmap(netmapVersion), rpcHTTPEndpoints, resolvedContracts.NetMapContract)
+	}
+
+	epochListener.ListenNotifications(ctx)
+
+	app.init(ctx, anonSigner, neoFS)
 
 	return app
 }
 
-func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS, p *pool.Pool) {
+func (a *App) init(ctx context.Context, anonSigner user.Signer, neoFS *neofs.NeoFS) {
 	a.initAPI(ctx, anonSigner, neoFS)
-	a.initMetrics(p)
+	a.initMetrics(neoFS.Pool)
 	a.initServers(ctx)
 }
 
@@ -264,7 +290,7 @@ func (a *App) initAPI(ctx context.Context, anonSigner user.Signer, neoFS *neofs.
 	a.initHandler()
 }
 
-func (a *App) initMetrics(p *pool.Pool) {
+func (a *App) initMetrics(p func() *pool.Pool) {
 	gateMetricsProvider := newGateMetrics(p)
 	gateMetricsProvider.SetGWVersion(version.Version)
 	a.metrics = newAppMetrics(a.log, gateMetricsProvider, a.cfg.GetBool(cfgPrometheusEnabled))
@@ -297,7 +323,7 @@ func newMaxClients(cfg *viper.Viper) api.MaxClients {
 	return api.NewMaxClientsMiddleware(maxClientsCount, maxClientsDeadline)
 }
 
-func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper, netMapContract util.Uint160) (*pool.Pool, *keys.PrivateKey) {
+func getPoolParams(logger *zap.Logger, cfg *viper.Viper) (pool.InitParameters, *keys.PrivateKey) {
 	poolStat := metrics.NewPoolMetrics()
 
 	var prm pool.InitParameters
@@ -312,29 +338,6 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper, netMapCo
 	signer := user.NewAutoIDSignerRFC6979(key.PrivateKey)
 	prm.SetSigner(signer)
 	logger.Info("using credentials", zap.String("pub key", hex.EncodeToString(key.PublicKey().Bytes())), zap.Stringer("userID", signer.UserID()))
-
-	var nodes []pool.NodeParam
-
-	if cfg.GetBool(cfgPeersFromNetmap) {
-		endpoints, err := neofs.NetmapNodes(ctx, logger, cfg.GetStringSlice(cfgRPCEndpoints), netMapContract)
-		if err != nil {
-			logger.Fatal("failed to read network map", zap.Error(err))
-		}
-
-		if len(endpoints) == 0 {
-			logger.Fatal("no usable nodes in network map")
-		}
-
-		logger.Info("using nodes from network map", zap.Strings("addresses", endpoints))
-
-		nodes = pool.NewFlatNodeParams(endpoints)
-	} else {
-		nodes = fetchPeers(logger, cfg)
-	}
-
-	for _, node := range nodes {
-		prm.AddNode(node)
-	}
 
 	connTimeout := cfg.GetDuration(cfgConnectTimeout)
 	if connTimeout <= 0 {
@@ -367,16 +370,80 @@ func getPool(ctx context.Context, logger *zap.Logger, cfg *viper.Viper, netMapCo
 	prm.SetErrorThreshold(errorThreshold)
 	prm.SetLogger(logger)
 
+	return prm, key
+}
+
+func getNetmapPeers(ctx context.Context, logger *zap.Logger, cfg *viper.Viper, netMapContract util.Uint160) (uint64, []string) {
+	version, endpoints, err := neofs.NetmapNodes(ctx, logger, cfg.GetStringSlice(cfgRPCEndpoints), netMapContract)
+	if err != nil {
+		logger.Fatal("failed to read network map", zap.Error(err))
+	}
+
+	if len(endpoints) == 0 {
+		logger.Fatal("no usable nodes in network map")
+	}
+
+	logger.Info("using nodes from network map", zap.Uint64("version", version), zap.Strings("addresses", endpoints))
+
+	return version, endpoints
+}
+
+func dialPool(ctx context.Context, prm pool.InitParameters, nodes []pool.NodeParam) (*pool.Pool, error) {
+	for _, node := range nodes {
+		prm.AddNode(node)
+	}
+
 	p, err := pool.NewPool(prm)
 	if err != nil {
-		logger.Fatal("failed to create connection pool", zap.Error(err))
+		return nil, fmt.Errorf("create pool: %w", err)
 	}
 
 	if err = p.Dial(ctx); err != nil {
-		logger.Fatal("failed to dial connection pool", zap.Error(err))
+		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	return p, key
+	return p, nil
+}
+
+func (a *App) watchNetmap(ctx context.Context, changed <-chan struct{}, rpcEndpoints []string, netMapContract util.Uint160) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-changed:
+			a.updatePeers(ctx, rpcEndpoints, netMapContract)
+		}
+	}
+}
+
+func (a *App) updatePeers(ctx context.Context, rpcEndpoints []string, netMapContract util.Uint160) {
+	version, endpoints, err := neofs.NetmapNodes(ctx, a.log, rpcEndpoints, netMapContract)
+	if err != nil {
+		a.log.Warn("failed to read network map", zap.Error(err))
+		return
+	}
+
+	if len(endpoints) == 0 {
+		a.log.Warn("no usable nodes in network map, keep using the current connection pool", zap.Uint64("version", version))
+		return
+	}
+
+	p, err := dialPool(ctx, a.poolPrm, pool.NewFlatNodeParams(endpoints))
+	if err != nil {
+		a.log.Warn("failed to update connection pool, keep using the current one",
+			zap.Uint64("version", version), zap.Strings("addresses", endpoints), zap.Error(err))
+		return
+	}
+
+	var old = a.neoFS.SetPool(p)
+
+	a.log.Info("connection pool updated", zap.Uint64("version", version), zap.Strings("addresses", endpoints))
+
+	time.AfterFunc(poolCloseDelay, func() {
+		if err := old.Close(); err != nil {
+			a.log.Warn("failed to close previous connection pool", zap.Error(err))
+		}
+	})
 }
 
 func newPlacementPolicy(defaultPolicy string, regionPolicyFilepath string, locations map[string]string) (*placementPolicy, error) {

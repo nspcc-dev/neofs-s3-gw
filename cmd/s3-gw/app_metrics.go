@@ -28,12 +28,12 @@ type GateMetrics struct {
 }
 
 type stateMetrics struct {
-	p           *pool.Pool
+	p           func() *pool.Pool
 	healthCheck prometheus.Gauge
 	gwVersion   *prometheus.GaugeVec
 }
 
-func newGateMetrics(p *pool.Pool) *GateMetrics {
+func newGateMetrics(p func() *pool.Pool) *GateMetrics {
 	stateMetric := newStateMetrics(p)
 	prometheus.MustRegister(stateMetric)
 
@@ -46,7 +46,7 @@ func (g *GateMetrics) Unregister() {
 	g.unregister()
 }
 
-func newStateMetrics(p *pool.Pool) *stateMetrics {
+func newStateMetrics(p func() *pool.Pool) *stateMetrics {
 	return &stateMetrics{
 		p: p,
 		healthCheck: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -76,7 +76,7 @@ func (m *stateMetrics) SetHealth(status healthStatus) {
 
 func (m *stateMetrics) updateHealthStatus() {
 	// Only "no healthy client" error is possible.
-	if _, err := m.p.RawClient(); err != nil {
+	if _, err := m.p().RawClient(); err != nil {
 		m.SetHealth(healthStatusUnhealthy)
 		return
 	}

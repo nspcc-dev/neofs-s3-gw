@@ -34,11 +34,15 @@ type (
 
 		clientMu *sync.Mutex
 		client   *rpcclient.WSClient
+
+		netmapVersion atomic.Uint64
+		netmapChanged chan struct{}
 	}
 )
 
 var (
-	eventName = "NewEpoch"
+	eventName       = "NewEpoch"
+	netmapEventName = "NewNetmap"
 )
 
 // NewEpochListener is a constructor for EpochListener.
@@ -49,6 +53,15 @@ func NewEpochListener(endpoints []string, log *zap.Logger, netMapContract util.U
 		netMapContract: netMapContract,
 		clientMu:       &sync.Mutex{},
 	}
+}
+
+// WatchNetmap enables network map tracking starting from the given version.
+// It must be called before [EpochListener.ListenNotifications].
+func (l *EpochListener) WatchNetmap(version uint64) <-chan struct{} {
+	l.netmapVersion.Store(version)
+	l.netmapChanged = make(chan struct{}, 1)
+
+	return l.netmapChanged
 }
 
 // CurrentEpoch returns actual epoch.
@@ -126,7 +139,7 @@ func (l *EpochListener) ListenNotifications(ctx context.Context) {
 
 			l.notifyChan = make(chan *state.ContainedNotificationEvent)
 
-			id, err := l.client.ReceiveExecutionNotifications(&neorpc.NotificationFilter{Contract: &l.netMapContract, Name: &eventName}, l.notifyChan)
+			id, err := l.client.ReceiveExecutionNotifications(&neorpc.NotificationFilter{Contract: &l.netMapContract}, l.notifyChan)
 			if err != nil {
 				l.log.Info("receive execution notifications failed", zap.Error(err))
 
@@ -148,6 +161,10 @@ func (l *EpochListener) ListenNotifications(ctx context.Context) {
 				}
 			}()
 
+			if l.netmapChanged != nil {
+				go l.forceGetNetmapVersion()
+			}
+
 			l.readNotifications(ctx)
 		}
 	}()
@@ -164,13 +181,28 @@ func (l *EpochListener) readNotifications(ctx context.Context) {
 				return
 			}
 
-			var newEpochEvent netmap.NewEpochEvent
-			if err := newEpochEvent.FromStackItem(notification.Item); err != nil {
-				l.log.Error("failed to parse NewEpoch event", zap.Error(err))
-				continue
-			}
+			switch notification.Name {
+			case eventName:
+				var newEpochEvent netmap.NewEpochEvent
+				if err := newEpochEvent.FromStackItem(notification.Item); err != nil {
+					l.log.Error("failed to parse NewEpoch event", zap.Error(err))
+					continue
+				}
 
-			l.updateEpoch(newEpochEvent.Epoch.Uint64())
+				l.updateEpoch(newEpochEvent.Epoch.Uint64())
+			case netmapEventName:
+				if l.netmapChanged == nil {
+					continue
+				}
+
+				var newNetmapEvent netmap.NewNetmapEvent
+				if err := newNetmapEvent.FromStackItem(notification.Item); err != nil {
+					l.log.Error("failed to parse NewNetmap event", zap.Error(err))
+					continue
+				}
+
+				l.updateNetmapVersion(newNetmapEvent.Version.Uint64())
+			}
 		}
 	}
 }
@@ -179,5 +211,38 @@ func (l *EpochListener) updateEpoch(e uint64) {
 	if e > l.epoch.Load() {
 		l.epoch.Store(e)
 		l.log.Info("epoch update", zap.Uint64("epoch", e))
+	}
+}
+
+func (l *EpochListener) forceGetNetmapVersion() {
+	l.clientMu.Lock()
+	version, err := netmap.NewReader(invoker.New(l.client, nil), l.netMapContract).NetworkMapVersion()
+	l.clientMu.Unlock()
+
+	if err != nil {
+		l.log.Warn("failed to get network map version", zap.Error(err))
+		return
+	}
+
+	l.updateNetmapVersion(version.Uint64())
+}
+
+func (l *EpochListener) updateNetmapVersion(v uint64) {
+	for {
+		cur := l.netmapVersion.Load()
+		if v <= cur {
+			return
+		}
+
+		if l.netmapVersion.CompareAndSwap(cur, v) {
+			break
+		}
+	}
+
+	l.log.Info("network map update", zap.Uint64("version", v))
+
+	select {
+	case l.netmapChanged <- struct{}{}:
+	default:
 	}
 }
