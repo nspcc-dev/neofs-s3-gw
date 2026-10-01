@@ -199,6 +199,7 @@ func (t *TestNeoFS) CreateContainer(ctx context.Context, prm PrmContainerCreate,
 	_, _ = io.ReadFull(rand.Reader, b)
 
 	id := cid.NewFromMarshalledContainer(b)
+	t.setContainerRevision(&cnr, initialContainerRevision)
 	t.containers[id.EncodeToString()] = &cnr
 
 	if !table.IsZero() {
@@ -530,6 +531,10 @@ func (t *TestNeoFS) SetContainerEACL(_ context.Context, table eacl.Table, _ *ses
 	cnrID := table.GetCID()
 	if cnrID.IsZero() {
 		return errors.New("invalid cid")
+	}
+
+	if cnrRevision == 0 {
+		return errors.New("container revision must be positive")
 	}
 
 	cnr, ok := t.containers[cnrID.EncodeToString()]

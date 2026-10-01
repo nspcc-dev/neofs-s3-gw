@@ -29,6 +29,8 @@ type (
 const (
 	attributeLocationConstraint = ".s3-location-constraint"
 	AttributeLockEnabled        = "LockEnabled"
+
+	initialContainerRevision = 1
 )
 
 func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID, namespace string) (*data.BucketInfo, error) {
@@ -147,6 +149,7 @@ func (n *layer) createContainer(ctx context.Context, p *CreateBucketParams) (*da
 		Created:            TimeNow(ctx),
 		LocationConstraint: p.LocationConstraint,
 		ObjectLockEnabled:  p.ObjectLockEnabled,
+		Revision:           initialContainerRevision,
 		Settings:           &data.BucketSettings{Versioning: data.VersioningUnversioned},
 		Notifications:      &data.NotificationConfiguration{},
 	}

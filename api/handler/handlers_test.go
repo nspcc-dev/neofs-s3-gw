@@ -153,21 +153,15 @@ func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {
 }
 
 func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.ObjectLockConfiguration) *data.BucketInfo {
-	cnrID, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
+	_, err := hc.MockedPool().CreateContainer(hc.Context(), layer.PrmContainerCreate{
 		Creator:              hc.owner,
 		Name:                 bktName,
 		AdditionalAttributes: [][2]string{{layer.AttributeLockEnabled, "true"}},
 	}, eacl.Table{})
 	require.NoError(hc.t, err)
 
-	var ownerID user.ID
-
-	bktInfo := &data.BucketInfo{
-		CID:               cnrID,
-		Name:              bktName,
-		ObjectLockEnabled: true,
-		Owner:             ownerID,
-	}
+	bktInfo, err := hc.Layer().GetBucketInfo(hc.Context(), bktName)
+	require.NoError(hc.t, err)
 
 	p := layer.PutBucketACLParams{
 		BktInfo: bktInfo,
