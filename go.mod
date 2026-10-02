@@ -16,7 +16,7 @@ require (
 	github.com/nats-io/nats.go v1.49.0
 	github.com/nspcc-dev/neo-go v0.123.0
 	github.com/nspcc-dev/neofs-contract v0.27.0
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.23
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.23.0.20261003043654-6aa701e66577
 	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
@@ -81,3 +81,5 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 )
+
+replace google.golang.org/grpc => github.com/cthulhu-rider/grpc-go v0.0.0-20260928154303-fe2805fc7628
