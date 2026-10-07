@@ -432,7 +432,6 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 		contentReader = file
 		size = head.Size
-		reqInfo.ObjectName = strings.ReplaceAll(reqInfo.ObjectName, "${filename}", head.Filename)
 	}
 	if !policy.CheckContentLength(size) {
 		h.logAndSendError(w, "invalid content-length", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
@@ -578,6 +577,11 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		value := v[0]
 		if key == "file" || key == "policy" || key == "x-amz-signature" || strings.HasPrefix(key, "x-ignore-") {
 			continue
+		}
+		if key == "key" {
+			if files := r.MultipartForm.File["file"]; len(files) > 0 {
+				value = strings.ReplaceAll(value, "${filename}", files[0].Filename)
+			}
 		}
 		if err := policy.CheckField(key, value); err != nil {
 			return nil, fmt.Errorf("'%s' form field doesn't match the policy: %w", key, err)
