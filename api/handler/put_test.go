@@ -65,7 +65,7 @@ func TestCustomJSONMarshal(t *testing.T) {
   "conditions": [
 	["content-length-range", 1048576, 10485760],
     {"bucket": "bucketName"},
-    ["starts-with", "$key", "user/user1/"]
+    ["StArTs-WiTh", "$KeY", "user/user1/"]
   ]
 }`)
 

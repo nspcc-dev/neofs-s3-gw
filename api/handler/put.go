@@ -136,6 +136,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 		if p.Matching, ok = v[0].(string); !ok {
 			return errInvalidCondition
 		}
+		p.Matching = strings.ToLower(p.Matching)
 
 		if p.Matching == "content-length-range" {
 			minV, ok := v[1].(float64)
