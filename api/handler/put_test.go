@@ -237,6 +237,21 @@ func TestPostPolicyConditionsMatched(t *testing.T) {
 	}
 }
 
+func TestExpiredPostPolicy(t *testing.T) {
+	policy := `{"expiration": "2015-12-30T12:00:00.000Z", "conditions": []}`
+	r := &http.Request{
+		MultipartForm: &multipart.Form{
+			Value: map[string][]string{
+				"key":    {"foo.txt"},
+				"policy": {base64.StdEncoding.EncodeToString([]byte(policy))},
+			},
+		},
+	}
+
+	_, err := checkPostPolicy(r, &api.ReqInfo{}, make(map[string]string))
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrAccessDenied))
+}
+
 func TestMalformedPostPolicy(t *testing.T) {
 	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 

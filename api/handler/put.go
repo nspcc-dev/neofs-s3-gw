@@ -584,7 +584,7 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 			return nil, fmt.Errorf("could not unmarshal policy conditions: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
 		}
 		if policy.Expiration.Before(time.Now()) {
-			return nil, fmt.Errorf("policy is expired: %w", s3errors.GetAPIError(s3errors.ErrInvalidArgument))
+			return nil, fmt.Errorf("policy is expired: %w", s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		}
 		policy.empty = false
 	}
