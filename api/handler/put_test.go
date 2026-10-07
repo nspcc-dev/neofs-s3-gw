@@ -99,6 +99,29 @@ func TestCustomJSONMarshal(t *testing.T) {
 	require.Equal(t, expectedPolicy, policy)
 }
 
+func TestCheckContentLength(t *testing.T) {
+	policy := &postPolicy{
+		Conditions: []*policyCondition{{
+			Matching: "content-length-range",
+			Key:      "0",
+			Value:    "1024",
+		}},
+	}
+
+	for _, tc := range []struct {
+		size int64
+		ok   bool
+	}{
+		{size: 0, ok: true},
+		{size: 3, ok: true},
+		{size: 1024, ok: true},
+		{size: 1025, ok: false},
+		{size: 20, ok: true},
+	} {
+		require.Equal(t, tc.ok, policy.CheckContentLength(tc.size), "size: %d", tc.size)
+	}
+}
+
 func TestCreateBucketWithNamespace(t *testing.T) {
 	type (
 		data struct {

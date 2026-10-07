@@ -51,8 +51,15 @@ func (p *postPolicy) CheckContentLength(size int64) bool {
 	}
 	for _, condition := range p.Conditions {
 		if condition.Matching == "content-length-range" {
-			length := strconv.FormatInt(size, 10)
-			return condition.Key <= length && length <= condition.Value
+			minV, err := strconv.ParseInt(condition.Key, 10, 64)
+			if err != nil {
+				return false
+			}
+			maxV, err := strconv.ParseInt(condition.Value, 10, 64)
+			if err != nil {
+				return false
+			}
+			return minV <= size && size <= maxV
 		}
 	}
 	return true
