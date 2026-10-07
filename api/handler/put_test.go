@@ -16,6 +16,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/stretchr/testify/require"
@@ -378,6 +379,31 @@ func TestPostObjectRetriesOnContainerRevisionMismatch(t *testing.T) {
 	assertStatus(t, w, http.StatusNoContent)
 
 	require.NotEmpty(t, w.Header().Get(api.AmzVersionID))
+}
+
+func TestPostObjectSuccessActionRedirect(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-post-redirect", "dir/object"
+	bktInfo := createTestBucket(hc, bktName)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, defaultURL, nil)
+	r.MultipartForm = &multipart.Form{Value: map[string][]string{
+		"key":                     {objName},
+		"file":                    {"content"},
+		"success_action_redirect": {"http://example.com/done?a=b"},
+	}}
+	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
+	r = r.WithContext(api.SetReqInfo(hc.Context(), reqInfo))
+
+	hc.Handler().PostObject(w, r)
+	assertStatus(t, w, http.StatusSeeOther)
+
+	objInfo, err := hc.Layer().GetObjectInfo(hc.Context(), &layer.HeadObjectParams{BktInfo: bktInfo, Object: objName})
+	require.NoError(t, err)
+	require.Equal(t, "http://example.com/done?a=b&bucket="+bktName+"&etag=%22"+objInfo.HashSum+"%22&key=dir%2Fobject",
+		w.Header().Get("Location"))
 }
 
 func TestTransformToS3ErrorRevisionMismatch(t *testing.T) {

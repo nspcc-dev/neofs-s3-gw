@@ -483,8 +483,15 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if redirectURL := auth.MultipartFormValue(r, "success_action_redirect"); redirectURL != "" {
-		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-		return
+		if u, err := url.Parse(redirectURL); err == nil {
+			query := u.Query()
+			query.Set("bucket", objInfo.Bucket)
+			query.Set("key", objInfo.Name)
+			query.Set("etag", `"`+objInfo.HashSum+`"`)
+			u.RawQuery = query.Encode()
+			http.Redirect(w, r, u.String(), http.StatusSeeOther)
+			return
+		}
 	}
 	status := http.StatusNoContent
 	if statusStr := auth.MultipartFormValue(r, "success_action_status"); statusStr != "" {
