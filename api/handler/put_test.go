@@ -185,6 +185,19 @@ func TestEmptyPostPolicy(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPostPolicyNoKey(t *testing.T) {
+	r := &http.Request{
+		MultipartForm: &multipart.Form{
+			Value: map[string][]string{
+				"acl": {"private"},
+			},
+		},
+	}
+
+	_, err := checkPostPolicy(r, &api.ReqInfo{}, make(map[string]string))
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
+}
+
 func TestPostPolicyConditionsMatched(t *testing.T) {
 	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 	policy := base64.StdEncoding.EncodeToString([]byte(`{"expiration": "` + expiration + `", "conditions": [

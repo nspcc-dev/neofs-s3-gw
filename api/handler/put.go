@@ -617,6 +617,10 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		}
 	}
 
+	if reqInfo.ObjectName == "" {
+		return nil, fmt.Errorf("form has no key field: %w", s3errors.GetAPIError(s3errors.ErrInvalidArgument))
+	}
+
 	for _, cond := range policy.Conditions {
 		if cond.Key == "bucket" {
 			if !cond.match(reqInfo.BucketName) {
