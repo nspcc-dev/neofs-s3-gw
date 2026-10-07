@@ -36,15 +36,6 @@ type postPolicy struct {
 	empty      bool
 }
 
-func (p *postPolicy) condition(key string) *policyCondition {
-	for _, condition := range p.Conditions {
-		if condition.Key == key {
-			return condition
-		}
-	}
-	return nil
-}
-
 func (p *postPolicy) CheckContentLength(size int64) bool {
 	if p.empty {
 		return true
@@ -88,12 +79,17 @@ func (p *postPolicy) CheckField(key string, value string) error {
 	if p.empty {
 		return nil
 	}
-	cond := p.condition(key)
-	if cond == nil {
-		return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
+	var found bool
+	for _, cond := range p.Conditions {
+		if cond.Matching == "content-length-range" || cond.Key != key {
+			continue
+		}
+		found = true
+		if !cond.match(value) {
+			return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
+		}
 	}
-
-	if !cond.match(value) {
+	if !found {
 		return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 	}
 
@@ -102,7 +98,7 @@ func (p *postPolicy) CheckField(key string, value string) error {
 
 func (p *postPolicy) AllConditionMatched() bool {
 	for _, condition := range p.Conditions {
-		if !condition.Matched {
+		if condition.Matching != "content-length-range" && !condition.Matched {
 			return false
 		}
 	}
@@ -627,6 +623,10 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 				return nil, s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 			}
 		}
+	}
+
+	if !policy.empty && !policy.AllConditionMatched() {
+		return nil, fmt.Errorf("form has no field required by the policy: %w", s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat))
 	}
 
 	return policy, nil

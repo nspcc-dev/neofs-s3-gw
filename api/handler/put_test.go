@@ -185,6 +185,45 @@ func TestEmptyPostPolicy(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPostPolicyConditionsMatched(t *testing.T) {
+	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	policy := base64.StdEncoding.EncodeToString([]byte(`{"expiration": "` + expiration + `", "conditions": [
+		{"bucket": "bucket"},
+		["starts-with", "$key", "foo"],
+		{"key": "foo.txt"},
+		["content-length-range", 0, 1024],
+		["starts-with", "$x-amz-meta-foo", "bar"]
+	]}`))
+
+	for name, tc := range map[string]struct {
+		form map[string][]string
+		ok   bool
+	}{
+		"all conditions matched": {
+			form: map[string][]string{"key": {"foo.txt"}, "x-amz-meta-foo": {"barbar"}},
+			ok:   true,
+		},
+		"field required by policy is missing": {
+			form: map[string][]string{"key": {"foo.txt"}},
+		},
+		"second condition on the same field fails": {
+			form: map[string][]string{"key": {"foo.bin"}, "x-amz-meta-foo": {"barbar"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.form["policy"] = []string{policy}
+			r := &http.Request{MultipartForm: &multipart.Form{Value: tc.form}}
+
+			_, err := checkPostPolicy(r, &api.ReqInfo{BucketName: "bucket"}, make(map[string]string))
+			if tc.ok {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat))
+			}
+		})
+	}
+}
+
 func TestMalformedPostPolicy(t *testing.T) {
 	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 
