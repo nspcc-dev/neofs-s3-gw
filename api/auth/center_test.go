@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"slices"
 	"strconv"
@@ -112,6 +113,24 @@ func TestSignature(t *testing.T) {
 
 	signature := signStr(secret, "s3", "us-east-1", signTime, strToSign)
 	require.Equal(t, "dfbe886241d9e369cf4b329ca0f15eb27306c97aa1022cc0bb5a914c4ef87634", signature)
+}
+
+func TestCheckFormDataNoSignature(t *testing.T) {
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	require.NoError(t, form.WriteField("key", "foo.txt"))
+	require.NoError(t, form.WriteField("policy", "e30="))
+	require.NoError(t, form.WriteField("x-amz-credential", "key/20151229/us-east-1/s3/aws4_request"))
+	require.NoError(t, form.WriteField("x-amz-date", "20151229T000000Z"))
+	require.NoError(t, form.Close())
+
+	r, err := http.NewRequest(http.MethodPost, "/bucket", &body)
+	require.NoError(t, err)
+	r.Header.Set(ContentTypeHdr, form.FormDataContentType())
+
+	c := &center{postReg: NewRegexpMatcher(postPolicyCredentialRegexp)}
+	_, err = c.checkFormData(r)
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
 }
 
 // TestAwsEncodedChunkReader checks example from https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
