@@ -155,6 +155,9 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 		}
 
 	case map[string]any:
+		if len(v) != 1 {
+			return errInvalidCondition
+		}
 		p.Matching = "eq"
 		for key, val := range v {
 			p.Key = strings.ToLower(key)
@@ -564,8 +567,24 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		if err != nil {
 			return nil, fmt.Errorf("could not decode policy: %w", err)
 		}
-		if err = json.Unmarshal(policyData, policy); err != nil {
-			return nil, fmt.Errorf("could not unmarshal policy: %w", err)
+		// Policy keys are case-sensitive, json.Unmarshal into a struct is not.
+		var fields map[string]json.RawMessage
+		if err = json.Unmarshal(policyData, &fields); err != nil {
+			return nil, fmt.Errorf("could not unmarshal policy: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		expiration, ok := fields["expiration"]
+		if !ok {
+			return nil, fmt.Errorf("policy has no expiration: %w", s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		conditions, ok := fields["conditions"]
+		if !ok {
+			return nil, fmt.Errorf("policy has no conditions: %w", s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		if err = json.Unmarshal(expiration, &policy.Expiration); err != nil {
+			return nil, fmt.Errorf("could not unmarshal policy expiration: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		if err = json.Unmarshal(conditions, &policy.Conditions); err != nil {
+			return nil, fmt.Errorf("could not unmarshal policy conditions: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
 		}
 		if policy.Expiration.Before(time.Now()) {
 			return nil, fmt.Errorf("policy is expired: %w", s3errors.GetAPIError(s3errors.ErrInvalidArgument))

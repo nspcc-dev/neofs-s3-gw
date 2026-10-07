@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -182,6 +183,34 @@ func TestEmptyPostPolicy(t *testing.T) {
 
 	_, err := checkPostPolicy(r, reqInfo, metadata)
 	require.NoError(t, err)
+}
+
+func TestMalformedPostPolicy(t *testing.T) {
+	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+
+	for name, policy := range map[string]string{
+		"invalid json":               `{`,
+		"invalid date format":        `{"expiration": "2015-12-30 12:00:00", "conditions": []}`,
+		"missing expiration":         `{"conditions": []}`,
+		"uppercase expiration":       `{"EXPIRATION": "` + expiration + `", "conditions": []}`,
+		"missing conditions":         `{"expiration": "` + expiration + `"}`,
+		"uppercase conditions":       `{"expiration": "` + expiration + `", "CONDITIONS": []}`,
+		"empty condition":            `{"expiration": "` + expiration + `", "conditions": [{}]}`,
+		"short content-length-range": `{"expiration": "` + expiration + `", "conditions": [["content-length-range", 0]]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := &http.Request{
+				MultipartForm: &multipart.Form{
+					Value: map[string][]string{
+						"policy": {base64.StdEncoding.EncodeToString([]byte(policy))},
+					},
+				},
+			}
+
+			_, err := checkPostPolicy(r, &api.ReqInfo{}, make(map[string]string))
+			require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		})
+	}
 }
 
 // putBucketSettingsBehindCache changes bucket settings the way another gateway
