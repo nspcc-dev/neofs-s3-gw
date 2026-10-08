@@ -83,8 +83,6 @@ var (
 	}
 	fullOps = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
 		eacl.OperationDelete, eacl.OperationSearch}
-	fullOpsDeny = []eacl.Operation{eacl.OperationGet, eacl.OperationHead, eacl.OperationPut,
-		eacl.OperationDelete, eacl.OperationSearch, eacl.OperationRange}
 )
 
 var actionToOpMap = map[string][]eacl.Operation{
@@ -1640,7 +1638,7 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		}
 	}
 
-	for _, op := range fullOpsDeny {
+	for _, op := range fullOps {
 		if _, ok := allowedOpsForOthers[op]; !ok {
 			records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 		}

@@ -194,9 +194,6 @@ where content of `session.json`:
    {
       "verb": "OBJECT_DELETE",
       "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
-   },
-   {
-      "verb": "OBJECT_RANGE"
    }
 ]
 ```
@@ -204,7 +201,7 @@ where content of `session.json`:
 Available `verb` values:
 - container operations: `PUT` (or `CONTAINER_PUT`), `DELETE` (or `CONTAINER_DELETE`), `SETEACL` (or `CONTAINER_SET_EACL`),
 `CONTAINER_SET_ATTRIBUTE`, `CONTAINER_REMOVE_ATTRIBUTE`;
-- object operations: `OBJECT_PUT`, `OBJECT_GET`, `OBJECT_HEAD`, `OBJECT_SEARCH`, `OBJECT_DELETE`, `OBJECT_RANGE`.
+- object operations: `OBJECT_PUT`, `OBJECT_GET`, `OBJECT_HEAD`, `OBJECT_SEARCH`, `OBJECT_DELETE`.
 
 If `containerID` is `null` or omitted, then session token rule will be applied
 to all containers. Otherwise, specify `containerID` value in human-redabale

@@ -1182,7 +1182,7 @@ func TestBucketAclToTable(t *testing.T) {
 	for _, op := range fullOps {
 		records = append(records, *getAllowRecordWithRoleUser(op))
 	}
-	for _, op := range fullOpsDeny {
+	for _, op := range fullOps {
 		if _, ok := readOpsMap[op]; !ok {
 			records = append(records, *getOthersRecord(op, eacl.ActionDeny))
 		}
@@ -1665,19 +1665,16 @@ func TestEACLEncode(t *testing.T) {
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationPut, []eacl.Target{userTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationDelete, []eacl.Target{userTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{userTarget}))
-	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{userTarget}))
 
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationGet, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationHead, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationSearch, []eacl.Target{othersTarget}))
-	records = append(records, *generateRecord(eacl.ActionAllow, eacl.OperationRange, []eacl.Target{othersTarget}))
 
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationGet, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationHead, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationPut, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationDelete, []eacl.Target{othersTarget}))
 	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationSearch, []eacl.Target{othersTarget}))
-	records = append(records, *generateRecord(eacl.ActionDeny, eacl.OperationRange, []eacl.Target{othersTarget}))
 
 	acl.EACL.SetRecords(records)
 

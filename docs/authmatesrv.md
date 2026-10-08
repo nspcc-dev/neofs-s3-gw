@@ -86,7 +86,6 @@ Available verbs:
 - `OBJECT_HEAD`
 - `OBJECT_SEARCH`
 - `OBJECT_DELETE`
-- `OBJECT_RANGE`
 
 > Creating buckets needs both `CONTAINER_PUT` and `CONTAINER_SET_EACL`.
 > Unlike the `s3-authmate` CLI, this service does not add them by default.

@@ -30,7 +30,6 @@ const (
 	VerbObjectHead               TokenVerb = "OBJECT_HEAD"
 	VerbObjectSearch             TokenVerb = "OBJECT_SEARCH"
 	VerbObjectDelete             TokenVerb = "OBJECT_DELETE"
-	VerbObjectRange              TokenVerb = "OBJECT_RANGE"
 )
 
 type (
