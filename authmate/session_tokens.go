@@ -41,7 +41,6 @@ var supportedVerbs = []session.Verb{
 	session.VerbObjectHead,
 	session.VerbObjectSearch,
 	session.VerbObjectDelete,
-	session.VerbObjectRange,
 }
 
 // ParseVerb parses a supported session verb from its canonical name.

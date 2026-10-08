@@ -46,16 +46,13 @@ func TestContainerSessionRules(t *testing.T) {
   {
     "verb": "OBJECT_DELETE",
     "containerID": "6CcWg8LkcbfMUC8pt7wiy5zM1fyS3psNoxgfppcCgig1"
-  },
-  {
-    "verb": "OBJECT_RANGE"
   }
 ]`)
 
 	sessionContext, err := buildContext(jsonRules)
 	require.NoError(t, err)
 
-	require.Len(t, sessionContext, 12)
+	require.Len(t, sessionContext, 11)
 	require.Equal(t, sessionContext[0].verb, session.VerbContainerPut)
 	require.Zero(t, sessionContext[0].containerID)
 	require.Equal(t, sessionContext[1].verb, session.VerbContainerDelete)
@@ -78,8 +75,6 @@ func TestContainerSessionRules(t *testing.T) {
 	require.Zero(t, sessionContext[9].containerID)
 	require.Equal(t, session.VerbObjectDelete, sessionContext[10].verb)
 	require.NotZero(t, sessionContext[10].containerID)
-	require.Equal(t, session.VerbObjectRange, sessionContext[11].verb)
-	require.Zero(t, sessionContext[11].containerID)
 }
 
 func TestContainerSessionRulesCanonicalVerbs(t *testing.T) {
@@ -127,7 +122,7 @@ func TestBuildContexts(t *testing.T) {
 		// into a single wildcard context.
 		require.Len(t, contexts, 1)
 		require.True(t, contexts[0].Container().IsZero())
-		require.Len(t, contexts[0].Verbs(), 11)
+		require.Len(t, contexts[0].Verbs(), 10)
 	})
 
 	t.Run("sorted and deduplicated", func(t *testing.T) {
@@ -174,5 +169,8 @@ func TestParseVerb(t *testing.T) {
 	}
 
 	_, err := ParseVerb(session.VerbUnspecified.String())
+	require.Error(t, err)
+
+	_, err = ParseVerb(session.VerbObjectRange.String())
 	require.Error(t, err)
 }

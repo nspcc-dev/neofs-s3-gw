@@ -13,6 +13,7 @@ This document outlines major changes between releases.
 ### Updated
 
 ### Removed
+- RANGE verb support in session tokens and EACL rules (#1369)
 
 ### Upgrading from 0.47.0
 
