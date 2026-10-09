@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
+	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/stretchr/testify/require"
@@ -64,7 +66,7 @@ func TestCustomJSONMarshal(t *testing.T) {
   "conditions": [
 	["content-length-range", 1048576, 10485760],
     {"bucket": "bucketName"},
-    ["starts-with", "$key", "user/user1/"]
+    ["StArTs-WiTh", "$KeY", "user/user1/"]
   ]
 }`)
 
@@ -97,6 +99,29 @@ func TestCustomJSONMarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expectedPolicy, policy)
+}
+
+func TestCheckContentLength(t *testing.T) {
+	policy := &postPolicy{
+		Conditions: []*policyCondition{{
+			Matching: "content-length-range",
+			Key:      "0",
+			Value:    "1024",
+		}},
+	}
+
+	for _, tc := range []struct {
+		size int64
+		ok   bool
+	}{
+		{size: 0, ok: true},
+		{size: 3, ok: true},
+		{size: 1024, ok: true},
+		{size: 1025, ok: false},
+		{size: 20, ok: true},
+	} {
+		require.Equal(t, tc.ok, policy.CheckContentLength(tc.size), "size: %d", tc.size)
+	}
 }
 
 func TestCreateBucketWithNamespace(t *testing.T) {
@@ -159,6 +184,101 @@ func TestEmptyPostPolicy(t *testing.T) {
 
 	_, err := checkPostPolicy(r, reqInfo, metadata)
 	require.NoError(t, err)
+}
+
+func TestPostPolicyNoKey(t *testing.T) {
+	r := &http.Request{
+		MultipartForm: &multipart.Form{
+			Value: map[string][]string{
+				"acl": {"private"},
+			},
+		},
+	}
+
+	_, err := checkPostPolicy(r, &api.ReqInfo{}, make(map[string]string))
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
+}
+
+func TestPostPolicyConditionsMatched(t *testing.T) {
+	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	policy := base64.StdEncoding.EncodeToString([]byte(`{"expiration": "` + expiration + `", "conditions": [
+		{"bucket": "bucket"},
+		["starts-with", "$key", "foo"],
+		{"key": "foo.txt"},
+		["content-length-range", 0, 1024],
+		["starts-with", "$x-amz-meta-foo", "bar"]
+	]}`))
+
+	for name, tc := range map[string]struct {
+		form map[string][]string
+		ok   bool
+	}{
+		"all conditions matched": {
+			form: map[string][]string{"key": {"foo.txt"}, "x-amz-meta-foo": {"barbar"}},
+			ok:   true,
+		},
+		"field required by policy is missing": {
+			form: map[string][]string{"key": {"foo.txt"}},
+		},
+		"second condition on the same field fails": {
+			form: map[string][]string{"key": {"foo.bin"}, "x-amz-meta-foo": {"barbar"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.form["policy"] = []string{policy}
+			r := &http.Request{MultipartForm: &multipart.Form{Value: tc.form}}
+
+			_, err := checkPostPolicy(r, &api.ReqInfo{BucketName: "bucket"}, make(map[string]string))
+			if tc.ok {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat))
+			}
+		})
+	}
+}
+
+func TestExpiredPostPolicy(t *testing.T) {
+	policy := `{"expiration": "2015-12-30T12:00:00.000Z", "conditions": []}`
+	r := &http.Request{
+		MultipartForm: &multipart.Form{
+			Value: map[string][]string{
+				"key":    {"foo.txt"},
+				"policy": {base64.StdEncoding.EncodeToString([]byte(policy))},
+			},
+		},
+	}
+
+	_, err := checkPostPolicy(r, &api.ReqInfo{}, make(map[string]string))
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrAccessDenied))
+}
+
+func TestMalformedPostPolicy(t *testing.T) {
+	expiration := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+
+	for name, policy := range map[string]string{
+		"invalid json":               `{`,
+		"invalid date format":        `{"expiration": "2015-12-30 12:00:00", "conditions": []}`,
+		"missing expiration":         `{"conditions": []}`,
+		"uppercase expiration":       `{"EXPIRATION": "` + expiration + `", "conditions": []}`,
+		"missing conditions":         `{"expiration": "` + expiration + `"}`,
+		"uppercase conditions":       `{"expiration": "` + expiration + `", "CONDITIONS": []}`,
+		"empty condition":            `{"expiration": "` + expiration + `", "conditions": [{}]}`,
+		"short content-length-range": `{"expiration": "` + expiration + `", "conditions": [["content-length-range", 0]]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := &http.Request{
+				MultipartForm: &multipart.Form{
+					Value: map[string][]string{
+						"policy": {base64.StdEncoding.EncodeToString([]byte(policy))},
+					},
+				},
+			}
+
+			_, err := checkPostPolicy(r, &api.ReqInfo{}, make(map[string]string))
+			require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		})
+	}
 }
 
 // putBucketSettingsBehindCache changes bucket settings the way another gateway
@@ -259,6 +379,31 @@ func TestPostObjectRetriesOnContainerRevisionMismatch(t *testing.T) {
 	assertStatus(t, w, http.StatusNoContent)
 
 	require.NotEmpty(t, w.Header().Get(api.AmzVersionID))
+}
+
+func TestPostObjectSuccessActionRedirect(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-post-redirect", "dir/object"
+	bktInfo := createTestBucket(hc, bktName)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, defaultURL, nil)
+	r.MultipartForm = &multipart.Form{Value: map[string][]string{
+		"key":                     {objName},
+		"file":                    {"content"},
+		"success_action_redirect": {"http://example.com/done?a=b"},
+	}}
+	reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
+	r = r.WithContext(api.SetReqInfo(hc.Context(), reqInfo))
+
+	hc.Handler().PostObject(w, r)
+	assertStatus(t, w, http.StatusSeeOther)
+
+	objInfo, err := hc.Layer().GetObjectInfo(hc.Context(), &layer.HeadObjectParams{BktInfo: bktInfo, Object: objName})
+	require.NoError(t, err)
+	require.Equal(t, "http://example.com/done?a=b&bucket="+bktName+"&etag=%22"+objInfo.HashSum+"%22&key=dir%2Fobject",
+		w.Header().Get("Location"))
 }
 
 func TestTransformToS3ErrorRevisionMismatch(t *testing.T) {

@@ -36,23 +36,21 @@ type postPolicy struct {
 	empty      bool
 }
 
-func (p *postPolicy) condition(key string) *policyCondition {
-	for _, condition := range p.Conditions {
-		if condition.Key == key {
-			return condition
-		}
-	}
-	return nil
-}
-
 func (p *postPolicy) CheckContentLength(size int64) bool {
 	if p.empty {
 		return true
 	}
 	for _, condition := range p.Conditions {
 		if condition.Matching == "content-length-range" {
-			length := strconv.FormatInt(size, 10)
-			return condition.Key <= length && length <= condition.Value
+			minV, err := strconv.ParseInt(condition.Key, 10, 64)
+			if err != nil {
+				return false
+			}
+			maxV, err := strconv.ParseInt(condition.Value, 10, 64)
+			if err != nil {
+				return false
+			}
+			return minV <= size && size <= maxV
 		}
 	}
 	return true
@@ -81,12 +79,17 @@ func (p *postPolicy) CheckField(key string, value string) error {
 	if p.empty {
 		return nil
 	}
-	cond := p.condition(key)
-	if cond == nil {
-		return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
+	var found bool
+	for _, cond := range p.Conditions {
+		if cond.Matching == "content-length-range" || cond.Key != key {
+			continue
+		}
+		found = true
+		if !cond.match(value) {
+			return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
+		}
 	}
-
-	if !cond.match(value) {
+	if !found {
 		return s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 	}
 
@@ -95,7 +98,7 @@ func (p *postPolicy) CheckField(key string, value string) error {
 
 func (p *postPolicy) AllConditionMatched() bool {
 	for _, condition := range p.Conditions {
-		if !condition.Matched {
+		if condition.Matching != "content-length-range" && !condition.Matched {
 			return false
 		}
 	}
@@ -129,6 +132,7 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 		if p.Matching, ok = v[0].(string); !ok {
 			return errInvalidCondition
 		}
+		p.Matching = strings.ToLower(p.Matching)
 
 		if p.Matching == "content-length-range" {
 			minV, ok := v[1].(float64)
@@ -148,6 +152,9 @@ func (p *policyCondition) UnmarshalJSON(data []byte) error {
 		}
 
 	case map[string]any:
+		if len(v) != 1 {
+			return errInvalidCondition
+		}
 		p.Matching = "eq"
 		for key, val := range v {
 			p.Key = strings.ToLower(key)
@@ -425,7 +432,6 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 		}
 		contentReader = file
 		size = head.Size
-		reqInfo.ObjectName = strings.ReplaceAll(reqInfo.ObjectName, "${filename}", head.Filename)
 	}
 	if !policy.CheckContentLength(size) {
 		h.logAndSendError(w, "invalid content-length", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
@@ -477,8 +483,15 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if redirectURL := auth.MultipartFormValue(r, "success_action_redirect"); redirectURL != "" {
-		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-		return
+		if u, err := url.Parse(redirectURL); err == nil {
+			query := u.Query()
+			query.Set("bucket", objInfo.Bucket)
+			query.Set("key", objInfo.Name)
+			query.Set("etag", `"`+objInfo.HashSum+`"`)
+			u.RawQuery = query.Encode()
+			http.Redirect(w, r, u.String(), http.StatusSeeOther)
+			return
+		}
 	}
 	status := http.StatusNoContent
 	if statusStr := auth.MultipartFormValue(r, "success_action_status"); statusStr != "" {
@@ -558,11 +571,27 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		if err != nil {
 			return nil, fmt.Errorf("could not decode policy: %w", err)
 		}
-		if err = json.Unmarshal(policyData, policy); err != nil {
-			return nil, fmt.Errorf("could not unmarshal policy: %w", err)
+		// Policy keys are case-sensitive, json.Unmarshal into a struct is not.
+		var fields map[string]json.RawMessage
+		if err = json.Unmarshal(policyData, &fields); err != nil {
+			return nil, fmt.Errorf("could not unmarshal policy: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		expiration, ok := fields["expiration"]
+		if !ok {
+			return nil, fmt.Errorf("policy has no expiration: %w", s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		conditions, ok := fields["conditions"]
+		if !ok {
+			return nil, fmt.Errorf("policy has no conditions: %w", s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		if err = json.Unmarshal(expiration, &policy.Expiration); err != nil {
+			return nil, fmt.Errorf("could not unmarshal policy expiration: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
+		}
+		if err = json.Unmarshal(conditions, &policy.Conditions); err != nil {
+			return nil, fmt.Errorf("could not unmarshal policy conditions: %w: %w", err, s3errors.GetAPIError(s3errors.ErrInvalidPolicyDocument))
 		}
 		if policy.Expiration.Before(time.Now()) {
-			return nil, fmt.Errorf("policy is expired: %w", s3errors.GetAPIError(s3errors.ErrInvalidArgument))
+			return nil, fmt.Errorf("policy is expired: %w", s3errors.GetAPIError(s3errors.ErrAccessDenied))
 		}
 		policy.empty = false
 	}
@@ -571,6 +600,11 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		value := v[0]
 		if key == "file" || key == "policy" || key == "x-amz-signature" || strings.HasPrefix(key, "x-ignore-") {
 			continue
+		}
+		if key == "key" {
+			if files := r.MultipartForm.File["file"]; len(files) > 0 {
+				value = strings.ReplaceAll(value, "${filename}", files[0].Filename)
+			}
 		}
 		if err := policy.CheckField(key, value); err != nil {
 			return nil, fmt.Errorf("'%s' form field doesn't match the policy: %w", key, err)
@@ -590,12 +624,20 @@ func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]
 		}
 	}
 
+	if reqInfo.ObjectName == "" {
+		return nil, fmt.Errorf("form has no key field: %w", s3errors.GetAPIError(s3errors.ErrInvalidArgument))
+	}
+
 	for _, cond := range policy.Conditions {
 		if cond.Key == "bucket" {
 			if !cond.match(reqInfo.BucketName) {
 				return nil, s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat)
 			}
 		}
+	}
+
+	if !policy.empty && !policy.AllConditionMatched() {
+		return nil, fmt.Errorf("form has no field required by the policy: %w", s3errors.GetAPIError(s3errors.ErrPostPolicyConditionInvalidFormat))
 	}
 
 	return policy, nil
