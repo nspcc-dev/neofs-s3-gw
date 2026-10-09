@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Container owner allow rules are no longer added to EACL (#1368)
 
 ### Fixed
 

@@ -1307,15 +1307,6 @@ func aclToAst(acl *AccessControlPolicy, resInfo *resourceInfo) (*ast, error) {
 		}
 	}
 
-	for _, op := range ops {
-		operation := &astOperation{
-			Op:      op,
-			Action:  eacl.ActionAllow,
-			Grantee: astGranteeRoleUser,
-		}
-		resource.Operations = append(resource.Operations, operation)
-	}
-
 	for _, grant := range acl.AccessControlList {
 		if grant.Grantee.Type == granteeAmazonCustomerByEmail || (grant.Grantee.Type == granteeGroup && grant.Grantee.URI != allUsersGroup) {
 			return nil, s3errors.GetAPIError(s3errors.ErrNotSupported)
@@ -1592,7 +1583,6 @@ func (h *handler) encodeBucketACL(bucketName string, bucketACL *layer.BucketACL)
 }
 
 func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
-	var found bool
 	var records []eacl.Record
 	var allowedOpsForOthers = make(map[eacl.Operation]struct{})
 
@@ -1601,7 +1591,8 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 			return nil, errors.New("unsupported grantee")
 		}
 		if grant.Grantee.ID == acp.Owner.ID {
-			found = true
+			// Owner rights are defined by basic ACL, no eACL records needed.
+			continue
 		}
 
 		var recordFromOp func(eacl.Operation) *eacl.Record
@@ -1610,16 +1601,12 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 		default:
 			return nil, fmt.Errorf("unknown grantee type: %s", grant.Grantee.Type)
 		case granteeCanonicalUser:
-			if grant.Grantee.ID == acp.Owner.ID {
-				recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithRoleUser(op) }
-			} else {
-				id, err := user.DecodeString(grant.Grantee.ID)
-				if err != nil {
-					return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
-				}
-
-				recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
+			id, err := user.DecodeString(grant.Grantee.ID)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %w", layer.ErrDecodeUserID, err)
 			}
+
+			recordFromOp = func(op eacl.Operation) *eacl.Record { return getAllowRecordWithUser(op, id) }
 		case granteeGroup:
 			recordFromOp = func(op eacl.Operation) *eacl.Record {
 				allowedOpsForOthers[op] = struct{}{}
@@ -1629,12 +1616,6 @@ func bucketACLToTable(acp *AccessControlPolicy) (*eacl.Table, error) {
 
 		for _, op := range permissionToOperations(grant.Permission) {
 			records = append(records, *recordFromOp(op))
-		}
-	}
-
-	if !found {
-		for _, op := range fullOps {
-			records = append(records, *getAllowRecordWithRoleUser(op))
 		}
 	}
 
@@ -1657,14 +1638,6 @@ func isValidGrant(grant *Grant) bool {
 func getAllowRecordWithUser(op eacl.Operation, acc user.ID) *eacl.Record {
 	record := eacl.ConstructRecord(eacl.ActionAllow, op,
 		[]eacl.Target{eacl.NewTargetByAccounts([]user.ID{acc})},
-	)
-
-	return &record
-}
-
-func getAllowRecordWithRoleUser(op eacl.Operation) *eacl.Record {
-	record := eacl.ConstructRecord(eacl.ActionAllow, op,
-		[]eacl.Target{eacl.NewTargetByRole(eacl.RoleUser)},
 	)
 
 	return &record
