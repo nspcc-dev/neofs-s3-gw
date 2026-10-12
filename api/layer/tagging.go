@@ -57,7 +57,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 
 	prm.Attributes[s3headers.MetaType] = s3headers.TypeTags
 	for k, v := range p.TagSet {
-		prm.Attributes[s3headers.NeoFSSystemMetadataTagPrefix+k] = v
+		prm.Attributes[s3headers.NeoFSSystemMetadataTagPrefix+k] = s3headers.EncodeTagValue(v)
 	}
 
 	if _, _, err = n.objectPutAndHash(ctx, prm, p.ObjectVersion.BktInfo); err != nil {
@@ -201,7 +201,7 @@ func (n *layer) getTagsFromOriginalObject(ctx context.Context, bktInfo *data.Buc
 
 	for _, attr := range header.Attributes() {
 		if after, ok := strings.CutPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix); ok {
-			tagSet[after] = attr.Value()
+			tagSet[after] = s3headers.DecodeTagValue(attr.Value())
 		}
 	}
 

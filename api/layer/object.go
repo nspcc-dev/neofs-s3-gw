@@ -308,7 +308,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 	}
 
 	for k, v := range p.Tags {
-		p.Header[s3headers.NeoFSSystemMetadataTagPrefix+k] = v
+		p.Header[s3headers.NeoFSSystemMetadataTagPrefix+k] = s3headers.EncodeTagValue(v)
 	}
 
 	prm := PrmObjectCreate{

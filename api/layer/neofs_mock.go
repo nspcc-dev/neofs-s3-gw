@@ -381,6 +381,10 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	}
 
 	for k, v := range prm.Attributes {
+		if v == "" {
+			return oid.ID{}, fmt.Errorf("empty value of attribute %s", k)
+		}
+
 		a = object.NewAttribute(k, v)
 		attrs = append(attrs, a)
 	}

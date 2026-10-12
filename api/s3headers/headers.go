@@ -55,3 +55,25 @@ const (
 	FieldComplianceMode     = "ComplianceMode"
 	FieldRetentionUntilMode = "RetentionUntil"
 )
+
+// emptyTagValue is stored in NeoFS attribute instead of an empty tag value,
+// since NeoFS rejects empty attribute values. S3 tag values can't contain "*".
+const emptyTagValue = "*"
+
+// EncodeTagValue returns tag value to be stored in NeoFS attribute.
+func EncodeTagValue(v string) string {
+	if v == "" {
+		return emptyTagValue
+	}
+
+	return v
+}
+
+// DecodeTagValue returns tag value from NeoFS attribute value.
+func DecodeTagValue(v string) string {
+	if v == emptyTagValue {
+		return ""
+	}
+
+	return v
+}
