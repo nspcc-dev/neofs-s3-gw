@@ -1,10 +1,17 @@
 package layer
 
 import (
+	"bytes"
 	"cmp"
+	"context"
+	"crypto/sha256"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/nspcc-dev/neofs-s3-gw/api"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -107,4 +114,25 @@ func TestTrimAfterUploadKey(t *testing.T) {
 		keys := trimAfterUploadKey(uploadKeys[lastIdx], uploadsInfos)
 		require.Empty(t, keys)
 	})
+}
+
+func TestPrepareMultipartHeadObjectUniqueID(t *testing.T) {
+	tc := prepareContext(t)
+	ctx := context.WithValue(tc.ctx, api.ClientTime, time.Now())
+
+	prepare := func() oid.ID {
+		header, err := tc.layer.(*layer).prepareMultipartHeadObject(ctx, multipartHeadObjectParams{
+			PutObject: PutObjectParams{
+				BktInfo: tc.bktInfo,
+				Reader:  bytes.NewBuffer(nil),
+				Header:  map[string]string{s3headers.MultipartPartNumber: "1"},
+			},
+			PayloadHash: sha256.New(),
+		})
+		require.NoError(t, err)
+		return header.GetID()
+	}
+
+	// The same part uploaded again at the same time must not get the ID of the previous one, it may be removed already.
+	require.NotEqual(t, prepare(), prepare())
 }

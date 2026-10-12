@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -469,6 +470,11 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, prm multipartHea
 		creationTime = time.Now()
 	}
 	attributes = append(attributes, object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
+
+	// The header is not created via CreateObject, so it needs its own nonce.
+	nonce := make([]byte, objectNonceSize)
+	_, _ = rand.Read(nonce)
+	attributes = append(attributes, object.NewAttribute(s3headers.AttributeObjectNonce, base64.StdEncoding.EncodeToString(nonce)))
 
 	if p.Object != "" {
 		attributes = append(attributes, object.NewAttribute(object.AttributeFilePath, p.Object))
