@@ -413,3 +413,56 @@ func TestTransformToS3ErrorRevisionMismatch(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, s3errors.ErrOperationAborted, s3err.ErrCode)
 }
+
+func TestPutObjectPreconditions(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName, missingName := "bucket-put-preconditions", "object", "missing"
+	createTestBucket(hc, bktName)
+
+	putObject := func(name string, headers map[string]string) *httptest.ResponseRecorder {
+		w, r := prepareTestPayloadRequest(hc, bktName, name, bytes.NewReader([]byte("content")))
+		for k, v := range headers {
+			r.Header.Set(k, v)
+		}
+		hc.Handler().PutObjectHandler(w, r)
+		return w
+	}
+
+	w := putObject(objName, nil)
+	assertStatus(t, w, http.StatusOK)
+	etag := w.Header().Get(api.ETag)
+
+	for _, tc := range []struct {
+		name    string
+		objName string
+		headers map[string]string
+		err     s3errors.ErrorCode
+	}{
+		{name: "if-match etag", objName: objName, headers: map[string]string{api.IfMatch: etag}},
+		{name: "if-match quoted etag", objName: objName, headers: map[string]string{api.IfMatch: `"` + etag + `"`}},
+		{name: "if-match any", objName: objName, headers: map[string]string{api.IfMatch: "*"}},
+		{name: "if-match other etag", objName: objName, headers: map[string]string{api.IfMatch: `"ABCORZ"`}, err: s3errors.ErrPreconditionFailed},
+		{name: "if-match any missing", objName: missingName, headers: map[string]string{api.IfMatch: "*"}, err: s3errors.ErrPreconditionFailed},
+		{name: "if-match etag missing", objName: missingName, headers: map[string]string{api.IfMatch: etag}, err: s3errors.ErrNoSuchKey},
+		{name: "if-none-match other etag", objName: objName, headers: map[string]string{api.IfNoneMatch: "ABCORZ"}},
+		{name: "if-none-match etag", objName: objName, headers: map[string]string{api.IfNoneMatch: etag}, err: s3errors.ErrPreconditionFailed},
+		{name: "if-none-match any", objName: objName, headers: map[string]string{api.IfNoneMatch: "*"}, err: s3errors.ErrPreconditionFailed},
+		{name: "if-none-match any missing", objName: missingName, headers: map[string]string{api.IfNoneMatch: "*"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := putObject(tc.objName, tc.headers)
+			if tc.err != 0 {
+				assertS3Error(t, w, s3errors.GetAPIError(tc.err))
+				return
+			}
+			assertStatus(t, w, http.StatusOK)
+
+			if tc.objName == missingName {
+				w, r := prepareTestRequest(hc, bktName, missingName, nil)
+				hc.Handler().DeleteObjectHandler(w, r)
+				assertStatus(t, w, http.StatusNoContent)
+			}
+		})
+	}
+}
