@@ -56,12 +56,8 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 
 	if newLock.Retention != nil {
 		if lockInfo.IsRetentionSet() {
-			if lockInfo.IsCompliance() {
-				return fmt.Errorf("you cannot change compliance mode")
-			}
-			if !newLock.Retention.ByPassedGovernance {
-				return fmt.Errorf("you cannot bypass governence mode")
-			}
+			// Extending the period in the same mode is always allowed.
+			var isExtension = newLock.Retention.IsCompliance == lockInfo.IsCompliance()
 
 			untilDate := lockInfo.UntilDate()
 			if len(untilDate) > 0 {
@@ -70,7 +66,16 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 					return fmt.Errorf("couldn't parse time '%s': %w", untilDate, err)
 				}
 				if parsedTime.After(newLock.Retention.Until) {
-					return fmt.Errorf("you couldn't short the until date")
+					isExtension = false
+				}
+			}
+
+			if !isExtension {
+				if lockInfo.IsCompliance() {
+					return fmt.Errorf("%w: you cannot change compliance mode", s3errors.GetAPIError(s3errors.ErrAccessDenied))
+				}
+				if !newLock.Retention.ByPassedGovernance {
+					return fmt.Errorf("%w: you cannot bypass governance mode", s3errors.GetAPIError(s3errors.ErrAccessDenied))
 				}
 			}
 		}
