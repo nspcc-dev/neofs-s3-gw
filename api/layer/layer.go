@@ -405,7 +405,7 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwne
 		return
 	}
 
-	if bd.Gate.SessionTokenV2 != nil && bd.Gate.SessionTokenV2.OriginalIssuer() == bktOwner {
+	if bd.Gate.SessionTokenV2 != nil {
 		prm.SessionTokenV2 = bd.Gate.SessionTokenV2
 	}
 }
@@ -416,7 +416,7 @@ func attachTokenToParams(ctx context.Context, bktOwner user.ID, params authAssig
 		return
 	}
 
-	if bd.Gate.SessionTokenV2 != nil && bd.Gate.SessionTokenV2.OriginalIssuer() == bktOwner {
+	if bd.Gate.SessionTokenV2 != nil {
 		params.WithSessionTokenV2(*bd.Gate.SessionTokenV2)
 	}
 }
