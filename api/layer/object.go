@@ -946,7 +946,14 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, p allObjectPar
 
 		// isBatchDone == true means we collected `maxKeys` objects to the response.
 		isBatchDone bool
+		startAfter  string
 	)
+
+	if p.ContinuationToken != "" {
+		if startAfter, err = extractFilePath(p.ContinuationToken); err != nil {
+			return nil, "", s3errors.GetAPIError(s3errors.ErrIncorrectContinuationToken)
+		}
+	}
 
 	for len(batch) < p.MaxKeys {
 		searchedPage, nextCursor, err = n.searchAllVersionsInNeoFSByPrefix(ctx, p.Bucket, p.Prefix, nextCursor, seachPageSize)
@@ -961,16 +968,22 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, p allObjectPar
 		for _, pageItem := range searchedPage {
 			filePath := displayPath(pageItem.FilePath, p.Prefix, p.Delimiter)
 
-			// We collect unique items to response.
-			if !isBatchDone {
-				if v, ok := batch[filePath]; ok {
-					if pageItem.isNewerThan(v) {
-						batch[filePath] = pageItem
-					}
+			// The common prefix was returned on the previous page, all its objects must be skipped.
+			if filePath == startAfter {
+				continue
+			}
 
-					continue
+			// Another version of the item or another object of the common prefix from the current batch.
+			if v, ok := batch[filePath]; ok {
+				if pageItem.isNewerThan(v) {
+					batch[filePath] = pageItem
 				}
 
+				continue
+			}
+
+			// We collect unique items to response.
+			if !isBatchDone {
 				batch[filePath] = pageItem
 				isBatchDone = len(batch) == p.MaxKeys
 			} else {
@@ -1040,7 +1053,7 @@ func (n *layer) searchLatestVersionsByPrefix(ctx context.Context, p allObjectPar
 
 	// We did some manipulations with pages, we must to send to the client actual point to start from the next request.
 	if len(nextCursor) != 0 || generateCursor {
-		nextCursor = generateContinuationToken(items[len(items)-1].FilePath)
+		nextCursor = generateContinuationToken(displayPath(items[len(items)-1].FilePath, p.Prefix, p.Delimiter))
 	}
 
 	return items, nextCursor, nil
@@ -1180,7 +1193,12 @@ func extractFilePath(continuationToken string) (string, error) {
 		return "", fmt.Errorf("invalid marker, expected 2 parts, got %d", len(parts))
 	}
 
-	filePath := parts[1][0 : len(parts[1])-oid.Size]
+	// The rest is the FilePath value, a 0x00 separator and the object ID.
+	if len(parts[1]) < oid.Size+1 {
+		return "", fmt.Errorf("invalid marker, too short value part: %d", len(parts[1]))
+	}
+
+	filePath := parts[1][0 : len(parts[1])-oid.Size-1]
 	return string(filePath), nil
 }
 
