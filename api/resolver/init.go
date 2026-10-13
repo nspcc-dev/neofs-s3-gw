@@ -7,6 +7,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neofs-contract/rpc/nns"
 	"github.com/nspcc-dev/neofs-s3-gw/internal/fschain"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
@@ -57,52 +58,28 @@ func NewContainer(ctx context.Context, endpoints []string) (*Container, error) {
 
 // NewResolver returns resolver depending on corresponding endpoints.
 //
-// It returns an error if no endpoint can be initialized at construction time.
+// It returns an error if no endpoint is available to infer NNS contract hash.
+// Unavailable endpoints are used once they become available.
 func NewResolver(ctx context.Context, endpoints []string) (*NNSResolver, error) {
-	readers := make([]*nns.ContractReader, 0, len(endpoints))
-	err := fschain.ForEachEndpoint(endpoints, func(endpoint string) error {
-		nnsReader, err := newNNSReader(ctx, endpoint)
-		if err != nil {
-			return err
-		}
-
-		readers = append(readers, nnsReader)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return NewNNSResolver(readers), nil
-}
-
-func newNNSReader(ctx context.Context, endpoint string) (*nns.ContractReader, error) {
-	cl, err := rpcClient(ctx, endpoint)
+	clients, err := fschain.NewClients(ctx, endpoints)
 	if err != nil {
 		return nil, fmt.Errorf("rpcclient: %w", err)
 	}
 
-	inv := invoker.New(cl, nil)
-	nnsReader, err := nns.NewInferredReader(cl, inv)
-	if err != nil {
-		cl.Close()
-		return nil, fmt.Errorf("nns readers instantiation: %w", err)
+	var inferNNSHash = func(cl *rpcclient.Client) (util.Uint160, error) {
+		return nns.InferHash(cl)
 	}
 
-	return nnsReader, nil
-}
-
-func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) {
-	cl, err := rpcclient.New(ctx, endpoint, rpcclient.Options{})
+	nnsHash, err := fschain.FirstSuccessful(clients, inferNNSHash)
 	if err != nil {
-		return nil, fmt.Errorf("new: %w", err)
+		fschain.CloseClients(clients)
+		return nil, fmt.Errorf("nns hash: %w", err)
 	}
 
-	err = cl.Init()
-	if err != nil {
-		cl.Close()
-		return nil, fmt.Errorf("init: %w", err)
+	var readers = make([]*nns.ContractReader, 0, len(clients))
+	for _, cl := range clients {
+		readers = append(readers, nns.NewReader(invoker.New(cl, nil), nnsHash))
 	}
 
-	return cl, nil
+	return NewNNSResolver(readers), nil
 }

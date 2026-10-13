@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 - Container owner allow rules are no longer added to EACL (#1368)
 
 ### Fixed
+- RPC endpoints unavailable at startup are used once they become available (#1360)
 
 ### Updated
 
