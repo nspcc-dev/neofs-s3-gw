@@ -693,17 +693,64 @@ func (n *layer) getMultipartInfoObject(ctx context.Context, bktInfo *data.Bucket
 		return cmp.Compare(b.Attributes[1], a.Attributes[1])
 	})
 
-	obj, err := n.objectGet(ctx, bktInfo, res[0].ID)
+	return n.readMultipartInfoObject(ctx, bktInfo, uploadID, res[0].ID)
+}
+
+func (n *layer) readMultipartInfoObject(ctx context.Context, bktInfo *data.BucketInfo, uploadID string, id oid.ID) (*data.MultipartInfo, error) {
+	obj, err := n.objectGet(ctx, bktInfo, id)
 	if err != nil {
-		return nil, fmt.Errorf("get multipart %s object %s: %w", uploadID, res[0].ID.String(), err)
+		return nil, fmt.Errorf("get multipart %s object %s: %w", uploadID, id.String(), err)
 	}
 
 	multipartInfo, err := n.parseMultipartInfoObject(uploadID, obj)
 	if err != nil {
-		return nil, fmt.Errorf("parse multipart %s object %s: %w", uploadID, res[0].ID.String(), err)
+		return nil, fmt.Errorf("parse multipart %s object %s: %w", uploadID, id.String(), err)
 	}
 
 	return &multipartInfo, nil
+}
+
+// searchMultipartInfoAndLink searches the upload info object and the linking object, which appears when the upload
+// is completed. Unlike the upload parts, neither of them has a part number. Zero IDs are returned if not found.
+func (n *layer) searchMultipartInfoAndLink(ctx context.Context, bktInfo *data.BucketInfo, objectName, uploadID string) (oid.ID, oid.ID, error) {
+	var (
+		filters object.SearchFilters
+		opts    client.SearchObjectsOptions
+
+		infoID, linkID oid.ID
+		infoTimestamp  string
+
+		returningAttributes = []string{
+			s3headers.MultipartUpload,
+			s3headers.MetaType,
+			s3headers.MultipartObjectKey,
+			object.AttributeTimestamp,
+		}
+	)
+
+	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MultipartPartNumber, "", object.MatchNotPresent)
+
+	attachTokenToParams(ctx, bktInfo.Owner, &opts)
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
+	if err != nil {
+		return oid.ID{}, oid.ID{}, fmt.Errorf("search objects: %w", err)
+	}
+
+	for _, item := range res {
+		switch item.Attributes[1] {
+		case s3headers.TypeMultipartInfo:
+			// take the latest info object of this key.
+			if item.Attributes[2] == objectName && cmp.Compare(item.Attributes[3], infoTimestamp) > 0 {
+				infoID, infoTimestamp = item.ID, item.Attributes[3]
+			}
+		case "":
+			linkID = item.ID
+		}
+	}
+
+	return infoID, linkID, nil
 }
 
 func (n *layer) getMultipartInfoByPrefix(ctx context.Context, bktInfo *data.BucketInfo, prefix, cursor string, maxKeys int) ([]data.MultipartInfo, string, error) {
@@ -1209,13 +1256,28 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	}
 
 	// Take current multipart state.
-	multipartInfo, err := n.getMultipartInfoObject(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
+	infoID, linkID, err := n.searchMultipartInfoAndLink(ctx, p.Info.Bkt, p.Info.Key, p.Info.UploadID)
 	if err != nil {
-		if errors.Is(err, ErrNodeNotFound) {
+		return nil, nil, fmt.Errorf("search multipart upload: %w", err)
+	}
+
+	if infoID.IsZero() {
+		if linkID.IsZero() {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
 		}
 
-		return nil, nil, fmt.Errorf("get multipart upload: %w", err)
+		// The upload is already completed, a repeated request gets the same result.
+		extObjInfo, err := n.getCompletedMultipartObject(ctx, p, linkID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("get completed multipart upload: %w", err)
+		}
+
+		return &UploadData{}, extObjInfo, nil
+	}
+
+	multipartInfo, err := n.readMultipartInfoObject(ctx, p.Info.Bkt, p.Info.UploadID, infoID)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// We need to fix Split.
@@ -1496,6 +1558,105 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 	wg.Wait()
 
 	return uploadData, extObjInfo, n.DeleteMultipartUpload(ctx, p.Info.Bkt, multipartInfo.ID)
+}
+
+// getCompletedMultipartObject returns the object created by the completed multipart upload. The linking object
+// keeps the upload ID, its contents must match the requested parts.
+func (n *layer) getCompletedMultipartObject(ctx context.Context, p *CompleteMultipartParams, linkID oid.ID) (*data.ExtendedObjectInfo, error) {
+	linkObj, err := n.objectGet(ctx, p.Info.Bkt, linkID)
+	if err != nil {
+		return nil, fmt.Errorf("get linking object %s: %w", linkID, err)
+	}
+
+	var header = linkObj.Parent()
+	if header == nil || filepathFromObject(header) != p.Info.Key {
+		return nil, s3errors.GetAPIError(s3errors.ErrNoSuchUpload)
+	}
+
+	var link object.Link
+	if err = linkObj.ReadLink(&link); err != nil {
+		return nil, fmt.Errorf("read link: %w", err)
+	}
+
+	// The linking object contains the zero part, the requested parts elements and the last empty part.
+	var linked = link.Objects()
+	if len(linked) < 2 {
+		return nil, fmt.Errorf("invalid linking object %s: %d children", linkID, len(linked))
+	}
+	linked = linked[1 : len(linked)-1]
+
+	// The link has no part numbers and ETags, they are taken from the upload elements attributes.
+	// ETag is the payload checksum of the last part element.
+	var (
+		filters object.SearchFilters
+		opts    client.SearchObjectsOptions
+	)
+
+	filters.AddFilter(s3headers.MultipartUpload, p.Info.UploadID, object.MatchStringEqual)
+	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
+
+	attachTokenToParams(ctx, p.Info.Bkt.Owner, &opts)
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, p.Info.Bkt.CID, filters, []string{
+		s3headers.MultipartUpload,
+		s3headers.MultipartPartNumber,
+		object.FilterPayloadChecksum,
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("search objects: %w", err)
+	}
+
+	var elements = make(map[oid.ID]client.SearchResultItem, len(res))
+	for _, item := range res {
+		elements[item.ID] = item
+	}
+
+	var (
+		numbers = make([]string, len(linked))
+		etags   = make([]string, len(linked))
+	)
+	for i, element := range linked {
+		item, ok := elements[element.ObjectID()]
+		if !ok {
+			return nil, fmt.Errorf("linked object %s not found", element.ObjectID())
+		}
+
+		numbers[i], etags[i] = item.Attributes[1], item.Attributes[2]
+	}
+
+	var i int
+	for _, part := range p.Parts {
+		var (
+			number = strconv.Itoa(part.PartNumber)
+			etag   string
+		)
+		for ; i < len(linked) && numbers[i] == number; i++ {
+			etag = etags[i]
+		}
+
+		if etag == "" || etag != part.ETag {
+			return nil, s3errors.GetAPIError(s3errors.ErrInvalidPart)
+		}
+	}
+
+	if i != len(linked) {
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidPart)
+	}
+
+	objInfo, err := objectInfoFromMeta(p.Info.Bkt, header)
+	if err != nil {
+		return nil, fmt.Errorf("object info from meta: %w", err)
+	}
+
+	return &data.ExtendedObjectInfo{
+		ObjectInfo: objInfo,
+		NodeVersion: &data.NodeVersion{
+			FilePath:      objInfo.Name,
+			OID:           objInfo.ID,
+			ETag:          objInfo.HashSum,
+			IsUnversioned: !p.Info.Bkt.Settings.VersioningEnabled(),
+		},
+	}, nil
 }
 
 func (n *layer) ListMultipartUploads(ctx context.Context, p *ListMultipartUploadsParams) (*ListMultipartUploadsInfo, error) {

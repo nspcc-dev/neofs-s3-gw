@@ -498,14 +498,27 @@ func TestObjectRetention(t *testing.T) {
 	putObjectRetention(hc, bktName, objName, retention, false, 0)
 	getObjectRetention(hc, bktName, objName, retention, 0)
 
-	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Add(time.Minute).Format(time.RFC3339)}
-	putObjectRetention(hc, bktName, objName, retention, false, s3errors.ErrInternalError)
+	// Extending governance retention doesn't require bypass.
+	retention = &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Add(2 * time.Minute).Format(time.RFC3339)}
+	putObjectRetention(hc, bktName, objName, retention, false, 0)
+	getObjectRetention(hc, bktName, objName, retention, 0)
 
-	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
+	// Shortening or changing mode of governance retention requires bypass.
+	shortened := &data.Retention{Mode: governanceMode, RetainUntilDate: time.Now().UTC().Add(time.Minute).Format(time.RFC3339)}
+	putObjectRetention(hc, bktName, objName, shortened, false, s3errors.ErrAccessDenied)
+
+	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: retention.RetainUntilDate}
+	putObjectRetention(hc, bktName, objName, retention, false, s3errors.ErrAccessDenied)
 	putObjectRetention(hc, bktName, objName, retention, true, 0)
 	getObjectRetention(hc, bktName, objName, retention, 0)
 
-	putObjectRetention(hc, bktName, objName, retention, true, s3errors.ErrInternalError)
+	// Compliance retention can only be extended.
+	putObjectRetention(hc, bktName, objName, &data.Retention{Mode: governanceMode, RetainUntilDate: retention.RetainUntilDate}, true, s3errors.ErrAccessDenied)
+	putObjectRetention(hc, bktName, objName, &data.Retention{Mode: complianceMode, RetainUntilDate: shortened.RetainUntilDate}, true, s3errors.ErrAccessDenied)
+
+	retention = &data.Retention{Mode: complianceMode, RetainUntilDate: time.Now().UTC().Add(3 * time.Minute).Format(time.RFC3339)}
+	putObjectRetention(hc, bktName, objName, retention, false, 0)
+	getObjectRetention(hc, bktName, objName, retention, 0)
 }
 
 func getObjectRetention(hc *handlerContext, bktName, objName string, retention *data.Retention, errCode s3errors.ErrorCode) {

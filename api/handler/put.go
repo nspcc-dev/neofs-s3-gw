@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
@@ -284,6 +285,11 @@ func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attem
 		r.Header.Set(api.AmzACL, "")
 	}
 
+	if err = h.checkPutPreconditions(r.Context(), bktInfo, reqInfo.ObjectName, r.Header); err != nil {
+		h.logAndSendError(w, "precondition failed", reqInfo, err)
+		return nil, nil, false
+	}
+
 	metadata := parseMetadata(r)
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		metadata[api.ContentType] = contentType
@@ -351,6 +357,53 @@ func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attem
 
 	h.logAndSendError(w, "could not upload object", reqInfo, err, zap.Errors("body close errors", []error{err2, err3}))
 	return nil, nil, false
+}
+
+// checkPutPreconditions checks If-Match and If-None-Match headers against the current version of the object.
+func (h *handler) checkPutPreconditions(ctx context.Context, bktInfo *data.BucketInfo, objName string, headers http.Header) error {
+	var (
+		ifMatch     = strings.Trim(headers.Get(api.IfMatch), `"`)
+		ifNoneMatch = strings.Trim(headers.Get(api.IfNoneMatch), `"`)
+	)
+
+	if len(ifMatch) == 0 && len(ifNoneMatch) == 0 {
+		return nil
+	}
+
+	var params = layer.HeadObjectParams{
+		BktInfo:                   bktInfo,
+		Object:                    objName,
+		IsBucketVersioningEnabled: bktInfo.Settings.VersioningEnabled(),
+	}
+
+	extendedObjInfo, err := h.obj.GetExtendedObjectInfo(ctx, &params)
+
+	if err != nil {
+		if !s3errors.IsS3Error(err, s3errors.ErrNoSuchKey) {
+			return err
+		}
+
+		switch ifMatch {
+		case "":
+			return nil
+		case "*":
+			return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
+		default:
+			return err
+		}
+	}
+
+	var hashSum = extendedObjInfo.ObjectInfo.HashSum
+
+	if len(ifMatch) > 0 && ifMatch != "*" && ifMatch != hashSum {
+		return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
+	}
+
+	if ifNoneMatch == "*" || ifNoneMatch == hashSum {
+		return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
+	}
+
+	return nil
 }
 
 func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {

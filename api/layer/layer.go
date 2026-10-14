@@ -405,7 +405,7 @@ func (n *layer) prepareAuthParameters(ctx context.Context, prm *PrmAuth, bktOwne
 		return
 	}
 
-	if bd.Gate.SessionTokenV2 != nil && bd.Gate.SessionTokenV2.OriginalIssuer() == bktOwner {
+	if bd.Gate.SessionTokenV2 != nil {
 		prm.SessionTokenV2 = bd.Gate.SessionTokenV2
 	}
 }
@@ -416,7 +416,7 @@ func attachTokenToParams(ctx context.Context, bktOwner user.ID, params authAssig
 		return
 	}
 
-	if bd.Gate.SessionTokenV2 != nil && bd.Gate.SessionTokenV2.OriginalIssuer() == bktOwner {
+	if bd.Gate.SessionTokenV2 != nil {
 		params.WithSessionTokenV2(*bd.Gate.SessionTokenV2)
 	}
 }
@@ -731,7 +731,7 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 
 		for _, attr := range header.Attributes() {
 			if after, ok := strings.CutPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix); ok {
-				tagSet[after] = attr.Value()
+				tagSet[after] = s3headers.DecodeTagValue(attr.Value())
 			}
 		}
 

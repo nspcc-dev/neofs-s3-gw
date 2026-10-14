@@ -155,6 +155,41 @@ func TestPolicyToAst(t *testing.T) {
 	}
 }
 
+func TestTaggingPolicyToAst(t *testing.T) {
+	for _, tc := range []struct {
+		action string
+		ops    []eacl.Operation
+	}{
+		{action: s3GetObjectTagging, ops: readOps},
+		{action: s3PutObjectTagging, ops: []eacl.Operation{eacl.OperationPut, eacl.OperationSearch}},
+	} {
+		t.Run(tc.action, func(t *testing.T) {
+			policy := &bucketPolicy{
+				Bucket: "bucketName",
+				Statement: []statement{{
+					Effect:    "Allow",
+					Principal: principal{AWS: allUsersWildcard},
+					Action:    stringOrSlice{values: []string{tc.action}},
+					Resource:  stringOrSlice{values: []string{"arn:aws:s3:::bucketName/object"}},
+				}},
+			}
+
+			actualAst, err := policyToAst(policy)
+			require.NoError(t, err)
+			require.Len(t, actualAst.Resources, 1)
+			require.Equal(t, resourceInfo{Bucket: "bucketName", Object: "object"}, actualAst.Resources[0].resourceInfo)
+
+			var ops []eacl.Operation
+			for _, op := range actualAst.Resources[0].Operations {
+				require.Equal(t, eacl.ActionAllow, op.Action)
+				require.Equal(t, astGranteeRoleOthers, op.Grantee)
+				ops = append(ops, op.Op)
+			}
+			require.Equal(t, tc.ops, ops)
+		})
+	}
+}
+
 func getReadOps(key *keys.PrivateKey, gt astGrantee, action eacl.Action) []*astOperation {
 	var (
 		result []*astOperation

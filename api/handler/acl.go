@@ -90,6 +90,11 @@ var actionToOpMap = map[string][]eacl.Operation{
 	s3GetObject:    readOps,
 	s3PutObject:    {eacl.OperationPut},
 	s3ListBucket:   readOps,
+
+	// Tagging is stored in objects with the same FilePath, so it is not separated from object operations.
+	// Search is required to find the object version for the tagging.
+	s3GetObjectTagging: readOps,
+	s3PutObjectTagging: {eacl.OperationPut, eacl.OperationSearch},
 }
 
 var (
@@ -110,6 +115,8 @@ const (
 	s3ListBucketVersions         = "s3:ListBucketVersions"
 	s3ListBucketMultipartUploads = "s3:ListBucketMultipartUploads"
 	s3GetObjectVersion           = "s3:GetObjectVersion"
+	s3GetObjectTagging           = "s3:GetObjectTagging"
+	s3PutObjectTagging           = "s3:PutObjectTagging"
 
 	s3ConditionXAmzACL = "s3:x-amz-acl"
 )
@@ -1224,6 +1231,11 @@ func handleResourceOperations(bktPolicy *bucketPolicy, list []*astOperation, eac
 		var actions []string
 	LOOP:
 		for action, ops := range actionToOpMap {
+			// Tagging actions have the same operations as object ones, they are implied by them.
+			if action == s3GetObjectTagging || action == s3PutObjectTagging {
+				continue
+			}
+
 			for _, op := range ops {
 				if !slices.Contains(userOps, op) {
 					continue LOOP

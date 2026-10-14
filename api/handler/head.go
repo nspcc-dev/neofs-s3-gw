@@ -68,7 +68,7 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 					if comprehensiveInfo.TagSet == nil {
 						comprehensiveInfo.TagSet = make(map[string]string)
 					}
-					comprehensiveInfo.TagSet[after] = v
+					comprehensiveInfo.TagSet[after] = s3headers.DecodeTagValue(v)
 				}
 			}
 		}

@@ -217,7 +217,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if len(comprehensiveObjectInfo.TagSet) == 0 {
 		for k, v := range info.Headers {
 			if after, ok := strings.CutPrefix(k, s3headers.NeoFSSystemMetadataTagPrefix); ok {
-				comprehensiveObjectInfo.TagSet[after] = v
+				comprehensiveObjectInfo.TagSet[after] = s3headers.DecodeTagValue(v)
 			}
 		}
 	}
