@@ -12,6 +12,7 @@ This document outlines major changes between releases.
 ### Fixed
 - RPC endpoints unavailable at startup are used once they become available (#1360)
 - ETag lists and weak ETags in PutObject If-Match and If-None-Match headers (#1379)
+- PutObject ignoring Content-MD5 header (#1376)
 
 ### Updated
 
