@@ -27,88 +27,34 @@ type (
 		next uint32
 	}
 
-	// storagePolicyEndpoint contains initialized policy resources and their cleanup function.
-	storagePolicyEndpoint struct {
-		invoker      *invoker.Invoker
-		contractHash util.Uint160
-		close        func()
-	}
-
-	// storagePolicyEndpoints contains invokers that use the same policy contract.
-	storagePolicyEndpoints struct {
-		invokers     []*invoker.Invoker
-		contractHash util.Uint160
-	}
-
 	noOpStoragePolicyProvider struct{}
 )
 
 func newStoragePolicyProvider(ctx context.Context, contractName string, endpoints []string) (*storagePolicyProvider, error) {
-	initializedEndpoints := make([]storagePolicyEndpoint, 0, len(endpoints))
-	err := fschain.ForEachEndpoint(endpoints, func(endpoint string) error {
-		initializedEndpoint, err := newStoragePolicyEndpoint(ctx, endpoint, contractName)
-		if err != nil {
-			return err
-		}
-
-		initializedEndpoints = append(initializedEndpoints, initializedEndpoint)
-		return nil
-	})
+	clients, err := fschain.NewClients(ctx, endpoints)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("rpcclient: %w", err)
 	}
 
-	policyEndpoints := filterStoragePolicyEndpoints(initializedEndpoints)
+	var resolvePolicyContract = func(cl *rpcclient.Client) (util.Uint160, error) {
+		return resolveContract(cl, invoker.New(cl, nil), contractName)
+	}
+
+	contractHash, err := fschain.FirstSuccessful(clients, resolvePolicyContract)
+	if err != nil {
+		fschain.CloseClients(clients)
+		return nil, fmt.Errorf("resolve %q contract: %w", contractName, err)
+	}
+
+	var invokers = make([]*invoker.Invoker, 0, len(clients))
+	for _, cl := range clients {
+		invokers = append(invokers, invoker.New(cl, nil))
+	}
 
 	return &storagePolicyProvider{
-		contractHash: policyEndpoints.contractHash,
-		invokers:     policyEndpoints.invokers,
-		mu:           &sync.Mutex{},
-	}, nil
-}
-
-func filterStoragePolicyEndpoints(initializedEndpoints []storagePolicyEndpoint) storagePolicyEndpoints {
-	var (
-		invokers        = make([]*invoker.Invoker, 0, len(initializedEndpoints))
-		contractHash    util.Uint160
-		hasContractHash bool
-	)
-
-	for _, initializedEndpoint := range initializedEndpoints {
-		if !hasContractHash {
-			contractHash = initializedEndpoint.contractHash
-			hasContractHash = true
-		} else if !contractHash.Equals(initializedEndpoint.contractHash) {
-			initializedEndpoint.close()
-			continue
-		}
-
-		invokers = append(invokers, initializedEndpoint.invoker)
-	}
-
-	return storagePolicyEndpoints{
 		contractHash: contractHash,
 		invokers:     invokers,
-	}
-}
-
-func newStoragePolicyEndpoint(ctx context.Context, endpoint, contractName string) (storagePolicyEndpoint, error) {
-	cl, err := rpcClient(ctx, endpoint)
-	if err != nil {
-		return storagePolicyEndpoint{}, fmt.Errorf("rpcclient: %w", err)
-	}
-
-	inv := invoker.New(cl, nil)
-	contractHash, err := resolveContract(cl, inv, contractName)
-	if err != nil {
-		cl.Close()
-		return storagePolicyEndpoint{}, fmt.Errorf("resolve %q contract: %w", contractName, err)
-	}
-
-	return storagePolicyEndpoint{
-		invoker:      inv,
-		contractHash: contractHash,
-		close:        cl.Close,
+		mu:           &sync.Mutex{},
 	}, nil
 }
 
@@ -200,20 +146,6 @@ func (p *storagePolicyProvider) index() int {
 
 func (p *storagePolicyProvider) invoker() *invoker.Invoker {
 	return p.invokers[p.index()]
-}
-
-func rpcClient(ctx context.Context, endpoint string) (*rpcclient.Client, error) {
-	cl, err := rpcclient.New(ctx, endpoint, rpcclient.Options{})
-	if err != nil {
-		return nil, fmt.Errorf("new: %w", err)
-	}
-
-	if err = cl.Init(); err != nil {
-		cl.Close()
-		return nil, fmt.Errorf("init: %w", err)
-	}
-
-	return cl, nil
 }
 
 func (p *noOpStoragePolicyProvider) GetPlacementPolicy(_ util.Uint160, _ string) (layer.PlacementPolicy, error) {

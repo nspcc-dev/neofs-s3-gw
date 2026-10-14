@@ -1,61 +1,75 @@
 package fschain
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/stretchr/testify/require"
 )
 
-func TestForEachEndpointContinuesAfterFailure(t *testing.T) {
-	errUnavailable := errors.New("unavailable")
-	var attempted []string
-	var initialized []string
+func TestNewClientsKeepsUnavailableEndpoints(t *testing.T) {
+	endpoints := []string{"http://IR1-down:30333", "http://IR2-up:30333"}
 
-	err := ForEachEndpoint([]string{"IR1-down", "IR2-up", "IR3-up"}, func(endpoint string) error {
-		attempted = append(attempted, endpoint)
-		if endpoint == "IR1-down" {
-			return errUnavailable
+	clients, err := NewClients(context.Background(), endpoints)
+	require.NoError(t, err)
+	t.Cleanup(func() { CloseClients(clients) })
+
+	require.Len(t, clients, len(endpoints))
+	for i, cl := range clients {
+		require.Equal(t, endpoints[i], cl.Endpoint())
+	}
+}
+
+func TestNewClientsFailsForEmptyList(t *testing.T) {
+	_, err := NewClients(context.Background(), []string{})
+	require.ErrorContains(t, err, "endpoints must be set")
+}
+
+func TestFirstSuccessfulContinuesAfterFailure(t *testing.T) {
+	clients, err := NewClients(context.Background(), []string{"http://IR1-down:30333", "http://IR2-up:30333", "http://IR3-up:30333"})
+	require.NoError(t, err)
+	t.Cleanup(func() { CloseClients(clients) })
+
+	var attempted []string
+
+	res, err := FirstSuccessful(clients, func(cl *rpcclient.Client) (util.Uint160, error) {
+		attempted = append(attempted, cl.Endpoint())
+		if cl.Endpoint() == "http://IR1-down:30333" {
+			return util.Uint160{}, errors.New("unavailable")
 		}
 
-		initialized = append(initialized, endpoint)
-		return nil
+		return util.Uint160{2}, nil
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, []string{"IR1-down", "IR2-up", "IR3-up"}, attempted)
-	require.Equal(t, []string{"IR2-up", "IR3-up"}, initialized)
+	require.Equal(t, util.Uint160{2}, res)
+	require.Equal(t, []string{"http://IR1-down:30333", "http://IR2-up:30333"}, attempted)
 }
 
-func TestForEachEndpointFailsWhenAllEndpointsFail(t *testing.T) {
+func TestFirstSuccessfulFailsWhenAllEndpointsFail(t *testing.T) {
+	clients, err := NewClients(context.Background(), []string{"http://IR1-down:30333", "http://IR2-down:30333"})
+	require.NoError(t, err)
+	t.Cleanup(func() { CloseClients(clients) })
+
 	firstErr := errors.New("first endpoint unavailable")
 	secondErr := errors.New("second endpoint unavailable")
 
-	err := ForEachEndpoint([]string{"IR1-down", "IR2-down"}, func(endpoint string) error {
-		switch endpoint {
-		case "IR1-down":
-			return firstErr
-		case "IR2-down":
-			return secondErr
+	_, err = FirstSuccessful(clients, func(cl *rpcclient.Client) (util.Uint160, error) {
+		switch cl.Endpoint() {
+		case "http://IR1-down:30333":
+			return util.Uint160{}, firstErr
+		case "http://IR2-down:30333":
+			return util.Uint160{}, secondErr
 		default:
-			t.Fatalf("unexpected endpoint %q", endpoint)
-			return nil
+			t.Fatalf("unexpected endpoint %q", cl.Endpoint())
+			return util.Uint160{}, nil
 		}
 	})
 
 	require.ErrorContains(t, err, "all RPC endpoints failed")
 	require.ErrorIs(t, err, firstErr)
 	require.ErrorIs(t, err, secondErr)
-}
-
-func TestForEachEndpointFailsForEmptyList(t *testing.T) {
-	called := false
-
-	err := ForEachEndpoint([]string{}, func(string) error {
-		called = true
-		return nil
-	})
-
-	require.ErrorContains(t, err, "endpoints must be set")
-	require.False(t, called)
 }
