@@ -395,15 +395,41 @@ func (h *handler) checkPutPreconditions(ctx context.Context, bktInfo *data.Bucke
 
 	var hashSum = extendedObjInfo.ObjectInfo.HashSum
 
-	if len(ifMatch) > 0 && ifMatch != "*" && ifMatch != hashSum {
+	if len(ifMatch) > 0 && !etagListMatches(ifMatch, hashSum, true) {
 		return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
 	}
 
-	if ifNoneMatch == "*" || ifNoneMatch == hashSum {
+	if len(ifNoneMatch) > 0 && etagListMatches(ifNoneMatch, hashSum, false) {
 		return s3errors.GetAPIError(s3errors.ErrPreconditionFailed)
 	}
 
 	return nil
+}
+
+// etagListMatches returns true if etag matches any entity tag from the comma-separated
+// If-Match/If-None-Match header value. Weak tags are skipped if strong
+// comparison is requested. Unquoted tags are accepted too.
+func etagListMatches(header, etag string, strong bool) bool {
+	for tag := range strings.SplitSeq(header, ",") {
+		tag = strings.TrimSpace(tag)
+		if tag == "*" {
+			return true
+		}
+
+		if after, ok := strings.CutPrefix(tag, "W/"); ok {
+			if strong {
+				continue
+			}
+
+			tag = after
+		}
+
+		if strings.Trim(tag, `"`) == etag {
+			return true
+		}
+	}
+
+	return false
 }
 
 func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
