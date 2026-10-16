@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"maps"
 	"net"
@@ -31,11 +32,19 @@ import (
 	"go.uber.org/zap"
 )
 
-type postPolicy struct {
-	Expiration time.Time          `json:"expiration"`
-	Conditions []*policyCondition `json:"conditions"`
-	empty      bool
-}
+type (
+	postPolicy struct {
+		Expiration time.Time          `json:"expiration"`
+		Conditions []*policyCondition `json:"conditions"`
+		empty      bool
+	}
+
+	md5Reader struct {
+		r        io.Reader
+		hash     hash.Hash
+		expected []byte
+	}
+)
 
 func (p *postPolicy) CheckContentLength(size int64) bool {
 	if p.empty {
@@ -216,6 +225,12 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	contentMD5, err := parseContentMD5(r.Header)
+	if err != nil {
+		h.logAndSendError(w, "could not parse content md5 header", reqInfo, err)
+		return
+	}
+
 	var (
 		bktInfo         *data.BucketInfo
 		extendedObjInfo *data.ExtendedObjectInfo
@@ -226,7 +241,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 	for attempt := range putObjectExtraAttempts + 1 {
 		var retry bool
 
-		bktInfo, extendedObjInfo, retry = h.putObjectAttempt(w, r, attempt, tagSet, hasACLHeaders)
+		bktInfo, extendedObjInfo, retry = h.putObjectAttempt(w, r, attempt, tagSet, contentMD5, hasACLHeaders)
 		if !retry {
 			break
 		}
@@ -258,7 +273,7 @@ func (h *handler) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attempt int, tagSet map[string]string,
-	hasACLHeaders bool) (*data.BucketInfo, *data.ExtendedObjectInfo, bool) {
+	contentMD5 []byte, hasACLHeaders bool) (*data.BucketInfo, *data.ExtendedObjectInfo, bool) {
 	reqInfo := api.GetReqInfo(r.Context())
 
 	bktInfo, err := h.getBucketAndCheckOwner(r, reqInfo.BucketName)
@@ -313,10 +328,15 @@ func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attem
 		return nil, nil, false
 	}
 
+	var payload io.Reader = r.Body
+	if contentMD5 != nil {
+		payload = newMD5Reader(payload, contentMD5)
+	}
+
 	params := &layer.PutObjectParams{
 		BktInfo:    bktInfo,
 		Object:     reqInfo.ObjectName,
-		Reader:     r.Body,
+		Reader:     payload,
 		Size:       cl,
 		Header:     metadata,
 		Encryption: encryptionParams,
@@ -430,6 +450,52 @@ func etagListMatches(header, etag string, strong bool) bool {
 	}
 
 	return false
+}
+
+func parseContentMD5(header http.Header) ([]byte, error) {
+	var values = header.Values(api.ContentMD5)
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	digest, err := base64.StdEncoding.DecodeString(values[0])
+	if err != nil || len(digest) != md5.Size {
+		return nil, s3errors.GetAPIError(s3errors.ErrInvalidDigest)
+	}
+
+	return digest, nil
+}
+
+func newMD5Reader(r io.Reader, expected []byte) *md5Reader {
+	return &md5Reader{
+		r:        r,
+		hash:     md5.New(),
+		expected: expected,
+	}
+}
+
+func (m *md5Reader) Read(p []byte) (int, error) {
+	n, err := m.r.Read(p)
+	m.hash.Write(p[:n])
+
+	if errors.Is(err, io.EOF) && !bytes.Equal(m.hash.Sum(nil), m.expected) {
+		return n, s3errors.GetAPIError(s3errors.ErrBadDigest)
+	}
+
+	return n, err
+}
+
+func (m *md5Reader) WriteTo(w io.Writer) (int64, error) {
+	n, err := io.Copy(io.MultiWriter(w, m.hash), m.r)
+	if err != nil {
+		return n, err
+	}
+
+	if !bytes.Equal(m.hash.Sum(nil), m.expected) {
+		return n, s3errors.GetAPIError(s3errors.ErrBadDigest)
+	}
+
+	return n, nil
 }
 
 func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {

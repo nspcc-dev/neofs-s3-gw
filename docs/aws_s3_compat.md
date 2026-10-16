@@ -23,7 +23,7 @@ Reference:
 | 🟢 | ListParts              | Parts loaded with MultipartUpload       |
 | 🟢 | ListObjects            |                                         |
 | 🟢 | ListObjectsV2          |                                         |
-| 🟢 | PutObject              | Content-MD5 header deprecated           |
+| 🟢 | PutObject              | Content-MD5 header is checked, not kept |
 | 🔵 | SelectObjectContent    | Need to have some Lambda to execute SQL |
 | 🔵 | WriteGetObjectResponse | Waiting for Lambda to be developed      |
 | 🟢 | GetObjectAttributes    |                                         |

@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -472,4 +473,74 @@ func TestPutObjectPreconditions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPutObjectContentMD5(t *testing.T) {
+	const content = "content"
+
+	validMD5 := md5.Sum([]byte(content))
+	otherMD5 := md5.Sum([]byte("other content"))
+
+	for _, tc := range []struct {
+		name  string
+		value string
+		err   s3errors.ErrorCode
+	}{
+		{name: "valid", value: base64.StdEncoding.EncodeToString(validMD5[:])},
+		{name: "mismatch", value: base64.StdEncoding.EncodeToString(otherMD5[:]), err: s3errors.ErrBadDigest},
+		{name: "not base64", value: "AWS HAHAHA", err: s3errors.ErrInvalidDigest},
+		{name: "empty", value: "", err: s3errors.ErrInvalidDigest},
+		{name: "short", value: base64.StdEncoding.EncodeToString([]byte("abracadabra")), err: s3errors.ErrInvalidDigest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hc := prepareHandlerContext(t)
+
+			bktName, objName := "bucket-content-md5", "object"
+			bktInfo := createTestBucket(hc, bktName)
+
+			w, r := prepareTestPayloadRequest(hc, bktName, objName, bytes.NewReader([]byte(content)))
+			r.Header.Set(api.ContentMD5, tc.value)
+			hc.Handler().PutObjectHandler(w, r)
+
+			_, err := hc.Layer().GetObjectInfo(hc.Context(), &layer.HeadObjectParams{BktInfo: bktInfo, Object: objName})
+			if tc.err == 0 {
+				assertStatus(t, w, http.StatusOK)
+				require.NoError(t, err)
+				return
+			}
+
+			assertS3Error(t, w, s3errors.GetAPIError(tc.err))
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestMD5Reader(t *testing.T) {
+	const content = "content"
+
+	var (
+		validMD5 = md5.Sum([]byte(content))
+		otherMD5 = md5.Sum([]byte("other content"))
+	)
+
+	t.Run("read", func(t *testing.T) {
+		data, err := io.ReadAll(newMD5Reader(bytes.NewReader([]byte(content)), validMD5[:]))
+		require.NoError(t, err)
+		require.Equal(t, content, string(data))
+
+		_, err = io.ReadAll(newMD5Reader(bytes.NewReader([]byte(content)), otherMD5[:]))
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrBadDigest))
+	})
+
+	t.Run("write to", func(t *testing.T) {
+		var buf bytes.Buffer
+
+		n, err := io.Copy(&buf, newMD5Reader(bytes.NewReader([]byte(content)), validMD5[:]))
+		require.NoError(t, err)
+		require.EqualValues(t, len(content), n)
+		require.Equal(t, content, buf.String())
+
+		_, err = io.Copy(io.Discard, newMD5Reader(bytes.NewReader([]byte(content)), otherMD5[:]))
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrBadDigest))
+	})
 }
