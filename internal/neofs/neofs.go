@@ -454,6 +454,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 			}
 
 			prm.Payload = bytes.NewReader(pld)
+			prm.PayloadSize = uint64(len(pld))
 		}
 	}
 
@@ -714,11 +715,12 @@ func (x *AuthmateNeoFS) ReadObject(ctx context.Context, addr oid.Address) ([]byt
 // CreateObject implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (oid.ID, error) {
 	return x.neoFS.CreateObject(ctx, layer.PrmObjectCreate{
-		Creator:    prm.Creator,
-		Container:  prm.Container,
-		Filepath:   prm.Filepath,
-		Attributes: map[string]string{object.AttributeExpirationEpoch: strconv.FormatUint(prm.ExpirationEpoch, 10)},
-		Payload:    bytes.NewReader(prm.Payload),
+		Creator:     prm.Creator,
+		Container:   prm.Container,
+		Filepath:    prm.Filepath,
+		Attributes:  map[string]string{object.AttributeExpirationEpoch: strconv.FormatUint(prm.ExpirationEpoch, 10)},
+		Payload:     bytes.NewReader(prm.Payload),
+		PayloadSize: uint64(len(prm.Payload)),
 	})
 }
 

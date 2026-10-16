@@ -226,7 +226,7 @@ type PrmObjectCreate struct {
 	// ID to lock (optional).
 	Locked oid.ID
 
-	// Full payload size (optional).
+	// Full payload size.
 	PayloadSize uint64
 
 	// Associated filepath (optional).
