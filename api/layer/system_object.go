@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -30,7 +29,6 @@ type locksSearchResult struct {
 	ID                 oid.ID
 	FilePath           string
 	CreationTimestamp  int64
-	ExpirationEpoch    uint64
 	IsComplianceMode   bool
 	RetentionUntilMode time.Time
 }
@@ -99,7 +97,6 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 		returningAttributes = []string{
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
-			object.AttributeExpirationEpoch,
 			s3headers.AttributeLockMeta,
 		}
 
@@ -143,15 +140,8 @@ func (n *layer) getLockDataFromObjects(ctx context.Context, bkt *data.BucketInfo
 		}
 
 		if item.Attributes[2] != "" {
-			psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[2], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[2], err)
-			}
-		}
-
-		if item.Attributes[3] != "" {
 			fields := make(map[string]string)
-			if err = json.Unmarshal([]byte(item.Attributes[3]), &fields); err != nil {
+			if err = json.Unmarshal([]byte(item.Attributes[2]), &fields); err != nil {
 				return nil, fmt.Errorf("unmarshal retention fields: %w", err)
 			}
 
@@ -286,12 +276,7 @@ func extractLockInfoFromSearch(lockVersions []locksSearchResult) *data.LockInfo 
 	var lockInfo data.LockInfo
 
 	for _, item := range lockVersions {
-		// legal hold.
-		if item.ExpirationEpoch == math.MaxUint64 {
-			lockInfo.SetLegalHold(item.ID)
-		} else {
-			lockInfo.SetRetention(item.ID, item.RetentionUntilMode.Format(time.RFC3339), item.IsComplianceMode)
-		}
+		lockInfo.SetRetention(item.ID, item.RetentionUntilMode.Format(time.RFC3339), item.IsComplianceMode)
 	}
 
 	return &lockInfo
