@@ -223,6 +223,9 @@ type PrmObjectCreate struct {
 	// Value for Timestamp attribute (optional).
 	CreationTime time.Time
 
+	// Object expiration time (optional).
+	ExpirationTime time.Time
+
 	// ID to lock (optional).
 	Locked oid.ID
 
@@ -382,14 +385,6 @@ type NeoFS interface {
 	//
 	// It returns any error encountered which prevented the removal request from being sent.
 	DeleteObject(context.Context, PrmObjectDelete) error
-
-	// TimeToEpoch computes current epoch and the epoch that corresponds to the provided now and future time.
-	// Note:
-	// * future time must be after the now
-	// * future time will be ceil rounded to match epoch
-	//
-	// It returns any error encountered which prevented computing epochs.
-	TimeToEpoch(ctx context.Context, now time.Time, future time.Time) (uint64, uint64, error)
 
 	// MaxObjectSize returns configured payload size limit for object slicing when enabled.
 	MaxObjectSize() int64

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
-	"github.com/nspcc-dev/neofs-sdk-go/object"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,6 +13,7 @@ func TestObjectLockAttributes(t *testing.T) {
 	tc.putBucketSettings(&data.BucketSettings{Versioning: data.VersioningEnabled})
 
 	obj := tc.putObject([]byte("content obj1 v1"))
+	until := time.Now()
 
 	p := &PutLockInfoParams{
 		ObjVersion: &ObjectVersion{
@@ -23,7 +23,7 @@ func TestObjectLockAttributes(t *testing.T) {
 		},
 		NewLock: &data.ObjectLock{
 			Retention: &data.RetentionLock{
-				Until: time.Now(),
+				Until: until,
 			},
 		},
 	}
@@ -37,12 +37,5 @@ func TestObjectLockAttributes(t *testing.T) {
 	lockObj := tc.getObjectByID(foundLock.Retention())
 	require.NotNil(t, lockObj)
 
-	expEpoch := false
-	for _, attr := range lockObj.Attributes() {
-		if attr.Key() == object.AttributeExpirationEpoch {
-			expEpoch = true
-		}
-	}
-
-	require.Truef(t, expEpoch, "system header %s presence", object.AttributeExpirationEpoch)
+	require.Equal(t, until.Unix(), lockObj.ExpirationTime().Unix())
 }
