@@ -11,7 +11,6 @@ import (
 	"hash"
 	"io"
 	"maps"
-	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -112,38 +111,6 @@ func (x *NeoFS) signer(ctx context.Context) user.Signer {
 	}
 
 	return x.gateSigner
-}
-
-// TimeToEpoch implements neofs.NeoFS interface method.
-func (x *NeoFS) TimeToEpoch(ctx context.Context, now, futureTime time.Time) (uint64, uint64, error) {
-	dur := futureTime.Sub(now)
-	if dur < 0 {
-		return 0, 0, fmt.Errorf("time '%s' must be in the future (after %s)",
-			futureTime.Format(time.RFC3339), now.Format(time.RFC3339))
-	}
-
-	networkInfo, err := x.pool.Load().NetworkInfo(ctx, client.PrmNetworkInfo{})
-	if err != nil {
-		return 0, 0, fmt.Errorf("get network info via client: %w", err)
-	}
-
-	durEpoch := networkInfo.EpochDuration()
-	if durEpoch == 0 {
-		return 0, 0, errors.New("epoch duration is missing or zero")
-	}
-
-	curr := networkInfo.CurrentEpoch()
-
-	epochLifetime := (uint64(dur.Seconds()) + durEpoch - 1) / durEpoch
-
-	var epoch uint64
-	if epochLifetime >= math.MaxUint64-curr {
-		epoch = math.MaxUint64
-	} else {
-		epoch = curr + epochLifetime
-	}
-
-	return curr, epoch, nil
 }
 
 // Container implements neofs.NeoFS interface method.
@@ -343,6 +310,12 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	obj.SetOwner(prm.Creator)
 	obj.SetAttributes(attrs...)
 	obj.SetPayloadSize(prm.PayloadSize)
+
+	if !prm.ExpirationTime.IsZero() {
+		if err := obj.SetExpirationTime(prm.ExpirationTime); err != nil {
+			return oid.ID{}, fmt.Errorf("set expiration time: %w", err)
+		}
+	}
 
 	signer := x.signer(ctx)
 
@@ -668,11 +641,6 @@ func (x *AuthmateNeoFS) ContainerExists(ctx context.Context, idCnr cid.ID) error
 	return nil
 }
 
-// TimeToEpoch implements authmate.NeoFS interface method.
-func (x *AuthmateNeoFS) TimeToEpoch(ctx context.Context, futureTime time.Time) (uint64, uint64, error) {
-	return x.neoFS.TimeToEpoch(ctx, time.Now(), futureTime)
-}
-
 // CreateContainer implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) CreateContainer(ctx context.Context, prm authmate.PrmContainerCreate) (cid.ID, error) {
 	basicACL := acl.Private
@@ -715,12 +683,12 @@ func (x *AuthmateNeoFS) ReadObject(ctx context.Context, addr oid.Address) ([]byt
 // CreateObject implements authmate.NeoFS interface method.
 func (x *AuthmateNeoFS) CreateObject(ctx context.Context, prm tokens.PrmObjectCreate) (oid.ID, error) {
 	return x.neoFS.CreateObject(ctx, layer.PrmObjectCreate{
-		Creator:     prm.Creator,
-		Container:   prm.Container,
-		Filepath:    prm.Filepath,
-		Attributes:  map[string]string{object.AttributeExpirationEpoch: strconv.FormatUint(prm.ExpirationEpoch, 10)},
-		Payload:     bytes.NewReader(prm.Payload),
-		PayloadSize: uint64(len(prm.Payload)),
+		Creator:        prm.Creator,
+		Container:      prm.Container,
+		Filepath:       prm.Filepath,
+		ExpirationTime: prm.ExpirationTime,
+		Payload:        bytes.NewReader(prm.Payload),
+		PayloadSize:    uint64(len(prm.Payload)),
 	})
 }
 
