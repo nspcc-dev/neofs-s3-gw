@@ -131,7 +131,7 @@ jobs:
           WALLET_PASS: 'password'
         run: |
           source virtualenv/bin/activate
-          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws and not fails_on_dbstore' --alluredir=${{ env.ALLURE_RESULTS_DIR }} -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3_neofs.py
+          S3TEST_CONF=${S3_TESTS_CONFIG} pytest -m 'not fails_on_aws' --alluredir=${{ env.ALLURE_RESULTS_DIR }} -v -s s3tests_boto3/functional/test_s3.py s3tests_boto3/functional/test_s3_neofs.py s3tests_boto3/functional/test_headers.py
         working-directory: s3-tests
 
 ################################################################      
