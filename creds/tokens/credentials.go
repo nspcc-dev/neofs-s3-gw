@@ -21,7 +21,7 @@ type (
 	// Credentials is a bearer token get/put interface.
 	Credentials interface {
 		GetBox(context.Context, oid.Address) (*accessbox.Box, error)
-		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, uint64, ...*keys.PublicKey) (oid.Address, error)
+		Put(context.Context, cid.ID, user.ID, *accessbox.AccessBox, time.Time, ...*keys.PublicKey) (oid.Address, error)
 	}
 
 	cred struct {
@@ -43,8 +43,8 @@ type PrmObjectCreate struct {
 	// File path.
 	Filepath string
 
-	// Last NeoFS epoch of the object lifetime.
-	ExpirationEpoch uint64
+	// Object expiration time.
+	ExpirationTime time.Time
 
 	// Object payload.
 	Payload []byte
@@ -133,7 +133,7 @@ func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.A
 	return &box, namespace, nil
 }
 
-func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration uint64, keys ...*keys.PublicKey) (oid.Address, error) {
+func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *accessbox.AccessBox, expiration time.Time, keys ...*keys.PublicKey) (oid.Address, error) {
 	if len(keys) == 0 {
 		return oid.Address{}, ErrEmptyPublicKeys
 	} else if box == nil {
@@ -145,11 +145,11 @@ func (c *cred) Put(ctx context.Context, idCnr cid.ID, issuer user.ID, box *acces
 	}
 
 	idObj, err := c.neoFS.CreateObject(ctx, PrmObjectCreate{
-		Creator:         issuer,
-		Container:       idCnr,
-		Filepath:        strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
-		ExpirationEpoch: expiration,
-		Payload:         data,
+		Creator:        issuer,
+		Container:      idCnr,
+		Filepath:       strconv.FormatInt(time.Now().Unix(), 10) + "_access.box",
+		ExpirationTime: expiration,
+		Payload:        data,
 	})
 	if err != nil {
 		return oid.Address{}, fmt.Errorf("create object: %w", err)
