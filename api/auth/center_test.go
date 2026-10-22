@@ -520,3 +520,12 @@ func TestAwsEncodedChunkReaderWithTrailer(t *testing.T) {
 		require.Equal(t, []byte(objectPayload), payload2.Bytes())
 	})
 }
+
+func TestSignatureFromAuthHeader(t *testing.T) {
+	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=2811ccb9e242f41426738fb1f"))
+	require.Equal(t, "", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host"))
+	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader("AWS4-HMAC-SHA256 Signature=2811ccb9e242f41426738fb1f, Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host"))
+	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader(`AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request,SignedHeaders=host, signature = "2811ccb9e242f41426738fb1f" `))
+	require.Equal(t, "", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, XSignature=2811ccb9e242f41426738fb1f"))
+	require.Equal(t, "", signatureFromAuthHeader("Basic Signature=2811ccb9e242f41426738fb1f"))
+}

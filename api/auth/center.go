@@ -367,6 +367,24 @@ func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 	return otherRequest
 }
 
+// signatureFromAuthHeader returns the Signature auth-param of an AWS4-HMAC-SHA256 Authorization
+// header, empty if the scheme differs, there is no such param or the header is malformed.
+func signatureFromAuthHeader(header string) string {
+	scheme, params := splitCredentials(header)
+	if !strings.EqualFold(scheme, signingAlgorithm) {
+		return ""
+	}
+	for {
+		name, value, err := params.next()
+		if err != nil || name == "" {
+			return ""
+		}
+		if strings.EqualFold(name, "Signature") {
+			return value
+		}
+	}
+}
+
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
 	credProvider := credentials.NewStaticCredentialsProvider(authHeader.AccessKeyID, box.Gate.AccessKey, "")
 	awsCreds, err := credProvider.Retrieve(request.Context())
@@ -422,7 +440,7 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		if err = signer.SignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
 			return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
 		}
-		signature = c.reg.GetSubmatches(request.Header.Get(AuthorizationHdr))["v4_signature"]
+		signature = signatureFromAuthHeader(request.Header.Get(AuthorizationHdr))
 	}
 
 	if authHeader.SignatureV4 != signature {
