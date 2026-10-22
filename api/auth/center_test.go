@@ -19,6 +19,7 @@ import (
 
 	v4amz "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/bluele/gcache"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
@@ -192,7 +193,7 @@ func TestCheckFormDataNoSignature(t *testing.T) {
 	require.NoError(t, err)
 	r.Header.Set(ContentTypeHdr, form.FormDataContentType())
 
-	c := &center{postReg: NewRegexpMatcher(postPolicyCredentialRegexp)}
+	c := &center{postReg: NewRegexpMatcher(postPolicyCredentialRegexp), signers: gcache.New(signerCacheSize).LRU().Build()}
 	_, err = c.checkFormData(r)
 	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
 }

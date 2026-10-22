@@ -16,6 +16,7 @@ import (
 
 	v4amz "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/bluele/gcache"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
@@ -44,6 +45,7 @@ type (
 
 	center struct {
 		postReg                    *RegexpSubmatcher
+		signers                    gcache.Cache // access key id -> *v4amz.Signer
 		cli                        tokens.Credentials
 		allowedAccessKeyIDPrefixes []string // empty slice means all access key ids are allowed
 		namespace                  string
@@ -66,6 +68,7 @@ type (
 
 const (
 	maxFormSizeMemory = 50 * 1048576 // 50 MB
+	signerCacheSize   = 10_000
 
 	AmzAlgorithm                  = "X-Amz-Algorithm"
 	AmzCredential                 = "X-Amz-Credential"
@@ -110,6 +113,7 @@ func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, namespace 
 	return &center{
 		cli:                        tokens.New(neoFS, key, config, resolver),
 		postReg:                    NewRegexpMatcher(postPolicyCredentialRegexp),
+		signers:                    gcache.New(signerCacheSize).LRU().Build(),
 		allowedAccessKeyIDPrefixes: prefixes,
 		namespace:                  namespace,
 	}
@@ -415,6 +419,19 @@ func signatureFromAuthHeader(header string) string {
 	}
 }
 
+func (c *center) signer(accessKeyID string) *v4amz.Signer {
+	if v, err := c.signers.Get(accessKeyID); err == nil {
+		return v.(*v4amz.Signer)
+	}
+
+	signer := v4amz.NewSigner(func(o *v4amz.SignerOptions) {
+		o.DisableURIPathEscaping = true
+	})
+	_ = c.signers.Set(accessKeyID, signer)
+
+	return signer
+}
+
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
 	credProvider := credentials.NewStaticCredentialsProvider(authHeader.AccessKeyID, box.Gate.AccessKey, "")
 	awsCreds, err := credProvider.Retrieve(request.Context())
@@ -422,9 +439,7 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		return fmt.Errorf("get credentials: %w", err)
 	}
 
-	signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
-		signer.DisableURIPathEscaping = true
-	})
+	signer := c.signer(authHeader.AccessKeyID)
 
 	if authHeader.PayloadHash == "" {
 		authHeader.PayloadHash = emptyStringSHA256
