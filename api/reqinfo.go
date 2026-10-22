@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-
-	"github.com/gorilla/mux"
 )
 
 type (
@@ -105,25 +103,28 @@ func GetSourceIP(r *http.Request) string {
 	return addr
 }
 
-func prepareContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	// the router matches on the decoded path, so the object var is already the
+func prepareContext(ctx context.Context, w http.ResponseWriter, r *http.Request, domains []string) context.Context {
+	// the target comes from the decoded path, so the object is already the
 	// key itself and must not be unescaped again.
-	object := vars["object"]
-	prefix, err := url.QueryUnescape(vars["prefix"])
-	if err != nil {
-		prefix = vars["prefix"]
+	bucket, object := requestTarget(r, domains)
+	var method string
+	if bucket == "" {
+		if r.Method == http.MethodGet {
+			method = listBucketsOperation
+		}
+	} else {
+		var bucketOp bool
+		if method, bucketOp = resolveOperation(r, object != ""); bucketOp {
+			object = ""
+		}
 	}
-	if prefix != "" {
-		object = prefix
-	}
+
 	return SetReqInfo(ctx,
 		// prepare request info
 		NewReqInfo(w, r, ObjectRequest{
 			Bucket: bucket,
 			Object: object,
-			Method: mux.CurrentRoute(r).GetName(),
+			Method: method,
 		}))
 }
 
