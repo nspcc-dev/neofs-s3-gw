@@ -27,9 +27,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
-// authorizationFieldRegexp -- is regexp for credentials with Base58 encoded cid and oid and '0' (zero) as delimiter.
-var authorizationFieldRegexp = regexp.MustCompile(`AWS4-HMAC-SHA256 Credential=(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request,\s*SignedHeaders=(?P<signed_header_fields>.+),\s*Signature=(?P<v4_signature>.+)`)
-
 // postPolicyCredentialRegexp -- is regexp for credentials when uploading file using POST with policy.
 var postPolicyCredentialRegexp = regexp.MustCompile(`(?P<access_key_id>[^/]+)/(?P<date>[^/]+)/(?P<region>[^/]*)/(?P<service>[^/]+)/aws4_request`)
 
@@ -46,7 +43,6 @@ type (
 	}
 
 	center struct {
-		reg                        *RegexpSubmatcher
 		postReg                    *RegexpSubmatcher
 		cli                        tokens.Credentials
 		allowedAccessKeyIDPrefixes []string // empty slice means all access key ids are allowed
@@ -69,9 +65,7 @@ type (
 )
 
 const (
-	accessKeyPartsNum  = 2
-	authHeaderPartsNum = 6
-	maxFormSizeMemory  = 50 * 1048576 // 50 MB
+	maxFormSizeMemory = 50 * 1048576 // 50 MB
 
 	AmzAlgorithm                  = "X-Amz-Algorithm"
 	AmzCredential                 = "X-Amz-Credential"
@@ -91,6 +85,11 @@ const (
 	// emptyStringSHA256 is a SHA256 of an empty string.
 	emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
 	UnsignedPayload   = "UNSIGNED-PAYLOAD"
+
+	signingAlgorithm   = "AWS4-HMAC-SHA256"
+	credentialParam    = "Credential"
+	signedHeadersParam = "SignedHeaders"
+	signatureParam     = "Signature"
 )
 
 // ErrNoAuthorizationHeader is returned for unauthenticated requests.
@@ -110,7 +109,6 @@ var _ io.ReadSeeker = prs(0)
 func New(neoFS tokens.NeoFS, key *keys.PrivateKey, prefixes []string, namespace string, config *cache.Config, resolver session.NNSResolver) Center {
 	return &center{
 		cli:                        tokens.New(neoFS, key, config, resolver),
-		reg:                        NewRegexpMatcher(authorizationFieldRegexp),
 		postReg:                    NewRegexpMatcher(postPolicyCredentialRegexp),
 		allowedAccessKeyIDPrefixes: prefixes,
 		namespace:                  namespace,
@@ -126,25 +124,60 @@ func (c *center) checkNamespace(boxNamespace string) error {
 }
 
 func (c *center) parseAuthHeader(header, amzContentSha256Header string) (*authHeader, error) {
-	submatches := c.reg.GetSubmatches(header)
-	if len(submatches) != authHeaderPartsNum {
+	scheme, params := splitCredentials(header)
+	if !strings.EqualFold(scheme, signingAlgorithm) {
 		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
 	}
 
-	accessKey := strings.Split(submatches["access_key_id"], "0")
-	if len(accessKey) != accessKeyPartsNum {
+	var credential, signedHeaders, signature string
+	for {
+		name, value, err := params.next()
+		if err != nil {
+			return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
+		}
+		if name == "" {
+			break
+		}
+
+		var dst *string
+		switch {
+		case strings.EqualFold(name, credentialParam):
+			dst = &credential
+		case strings.EqualFold(name, signedHeadersParam):
+			dst = &signedHeaders
+		case strings.EqualFold(name, signatureParam):
+			dst = &signature
+		default:
+			continue
+		}
+		if *dst != "" || value == "" {
+			return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
+		}
+		*dst = value
+	}
+
+	// <access_key_id>/<date>/<region>/<service>/aws4_request; region may be empty.
+	accessKeyID, scope, _ := strings.Cut(credential, "/")
+	date, scope, _ := strings.Cut(scope, "/")
+	region, scope, _ := strings.Cut(scope, "/")
+	service, terminator, _ := strings.Cut(scope, "/")
+	if accessKeyID == "" || date == "" || service == "" || terminator != "aws4_request" ||
+		signedHeaders == "" || signature == "" {
+		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
+	}
+
+	// <cid>0<oid>, both Base58 encoded, so the delimiter is the only zero.
+	if strings.Count(accessKeyID, "0") != 1 {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 
-	signedFields := strings.Split(submatches["signed_header_fields"], ";")
-
 	return &authHeader{
-		AccessKeyID:  submatches["access_key_id"],
-		Service:      submatches["service"],
-		Region:       submatches["region"],
-		SignatureV4:  submatches["v4_signature"],
-		SignedFields: signedFields,
-		Date:         submatches["date"],
+		AccessKeyID:  accessKeyID,
+		Service:      service,
+		Region:       region,
+		SignatureV4:  signature,
+		SignedFields: strings.Split(signedHeaders, ";"),
+		Date:         date,
 		PayloadHash:  amzContentSha256Header,
 	}, nil
 }
@@ -379,7 +412,7 @@ func signatureFromAuthHeader(header string) string {
 		if err != nil || name == "" {
 			return ""
 		}
-		if strings.EqualFold(name, "Signature") {
+		if strings.EqualFold(name, signatureParam) {
 			return value
 		}
 	}
