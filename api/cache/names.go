@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
-	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"go.uber.org/zap"
 )
 
 // ObjectsNameCache provides lru cache for objects.
-// This cache contains mapping nice names to object addresses.
-// Key is bucketName+objectName.
+// This cache contains the result of the current version lookup by object name.
+// Key is containerID+objectName.
 type ObjectsNameCache struct {
 	cache  gcache.Cache
 	logger *zap.Logger
@@ -21,7 +21,7 @@ const (
 	// DefaultObjectsNameCacheSize is a default maximum number of entries in cache.
 	DefaultObjectsNameCacheSize = 1e4
 	// DefaultObjectsNameCacheLifetime is a default lifetime of entries in cache.
-	DefaultObjectsNameCacheLifetime = time.Minute
+	DefaultObjectsNameCacheLifetime = 5 * time.Second
 )
 
 // DefaultObjectsNameConfig returns new default cache expiration values.
@@ -40,25 +40,25 @@ func NewObjectsNameCache(config *Config) *ObjectsNameCache {
 }
 
 // Get returns a cached object. Returns nil if value is missing.
-func (o *ObjectsNameCache) Get(key string) *oid.Address {
+func (o *ObjectsNameCache) Get(key string) *data.ComprehensiveObjectInfo {
 	entry, err := o.cache.Get(key)
 	if err != nil {
 		return nil
 	}
 
-	result, ok := entry.(oid.Address)
+	result, ok := entry.(*data.ComprehensiveObjectInfo)
 	if !ok {
 		o.logger.Warn("invalid cache entry type", zap.String("actual", fmt.Sprintf("%T", entry)),
 			zap.String("expected", fmt.Sprintf("%T", result)))
 		return nil
 	}
 
-	return &result
+	return result
 }
 
 // Put puts an object to cache.
-func (o *ObjectsNameCache) Put(key string, address oid.Address) error {
-	return o.cache.Set(key, address)
+func (o *ObjectsNameCache) Put(key string, info *data.ComprehensiveObjectInfo) error {
+	return o.cache.Set(key, info)
 }
 
 // Delete deletes an object from cache.

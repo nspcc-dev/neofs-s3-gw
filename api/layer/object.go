@@ -389,7 +389,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		}
 	}
 
-	n.cache.CleanListCacheEntriesContainingObject(p.Object, p.BktInfo.CID)
+	n.cache.DeleteObjectName(p.BktInfo.CID, p.Object)
 
 	objInfo := &data.ObjectInfo{
 		ID:  id,
@@ -410,7 +410,7 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 		NodeVersion: newVersion,
 	}
 
-	n.cache.PutObjectWithName(owner, extendedObjInfo)
+	n.cache.PutObject(owner, extendedObjInfo)
 
 	wg.Wait()
 

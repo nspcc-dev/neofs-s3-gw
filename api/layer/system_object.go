@@ -88,6 +88,7 @@ func (n *layer) PutLockInfo(ctx context.Context, p *PutLockInfoParams) (err erro
 	}
 
 	n.cache.PutLockInfo(n.Owner(ctx), lockObjectKey(p.ObjVersion), lockInfo)
+	n.cache.DeleteObjectName(p.ObjVersion.BktInfo.CID, p.ObjVersion.ObjectName)
 
 	return nil
 }

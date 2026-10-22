@@ -53,12 +53,12 @@ func TestObjectNamesCacheType(t *testing.T) {
 	cache := NewObjectsNameCache(DefaultObjectsNameConfig(logger))
 
 	key := "name"
-	addr := oidtest.Address()
+	info := &data.ComprehensiveObjectInfo{ID: oidtest.ID(), TagSet: map[string]string{"k": "v"}}
 
-	err := cache.Put(key, addr)
+	err := cache.Put(key, info)
 	require.NoError(t, err)
 	val := cache.Get(key)
-	require.Equal(t, addr, *val)
+	require.Equal(t, info, val)
 	require.Equal(t, 0, observedLog.Len())
 
 	err = cache.cache.Set(key, "tmp")

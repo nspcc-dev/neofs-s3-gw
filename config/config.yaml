@@ -88,9 +88,9 @@ cache:
   list:
     lifetime: 1m
     size: 100
-  # Cache which contains mapping of nice name to object addresses
+  # Cache of current version lookups by object name
   names:
-    lifetime: 1m
+    lifetime: 5s
     size: 1000
   # Cache which contains mapping of bucket name to bucket info
   buckets:

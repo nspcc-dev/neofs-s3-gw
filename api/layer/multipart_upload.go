@@ -1456,7 +1456,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		IsUnversioned: !p.Info.Bkt.Settings.VersioningEnabled(),
 	}
 
-	n.cache.CleanListCacheEntriesContainingObject(p.Info.Key, p.Info.Bkt.CID)
+	n.cache.DeleteObjectName(p.Info.Bkt.CID, p.Info.Key)
 
 	objInfo := &data.ObjectInfo{
 		ID:          headerObjectID,
@@ -1476,7 +1476,7 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		NodeVersion: newVersion,
 	}
 
-	n.cache.PutObjectWithName(p.Info.Bkt.Owner, extObjInfo)
+	n.cache.PutObject(p.Info.Bkt.Owner, extObjInfo)
 
 	wg.Wait()
 
