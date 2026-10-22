@@ -77,12 +77,40 @@ func (c *Cache) DeleteBucket(name, namespace string) {
 	c.bucketCache.Delete(name, namespace)
 }
 
-func (c *Cache) CleanListCacheEntriesContainingObject(objectName string, cnrID cid.ID) {
-	c.listsCache.CleanCacheEntriesContainingObject(objectName, cnrID)
+// objectNameCacheKey is the key of the current version lookup in the names and access control
+// caches. The prefix keeps it apart from the <cid>/<oid> object keys in the latter, where a name
+// may be equal to an object id.
+func objectNameCacheKey(cnrID cid.ID, objName string) string {
+	return ".name." + cnrID.EncodeToString() + "." + objName
 }
 
-func (c *Cache) DeleteObjectName(cnrID cid.ID, bktName, objName string) {
-	c.namesCache.Delete(bktName + "/" + objName)
+// GetObjectByName returns the cached current version lookup for the object name, if owner has
+// already made it.
+func (c *Cache) GetObjectByName(owner user.ID, cnrID cid.ID, objName string) *data.ComprehensiveObjectInfo {
+	key := objectNameCacheKey(cnrID, objName)
+	if !c.accessCache.Get(owner, key) {
+		return nil
+	}
+
+	return c.namesCache.Get(key)
+}
+
+func (c *Cache) PutObjectByName(owner user.ID, cnrID cid.ID, objName string, info *data.ComprehensiveObjectInfo) {
+	key := objectNameCacheKey(cnrID, objName)
+
+	if err := c.namesCache.Put(key, info); err != nil {
+		c.logger.Warn("couldn't put object info to name cache", zap.String("key", key), zap.Error(err))
+	}
+
+	if err := c.accessCache.Put(owner, key); err != nil {
+		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
+	}
+}
+
+// DeleteObjectName drops everything cached under the object name: the current version lookup
+// and listings containing the object.
+func (c *Cache) DeleteObjectName(cnrID cid.ID, objName string) {
+	c.namesCache.Delete(objectNameCacheKey(cnrID, objName))
 	c.listsCache.CleanCacheEntriesContainingObject(objName, cnrID)
 }
 
@@ -98,15 +126,6 @@ func (c *Cache) GetObject(owner user.ID, addr oid.Address) *data.ExtendedObjectI
 	return c.objCache.GetObject(addr)
 }
 
-func (c *Cache) GetLastObject(owner user.ID, bktName, objName string) *data.ExtendedObjectInfo {
-	addr := c.namesCache.Get(bktName + "/" + objName)
-	if addr == nil {
-		return nil
-	}
-
-	return c.GetObject(owner, *addr)
-}
-
 func (c *Cache) PutObject(owner user.ID, extObjInfo *data.ExtendedObjectInfo) {
 	if err := c.objCache.PutObject(extObjInfo); err != nil {
 		c.logger.Warn("couldn't add object to cache", zap.Error(err),
@@ -116,16 +135,6 @@ func (c *Cache) PutObject(owner user.ID, extObjInfo *data.ExtendedObjectInfo) {
 
 	if err := c.accessCache.Put(owner, extObjInfo.ObjectInfo.Address().EncodeToString()); err != nil {
 		c.logger.Warn("couldn't cache access control operation", zap.Error(err))
-	}
-}
-
-func (c *Cache) PutObjectWithName(owner user.ID, extObjInfo *data.ExtendedObjectInfo) {
-	c.PutObject(owner, extObjInfo)
-
-	if err := c.namesCache.Put(extObjInfo.ObjectInfo.NiceName(), extObjInfo.ObjectInfo.Address()); err != nil {
-		c.logger.Warn("couldn't put obj address to name cache",
-			zap.String("obj nice name", extObjInfo.ObjectInfo.NiceName()),
-			zap.Error(err))
 	}
 }
 
