@@ -453,6 +453,13 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 
 			realHeaderObj.SetPayloadChecksum(checksum.NewSHA256(sha256.Sum256(payload)))
 
+			if firstID := prm.Multipart.HeaderObject.GetFirstID(); !firstID.IsZero() {
+				realHeaderObj.SetFirstID(firstID)
+			}
+			if prevID := prm.Multipart.HeaderObject.GetPreviousID(); !prevID.IsZero() {
+				realHeaderObj.SetPreviousID(prevID)
+			}
+
 			t.objectsMutex.Lock()
 			t.objects[realHeaderObj.Address().EncodeToString()] = realHeaderObj
 			t.objectsMutex.Unlock()

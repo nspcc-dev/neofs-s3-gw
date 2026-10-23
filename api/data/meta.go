@@ -72,6 +72,8 @@ type PartInfo struct {
 	MultipartHash []byte
 	// Elements contain [oid.ID] and size for each element for the current part.
 	Elements []ElementInfo
+	// PreviousID is the ID of the object the part is chained to in the Split chain.
+	PreviousID oid.ID
 }
 
 // ElementInfo represents small element in "big object" chain.
@@ -80,6 +82,7 @@ type ElementInfo struct {
 	Attributes map[string]string
 	Size       int64
 	TotalSize  int64
+	PreviousID oid.ID
 }
 
 // SortPartInfo sorts PartInfo for Number ASC, ServerCreated ASC.

@@ -225,7 +225,7 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 		}
 	}
 
-	objInfo, err := n.uploadPart(ctx, multipartInfo, p)
+	objInfo, err := n.uploadPart(ctx, multipartInfo, p, p.PartNumber-1)
 	if err != nil {
 		return "", err
 	}
@@ -233,7 +233,7 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 	return objInfo.HashSum, nil
 }
 
-func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadPartParams) (*data.ObjectInfo, error) {
+func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInfo, p *UploadPartParams, prevPartNumber int) (*data.ObjectInfo, error) {
 	encInfo := FormEncryptionInfoFromMeta(multipartInfo.EncryptionMeta)
 	if err := p.Info.Encryption.MatchObjectEncryption(encInfo); err != nil {
 		n.log.Warn("mismatched obj encryptionInfo", zap.Error(err))
@@ -269,7 +269,7 @@ func (n *layer) uploadPart(ctx context.Context, multipartInfo *data.MultipartInf
 		creationTime    = TimeNow(ctx)
 	)
 
-	lastPart, err := n.multipartMetaGetPartByNumber(ctx, bktInfo, multipartInfo.UploadID, p.PartNumber-1)
+	lastPart, err := n.multipartMetaGetPartByNumber(ctx, bktInfo, multipartInfo.UploadID, prevPartNumber)
 	if err != nil {
 		return nil, fmt.Errorf("getLastPart: %w", err)
 	}
@@ -588,12 +588,13 @@ func convertElementsToPartInfo(uploadID string, number int, elements []data.Elem
 		lastElement = elements[len(elements)-1]
 
 		partInfo = data.PartInfo{
-			UploadID: uploadID,
-			Number:   number,
-			OID:      lastElement.ID,
-			Size:     lastElement.TotalSize,
-			ETag:     lastElement.Attributes[object.FilterPayloadChecksum],
-			Elements: elements,
+			UploadID:   uploadID,
+			Number:     number,
+			OID:        lastElement.ID,
+			Size:       lastElement.TotalSize,
+			ETag:       lastElement.Attributes[object.FilterPayloadChecksum],
+			Elements:   elements,
+			PreviousID: lastElement.PreviousID,
 		}
 	)
 
@@ -869,7 +870,6 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 
 	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
 	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MultipartHash, "", object.MatchStringNotEqual)
 
 	attachTokenToParams(ctx, bktInfo.Owner, &opts)
 
@@ -903,6 +903,7 @@ func (n *layer) multipartMetaGetParts(ctx context.Context, bktInfo *data.BucketI
 			ID:         item.ID,
 			Attributes: make(map[string]string, len(obj.Attributes())),
 			Size:       int64(obj.PayloadSize()),
+			PreviousID: obj.GetPreviousID(),
 		}
 
 		for _, attr := range obj.Attributes() {
@@ -1069,107 +1070,7 @@ func (n *layer) multipartGetPartsList(ctx context.Context, bktInfo *data.BucketI
 	return parts, nil
 }
 
-func (n *layer) multipartMetaGetPartsAfter(ctx context.Context, bktInfo *data.BucketInfo, uploadID string, partID int) ([]*data.PartInfo, error) {
-	var (
-		filters object.SearchFilters
-		opts    client.SearchObjectsOptions
-
-		returningAttributes = []string{
-			s3headers.MultipartUpload,
-		}
-	)
-
-	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MultipartPartNumber, strconv.Itoa(partID), object.MatchNumGT)
-
-	attachTokenToParams(ctx, bktInfo.Owner, &opts)
-
-	res, err := n.neoFS.SearchObjectsV2(ctx, bktInfo.CID, filters, returningAttributes, opts)
-	if err != nil {
-		return nil, fmt.Errorf("search objects: %w", err)
-	}
-
-	if len(res) == 0 {
-		return nil, nil
-	}
-
-	var (
-		obj    *object.Object
-		number int
-
-		partElementMap = make(map[int][]data.ElementInfo)
-	)
-
-	for _, item := range res {
-		obj, err = n.objectHead(ctx, bktInfo, item.ID)
-		if err != nil {
-			return nil, fmt.Errorf("get multipart %s object: %w", uploadID, err)
-		}
-
-		element := data.ElementInfo{
-			ID:         item.ID,
-			Attributes: make(map[string]string, len(obj.Attributes())),
-			Size:       int64(obj.PayloadSize()),
-		}
-
-		for _, attr := range obj.Attributes() {
-			element.Attributes[attr.Key()] = attr.Value()
-		}
-
-		payloadChecksum, _ := obj.PayloadChecksum()
-		element.Attributes[object.FilterPayloadChecksum] = hex.EncodeToString(payloadChecksum.Value())
-
-		if number, err = strconv.Atoi(element.Attributes[s3headers.MultipartPartNumber]); err != nil {
-			return nil, fmt.Errorf("convert multipart %s number %s: %w", uploadID, element.Attributes[s3headers.MultipartPartNumber], err)
-		}
-
-		if _, ok := partElementMap[number]; !ok {
-			partElementMap[number] = make([]data.ElementInfo, 0)
-		}
-
-		partElementMap[number] = append(partElementMap[number], element)
-	}
-
-	parts := make([]*data.PartInfo, 0, len(partElementMap))
-
-	for partNumber, elements := range partElementMap {
-		partInfo, err := convertElementsToPartInfo(uploadID, partNumber, elements)
-		if err != nil {
-			return nil, err
-		}
-
-		parts = append(parts, &partInfo)
-	}
-
-	slices.SortFunc(parts, data.SortPartInfo)
-
-	return parts, nil
-}
-
-func (n *layer) reUploadFollowingParts(ctx context.Context, uploadParams UploadPartParams, partID int, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
-	parts, err := n.multipartMetaGetPartsAfter(ctx, bktInfo, multipartInfo.UploadID, partID)
-	if err != nil {
-		// nothing to re-upload.
-		if errors.Is(err, ErrPartListIsEmpty) {
-			return nil
-		}
-
-		return fmt.Errorf("get parts after: %w", err)
-	}
-
-	for _, part := range parts {
-		uploadParams.PartNumber = part.Number
-
-		if err = n.reUploadPart(ctx, uploadParams, part.OID, bktInfo, multipartInfo); err != nil {
-			return fmt.Errorf("reupload number=%d: %w", part.Number, err)
-		}
-	}
-
-	return nil
-}
-
-func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams, id oid.ID, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
+func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams, prevPartNumber int, id oid.ID, bktInfo *data.BucketInfo, multipartInfo *data.MultipartInfo) error {
 	obj, pld, err := n.initObjectReader(ctx, getParams{bktInfo: bktInfo, oid: id})
 	if err != nil {
 		return fmt.Errorf("get id=%s: %w", id.String(), err)
@@ -1179,7 +1080,7 @@ func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams,
 	uploadParams.Reader = pld
 
 	n.log.Debug("reUploadPart", zap.String("oid", id.String()), zap.Int("part", uploadParams.PartNumber), zap.Uint64("payload size", obj.PayloadSize()))
-	if _, err = n.uploadPart(ctx, multipartInfo, &uploadParams); err != nil {
+	if _, err = n.uploadPart(ctx, multipartInfo, &uploadParams, prevPartNumber); err != nil {
 		return fmt.Errorf("upload id=%s: %w", id.String(), err)
 	}
 
@@ -1235,7 +1136,7 @@ func (n *layer) UploadPartCopy(ctx context.Context, p *UploadCopyParams) (*data.
 		Reader:     pr,
 	}
 
-	objInfo, err := n.uploadPart(ctx, multipartInfo, params)
+	objInfo, err := n.uploadPart(ctx, multipartInfo, params, p.PartNumber-1)
 	if err != nil {
 		return nil, fmt.Errorf("upload part: %w", err)
 	}
@@ -1248,11 +1149,6 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		if p.Parts[i].PartNumber <= p.Parts[i-1].PartNumber {
 			return nil, nil, s3errors.GetAPIError(s3errors.ErrInvalidPartOrder)
 		}
-	}
-
-	partNumber, err := n.getFirstArbitraryPart(ctx, p.Info.UploadID, p.Info.Bkt)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get first arbitrary part: %w", err)
 	}
 
 	// Take current multipart state.
@@ -1275,28 +1171,55 @@ func (n *layer) CompleteMultipartUpload(ctx context.Context, p *CompleteMultipar
 		return &UploadData{}, extObjInfo, nil
 	}
 
-	multipartInfo, err := n.readMultipartInfoObject(ctx, p.Info.Bkt, p.Info.UploadID, infoID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// We need to fix Split.
-	if partNumber > 0 {
-		n.log.Debug("split fix required", zap.String("uploadID", p.Info.UploadID))
-
-		var uploadPartParams = UploadPartParams{Info: p.Info}
-
-		// We should take the part which broke the multipart upload sequence and re-upload all parts including this one.
-		// This step rebuilds and recalculates Split chain and calculates the total object hash.
-		if err = n.reUploadFollowingParts(ctx, uploadPartParams, int(partNumber-1), p.Info.Bkt, multipartInfo); err != nil {
-			return nil, nil, fmt.Errorf("reupload following parts: %w", err)
-		}
-	}
-
-	// Some actions above could change the multipart state, we need to take actual one.
 	multipartInfo, partsInfo, err := n.getUploadParts(ctx, p.Info)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Validate the requested parts before any changes of the multipart state.
+	for i, part := range p.Parts {
+		partInfo := partsInfo[part.PartNumber]
+		if partInfo == nil || part.ETag != partInfo.ETag {
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrInvalidPart)
+		}
+		// for the last part we have no minimum size limit
+		if i != len(p.Parts)-1 && partInfo.Size < uploadMinSize {
+			return nil, nil, s3errors.GetAPIError(s3errors.ErrEntityTooSmall)
+		}
+	}
+
+	// Each part is chained to the part with the previous number at upload time, but the object consists of
+	// the requested parts only. The first part which doesn't follow the previous requested one (it was
+	// uploaded out of sequence or there is a gap in requested numbers) and all the next requested parts are
+	// re-uploaded. This step rebuilds and recalculates Split chain and calculates the total object hash.
+	var (
+		uploadPartParams = UploadPartParams{Info: p.Info}
+		prevPart         = partsInfo[0]
+		reUploaded       bool
+	)
+
+	for _, part := range p.Parts {
+		partInfo := partsInfo[part.PartNumber]
+
+		if reUploaded || len(partInfo.MultipartHash) == 0 || partInfo.PreviousID != prevPart.OID {
+			n.log.Debug("split fix required", zap.String("uploadID", p.Info.UploadID), zap.Int("part", part.PartNumber))
+
+			uploadPartParams.PartNumber = part.PartNumber
+			if err = n.reUploadPart(ctx, uploadPartParams, prevPart.Number, partInfo.OID, p.Info.Bkt, multipartInfo); err != nil {
+				return nil, nil, fmt.Errorf("reupload number=%d: %w", part.PartNumber, err)
+			}
+
+			reUploaded = true
+		}
+
+		prevPart = partInfo
+	}
+
+	// Some actions above could change the multipart state, we need to take actual one.
+	if reUploaded {
+		if multipartInfo, partsInfo, err = n.getUploadParts(ctx, p.Info); err != nil {
+			return nil, nil, err
+		}
 	}
 	if len(partsInfo) < len(p.Parts) {
 		n.log.Debug(
@@ -2109,47 +2032,4 @@ func (n *layer) uploadPartAsSlot(ctx context.Context, params uploadPartAsSlotPar
 	}
 
 	return &objInfo, nil
-}
-
-func (n *layer) getFirstArbitraryPart(ctx context.Context, uploadID string, bucketInfo *data.BucketInfo) (int64, error) {
-	var filters object.SearchFilters
-	filters.AddFilter(s3headers.MultipartUpload, uploadID, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MetaType, s3headers.TypeMultipartPart, object.MatchStringEqual)
-	filters.AddFilter(s3headers.MultipartHash, "", object.MatchNotPresent)
-
-	var opts client.SearchObjectsOptions
-	attachTokenToParams(ctx, bucketInfo.Owner, &opts)
-
-	res, err := n.neoFS.SearchObjectsV2(ctx, bucketInfo.CID, filters, []string{
-		s3headers.MultipartUpload,
-		s3headers.MultipartPartNumber,
-	}, opts)
-	if err != nil {
-		return 0, fmt.Errorf("search objects: %w", err)
-	}
-
-	if len(res) == 0 {
-		return 0, nil
-	}
-
-	var (
-		minNumer  int64
-		tmpNumber int64
-	)
-
-	minNumer, err = strconv.ParseInt(res[0].Attributes[1], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse int %s: %w", res[0].Attributes[1], err)
-	}
-
-	for i := 1; i < len(res); i++ {
-		tmpNumber, err = strconv.ParseInt(res[i].Attributes[1], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("parse int %s: %w", res[i].Attributes[1], err)
-		}
-
-		minNumer = min(tmpNumber, minNumer)
-	}
-
-	return minNumer, nil
 }
