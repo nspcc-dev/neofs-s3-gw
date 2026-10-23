@@ -372,7 +372,7 @@ cache:
     lifetime: 1m
     size: 100
   names:
-    lifetime: 1m
+    lifetime: 5s
     size: 1000
   buckets:
     lifetime: 1m
@@ -392,7 +392,7 @@ cache:
 |-----------------|-----------------------------------|-----------------------------------|----------------------------------------------------------------------------------------|
 | `objects`       | [Cache config](#cache-subsection) | `lifetime: 5m`<br>`size: 1000000` | Cache for objects (NeoFS headers).                                                     |
 | `list`          | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 100000` | Cache which keeps lists of objects in buckets.                                         |
-| `names`         | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 10000`  | Cache which contains mapping of nice name to object addresses.                         |
+| `names`         | [Cache config](#cache-subsection) | `lifetime: 5s`<br>`size: 10000`   | Cache of current version lookups by object name (object ID, tags and lock info) used by GET and HEAD.                         |
 | `buckets`       | [Cache config](#cache-subsection) | `lifetime: 60s`<br>`size: 1000`   | Cache which contains mapping of bucket name to bucket info.                            |
 | `system`        | [Cache config](#cache-subsection) | `lifetime: 5m`<br>`size: 10000`   | Cache for system objects in a bucket: bucket settings, notification configuration etc. |
 | `accessbox`     | [Cache config](#cache-subsection) | `lifetime: 10m`<br>`size: 100`    | Cache which stores access box with tokens by its address.                              |
