@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/url"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
@@ -61,4 +62,51 @@ func TestCompleteMultipartUploadRepeat(t *testing.T) {
 		hc.Handler().CompleteMultipartUploadHandler(w, r)
 		assertS3Error(t, w, s3errors.GetAPIError(s3errors.ErrNoSuchUpload))
 	})
+}
+
+func TestCompleteMultipartUploadPartsSubset(t *testing.T) {
+	const partSize = 5 * 1048576
+
+	hc := prepareHandlerContext(t)
+
+	bktName := "bucket-for-parts-subset"
+	createTestBucket(hc, bktName)
+
+	for _, tc := range []struct {
+		name      string
+		uploaded  []int
+		completed []int
+	}{
+		{name: "gaps", uploaded: []int{1, 5, 14}, completed: []int{1, 5, 14}},
+		{name: "subset", uploaded: []int{1, 2, 3, 4, 5}, completed: []int{1, 3, 5}},
+		{name: "out of order upload", uploaded: []int{3, 1, 2}, completed: []int{1, 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			objName := "object-" + tc.name
+			multipartInfo := createMultipartUpload(hc, bktName, objName, map[string]string{})
+
+			etags := make(map[int]string, len(tc.uploaded))
+			payloads := make(map[int][]byte, len(tc.uploaded))
+			for _, num := range tc.uploaded {
+				etags[num], payloads[num] = uploadPart(hc, bktName, objName, multipartInfo.UploadID, num, partSize+num)
+			}
+
+			var (
+				complete CompleteMultipartUpload
+				expected []byte
+			)
+			for _, num := range tc.completed {
+				complete.Parts = append(complete.Parts, &layer.CompletedPart{ETag: etags[num], PartNumber: num})
+				expected = slices.Concat(expected, payloads[num])
+			}
+
+			query := make(url.Values)
+			query.Set(uploadIDQuery, multipartInfo.UploadID)
+			w, r := prepareTestFullRequest(hc, bktName, objName, query, &complete)
+			hc.Handler().CompleteMultipartUploadHandler(w, r)
+			assertStatus(t, w, http.StatusOK)
+
+			require.Equal(t, expected, getObjectRange(t, hc, bktName, objName, 0, len(expected)-1))
+		})
+	}
 }
