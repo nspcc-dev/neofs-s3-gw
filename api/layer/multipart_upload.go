@@ -1903,7 +1903,7 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 		// If an EOF happens after reading fewer than min bytes, ReadAtLeast returns ErrUnexpectedEOF.
 		// We have the whole payload.
 		if !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
-			return id, nil, fmt.Errorf("read payload chunk: %w", err)
+			return id, nil, fmt.Errorf("read payload chunk: %w", readErr)
 		}
 
 		break
