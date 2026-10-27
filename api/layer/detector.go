@@ -46,11 +46,11 @@ func newDetector(reader io.Reader) *detector {
 
 func (d *detector) Detect() (string, error) {
 	n, err := d.Read(d.data)
+	d.data = d.data[:n]
 	if err != nil && !errors.Is(err, io.EOF) {
 		d.err = err
 		return "", err
 	}
-	d.data = d.data[:n]
 	return http.DetectContentType(d.data), nil
 }
 
