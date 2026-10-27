@@ -250,6 +250,9 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 	// Attach user authentication for all S3 routes.
 	AttachUserAuth(api, center, log)
 
+	// Count request bodies after authentication unwrapped them.
+	api.Use(countBody)
+
 	buckets := make([]*mux.Router, 0, len(domains)+1)
 	buckets = append(buckets, api.PathPrefix("/{bucket}").Subrouter())
 

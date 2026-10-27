@@ -198,6 +198,8 @@ func (h *handler) UploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.ExpectBodyLength(r, contentLength)
+
 	p := &layer.UploadPartParams{
 		Info: &layer.UploadInfoParams{
 			UploadID: uploadID,
