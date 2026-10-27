@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -21,11 +20,6 @@ type (
 
 		totalInputBytes  atomic.Uint64
 		totalOutputBytes atomic.Uint64
-	}
-
-	readCounter struct {
-		io.ReadCloser
-		countBytes uint64
 	}
 
 	writeCounter struct {
@@ -110,10 +104,7 @@ func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		httpStatsMetric.currentS3Requests[api].Add(1)
 		defer httpStatsMetric.currentS3Requests[api].Add(math.MaxUint64)
 
-		in := &readCounter{ReadCloser: r.Body}
 		out := &writeCounter{ResponseWriter: w}
-
-		r.Body = in
 
 		statsWriter := &responseWrapper{
 			ResponseWriter: out,
@@ -129,9 +120,13 @@ func APIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		httpStatsMetric.updateStats(api, statsWriter, r, durationSecs)
 
-		httpStatsMetric.totalInputBytes.Add(in.countBytes)
 		httpStatsMetric.totalOutputBytes.Add(out.countBytes)
 	}
+}
+
+// AddInputBytes accounts n bytes of request bodies read.
+func AddInputBytes(n uint64) {
+	httpStatsMetric.totalInputBytes.Add(n)
 }
 
 func (st *HTTPStats) getInputBytes() uint64 {
@@ -190,11 +185,5 @@ func (w *responseWrapper) Flush() {
 func (w *writeCounter) Write(p []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(p)
 	atomic.AddUint64(&w.countBytes, uint64(n))
-	return n, err
-}
-
-func (r *readCounter) Read(p []byte) (int, error) {
-	n, err := r.ReadCloser.Read(p)
-	atomic.AddUint64(&r.countBytes, uint64(n))
 	return n, err
 }

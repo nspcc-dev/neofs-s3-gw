@@ -63,6 +63,10 @@ func transformToS3Error(err error) error {
 		return s3errors.GetAPIError(s3errors.ErrInvalidArgument)
 	}
 
+	if errors.Is(err, api.ErrBodyLengthMismatch) {
+		return s3errors.GetAPIError(s3errors.ErrIncompleteBody)
+	}
+
 	if errors.Is(err, layer.ErrTooManyObjectForDeletion) {
 		return s3errors.GetAPIError(s3errors.ErrBadRequest)
 	}

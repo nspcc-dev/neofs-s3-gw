@@ -328,6 +328,8 @@ func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attem
 		return nil, nil, false
 	}
 
+	api.ExpectBodyLength(r, cl)
+
 	var payload io.Reader = r.Body
 	if contentMD5 != nil {
 		payload = newMD5Reader(payload, contentMD5)
