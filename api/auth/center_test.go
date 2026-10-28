@@ -27,9 +27,7 @@ import (
 func TestAuthHeaderParse(t *testing.T) {
 	defaultHeader := "AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=2811ccb9e242f41426738fb1f"
 
-	center := &center{
-		reg: NewRegexpMatcher(authorizationFieldRegexp),
-	}
+	center := &center{}
 
 	for _, tc := range []struct {
 		header   string
@@ -56,6 +54,72 @@ func TestAuthHeaderParse(t *testing.T) {
 		{
 			header:   strings.ReplaceAll(defaultHeader, "oid0cid", "oidcid"),
 			err:      s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID),
+			expected: nil,
+		},
+		{
+			header: strings.ReplaceAll(defaultHeader, ", ", ","),
+			err:    nil,
+			expected: &authHeader{
+				AccessKeyID:  "oid0cid",
+				Service:      "s3",
+				Region:       "us-east-1",
+				SignatureV4:  "2811ccb9e242f41426738fb1f",
+				SignedFields: []string{"host", "x-amz-content-sha256", "x-amz-date"},
+				Date:         "20210809",
+			},
+		},
+		{
+			header: strings.ReplaceAll(defaultHeader, "us-east-1", ""),
+			err:    nil,
+			expected: &authHeader{
+				AccessKeyID:  "oid0cid",
+				Service:      "s3",
+				Region:       "",
+				SignatureV4:  "2811ccb9e242f41426738fb1f",
+				SignedFields: []string{"host", "x-amz-content-sha256", "x-amz-date"},
+				Date:         "20210809",
+			},
+		},
+		{
+			header:   strings.ReplaceAll(defaultHeader, "aws4_request", "aws4"),
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
+			expected: nil,
+		},
+		{
+			header:   strings.ReplaceAll(defaultHeader, "SignedHeaders=host;x-amz-content-sha256;x-amz-date, ", ""),
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
+			expected: nil,
+		},
+		{
+			header: "aws4-hmac-sha256 signature=2811ccb9e242f41426738fb1f, credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=\"host;x-amz-content-sha256;x-amz-date\"",
+			err:    nil,
+			expected: &authHeader{
+				AccessKeyID:  "oid0cid",
+				Service:      "s3",
+				Region:       "us-east-1",
+				SignatureV4:  "2811ccb9e242f41426738fb1f",
+				SignedFields: []string{"host", "x-amz-content-sha256", "x-amz-date"},
+				Date:         "20210809",
+			},
+		},
+		{
+			header:   defaultHeader + ", Signature=2811ccb9e242f41426738fb1f",
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
+			expected: nil,
+		},
+		{
+			header:   strings.ReplaceAll(defaultHeader, "Signature=", "Signature=abc "),
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
+			expected: nil,
+		},
+		{
+			header:   strings.ReplaceAll(defaultHeader, "/s3/", "/s3/extra/"),
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
+			expected: nil,
+		},
+		{
+			header:   "Bearer token",
+			err:      s3errors.GetAPIError(s3errors.ErrCredMalformed),
 			expected: nil,
 		},
 	} {
@@ -420,8 +484,7 @@ func TestAwsEncodedWithRequest(t *testing.T) {
 	err = signer.SignHTTP(ctx, awsCreds, req, hex.EncodeToString(h.Sum(nil)), "s3", "us-east-1", ts)
 	require.NoError(t, err)
 
-	reg := NewRegexpMatcher(authorizationFieldRegexp)
-	signature := reg.GetSubmatches(req.Header.Get(AuthorizationHdr))["v4_signature"]
+	signature := signatureFromAuthHeader(req.Header.Get(AuthorizationHdr))
 
 	seedSignature, err := hex.DecodeString(signature)
 	require.NoError(t, err)
@@ -519,4 +582,13 @@ func TestAwsEncodedChunkReaderWithTrailer(t *testing.T) {
 
 		require.Equal(t, []byte(objectPayload), payload2.Bytes())
 	})
+}
+
+func TestSignatureFromAuthHeader(t *testing.T) {
+	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=2811ccb9e242f41426738fb1f"))
+	require.Equal(t, "", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host"))
+	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader("AWS4-HMAC-SHA256 Signature=2811ccb9e242f41426738fb1f, Credential=oid0cid/20210809/us-east-1/s3/aws4_request, SignedHeaders=host"))
+	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader(`AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request,SignedHeaders=host, signature = "2811ccb9e242f41426738fb1f" `))
+	require.Equal(t, "", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, XSignature=2811ccb9e242f41426738fb1f"))
+	require.Equal(t, "", signatureFromAuthHeader("Basic Signature=2811ccb9e242f41426738fb1f"))
 }

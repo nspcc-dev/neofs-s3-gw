@@ -65,6 +65,7 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 	}
 
 	n.cache.PutTagging(n.Owner(ctx), objectTaggingCacheKey(p.ObjectVersion), p.TagSet)
+	n.cache.DeleteObjectName(p.ObjectVersion.BktInfo.CID, p.ObjectVersion.ObjectName)
 
 	return nil
 }
@@ -259,6 +260,7 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 	}
 
 	n.cache.DeleteTagging(objectTaggingCacheKey(p))
+	n.cache.DeleteObjectName(p.BktInfo.CID, p.ObjectName)
 
 	// Put an empty tag list to override tags inside the object itself.
 	putObjectTaggingParams := PutObjectTaggingParams{

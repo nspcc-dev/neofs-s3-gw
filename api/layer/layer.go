@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -691,6 +692,25 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		header         *object.Object
 	)
 
+	if isEmptyVersion {
+		if cached := n.cache.GetObjectByName(n.Owner(ctx), p.BktInfo.CID, p.Object); cached != nil {
+			if p.IsBucketVersioningEnabled {
+				p.VersionID = cached.ID.String()
+			}
+
+			tagSet = maps.Clone(cached.TagSet)
+			if tagSet == nil {
+				tagSet = make(map[string]string)
+			}
+
+			return &data.ComprehensiveObjectInfo{
+				ID:       cached.ID,
+				TagSet:   tagSet,
+				LockInfo: cached.LockInfo,
+			}, nil
+		}
+	}
+
 	if isEmptyVersion || isNullVersion {
 		versions, tagsObjectOID, lockInfo, err = n.comprehensiveSearchAllVersionsInNeoFS(ctx, p.BktInfo, p.Object)
 		if err != nil {
@@ -764,6 +784,14 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 		if err != nil {
 			return nil, fmt.Errorf("object info from meta: %w", err)
 		}
+	}
+
+	if isEmptyVersion {
+		n.cache.PutObjectByName(n.Owner(ctx), p.BktInfo.CID, p.Object, &data.ComprehensiveObjectInfo{
+			ID:       id,
+			TagSet:   maps.Clone(tagSet),
+			LockInfo: lockInfo,
+		})
 	}
 
 	return &data.ComprehensiveObjectInfo{
@@ -891,7 +919,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 			return obj
 		}
 
-		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
+		n.cache.DeleteObjectName(bkt.CID, obj.Name)
 
 		ov := ObjectVersion{
 			BktInfo:    bkt,
@@ -919,7 +947,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		markerOID, obj.Error = n.putDeleteMarker(ctx, bkt, obj.Name)
 		obj.DeleteMarkVersion = markerOID.EncodeToString()
 
-		n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
+		n.cache.DeleteObjectName(bkt.CID, obj.Name)
 		return obj
 	}
 
@@ -955,7 +983,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 		// Return unversioned ID.
 		obj.VersionID = data.UnversionedObjectVersionID
 	}
-	n.cache.DeleteObjectName(bkt.CID, bkt.Name, obj.Name)
+	n.cache.DeleteObjectName(bkt.CID, obj.Name)
 
 	return obj
 }
