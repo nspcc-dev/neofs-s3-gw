@@ -631,7 +631,6 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 			s3headers.AttributeDeleteMarker,
 			s3headers.MetaType,
 			object.AttributeAssociatedObject,
-			object.AttributeExpirationEpoch,
 			s3headers.AttributeLockMeta,
 		}
 
@@ -700,21 +699,14 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 			}
 		default:
 			// lock meta object.
-			if item.Attributes[7] != "" {
+			if item.Attributes[6] != "" {
 				var lsr = locksSearchResult{
 					ID:                item.ID,
 					FilePath:          item.Attributes[0],
 					CreationTimestamp: psr.CreationTimestamp,
 				}
 
-				if item.Attributes[6] != "" {
-					lsr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[6], 10, 64)
-					if err != nil {
-						return nil, oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[6], err)
-					}
-				}
-
-				if err = extractLockDataFromAttrubute(&lsr, item.Attributes[7]); err != nil {
+				if err = extractLockDataFromAttrubute(&lsr, item.Attributes[6]); err != nil {
 					return nil, oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
 				}
 
@@ -757,7 +749,6 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 			object.AttributeFilePath,
 			object.AttributeTimestamp,
 			s3headers.MetaType,
-			object.AttributeExpirationEpoch,
 			s3headers.AttributeLockMeta,
 		}
 
@@ -812,20 +803,13 @@ func (n *layer) searchTagsAndLocksInNeoFS(ctx context.Context, bkt *data.BucketI
 			}
 		default:
 			// it is a regular object, skip it.
-			if item.Attributes[4] == "" {
+			if item.Attributes[3] == "" {
 				continue
 			}
 
 			// lock meta object.
-			if err = extractLockDataFromAttrubute(&psr, item.Attributes[4]); err != nil {
+			if err = extractLockDataFromAttrubute(&psr, item.Attributes[3]); err != nil {
 				return oid.ID{}, nil, fmt.Errorf("extract lock data from attrubute: %w", err)
-			}
-
-			if item.Attributes[3] != "" {
-				psr.ExpirationEpoch, err = strconv.ParseUint(item.Attributes[3], 10, 64)
-				if err != nil {
-					return oid.ID{}, nil, fmt.Errorf("invalid expiration epoch %s: %w", item.Attributes[3], err)
-				}
 			}
 
 			lockSearchResults = append(lockSearchResults, psr)

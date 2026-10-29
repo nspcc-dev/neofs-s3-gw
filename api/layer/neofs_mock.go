@@ -402,6 +402,12 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 	obj.SetCreationEpoch(t.currentEpoch)
 	t.currentEpoch++
 
+	if !prm.ExpirationTime.IsZero() {
+		if err := obj.SetExpirationTime(prm.ExpirationTime); err != nil {
+			return oid.ID{}, fmt.Errorf("set expiration time: %w", err)
+		}
+	}
+
 	if prm.Multipart != nil {
 		if prm.Multipart.SplitPreviousID != nil {
 			obj.SetPreviousID(*prm.Multipart.SplitPreviousID)
@@ -513,10 +519,6 @@ func (t *TestNeoFS) DeleteObject(ctx context.Context, prm PrmObjectDelete) error
 	}
 
 	return nil
-}
-
-func (t *TestNeoFS) TimeToEpoch(_ context.Context, now, futureTime time.Time) (uint64, uint64, error) {
-	return t.currentEpoch, t.currentEpoch + uint64(futureTime.Sub(now).Seconds()), nil
 }
 
 func (t *TestNeoFS) MaxObjectSize() int64 {

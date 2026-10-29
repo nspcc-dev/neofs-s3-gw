@@ -66,14 +66,6 @@ type NeoFS interface {
 	// prevented the container from being created.
 	CreateContainer(context.Context, PrmContainerCreate) (cid.ID, error)
 
-	// TimeToEpoch computes the current epoch and the epoch that corresponds to the provided time.
-	// Note:
-	// * time must be in the future
-	// * time will be ceil rounded to match epoch
-	//
-	// It returns any error encountered which prevented computing epochs.
-	TimeToEpoch(context.Context, time.Time) (uint64, uint64, error)
-
 	// SetContainerEACL updates container EACL.
 	SetContainerEACL(ctx context.Context, table eacl.Table, sessionTokenV2 *session2.Token) error
 
@@ -123,11 +115,8 @@ type (
 	}
 )
 
-// lifetimeOptions holds NeoFS epochs, iat -- epoch which the token was issued at, exp -- epoch when the token expires.
+// lifetimeOptions holds token lifetime, IssuedAt -- time the token was issued at, ExpireAt -- time when the token expires.
 type lifetimeOptions struct {
-	Iat uint64
-	Exp uint64
-
 	IssuedAt time.Time
 	ExpireAt time.Time
 }
@@ -226,11 +215,6 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 		return fmt.Errorf("prepare policies: %w", err)
 	}
 
-	lifetime.Iat, lifetime.Exp, err = a.neoFS.TimeToEpoch(ctx, time.Now().Add(options.Lifetime))
-	if err != nil {
-		return fmt.Errorf("fetch time to epoch: %w", err)
-	}
-
 	var (
 		secret          = NewSecret()
 		secretAccessKey = hex.EncodeToString(secret)
@@ -264,7 +248,7 @@ func (a *Agent) IssueSecret(ctx context.Context, w io.Writer, options *IssueSecr
 
 	addr, err := tokens.
 		New(a.neoFS, nil, cache.DefaultAccessBoxConfig(a.log), contracts.NewNoOpNNSResolver()).
-		Put(ctx, id, idOwner, box, lifetime.Exp, options.GatesPublicKeys...)
+		Put(ctx, id, idOwner, box, lifetime.ExpireAt, options.GatesPublicKeys...)
 	if err != nil {
 		return fmt.Errorf("failed to put bearer token: %w", err)
 	}

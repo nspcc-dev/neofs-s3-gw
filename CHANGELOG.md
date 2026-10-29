@@ -16,6 +16,7 @@ This document outlines major changes between releases.
 - Unset known payload length of uploaded objects (#1382)
 
 ### Updated
+- github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.23 => v1.0.0-rc.24 (#1383)
 
 ### Removed
 - RANGE verb support in session tokens and EACL rules (#1369)
