@@ -90,6 +90,31 @@ func (n *layer) containerInfo(ctx context.Context, idCnr cid.ID, namespace strin
 	return info, nil
 }
 
+func (n *layer) cacheBucketWithAttribute(bktInfo *data.BucketInfo, attributeName, value string) {
+	info := *bktInfo
+	info.Revision++
+	info.CORS = nil
+	info.Tags = nil
+
+	switch attributeName {
+	case attributeCors:
+		info.AttributeCors = value
+	case attributeTags:
+		info.AttributeTags = value
+	case attributeSettings:
+		info.AttributeSettings = value
+	case attributeNotifications:
+		info.AttributeNotifications = value
+	}
+
+	if err := info.ParseSettings(); err != nil {
+		n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+		return
+	}
+
+	n.cache.PutBucket(&info)
+}
+
 func (n *layer) dropBucketCacheOnRevisionMismatch(bkt *data.BucketInfo, err error) {
 	if !errors.Is(err, apistatus.ErrContainerRevisionMismatch) {
 		return

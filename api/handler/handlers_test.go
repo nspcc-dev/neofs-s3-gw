@@ -176,6 +176,11 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 	err = hc.Layer().PutBucketACL(hc.Context(), &p)
 	require.NoError(hc.t, err)
 
+	// The eACL change moved the container to the next revision, the settings
+	// update must build on it the way a new request would.
+	bktInfo, err = hc.Layer().GetBucketInfo(hc.Context(), bktName)
+	require.NoError(hc.t, err)
+
 	sp := &layer.PutSettingsParams{
 		BktInfo: bktInfo,
 		Settings: &data.BucketSettings{
@@ -187,7 +192,7 @@ func createTestBucketWithLock(hc *handlerContext, bktName string, conf *data.Obj
 	err = hc.Layer().PutBucketSettings(hc.Context(), sp)
 	require.NoError(hc.t, err)
 
-	// Writing invalidates the cached settings, we need to get refreshed.
+	// Writing replaced the cached bucket info, the local copy needs refreshing.
 	bktInfo, err = hc.Layer().GetBucketInfo(hc.Context(), bktName)
 	require.NoError(hc.t, err)
 

@@ -290,11 +290,9 @@ func (n *layer) PutBucketTagging(ctx context.Context, bktInfo *data.BucketInfo, 
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, bktInfo.CID, attributeTags, tagSet, sessionTokenV2); err != nil {
+	if err = n.storeAttribute(ctx, bktInfo, attributeTags, tagSet, sessionTokenV2); err != nil {
 		return fmt.Errorf("couldn't store bucket tags: %w", err)
 	}
-
-	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
 
 	return nil
 }
@@ -307,10 +305,11 @@ func (n *layer) DeleteBucketTagging(ctx context.Context, bktInfo *data.BucketInf
 	}
 
 	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeTags, sessionTokenV2); err != nil {
+		n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
 		return fmt.Errorf("couldn't remove bucket tags: %w", err)
 	}
 
-	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+	n.cacheBucketWithAttribute(bktInfo, attributeTags, "")
 
 	return nil
 }
