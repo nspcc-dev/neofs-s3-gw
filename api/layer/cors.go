@@ -11,7 +11,6 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
 )
 
@@ -26,15 +25,18 @@ const (
 
 var supportedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "POST": {}, "PUT": {}, "DELETE": {}}
 
-func (n *layer) storeAttribute(ctx context.Context, cID cid.ID, attributeName string, payload any, sessionTokenV2 *session.Token) error {
+func (n *layer) storeAttribute(ctx context.Context, bktInfo *data.BucketInfo, attributeName string, payload any, sessionTokenV2 *session.Token) error {
 	pl, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	if err = n.neoFS.SetContainerAttribute(ctx, cID, attributeName, string(pl), sessionTokenV2); err != nil {
-		return fmt.Errorf("could't store %s %s: %w", cID.EncodeToString(), attributeName, err)
+	if err = n.neoFS.SetContainerAttribute(ctx, bktInfo.CID, attributeName, string(pl), sessionTokenV2); err != nil {
+		n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+		return fmt.Errorf("could't store %s %s: %w", bktInfo.CID.EncodeToString(), attributeName, err)
 	}
+
+	n.cacheBucketWithAttribute(bktInfo, attributeName, string(pl))
 
 	return nil
 }
@@ -64,11 +66,9 @@ func (n *layer) PutBucketCORS(ctx context.Context, p *PutCORSParams) error {
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeCors, cors.CORSRules, sessionTokenV2); err != nil {
+	if err = n.storeAttribute(ctx, p.BktInfo, attributeCors, cors.CORSRules, sessionTokenV2); err != nil {
 		return fmt.Errorf("store bucket CORS: %w", err)
 	}
-
-	n.cache.DeleteBucket(p.BktInfo.Name, p.BktInfo.Namespace)
 
 	return nil
 }
@@ -89,10 +89,11 @@ func (n *layer) DeleteBucketCORS(ctx context.Context, bktInfo *data.BucketInfo) 
 	}
 
 	if err = n.neoFS.RemoveContainerAttribute(ctx, bktInfo.CID, attributeCors, sessionTokenV2); err != nil {
+		n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
 		return fmt.Errorf("remove bucket CORS: %w", err)
 	}
 
-	n.cache.DeleteBucket(bktInfo.Name, bktInfo.Namespace)
+	n.cacheBucketWithAttribute(bktInfo, attributeCors, "")
 
 	return nil
 }

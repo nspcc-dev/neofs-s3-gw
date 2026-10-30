@@ -227,11 +227,9 @@ func (n *layer) PutBucketSettings(ctx context.Context, p *PutSettingsParams) err
 		sessionTokenV2 = boxData.Gate.SessionTokenV2
 	}
 
-	if err = n.storeAttribute(ctx, p.BktInfo.CID, attributeSettings, p.Settings, sessionTokenV2); err != nil {
+	if err = n.storeAttribute(ctx, p.BktInfo, attributeSettings, p.Settings, sessionTokenV2); err != nil {
 		return fmt.Errorf("store bucket settings: %w", err)
 	}
-
-	n.cache.DeleteBucket(p.BktInfo.Name, p.BktInfo.Namespace)
 
 	return nil
 }
