@@ -7,22 +7,59 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
-- Container owner allow rules are no longer added to EACL (#1368)
 
 ### Fixed
+
+### Updated
+
+### Removed
+
+### Upgrading from 0.48.0
+
+## [0.48.0] - 2026-10-30
+
+### Added
+- Support for If-Match and If-None-Match in PutObject with ETag lists and weak Etags (#1374, #1379)
+
+### Changed
+- Container owner allow rules are no longer added to EACL (#1368)
+- Improved GET performance (#1386)
+- Time-based expirations used for all objects (#1385)
+
+### Fixed
+- Content-length-range policy handling (#1370)
+- PostObject not handling file name properly wrt policy check (#1370)
+- Invalid policy resulting in 500 or 403 result instead of 400 (#1370)
+- Case-sensitive policy operator matching (#1370)
+- Ignoring conditions on missing fields in PostObject (#1370)
+- Accepting object POST without a key (#1370)
+- Accepting object POST without a signature (#1370)
+- Handling expired POST policy (#1370)
+- Object POST redirection (#1370)
+- Object listing pagination with delimiter (#1374)
+- Support for empty tags (#1374)
+- Tagging actions in bucket policy (#1374)
+- Retention extension requiring bypass (#1374)
+- Missing token for non-owner requests (#1374)
+- Multipart objects not using nonces (#1374)
+- Handling of repeated CompleteMultipartUpload (#1374)
 - RPC endpoints unavailable at startup are used once they become available (#1360)
-- ETag lists and weak ETags in PutObject If-Match and If-None-Match headers (#1379)
 - PutObject ignoring Content-MD5 header (#1376)
+- Support for gaps in CompleteMultipartUpload (#1387)
 - Unset known payload length of uploaded objects (#1382)
+- Payload length check (#1388)
+- Stale container used after attribute changes (#1391)
 
 ### Updated
 - github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.23 => v1.0.0-rc.24 (#1383)
 - github.com/nspcc-dev/neofs-contract 0.27.0 => 0.28.0 (#1392)
+- github.com/labstack/echo/v4 from 4.15.4 to 4.16.1 (#1389)
 
 ### Removed
 - RANGE verb support in session tokens and EACL rules (#1369)
 
 ### Upgrading from 0.47.0
+This gateway requires NeoFS node 0.58.0.
 
 ## [0.47.0] - 2026-10-01
 
@@ -1151,4 +1188,5 @@ releases.
 [0.45.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.0...v0.45.1
 [0.46.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.1...v0.46.0
 [0.47.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.46.0...v0.47.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.47.0...master
+[0.48.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.47.0...v0.48.0
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.48.0...master
