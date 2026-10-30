@@ -17,6 +17,7 @@ This document outlines major changes between releases.
 
 ### Updated
 - github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.23 => v1.0.0-rc.24 (#1383)
+- github.com/nspcc-dev/neofs-contract 0.27.0 => 0.28.0 (#1392)
 
 ### Removed
 - RANGE verb support in session tokens and EACL rules (#1369)
