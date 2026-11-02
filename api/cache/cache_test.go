@@ -2,6 +2,7 @@ package cache
 
 import (
 	"testing"
+	"time"
 
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
@@ -50,7 +51,9 @@ func TestBucketsCacheType(t *testing.T) {
 
 func TestObjectNamesCacheType(t *testing.T) {
 	logger, observedLog := getObservedLogger()
-	cache := NewObjectsNameCache(DefaultObjectsNameConfig(logger))
+	cfg := DefaultObjectsNameConfig(logger)
+	cfg.Lifetime = time.Minute
+	cache := NewObjectsNameCache(cfg)
 
 	key := "name"
 	info := &data.ComprehensiveObjectInfo{ID: oidtest.ID(), TagSet: map[string]string{"k": "v"}}
@@ -64,6 +67,15 @@ func TestObjectNamesCacheType(t *testing.T) {
 	err = cache.cache.Set(key, "tmp")
 	require.NoError(t, err)
 	assertInvalidCacheEntry(t, cache.Get(key), observedLog)
+}
+
+func TestObjectNamesCacheDisabled(t *testing.T) {
+	cache := NewObjectsNameCache(DefaultObjectsNameConfig(zap.NewNop()))
+	require.False(t, cache.Enabled())
+
+	require.NoError(t, cache.Put("name", &data.ComprehensiveObjectInfo{ID: oidtest.ID()}))
+	require.Nil(t, cache.Get("name"))
+	require.False(t, cache.Delete("name"))
 }
 
 func TestObjectCacheType(t *testing.T) {

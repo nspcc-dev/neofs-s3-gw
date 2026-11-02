@@ -212,7 +212,7 @@ func (n *layer) getTagsFromOriginalObject(ctx context.Context, bktInfo *data.Buc
 func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID) (map[string]string, error) {
 	lastObj, err := n.objectGet(ctx, bktInfo, id)
 	if err != nil {
-		if isErrObjectAlreadyRemoved(err) {
+		if errors.Is(err, apistatus.ErrObjectAlreadyRemoved) {
 			return nil, nil
 		}
 

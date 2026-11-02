@@ -778,7 +778,10 @@ func getCacheOptions(v *viper.Viper, l *zap.Logger) *layer.CachesConfig {
 	cacheCfg.Buckets.Lifetime = getLifetime(v, l, cfgBucketsCacheLifetime, cacheCfg.Buckets.Lifetime)
 	cacheCfg.Buckets.Size = getSize(v, l, cfgBucketsCacheSize, cacheCfg.Buckets.Size)
 
-	cacheCfg.Names.Lifetime = getLifetime(v, l, cfgNamesCacheLifetime, cacheCfg.Names.Lifetime)
+	// Zero lifetime disables the names cache.
+	if !v.IsSet(cfgNamesCacheLifetime) || v.GetDuration(cfgNamesCacheLifetime) != 0 {
+		cacheCfg.Names.Lifetime = getLifetime(v, l, cfgNamesCacheLifetime, cacheCfg.Names.Lifetime)
+	}
 	cacheCfg.Names.Size = getSize(v, l, cfgNamesCacheSize, cacheCfg.Names.Size)
 
 	cacheCfg.System.Lifetime = getLifetime(v, l, cfgSystemCacheLifetime, cacheCfg.System.Lifetime)

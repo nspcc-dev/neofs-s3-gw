@@ -355,3 +355,110 @@ func TestGetObject_noNeoFSSystemAttributes(t *testing.T) {
 		require.False(t, strings.HasPrefix(k, "X-Amz-Meta-__NEOFS__"))
 	}
 }
+
+func getObjectContent(t *testing.T, tc *handlerContext, bktName, objName string) string {
+	w, r := prepareTestRequest(tc, bktName, objName, nil)
+	tc.Handler().GetObjectHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	content, err := io.ReadAll(w.Result().Body)
+	require.NoError(t, err)
+
+	return string(content)
+}
+
+func putObjectVersion(t *testing.T, tc *handlerContext, bktName, objName, content string) string {
+	w, r := prepareTestPayloadRequest(tc, bktName, objName, bytes.NewReader([]byte(content)))
+	tc.Handler().PutObjectHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	return w.Header().Get(api.AmzVersionID)
+}
+
+func TestReadObjectRemovedByAnotherGateway(t *testing.T) {
+	for _, namesCache := range []bool{true, false} {
+		t.Run(fmt.Sprintf("names cache %t", namesCache), func(t *testing.T) {
+			testReadObjectRemovedByAnotherGateway(t, namesCache)
+		})
+	}
+}
+
+func testReadObjectRemovedByAnotherGateway(t *testing.T, namesCache bool) {
+	const objName = "docs/readme.txt"
+
+	prepareGateways := func(t *testing.T) (*handlerContext, *handlerContext) {
+		gwA := prepareHandlerContext(t)
+		if namesCache {
+			enableNamesCache(gwA)
+		}
+
+		return gwA, prepareAnotherGateway(gwA)
+	}
+
+	read := map[string]func(t *testing.T, tc *handlerContext, bktName string, expected string){
+		"get": func(t *testing.T, tc *handlerContext, bktName string, expected string) {
+			require.Equal(t, expected, getObjectContent(t, tc, bktName, objName))
+		},
+		"head": func(t *testing.T, tc *handlerContext, bktName string, expected string) {
+			w, r := prepareTestRequest(tc, bktName, objName, nil)
+			tc.Handler().HeadObjectHandler(w, r)
+			assertStatus(t, w, http.StatusOK)
+			require.Equal(t, strconv.Itoa(len(expected)), w.Header().Get(api.ContentLength))
+		},
+	}
+
+	for name, readFn := range read {
+		t.Run(name+" overwritten in unversioned bucket", func(t *testing.T) {
+			gwA, gwB := prepareGateways(t)
+
+			bktName := "bucket-overwrite-" + name
+			createTestBucket(gwA, bktName)
+
+			putObjectContent(gwA, bktName, objName, "v1")
+			readFn(t, gwB, bktName, "v1") // Caches the name in gwB.
+
+			// Removes the previous version, gwB isn't notified.
+			putObjectContent(gwA, bktName, objName, "second")
+
+			readFn(t, gwB, bktName, "second")
+		})
+
+		t.Run(name+" latest version removed in versioned bucket", func(t *testing.T) {
+			gwA, gwB := prepareGateways(t)
+
+			bktName := "bucket-remove-version-" + name
+			createTestBucket(gwA, bktName)
+			putBucketVersioning(t, gwA, bktName, true)
+
+			putObjectVersion(t, gwA, bktName, objName, "v1")
+			latest := putObjectVersion(t, gwA, bktName, objName, "second")
+			require.NotEmpty(t, latest)
+
+			readFn(t, gwB, bktName, "second") // Caches the name in gwB.
+
+			deleteObject(t, gwA, bktName, objName, latest)
+
+			readFn(t, gwB, bktName, "v1")
+		})
+	}
+
+	t.Run("deleted object is not found", func(t *testing.T) {
+		gwA, gwB := prepareGateways(t)
+
+		bktName := "bucket-delete"
+		createTestBucket(gwA, bktName)
+
+		putObjectContent(gwA, bktName, objName, "v1")
+		require.Equal(t, "v1", getObjectContent(t, gwB, bktName, objName))
+
+		deleteObject(t, gwA, bktName, objName, "")
+
+		w, r := prepareTestRequest(gwB, bktName, objName, nil)
+		gwB.Handler().GetObjectHandler(w, r)
+		assertS3Error(t, w, s3errors.GetAPIError(s3errors.ErrNoSuchKey))
+
+		w, r = prepareTestRequest(gwB, bktName, objName, nil)
+		gwB.Handler().HeadObjectHandler(w, r)
+		assertStatus(t, w, http.StatusNotFound)
+	})
+}
