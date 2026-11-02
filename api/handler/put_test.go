@@ -187,6 +187,11 @@ func TestEmptyPostPolicy(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPostPolicyNoForm(t *testing.T) {
+	_, err := checkPostPolicy(&http.Request{}, &api.ReqInfo{}, make(map[string]string))
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrMalformedPOSTRequest))
+}
+
 func TestPostPolicyNoKey(t *testing.T) {
 	r := &http.Request{
 		MultipartForm: &multipart.Form{
