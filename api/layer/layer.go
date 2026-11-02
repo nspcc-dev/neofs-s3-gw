@@ -239,6 +239,7 @@ type (
 		GetObjectInfoByID(ctx context.Context, bktInfo *data.BucketInfo, idObj oid.ID) (*data.ObjectInfo, error)
 		GetExtendedObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ExtendedObjectInfo, error)
 		ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams) (*data.ComprehensiveObjectInfo, error)
+		DropObjectNameCache(bktInfo *data.BucketInfo, objName string)
 		GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error)
 
 		GetLockInfo(ctx context.Context, obj *ObjectVersion) (*data.LockInfo, error)
@@ -964,7 +965,7 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 
 	for _, id := range versions {
 		if obj.Error = n.objectDelete(ctx, bkt, id); obj.Error != nil {
-			if isErrObjectAlreadyRemoved(obj.Error) {
+			if errors.Is(obj.Error, apistatus.ErrObjectAlreadyRemoved) {
 				obj.Error = nil
 				continue
 			}
@@ -988,17 +989,13 @@ func (n *layer) deleteObject(ctx context.Context, bkt *data.BucketInfo, settings
 	return obj
 }
 
-func isErrObjectAlreadyRemoved(err error) bool {
-	var (
-		ol  apistatus.ObjectAlreadyRemoved
-		olp *apistatus.ObjectAlreadyRemoved
-	)
-	switch {
-	case errors.As(err, &ol), errors.As(err, &olp):
-		return true
-	default:
-		return strings.Contains(err.Error(), "object already removed")
-	}
+func (n *layer) DropObjectNameCache(bktInfo *data.BucketInfo, objName string) {
+	n.cache.DeleteObjectName(bktInfo.CID, objName)
+}
+
+// IsErrObjectGone checks whether err means that the object no longer exists.
+func IsErrObjectGone(err error) bool {
+	return errors.Is(err, apistatus.ErrObjectNotFound) || errors.Is(err, apistatus.ErrObjectAlreadyRemoved)
 }
 
 // DeleteObjects from the storage.

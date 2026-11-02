@@ -25,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -218,7 +219,7 @@ func (n *layer) UploadPart(ctx context.Context, p *UploadPartParams) (string, er
 	if existingPart != nil {
 		for _, item := range existingPart.Elements {
 			if err = n.objectDelete(ctx, p.Info.Bkt, item.ID); err != nil {
-				if !isErrObjectAlreadyRemoved(err) {
+				if !errors.Is(err, apistatus.ErrObjectAlreadyRemoved) {
 					return "", err
 				}
 			}
@@ -1086,7 +1087,7 @@ func (n *layer) reUploadPart(ctx context.Context, uploadParams UploadPartParams,
 
 	// remove old object, we just re-uploaded a new one.
 	if err = n.objectDelete(ctx, bktInfo, id); err != nil {
-		if !isErrObjectAlreadyRemoved(err) {
+		if !errors.Is(err, apistatus.ErrObjectAlreadyRemoved) {
 			return fmt.Errorf("delete old id=%s: %w", id.String(), err)
 		}
 	}

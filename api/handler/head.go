@@ -46,21 +46,35 @@ func (h *handler) HeadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		IsBucketVersioningEnabled: bktInfo.Settings.VersioningEnabled(),
 	}
 
-	comprehensiveInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
+	var (
+		comprehensiveInfo *data.ComprehensiveObjectInfo
+		info              *data.ObjectInfo
+
+		versionID = p.VersionID
+	)
+
+	for retried := false; ; retried = true {
+		comprehensiveInfo, err = h.obj.ComprehensiveObjectInfo(r.Context(), p)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		if info = comprehensiveInfo.ObjectInfo; info == nil {
+			info, err = h.obj.GetObjectInfoByID(r.Context(), bktInfo, comprehensiveInfo.ID)
+		}
+
+		var retry bool
+		if retry, err = h.staleLookup(p, versionID, retried, err); !retry {
+			break
+		}
+	}
 	if err != nil {
-		h.logAndSendError(w, "could not find object", reqInfo, err)
+		h.logAndSendError(w, "could not get object info", reqInfo, err)
 		return
 	}
 
-	var info *data.ObjectInfo
-	if comprehensiveInfo.ObjectInfo != nil {
-		info = comprehensiveInfo.ObjectInfo
-	} else {
-		info, err = h.obj.GetObjectInfoByID(r.Context(), bktInfo, comprehensiveInfo.ID)
-		if err != nil {
-			h.logAndSendError(w, "could not get object info", reqInfo, err)
-			return
-		}
+	if comprehensiveInfo.ObjectInfo == nil {
 		// No tags from a separate object; try to extract inline tags from object headers.
 		if len(comprehensiveInfo.TagSet) == 0 {
 			for k, v := range info.Headers {

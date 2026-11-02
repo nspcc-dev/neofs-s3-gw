@@ -43,11 +43,12 @@ func (r *contResolver) ResolveCID(_ context.Context, name, namespace string) (ci
 }
 
 type handlerContext struct {
-	owner   user.ID
-	t       *testing.T
-	h       *handler
-	tp      *layer.TestNeoFS
-	context context.Context
+	owner    user.ID
+	t        *testing.T
+	h        *handler
+	tp       *layer.TestNeoFS
+	layerCfg *layer.Config
+	context  context.Context
 }
 
 func (hc *handlerContext) Handler() *handler {
@@ -114,12 +115,31 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	}
 
 	return &handlerContext{
-		owner:   owner,
-		t:       t,
-		h:       h,
-		tp:      tp,
-		context: context.WithValue(context.Background(), api.BoxData, newTestAccessBox(t, key)),
+		owner:    owner,
+		t:        t,
+		h:        h,
+		tp:       tp,
+		layerCfg: layerCfg,
+		context:  context.WithValue(context.Background(), api.BoxData, newTestAccessBox(t, key)),
 	}
+}
+
+// prepareAnotherGateway returns a context of another gateway instance working
+// with the same NeoFS and credentials as hc. It has its own caches, so it
+// doesn't see cache invalidations made by hc.
+func prepareAnotherGateway(hc *handlerContext) *handlerContext {
+	layerCfg := *hc.layerCfg
+	layerCfg.Caches = layer.DefaultCachesConfigs(zap.NewExample())
+
+	another := *hc
+	another.layerCfg = &layerCfg
+	another.h = &handler{
+		log: hc.h.log,
+		obj: layer.NewLayer(hc.h.log, hc.tp, &layerCfg),
+		cfg: hc.h.cfg,
+	}
+
+	return &another
 }
 
 func createTestBucket(hc *handlerContext, bktName string) *data.BucketInfo {

@@ -131,6 +131,27 @@ func writeHeaders(h http.Header, requestHeader http.Header, info *data.ObjectInf
 	}
 }
 
+func (h *handler) staleLookup(p *layer.HeadObjectParams, versionID string, retried bool, err error) (bool, error) {
+	switch {
+	case err == nil || !layer.IsErrObjectGone(err):
+		return false, err
+	case versionID != "":
+		return false, s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+	case retried:
+		return false, s3errors.GetAPIError(s3errors.ErrNoSuchKey)
+	}
+
+	h.log.Debug("object is gone, retrying lookup without cache",
+		zap.String("bucket", p.BktInfo.Name),
+		zap.String("object", p.Object),
+		zap.Error(err))
+
+	h.obj.DropObjectNameCache(p.BktInfo, p.Object)
+	p.VersionID = versionID
+
+	return true, nil
+}
+
 func (h *handler) readObject(ctx context.Context, bktInfo *data.BucketInfo, id oid.ID, rng layer.PayloadRange, headerOnly bool) (*data.ObjectInfo, layer.PayloadReadCloser, error) {
 	if headerOnly {
 		info, err := h.obj.GetObjectInfoByID(ctx, bktInfo, id)
@@ -189,18 +210,29 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 		IsBucketVersioningEnabled: bktInfo.Settings.VersioningEnabled(),
 	}
 
-	comprehensiveObjectInfo, err := h.obj.ComprehensiveObjectInfo(r.Context(), p)
-	if err != nil {
-		h.logAndSendError(w, "could not find object", reqInfo, err)
-		return
-	}
-
 	var (
+		comprehensiveObjectInfo *data.ComprehensiveObjectInfo
+		info                    *data.ObjectInfo
+
 		headerOnly    = encryptionParams.Enabled()
 		partNumberStr = reqInfo.URL.Query().Get("partNumber")
+		versionID     = p.VersionID
 	)
 
-	info, payload, err := h.readObject(r.Context(), bktInfo, comprehensiveObjectInfo.ID, rng, headerOnly || len(partNumberStr) > 0)
+	for retried := false; ; retried = true {
+		comprehensiveObjectInfo, err = h.obj.ComprehensiveObjectInfo(r.Context(), p)
+		if err != nil {
+			h.logAndSendError(w, "could not find object", reqInfo, err)
+			return
+		}
+
+		info, payload, err = h.readObject(r.Context(), bktInfo, comprehensiveObjectInfo.ID, rng, headerOnly || len(partNumberStr) > 0)
+
+		var retry bool
+		if retry, err = h.staleLookup(p, versionID, retried, err); !retry {
+			break
+		}
+	}
 	if err != nil {
 		h.logAndSendError(w, "could not get object meta", reqInfo, err)
 		return
