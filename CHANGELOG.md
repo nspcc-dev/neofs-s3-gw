@@ -14,7 +14,16 @@ This document outlines major changes between releases.
 
 ### Removed
 
-### Upgrading from 0.48.0
+### Upgrading from 0.48.1
+
+## [0.48.1] - 2026-11-02
+
+### Changed
+- Object name cache is disabled by default now (#1393)
+
+### Fixed
+- Panic in PostObject handler on incorrect multipart form (#1395)
+- Object name cache keeping stale entries for deleted objects (#1393)
 
 ## [0.48.0] - 2026-10-30
 
@@ -1189,4 +1198,5 @@ releases.
 [0.46.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.45.1...v0.46.0
 [0.47.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.46.0...v0.47.0
 [0.48.0]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.47.0...v0.48.0
-[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.48.0...master
+[0.48.1]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.48.0...v0.48.1
+[Unreleased]: https://github.com/nspcc-dev/neofs-s3-gw/compare/v0.48.1...master
