@@ -712,6 +712,10 @@ func (h *handler) postObjectAttempt(w http.ResponseWriter, r *http.Request, atte
 }
 
 func checkPostPolicy(r *http.Request, reqInfo *api.ReqInfo, metadata map[string]string) (*postPolicy, error) {
+	if r.MultipartForm == nil {
+		return nil, s3errors.GetAPIError(s3errors.ErrMalformedPOSTRequest)
+	}
+
 	policy := &postPolicy{empty: true}
 	if policyStr := auth.MultipartFormValue(r, "policy"); policyStr != "" {
 		policyData, err := base64.StdEncoding.DecodeString(policyStr)
