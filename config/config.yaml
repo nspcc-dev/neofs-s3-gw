@@ -88,9 +88,9 @@ cache:
   list:
     lifetime: 1m
     size: 100
-  # Cache of current version lookups by object name
+  # Cache of current version lookups by object name, 0 lifetime disables it
   names:
-    lifetime: 5s
+    lifetime: 0s
     size: 1000
   # Cache which contains mapping of bucket name to bucket info
   buckets:

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
@@ -124,12 +125,16 @@ func prepareHandlerContext(t *testing.T) *handlerContext {
 	}
 }
 
+func enableNamesCache(hc *handlerContext) {
+	hc.layerCfg.Caches.Names.Lifetime = time.Minute
+	hc.h.obj = layer.NewLayer(hc.h.log, hc.tp, hc.layerCfg)
+}
+
 // prepareAnotherGateway returns a context of another gateway instance working
-// with the same NeoFS and credentials as hc. It has its own caches, so it
-// doesn't see cache invalidations made by hc.
+// with the same NeoFS, credentials and cache settings as hc. It has its own
+// caches, so it doesn't see cache invalidations made by hc.
 func prepareAnotherGateway(hc *handlerContext) *handlerContext {
 	layerCfg := *hc.layerCfg
-	layerCfg.Caches = layer.DefaultCachesConfigs(zap.NewExample())
 
 	another := *hc
 	another.layerCfg = &layerCfg

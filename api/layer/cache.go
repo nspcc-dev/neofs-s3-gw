@@ -88,14 +88,21 @@ func objectNameCacheKey(cnrID cid.ID, objName string) string {
 // already made it.
 func (c *Cache) GetObjectByName(owner user.ID, cnrID cid.ID, objName string) *data.ComprehensiveObjectInfo {
 	key := objectNameCacheKey(cnrID, objName)
-	if !c.accessCache.Get(owner, key) {
+
+	info := c.namesCache.Get(key)
+	if info == nil || !c.accessCache.Get(owner, key) {
 		return nil
 	}
 
-	return c.namesCache.Get(key)
+	return info
 }
 
 func (c *Cache) PutObjectByName(owner user.ID, cnrID cid.ID, objName string, info *data.ComprehensiveObjectInfo) {
+	// Don't fill the shared access control cache with entries nobody reads.
+	if !c.namesCache.Enabled() {
+		return
+	}
+
 	key := objectNameCacheKey(cnrID, objName)
 
 	if err := c.namesCache.Put(key, info); err != nil {

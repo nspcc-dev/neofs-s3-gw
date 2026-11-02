@@ -376,7 +376,24 @@ func putObjectVersion(t *testing.T, tc *handlerContext, bktName, objName, conten
 }
 
 func TestReadObjectRemovedByAnotherGateway(t *testing.T) {
+	for _, namesCache := range []bool{true, false} {
+		t.Run(fmt.Sprintf("names cache %t", namesCache), func(t *testing.T) {
+			testReadObjectRemovedByAnotherGateway(t, namesCache)
+		})
+	}
+}
+
+func testReadObjectRemovedByAnotherGateway(t *testing.T, namesCache bool) {
 	const objName = "docs/readme.txt"
+
+	prepareGateways := func(t *testing.T) (*handlerContext, *handlerContext) {
+		gwA := prepareHandlerContext(t)
+		if namesCache {
+			enableNamesCache(gwA)
+		}
+
+		return gwA, prepareAnotherGateway(gwA)
+	}
 
 	read := map[string]func(t *testing.T, tc *handlerContext, bktName string, expected string){
 		"get": func(t *testing.T, tc *handlerContext, bktName string, expected string) {
@@ -392,8 +409,7 @@ func TestReadObjectRemovedByAnotherGateway(t *testing.T) {
 
 	for name, readFn := range read {
 		t.Run(name+" overwritten in unversioned bucket", func(t *testing.T) {
-			gwA := prepareHandlerContext(t)
-			gwB := prepareAnotherGateway(gwA)
+			gwA, gwB := prepareGateways(t)
 
 			bktName := "bucket-overwrite-" + name
 			createTestBucket(gwA, bktName)
@@ -408,8 +424,7 @@ func TestReadObjectRemovedByAnotherGateway(t *testing.T) {
 		})
 
 		t.Run(name+" latest version removed in versioned bucket", func(t *testing.T) {
-			gwA := prepareHandlerContext(t)
-			gwB := prepareAnotherGateway(gwA)
+			gwA, gwB := prepareGateways(t)
 
 			bktName := "bucket-remove-version-" + name
 			createTestBucket(gwA, bktName)
@@ -428,8 +443,7 @@ func TestReadObjectRemovedByAnotherGateway(t *testing.T) {
 	}
 
 	t.Run("deleted object is not found", func(t *testing.T) {
-		gwA := prepareHandlerContext(t)
-		gwB := prepareAnotherGateway(gwA)
+		gwA, gwB := prepareGateways(t)
 
 		bktName := "bucket-delete"
 		createTestBucket(gwA, bktName)
