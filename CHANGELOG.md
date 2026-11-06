@@ -14,6 +14,7 @@ This document outlines major changes between releases.
 - `ListParts` with `part-number-marker=0` answered with an internal error (#1406)
 - `ListParts` returning all parts for a marker at or after the last part (#1406)
 - Non-ASCII keys truncated in ListObjects responses with URL encoding (#1398)
+- Content-Encoding, Content-Disposition and Content-Language headers not stored and returned for objects (#1398)
 
 ### Updated
 

@@ -147,6 +147,7 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		p.Header[api.ContentType] = contentType
 	}
+	copyStandardHeaders(p.Header, r.Header)
 
 	uploadID, err := h.obj.CreateMultipartUpload(r.Context(), p)
 	if err != nil {

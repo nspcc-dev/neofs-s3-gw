@@ -93,8 +93,15 @@ var SystemMetadata = map[string]struct{}{
 	Date:               {},
 	CacheControl:       {},
 	ContentDisposition: {},
+	ContentEncoding:    {},
+	ContentLanguage:    {},
 	ContentLength:      {},
 	ContentType:        {},
+	Expires:            {},
 	LastModified:       {},
 	ETag:               {},
 }
+
+// StandardObjectHeaders are the request headers stored with an object besides
+// Content-Type and returned as they were on GetObject and HeadObject.
+var StandardObjectHeaders = []string{CacheControl, ContentDisposition, ContentEncoding, ContentLanguage, Expires}

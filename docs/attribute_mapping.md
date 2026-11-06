@@ -42,6 +42,39 @@ A NeoFS SDK attribute containing the UNIX timestamp of object creation.
 
 A NeoFS SDK attribute representing the object name. This is used by end-users to interact with the gateway.
 
+### HTTP headers
+
+Standard HTTP headers of an upload request are stored as attributes named
+exactly like the header and are returned unchanged by `GetObject` and
+`HeadObject`:
+
+| Attribute             | Notes                                                                        |
+|-----------------------|------------------------------------------------------------------------------|
+| `Content-Type`        | Detected from the object name or the payload if the request does not set it. |
+| `Cache-Control`       |                                                                              |
+| `Content-Disposition` |                                                                              |
+| `Content-Encoding`    |                                                                              |
+| `Content-Language`    |                                                                              |
+| `Expires`             |                                                                              |
+
+An attribute is present only if the request has the corresponding header (`Content-Type` is the exception).
+
+Where the headers are taken from:
+
+- `PutObject` and `CreateMultipartUpload`: the request itself.
+- `CopyObject` with `X-Amz-Metadata-Directive: REPLACE`: the copy request.
+  The headers of the source object are dropped.
+- `CopyObject` with `X-Amz-Metadata-Directive: COPY` or without the directive:
+  the source object. The copy request headers are ignored.
+
+These attributes are system metadata, they are never returned as `X-Amz-Meta-*`.
+
+### User metadata
+
+Each `X-Amz-Meta-<name>` request header is stored as an attribute with the
+lowercased `<name>` as its key, without the prefix. It is returned as
+`X-Amz-Meta-<name>`.
+
 ### `S3-Meta-DeleteMarker`
 
 Contains the server timestamp of object removal for versioned container. It is used for special object called
