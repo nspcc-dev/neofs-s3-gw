@@ -1,5 +1,12 @@
 package s3headers
 
+import (
+	"sort"
+	"strings"
+
+	"github.com/nspcc-dev/neofs-sdk-go/object"
+)
+
 const (
 	attributePrefix = "S3-"
 )
@@ -46,6 +53,7 @@ const (
 	NeoFSSystemMetadataPrefix = attributePrefix + "Meta-"
 	AttributeVersioningState  = NeoFSSystemMetadataPrefix + "VersioningState"
 	AttributeDeleteMarker     = NeoFSSystemMetadataPrefix + "DeleteMarker"
+	AttributeEmptyMetaKeys    = NeoFSSystemMetadataPrefix + "EmptyMetaKeys"
 
 	// Result: S3-Meta-Tag-.
 	NeoFSSystemMetadataTagPrefix = NeoFSSystemMetadataPrefix + "Tag-"
@@ -55,6 +63,67 @@ const (
 	FieldComplianceMode     = "ComplianceMode"
 	FieldRetentionUntilMode = "RetentionUntil"
 )
+
+// GetStoredHeaders returns headers with the empty values moved into AttributeEmptyMetaKeys.
+func GetStoredHeaders(headers map[string]string) map[string]string {
+	var (
+		empty  []string
+		stored = make(map[string]string, len(headers)+1)
+	)
+
+	for k, v := range headers {
+		if v == "" {
+			empty = append(empty, k)
+		} else {
+			stored[k] = v
+		}
+	}
+
+	if len(empty) > 0 {
+		sort.Strings(empty)
+		stored[AttributeEmptyMetaKeys] = strings.Join(empty, ",")
+	}
+
+	return stored
+}
+
+// GetMetaAttributes process headeers and returns NeoFS attributes for an object.
+func GetMetaAttributes(headers map[string]string) []object.Attribute {
+	var (
+		empty []string
+		attrs = make([]object.Attribute, 0, len(headers)+1)
+	)
+
+	for k, v := range headers {
+		if v == "" {
+			empty = append(empty, k)
+		} else {
+			attrs = append(attrs, object.NewAttribute(k, v))
+		}
+	}
+
+	if len(empty) > 0 {
+		sort.Strings(empty)
+		attrs = append(attrs, object.NewAttribute(AttributeEmptyMetaKeys, strings.Join(empty, ",")))
+	}
+
+	return attrs
+}
+
+// RestoreEmptyHeaders is the inverse of GetStoredHeaders, in place.
+func RestoreEmptyHeaders(headers map[string]string) {
+	list, ok := headers[AttributeEmptyMetaKeys]
+	if !ok {
+		return
+	}
+
+	delete(headers, AttributeEmptyMetaKeys)
+	for k := range strings.SplitSeq(list, ",") {
+		if k != "" {
+			headers[k] = ""
+		}
+	}
+}
 
 // emptyTagValue is stored in NeoFS attribute instead of an empty tag value,
 // since NeoFS rejects empty attribute values. S3 tag values can't contain "*".

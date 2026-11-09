@@ -7,6 +7,7 @@ This document outlines major changes between releases.
 ### Added
 
 ### Changed
+- Empty user metadata values are accepted instead of returning an error (#1397)
 
 ### Fixed
 

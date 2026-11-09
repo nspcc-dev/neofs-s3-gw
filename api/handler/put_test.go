@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/stretchr/testify/require"
 )
@@ -548,4 +550,47 @@ func TestMD5Reader(t *testing.T) {
 		_, err = io.Copy(io.Discard, newMD5Reader(bytes.NewReader([]byte(content)), otherMD5[:]))
 		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrBadDigest))
 	})
+}
+
+func headerPresent(h http.Header, name string) (string, bool) {
+	for k, v := range h {
+		if strings.EqualFold(k, name) && len(v) > 0 {
+			return v[0], true
+		}
+	}
+
+	return "", false
+}
+
+func TestPutObjectEmptyMetadataValue(t *testing.T) {
+	hc := prepareHandlerContext(t)
+	bktName, objName := "bucket-empty-meta", "obj"
+	createTestBucket(hc, bktName)
+
+	w, r := prepareTestPayloadRequest(hc, bktName, objName, bytes.NewReader([]byte("content")))
+	r.Header.Set(api.MetadataPrefix+"Note", "")
+	r.Header.Set(api.MetadataPrefix+"Owner", "smoke")
+	hc.Handler().PutObjectHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	check := func(name string) {
+		w, r := prepareTestRequest(hc, bktName, name, nil)
+		hc.Handler().HeadObjectHandler(w, r)
+		assertStatus(t, w, http.StatusOK)
+		note, ok := headerPresent(w.Header(), api.MetadataPrefix+"note")
+		require.True(t, ok, "%s: the empty metadata key must come back", name)
+		require.Empty(t, note)
+		owner, ok := headerPresent(w.Header(), api.MetadataPrefix+"owner")
+		require.True(t, ok)
+		require.Equal(t, "smoke", owner)
+		_, ok = headerPresent(w.Header(), api.MetadataPrefix+s3headers.AttributeEmptyMetaKeys)
+		require.False(t, ok, "%s: the bookkeeping attribute must stay hidden", name)
+	}
+	check(objName)
+
+	// server-side copy keeps it, with COPY and with REPLACE
+	copyObject(t, hc, bktName, objName, "copy", CopyMeta{MetadataDirective: "COPY"}, http.StatusOK)
+	check("copy")
+	copyObject(t, hc, bktName, objName, "replaced", CopyMeta{MetadataDirective: "REPLACE", Metadata: map[string]string{"note": "", "owner": "smoke"}}, http.StatusOK)
+	check("replaced")
 }

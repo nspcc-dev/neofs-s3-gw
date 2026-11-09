@@ -413,11 +413,13 @@ func (n *layer) uploadZeroPart(ctx context.Context, multipartInfo *data.Multipar
 	attrs := make([]object.Attribute, 0, len(multipartInfo.Meta)+1)
 	attrs = append(attrs, object.NewAttribute(object.AttributeTimestamp, strconv.FormatInt(creationTime.Unix(), 10)))
 
+	var userMeta = make(map[string]string, len(multipartInfo.Meta))
 	for key, val := range multipartInfo.Meta {
 		if after, ok := strings.CutPrefix(key, metaPrefix); ok {
-			attrs = append(attrs, object.NewAttribute(after, val))
+			userMeta[after] = val
 		}
 	}
+	attrs = append(attrs, s3headers.GetMetaAttributes(userMeta)...)
 
 	if multipartInfo.EncryptionMeta != nil {
 		attrs = append(attrs, object.NewAttribute(s3headers.AttributeEncryptionMeta, packEncryptionMeta(*multipartInfo.EncryptionMeta)))
