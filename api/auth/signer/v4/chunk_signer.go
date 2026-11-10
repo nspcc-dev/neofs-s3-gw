@@ -59,6 +59,27 @@ func (s *ChunkSigner) getSignature(payloadHash []byte) ([]byte, error) {
 	return signature, nil
 }
 
+// GetTrailerSignature returns the signature of the trailing headers that close
+// a STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER payload. The trailer must be in
+// its canonical form: one "name:value\n" line per header. It continues the
+// signature chain, so it must be called after the final zero-length chunk.
+func (s *ChunkSigner) GetTrailerSignature(trailer []byte) []byte {
+	sigKey := deriveSigningKey(s.region, s.service, s.credentials.SecretAccessKey, s.seedDate)
+
+	stringToSign := strings.Join([]string{
+		"AWS4-HMAC-SHA256-TRAILER",
+		formatTime(s.seedDate),
+		buildSigningScope(s.region, s.service, s.seedDate),
+		hex.EncodeToString(s.prevSig),
+		hex.EncodeToString(hashSHA256(trailer)),
+	}, "\n")
+
+	signature := hmacSHA256(sigKey, []byte(stringToSign))
+	s.prevSig = signature
+
+	return signature
+}
+
 func buildStringToSign(payloadHash, prevSig []byte, scope string, date time.Time) string {
 	return strings.Join([]string{
 		"AWS4-HMAC-SHA256-PAYLOAD",

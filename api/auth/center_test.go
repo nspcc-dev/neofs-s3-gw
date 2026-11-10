@@ -197,6 +197,108 @@ func TestCheckFormDataNoSignature(t *testing.T) {
 	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
 }
 
+// TestAwsEncodedChunkReaderSignedTrailer checks the example from
+// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming-trailers.html
+func TestAwsEncodedChunkReaderSignedTrailer(t *testing.T) {
+	const (
+		seed      = "106e2a8a18243abcf37539882f36619c00e2dfc72633413f02d3b74544bfeb8e"
+		chunkOne  = "10000;chunk-signature=b474d8862b1487a5145d686f57f013e54db672cee1c953b3010fb58501ef5aa2\r\n"
+		chunkTwo  = "400;chunk-signature=1c1344b170168f8e65b41376b44b20fe354e373826ccbbe2c1d40a8cae51e5c7\r\n"
+		chunkLast = "0;chunk-signature=2ca2aba2005185cf7159c6277faf83795951dd77a3a99e6e65d5c9f85863f992\r\n"
+		checksum  = "x-amz-checksum-crc32c:sOO8/Q==\r\n"
+		trailer   = "x-amz-trailer-signature:d81f82fc3505edab99d459891051a732e8730629a2e4a59689829ca17fe2e435\r\n"
+	)
+
+	payload := bytes.Repeat([]byte{'a'}, 65536+1024)
+	appCreds := credentials.NewStaticCredentialsProvider("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "")
+	awsCreds, err := appCreds.Retrieve(context.Background())
+	require.NoError(t, err)
+
+	ts, err := time.Parse(timeFormatISO8601, "20130524T000000Z")
+	require.NoError(t, err)
+
+	seedSignature, err := hex.DecodeString(seed)
+	require.NoError(t, err)
+
+	body := func(parts ...string) io.ReadCloser {
+		buf := bytes.NewBuffer(nil)
+		for _, p := range parts {
+			switch p {
+			case chunkOne:
+				buf.WriteString(p)
+				buf.Write(payload[:65536])
+				buf.WriteString("\r\n")
+			case chunkTwo:
+				buf.WriteString(p)
+				buf.Write(payload[65536:])
+				buf.WriteString("\r\n")
+			default:
+				buf.WriteString(p)
+			}
+		}
+		buf.WriteString("\r\n")
+		return io.NopCloser(buf)
+	}
+
+	read := func(t *testing.T, r io.ReadCloser, trailerHeader string) ([]byte, error) {
+		streamSigner := v4.NewChunkSigner("us-east-1", "s3", seedSignature, ts, awsCreds)
+		chunkedReader, err := v4.NewChunkedReaderWithSignedTrail(r, streamSigner, trailerHeader)
+		require.NoError(t, err)
+		got := bytes.NewBuffer(nil)
+		_, err = io.CopyBuffer(got, chunkedReader, make([]byte, 4096))
+		return got.Bytes(), err
+	}
+
+	t.Run("correct signatures", func(t *testing.T) {
+		got, err := read(t, body(chunkOne, chunkTwo, chunkLast, checksum, trailer), "x-amz-checksum-crc32c")
+		require.NoError(t, err)
+		require.Equal(t, payload, got)
+	})
+
+	t.Run("invalid trailer signature", func(t *testing.T) {
+		bad := "x-amz-trailer-signature:" + strings.Repeat("0", 64) + "\r\n"
+		_, err := read(t, body(chunkOne, chunkTwo, chunkLast, checksum, bad), "x-amz-checksum-crc32c")
+		require.ErrorIs(t, err, v4.ErrInvalidTrailerSignature)
+	})
+
+	t.Run("missing trailer signature", func(t *testing.T) {
+		_, err := read(t, body(chunkOne, chunkTwo, chunkLast, checksum), "x-amz-checksum-crc32c")
+		require.ErrorIs(t, err, v4.ErrInvalidTrailerSignature)
+	})
+
+	t.Run("invalid chunk signature", func(t *testing.T) {
+		bad := "400;chunk-signature=" + strings.Repeat("0", 64) + "\r\n"
+		buf := bytes.NewBufferString(chunkOne)
+		buf.Write(payload[:65536])
+		buf.WriteString("\r\n" + bad)
+		buf.Write(payload[65536:])
+		buf.WriteString("\r\n" + chunkLast + checksum + trailer + "\r\n")
+		_, err := read(t, io.NopCloser(buf), "x-amz-checksum-crc32c")
+		require.ErrorIs(t, err, v4.ErrInvalidChunkSignature)
+	})
+
+	t.Run("chunk without signature", func(t *testing.T) {
+		buf := bytes.NewBufferString(chunkOne)
+		buf.Write(payload[:65536])
+		buf.WriteString("\r\n400\r\n")
+		buf.Write(payload[65536:])
+		buf.WriteString("\r\n" + chunkLast + checksum + trailer + "\r\n")
+		_, err := read(t, io.NopCloser(buf), "x-amz-checksum-crc32c")
+		require.ErrorIs(t, err, v4.ErrInvalidChunkSignature)
+	})
+
+	t.Run("checksum mismatch", func(t *testing.T) {
+		_, err := read(t, body(chunkOne, chunkTwo, chunkLast, "x-amz-checksum-crc32c:AAAAAA==\r\n", trailer), "x-amz-checksum-crc32c")
+		require.Error(t, err)
+	})
+
+	t.Run("no checksum declared", func(t *testing.T) {
+		streamSigner := v4.NewChunkSigner("us-east-1", "s3", seedSignature, ts, awsCreds)
+		_, err := v4.NewChunkedReaderWithSignedTrail(body(), streamSigner, "")
+		require.Error(t, err)
+	})
+}
+
 // TestAwsEncodedChunkReader checks example from https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
 func TestAwsEncodedChunkReader(t *testing.T) {
 	chunkOnePayload := make([]byte, 65536)

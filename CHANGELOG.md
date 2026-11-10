@@ -5,6 +5,7 @@ This document outlines major changes between releases.
 ## [Unreleased]
 
 ### Added
+- Support for `STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER` uploads (#1399)
 
 ### Changed
 
