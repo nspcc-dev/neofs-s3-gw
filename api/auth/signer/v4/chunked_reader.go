@@ -16,7 +16,11 @@ import (
 	"io"
 )
 
-const maxLineLength = 4096 // assumed <= bufio.defaultBufSize
+const (
+	maxLineLength = 4096 // assumed <= bufio.defaultBufSize
+
+	trailerSignatureHeader = "x-amz-trailer-signature"
+)
 
 var (
 	// ErrLineTooLong appears if chunk header exceeds maxLineLength.
@@ -31,6 +35,10 @@ var (
 
 	// ErrInvalidByteInChunkLength appears if chunk header has invalid encoding.
 	ErrInvalidByteInChunkLength = errors.New("invalid byte in chunk length")
+
+	// ErrInvalidTrailerSignature appears if the signature of the trailing headers
+	// is missing or differs from the calculated one.
+	ErrInvalidTrailerSignature = errors.New("invalid trailer signature")
 
 	errInvalidChunkEncoding = errors.New("invalid chunk encoding")
 )
@@ -80,6 +88,33 @@ func NewChunkedReaderWithTrail(r io.ReadCloser, amzTrailerHeader string) (io.Rea
 	}, nil
 }
 
+// NewChunkedReaderWithSignedTrail returns a new chunkedReader for the
+// STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER payload: every chunk is signed as for
+// [NewChunkedReader], and the body ends with a checksum trailer followed by its
+// own signature (x-amz-trailer-signature). Chunk signatures, the checksum and the
+// trailer signature are all verified.
+func NewChunkedReaderWithSignedTrail(r io.ReadCloser, streamSigner *ChunkSigner, amzTrailerHeader string) (io.ReadCloser, error) {
+	checksumAlgorithm, err := detectChecksumType(amzTrailerHeader)
+	if err != nil {
+		return nil, err
+	}
+	if checksumAlgorithm == checksumNone {
+		return nil, errors.New("missing checksum trailer declaration")
+	}
+
+	return &chunkedReader{
+		r: bufio.NewReader(r),
+		// bufio.Reader can't be closed, thus left link to the original reader to close it later.
+		origReader:        r,
+		streamSigner:      streamSigner,
+		chunkHash:         sha256.New(),
+		nextState:         readChunkHeader,
+		checkSumAlgorithm: checksumAlgorithm.String(),
+		checkSumWriter:    checksumWriter(checksumAlgorithm),
+		signedTrailer:     true,
+	}, nil
+}
+
 type chunkedReader struct {
 	chunkHash         hash.Hash
 	chunkSignature    string
@@ -92,6 +127,8 @@ type chunkedReader struct {
 	lastChunk         bool
 	checkSumAlgorithm string
 	checkSumWriter    hash.Hash
+	// signedTrailer means signed chunks followed by a signed checksum trailer.
+	signedTrailer bool
 }
 
 // Close implements [io.ReadCloser].
@@ -197,8 +234,9 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 				return 0, errInvalidChunkEncoding
 			}
 
-			// Unsigned streaming upload.
-			if cr.chunkSignature != "" {
+			// Unsigned streaming upload has no chunk signatures. With a signer every
+			// chunk must carry one, a missing one fails the check.
+			if cr.chunkSignature != "" || cr.streamSigner != nil {
 				cr.nextState = verifyChunkSignature
 			} else if cr.lastChunk {
 				cr.nextState = readTrailerChunk
@@ -210,13 +248,19 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 				return 0, err
 			}
 
-			if cr.lastChunk {
-				cr.nextState = exit
-			} else {
+			// Signatures are per chunk, do not let the previous one pass for the next.
+			cr.chunkSignature = ""
+
+			switch {
+			case !cr.lastChunk:
 				cr.nextState = readChunkHeader
+			case cr.signedTrailer:
+				cr.nextState = readTrailerChunk
+			default:
+				cr.nextState = exit
 			}
 		case readTrailerChunk:
-			extractedCheckSumAlgorithm, extractedChecksum := parseChunkChecksum(cr.r)
+			trailerName, extractedCheckSumAlgorithm, extractedChecksum := parseChunkChecksum(cr.r)
 			if extractedCheckSumAlgorithm.String() != cr.checkSumAlgorithm {
 				cr.err = fmt.Errorf("request header and trailed chunk checksum algorithm mismatch. %s vs %s", extractedCheckSumAlgorithm.String(), cr.checkSumAlgorithm)
 				return 0, cr.err
@@ -226,6 +270,17 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 			if string(extractedChecksum) != base64Checksum {
 				cr.err = errors.New("payload checksum does not match")
 				return 0, cr.err
+			}
+
+			if cr.signedTrailer {
+				// Canonical form of the only trailing header, as the client signed it.
+				trailer := trailerName + ":" + string(extractedChecksum) + "\n"
+				if cr.err = cr.verifyTrailerSignature([]byte(trailer)); cr.err != nil {
+					return 0, cr.err
+				}
+				cr.err = readCRLF(cr.r)
+				cr.nextState = exit
+				continue
 			}
 
 			// Reading remaining CRLF.
@@ -238,6 +293,28 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 			return n, io.EOF
 		}
 	}
+}
+
+// verifyTrailerSignature reads the x-amz-trailer-signature line and compares it
+// with the signature calculated over the canonical trailer.
+func (cr *chunkedReader) verifyTrailerSignature(trailer []byte) error {
+	line, err := readChunkLine(cr.r)
+	if err != nil {
+		return ErrInvalidTrailerSignature
+	}
+
+	name, value, ok := bytes.Cut(trimTrailingWhitespace(line), []byte(":"))
+	if !ok || !bytes.EqualFold(bytes.TrimSpace(name), []byte(trailerSignatureHeader)) {
+		return ErrInvalidTrailerSignature
+	}
+
+	var calculated = cr.streamSigner.GetTrailerSignature(trailer)
+
+	if string(bytes.TrimSpace(value)) != hex.EncodeToString(calculated) {
+		return ErrInvalidTrailerSignature
+	}
+
+	return nil
 }
 
 func readCRLF(reader io.Reader) error {
@@ -347,26 +424,28 @@ func parseHexUint(v []byte) (n uint64, err error) {
 	return
 }
 
-func parseChunkChecksum(b *bufio.Reader) (checksumType, []byte) {
+// parseChunkChecksum reads the checksum trailer line and returns the header name
+// as sent, the algorithm it stands for and the value.
+func parseChunkChecksum(b *bufio.Reader) (string, checksumType, []byte) {
 	bytesRead, err := readChunkLine(b)
 	if err != nil {
-		return checksumNone, nil
+		return "", checksumNone, nil
 	}
 
 	parts := bytes.SplitN(bytesRead, []byte(":"), 2)
 	if len(parts) != 2 {
-		return checksumNone, nil
+		return "", checksumNone, nil
 	}
 
 	var (
 		checksumKey   = string(parts[0])
-		checksumValue = trimTrailingWhitespace(parts[1])
+		checksumValue = bytes.TrimSpace(parts[1])
 	)
 
 	extractedAlgorithm, err := detectChecksumType(checksumKey)
 	if err != nil {
-		return checksumNone, nil
+		return "", checksumNone, nil
 	}
 
-	return extractedAlgorithm, checksumValue
+	return checksumKey, extractedAlgorithm, checksumValue
 }

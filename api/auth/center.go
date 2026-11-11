@@ -79,6 +79,8 @@ const (
 	ContentTypeHdr                = "Content-Type"
 	ContentEncodingChunked        = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
 	UnsignedPayloadMultipleChunks = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+	// ContentEncodingChunkedTrailer is signed chunks followed by a signed checksum trailer.
+	ContentEncodingChunkedTrailer = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER"
 
 	timeFormatISO8601 = "20060102T150405Z"
 
@@ -283,7 +285,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	amzContent := r.Header.Get(AmzContentSha256)
 
 	switch amzContent {
-	case ContentEncodingChunked:
+	case ContentEncodingChunked, ContentEncodingChunkedTrailer:
 		sig, err := hex.DecodeString(authHdr.SignatureV4)
 		if err != nil {
 			return nil, fmt.Errorf("decode auth header signature: %w", err)
@@ -296,7 +298,14 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		}
 
 		chunkSigner := v4.NewChunkSigner(authHdr.Region, authHdr.Service, sig, signatureDateTime, value)
-		r.Body = v4.NewChunkedReader(r.Body, chunkSigner)
+		if amzContent == ContentEncodingChunkedTrailer {
+			r.Body, err = v4.NewChunkedReaderWithSignedTrail(r.Body, chunkSigner, clonedRequest.Header.Get(AmzTrailer))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			r.Body = v4.NewChunkedReader(r.Body, chunkSigner)
+		}
 	case UnsignedPayloadMultipleChunks:
 		r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, clonedRequest.Header.Get(AmzTrailer))
 		if err != nil {
