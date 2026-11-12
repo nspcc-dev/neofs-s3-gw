@@ -92,6 +92,7 @@ func extractHeaders(headers map[string]string) (map[string]string, string, time.
 
 func objectInfoFromMeta(bkt *data.BucketInfo, meta *object.Object) (*data.ObjectInfo, error) {
 	attributes := userHeaders(meta.Attributes())
+	s3headers.RestoreEmptyHeaders(attributes)
 	encMeta, err := unpackEncryptionMeta(attributes[s3headers.AttributeEncryptionMeta])
 	if err != nil {
 		return nil, err

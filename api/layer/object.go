@@ -243,8 +243,6 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 }
 
 // PutObject stores object into NeoFS, took payload from io.Reader.
-//
-// Returns [ErrMetaEmptyParameterValue] error if any attribute parameter is empty.
 func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.ExtendedObjectInfo, error) {
 	owner := n.Owner(ctx)
 
@@ -299,12 +297,6 @@ func (n *layer) PutObject(ctx context.Context, p *PutObjectParams) (*data.Extend
 			} else {
 				p.Header[api.ContentType] = contentType
 			}
-		}
-	}
-
-	for _, v := range p.Header {
-		if v == "" {
-			return nil, ErrMetaEmptyParameterValue
 		}
 	}
 
@@ -456,14 +448,7 @@ func (n *layer) prepareMultipartHeadObject(ctx context.Context, prm multipartHea
 	currentVersion := version.Current()
 	headerObject.SetVersion(&currentVersion)
 
-	attributes := make([]object.Attribute, 0, len(p.Header))
-	for k, v := range p.Header {
-		if v == "" {
-			return nil, ErrMetaEmptyParameterValue
-		}
-
-		attributes = append(attributes, object.NewAttribute(k, v))
-	}
+	attributes := s3headers.GetMetaAttributes(p.Header)
 
 	creationTime := TimeNow(ctx)
 	if creationTime.IsZero() {

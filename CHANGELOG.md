@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 - Support for `STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER` uploads (#1399)
 
 ### Changed
+- Empty user metadata values are accepted instead of returning an error (#1397)
 
 ### Fixed
 

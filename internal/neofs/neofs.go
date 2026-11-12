@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"maps"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -287,10 +286,7 @@ func (x *NeoFS) CreateObject(ctx context.Context, prm layer.PrmObjectCreate) (oi
 	nonce := make([]byte, objectNonceSize)
 	_, _ = rand.Read(nonce)
 
-	uniqAttributes := maps.Clone(prm.Attributes)
-	if uniqAttributes == nil {
-		uniqAttributes = make(map[string]string)
-	}
+	uniqAttributes := s3headers.GetStoredHeaders(prm.Attributes)
 
 	uniqAttributes[object.AttributeTimestamp] = strconv.FormatInt(creationTime.Unix(), 10)
 	uniqAttributes[s3headers.AttributeObjectNonce] = base64.StdEncoding.EncodeToString(nonce)

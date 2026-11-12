@@ -380,14 +380,7 @@ func (t *TestNeoFS) CreateObject(_ context.Context, prm PrmObjectCreate) (oid.ID
 		attrs = append(attrs, a)
 	}
 
-	for k, v := range prm.Attributes {
-		if v == "" {
-			return oid.ID{}, fmt.Errorf("empty value of attribute %s", k)
-		}
-
-		a = object.NewAttribute(k, v)
-		attrs = append(attrs, a)
-	}
+	attrs = append(attrs, s3headers.GetMetaAttributes(prm.Attributes)...)
 
 	nonce := make([]byte, objectNonceSize)
 	_, _ = rand.Read(nonce)
