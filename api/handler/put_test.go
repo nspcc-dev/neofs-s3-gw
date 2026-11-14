@@ -549,3 +549,32 @@ func TestMD5Reader(t *testing.T) {
 		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrBadDigest))
 	})
 }
+
+func TestPutObjectStandardHeadersRoundTrip(t *testing.T) {
+	hc := prepareHandlerContext(t)
+	bktName, objName := "bucket-std-headers", "obj"
+	createTestBucket(hc, bktName)
+
+	want := map[string]string{
+		api.ContentType:        "application/x-custom",
+		api.CacheControl:       "max-age=3600",
+		api.ContentDisposition: `attachment; filename="h.bin"`,
+		api.ContentEncoding:    "gzip",
+		api.ContentLanguage:    "en-US",
+		api.Expires:            "Tue, 01 Jan 2030 00:00:00 GMT",
+	}
+	w, r := prepareTestPayloadRequest(hc, bktName, objName, bytes.NewReader([]byte("content")))
+	for name, value := range want {
+		r.Header.Set(name, value)
+	}
+	hc.Handler().PutObjectHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	w, r = prepareTestRequest(hc, bktName, objName, nil)
+	hc.Handler().HeadObjectHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+	for name, value := range want {
+		require.Equal(t, value, w.Header().Get(name), name)
+		require.Empty(t, w.Header().Get(api.MetadataPrefix+name), "%s must not be mirrored as user metadata", name)
+	}
+}

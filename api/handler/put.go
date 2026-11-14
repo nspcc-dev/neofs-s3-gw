@@ -309,12 +309,7 @@ func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attem
 	if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
 		metadata[api.ContentType] = contentType
 	}
-	if cacheControl := r.Header.Get(api.CacheControl); len(cacheControl) > 0 {
-		metadata[api.CacheControl] = cacheControl
-	}
-	if expires := r.Header.Get(api.Expires); len(expires) > 0 {
-		metadata[api.Expires] = expires
-	}
+	copyStandardHeaders(metadata, r.Header)
 
 	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
@@ -1038,4 +1033,15 @@ func parseLocationConstraint(r *http.Request) (*createBucketParams, error) {
 		return nil, s3errors.GetAPIError(s3errors.ErrMalformedXML)
 	}
 	return params, nil
+}
+
+// copyStandardHeaders stores the standard HTTP object headers of the request
+// (Cache-Control, Content-Disposition, Content-Encoding, Content-Language, Expires)
+// in the object's metadata.
+func copyStandardHeaders(metadata map[string]string, header http.Header) {
+	for _, name := range api.StandardObjectHeaders {
+		if value := header.Get(name); len(value) > 0 {
+			metadata[name] = value
+		}
+	}
 }

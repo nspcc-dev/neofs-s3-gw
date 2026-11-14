@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 ### Changed
 
 ### Fixed
+- Content-Encoding, Content-Disposition and Content-Language headers not stored and returned for objects (#1398)
 
 ### Updated
 
