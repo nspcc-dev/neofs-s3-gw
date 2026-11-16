@@ -507,8 +507,9 @@ func (h *handler) ListPartsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if queryValues.Get("part-number-marker") != "" {
-		if partNumberMarker, err = strconv.Atoi(queryValues.Get("part-number-marker")); err != nil || partNumberMarker <= 0 {
-			h.logAndSendError(w, "invalid PartNumberMarker", reqInfo, err, additional...)
+		// Zero is a valid marker: list from the first part.
+		if partNumberMarker, err = strconv.Atoi(queryValues.Get("part-number-marker")); err != nil || partNumberMarker < 0 {
+			h.logAndSendError(w, "invalid PartNumberMarker", reqInfo, s3errors.GetAPIError(s3errors.ErrInvalidPartNumberMarker), additional...)
 			return
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"testing"
@@ -146,5 +147,48 @@ func TestMultipartUploadEmptyPart(t *testing.T) {
 			require.Equal(t, len(payload), w.Body.Len())
 			require.True(t, bytes.Equal(payload, w.Body.Bytes()))
 		})
+	}
+}
+
+func TestListPartsPartNumberMarker(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-for-list-parts", "object-multipart"
+	createTestBucket(hc, bktName)
+
+	multipartInfo := createMultipartUpload(hc, bktName, objName, map[string]string{})
+	for i := 1; i <= 3; i++ {
+		uploadPart(hc, bktName, objName, multipartInfo.UploadID, i, 10)
+	}
+
+	listParts := func(marker string) *httptest.ResponseRecorder {
+		query := make(url.Values)
+		query.Set(uploadIDQuery, multipartInfo.UploadID)
+		query.Set("part-number-marker", marker)
+
+		w, r := prepareTestFullRequest(hc, bktName, objName, query, nil)
+		hc.Handler().ListPartsHandler(w, r)
+		return w
+	}
+
+	for marker, expected := range map[string][]int{
+		"0": {1, 2, 3},
+		"1": {2, 3},
+	} {
+		w := listParts(marker)
+		assertStatus(t, w, http.StatusOK)
+
+		var resp ListPartsResponse
+		require.NoError(t, xml.NewDecoder(w.Result().Body).Decode(&resp))
+
+		var numbers []int
+		for _, part := range resp.Parts {
+			numbers = append(numbers, part.PartNumber)
+		}
+		require.Equal(t, expected, numbers, marker)
+	}
+
+	for _, marker := range []string{"-1", "abc"} {
+		assertS3Error(t, listParts(marker), s3errors.GetAPIError(s3errors.ErrInvalidPartNumberMarker))
 	}
 }
