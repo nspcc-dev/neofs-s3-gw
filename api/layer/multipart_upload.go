@@ -1857,10 +1857,19 @@ func (n *layer) manualSlice(ctx context.Context, bktInfo *data.BucketInfo, prm P
 			prm.Multipart.SplitFirstID = &localSplitFirstID
 		}
 
-		nBts, readErr := io.ReadAtLeast(payloadReader, chunk, len(chunk))
+		var (
+			nBts    int
+			readErr = io.EOF
+		)
+		// Reading into an empty buffer never reports EOF, and an empty part has
+		// no payload anyway.
+		if len(chunk) > 0 {
+			nBts, readErr = io.ReadAtLeast(payloadReader, chunk, len(chunk))
+		}
 		totalBytes += int64(nBts)
 
-		if nBts > 0 {
+		// The split chain of the part needs its first element even if the part is empty.
+		if nBts > 0 || localSplitFirstID.IsZero() {
 			prm.Payload = bytes.NewReader((chunk)[:nBts])
 			prm.PayloadSize = uint64(nBts)
 			prm.Multipart.PayloadHash = sha256.New()
