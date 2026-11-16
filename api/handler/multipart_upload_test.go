@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/xml"
 	"net/http"
 	"net/url"
@@ -107,6 +108,43 @@ func TestCompleteMultipartUploadPartsSubset(t *testing.T) {
 			assertStatus(t, w, http.StatusOK)
 
 			require.Equal(t, expected, getObjectRange(t, hc, bktName, objName, 0, len(expected)-1))
+		})
+	}
+}
+
+// An empty part used to spin forever reading into an empty buffer.
+func TestMultipartUploadEmptyPart(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName := "bucket-for-empty-part"
+	createTestBucket(hc, bktName)
+
+	for _, tc := range []struct {
+		name  string
+		sizes []int
+	}{
+		{name: "single", sizes: []int{0}},
+		{name: "last", sizes: []int{5 * 1048576, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				objName       = "object-" + tc.name
+				multipartInfo = createMultipartUpload(hc, bktName, objName, map[string]string{})
+				etags         []string
+				payload       []byte
+			)
+			for i, size := range tc.sizes {
+				etag, body := uploadPart(hc, bktName, objName, multipartInfo.UploadID, i+1, size)
+				etags = append(etags, etag)
+				payload = append(payload, body...)
+			}
+			completeMultipartUpload(hc, bktName, objName, multipartInfo.UploadID, etags)
+
+			w, r := prepareTestRequest(hc, bktName, objName, nil)
+			hc.Handler().GetObjectHandler(w, r)
+			assertStatus(t, w, http.StatusOK)
+			require.Equal(t, len(payload), w.Body.Len())
+			require.True(t, bytes.Equal(payload, w.Body.Bytes()))
 		})
 	}
 }

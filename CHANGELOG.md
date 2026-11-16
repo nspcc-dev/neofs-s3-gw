@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 ### Changed
 
 ### Fixed
+- Endless loop on an empty multipart part (#1405)
 
 ### Updated
 
