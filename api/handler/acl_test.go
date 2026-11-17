@@ -20,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/data"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	neofscryptotest "github.com/nspcc-dev/neofs-sdk-go/crypto/test"
@@ -188,6 +189,39 @@ func TestTaggingPolicyToAst(t *testing.T) {
 			require.Equal(t, tc.ops, ops)
 		})
 	}
+}
+
+func TestPolicyToAstUnsupportedElements(t *testing.T) {
+	const ownerFullControl = `"Effect":"Allow","Principal":"*","Action":"s3:PutObject","Resource":"arn:aws:s3:::bucketName/*",` +
+		`"Condition":{"StringEquals":{"s3:x-amz-acl":"bucket-owner-full-control"`
+
+	for name, state := range map[string]string{
+		"condition":                              `"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::bucketName/obj","Condition":{"StringEquals":{"s3:x-amz-acl":"public-read"}}`,
+		"not resource":                           `"Effect":"Deny","Principal":"*","Action":"s3:GetObject","NotResource":"arn:aws:s3:::bucketName/obj"`,
+		"not action":                             `"Effect":"Allow","Principal":"*","NotAction":"s3:DeleteObject","Resource":"arn:aws:s3:::bucketName/obj"`,
+		"not principal":                          `"Effect":"Deny","NotPrincipal":{"AWS":"*"},"Action":"s3:GetObject","Resource":"arn:aws:s3:::bucketName/obj"`,
+		"owner full control with extra key":      ownerFullControl + `,"s3:prefix":"public/"}}`,
+		"owner full control with extra operator": ownerFullControl + `},"IpAddress":{"aws:SourceIp":"10.0.0.0/8"}}`,
+		"owner full control with not resource":   ownerFullControl + `}},"NotResource":"arn:aws:s3:::bucketName/secret"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			policy := &bucketPolicy{Bucket: "bucketName"}
+			require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{`+state+`}]}`), policy))
+
+			_, err := policyToAst(policy)
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrMalformedPolicy), err)
+		})
+	}
+
+	t.Run("owner full control", func(t *testing.T) {
+		policy := &bucketPolicy{Bucket: "bucketName"}
+		require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{`+ownerFullControl+`}}}]}`), policy))
+
+		actualAst, err := policyToAst(policy)
+		require.NoError(t, err)
+		require.Len(t, actualAst.Resources, 1)
+		require.Equal(t, s3ConditionXAmzACL, actualAst.Resources[0].Object)
+	})
 }
 
 func getReadOps(key *keys.PrivateKey, gt astGrantee, action eacl.Action) []*astOperation {
@@ -1566,6 +1600,10 @@ func TestBucketPolicy(t *testing.T) {
 	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusInternalServerError)
 
 	newPolicy.Statement[0].Resource.values[0] = arnAwsPrefix + bktName
+	newPolicy.Statement[0].Condition = map[string]map[string]string{"StringEquals": {s3ConditionXAmzACL: "public-read"}}
+	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusBadRequest)
+
+	newPolicy.Statement[0].Condition = nil
 	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusOK)
 
 	bktPolicy = getBucketPolicy(hc, bktName)
