@@ -212,7 +212,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			Service:      creds[3],
 			Region:       creds[2],
 			SignatureV4:  queryValues.Get(AmzSignature),
-			SignedFields: queryValues[AmzSignedHeaders],
+			SignedFields: strings.Split(queryValues.Get(AmzSignedHeaders), ";"),
 			Date:         creds[1],
 			IsPresigned:  true,
 			PayloadHash:  r.Header.Get(AmzContentSha256),

@@ -28,6 +28,7 @@ import (
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1200,6 +1201,76 @@ func TestCheckSignSDKSigner(t *testing.T) {
 			hdr = newAuthHeader()
 			r.Method = http.MethodDelete
 			require.ErrorIs(t, c.checkSign(hdr, box, cloneRequest(r, hdr), signTime), s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch))
+		})
+	}
+}
+
+func TestAuthenticatePresigned(t *testing.T) {
+	const secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+	var (
+		accessKeyID = strings.ReplaceAll(oidtest.Address().String(), "/", "0")
+		c           = &center{cli: &boxStub{box: &accessbox.Box{Gate: &accessbox.GateData{AccessKey: secret}}}}
+		signer      = v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
+			signer.DisableURIPathEscaping = true
+		})
+	)
+
+	awsCreds, err := credentials.NewStaticCredentialsProvider(accessKeyID, secret, "").Retrieve(context.Background())
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name          string
+		headers       map[string]string
+		signedHeaders string
+	}{
+		{
+			name:          "host",
+			signedHeaders: "host",
+		},
+		{
+			name: "several headers",
+			headers: map[string]string{
+				"Content-Type":   "text/plain",
+				"X-Amz-Meta-Key": "value",
+			},
+			signedHeaders: "content-type;host;x-amz-meta-key",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			presigned, err := http.NewRequest(http.MethodPut, "http://s3.example.com:8080/bucket/object?X-Amz-Expires=600", nil)
+			require.NoError(t, err)
+			for k, v := range tc.headers {
+				presigned.Header.Set(k, v)
+			}
+
+			uri, _, err := signer.PresignHTTP(context.Background(), awsCreds, presigned, UnsignedPayload, "s3", "us-east-1", time.Now())
+			require.NoError(t, err)
+
+			newRequest := func() *http.Request {
+				r := httptest.NewRequest(http.MethodPut, uri, strings.NewReader("payload"))
+				r.Header.Set("Content-Length", "7")
+				// Not signed, must not affect the result.
+				r.Header.Set("User-Agent", "client/1.0")
+				for k, v := range tc.headers {
+					r.Header.Set(k, v)
+				}
+				return r
+			}
+
+			r := newRequest()
+			require.Equal(t, tc.signedHeaders, r.URL.Query().Get(AmzSignedHeaders))
+
+			_, err = c.Authenticate(r)
+			require.NoError(t, err)
+
+			for k := range tc.headers {
+				r = newRequest()
+				r.Header.Set(k, "other")
+
+				_, err = c.Authenticate(r)
+				require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch))
+			}
 		})
 	}
 }
