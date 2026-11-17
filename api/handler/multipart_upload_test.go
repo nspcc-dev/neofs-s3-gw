@@ -174,6 +174,8 @@ func TestListPartsPartNumberMarker(t *testing.T) {
 	for marker, expected := range map[string][]int{
 		"0": {1, 2, 3},
 		"1": {2, 3},
+		"3": nil,
+		"4": nil,
 	} {
 		w := listParts(marker)
 		assertStatus(t, w, http.StatusOK)
