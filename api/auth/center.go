@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -415,58 +416,14 @@ func cloneRequest(r *http.Request, authHeader *authHeader) *http.Request {
 	return otherRequest
 }
 
-// signatureFromAuthHeader returns the Signature auth-param of an AWS4-HMAC-SHA256 Authorization
-// header, empty if the scheme differs, there is no such param or the header is malformed.
-func signatureFromAuthHeader(header string) string {
-	scheme, params := splitCredentials(header)
-	if !strings.EqualFold(scheme, signingAlgorithm) {
-		return ""
-	}
-	for {
-		name, value, err := params.next()
-		if err != nil || name == "" {
-			return ""
-		}
-		if strings.EqualFold(name, signatureParam) {
-			return value
-		}
-	}
-}
-
 func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *http.Request, signatureDateTime time.Time) error {
-	credProvider := credentials.NewStaticCredentialsProvider(authHeader.AccessKeyID, box.Gate.AccessKey, "")
-	awsCreds, err := credProvider.Retrieve(request.Context())
-	if err != nil {
-		return fmt.Errorf("get credentials: %w", err)
-	}
-
-	signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
-		signer.DisableURIPathEscaping = true
-	})
-
 	if authHeader.PayloadHash == "" {
 		authHeader.PayloadHash = emptyStringSHA256
 	}
 
-	var hasContentLength bool
-	for _, h := range authHeader.SignedFields {
-		if strings.ToLower(h) == "content-length" {
-			hasContentLength = true
-			break
-		}
-	}
-
-	// Final content length is unknown, request.ContentLength == -1.
-	if !hasContentLength {
-		request.ContentLength = 0
-	}
-
 	var signature string
 	if authHeader.IsPresigned {
-		var (
-			now       = time.Now()
-			signedURI string
-		)
+		var now = time.Now()
 		if signatureDateTime.Add(authHeader.Expiration).Before(now) {
 			return s3errors.GetAPIError(s3errors.ErrExpiredPresignRequest)
 		}
@@ -474,7 +431,22 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 			return s3errors.GetAPIError(s3errors.ErrRequestNotReadyYet)
 		}
 
-		signedURI, _, err = signer.PresignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime)
+		credProvider := credentials.NewStaticCredentialsProvider(authHeader.AccessKeyID, box.Gate.AccessKey, "")
+		awsCreds, err := credProvider.Retrieve(request.Context())
+		if err != nil {
+			return fmt.Errorf("get credentials: %w", err)
+		}
+
+		signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
+			signer.DisableURIPathEscaping = true
+		})
+
+		// Final content length is unknown, request.ContentLength == -1.
+		if !authHeader.signs("content-length") {
+			request.ContentLength = 0
+		}
+
+		signedURI, _, err := signer.PresignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime)
 		if err != nil {
 			return fmt.Errorf("failed to pre-sign temporary HTTP request: %w", err)
 		}
@@ -485,10 +457,7 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		}
 		signature = u.Query().Get(AmzSignature)
 	} else {
-		if err = signer.SignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime); err != nil {
-			return fmt.Errorf("failed to sign temporary HTTP request: %w", err)
-		}
-		signature = signatureFromAuthHeader(request.Header.Get(AuthorizationHdr))
+		signature = signHeaders(box.Gate.AccessKey, authHeader, request, signatureDateTime)
 	}
 
 	if authHeader.SignatureV4 != signature {
@@ -496,6 +465,98 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 	}
 
 	return nil
+}
+
+// signs reports whether the client has put the header into the signature.
+func (a *authHeader) signs(header string) bool {
+	return slices.ContainsFunc(a.SignedFields, func(name string) bool {
+		return strings.EqualFold(name, header)
+	})
+}
+
+// signHeaders returns the SigV4 signature of a request authenticated with the
+// Authorization header. It is calculated over the headers the client has signed.
+func signHeaders(secret string, authHeader *authHeader, r *http.Request, t time.Time) string {
+	type header struct {
+		name   string
+		values []string
+	}
+
+	var headers = make([]header, 0, len(authHeader.SignedFields))
+
+	for _, name := range authHeader.SignedFields {
+		name = strings.ToLower(name)
+
+		var values []string
+		if name == "host" {
+			var host = r.Host
+			if host == "" {
+				host = r.URL.Host
+			}
+			values = []string{host}
+		} else {
+			values = r.Header.Values(name)
+		}
+
+		if len(values) > 0 {
+			headers = append(headers, header{name: name, values: values})
+		}
+	}
+
+	slices.SortFunc(headers, func(a, b header) int { return strings.Compare(a.name, b.name) })
+	headers = slices.CompactFunc(headers, func(a, b header) bool { return a.name == b.name })
+
+	var query = r.URL.Query()
+	for k := range query {
+		slices.Sort(query[k])
+	}
+
+	var path = r.URL.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+
+	var canonical strings.Builder
+	canonical.WriteString(r.Method + "\n" + path + "\n" + strings.ReplaceAll(query.Encode(), "+", "%20") + "\n")
+
+	for _, h := range headers {
+		canonical.WriteString(h.name + ":")
+		for i, value := range h.values {
+			if i > 0 {
+				canonical.WriteByte(',')
+			}
+			canonical.WriteString(canonicalHeaderValue(value))
+		}
+		canonical.WriteByte('\n')
+	}
+	canonical.WriteByte('\n')
+
+	for i, h := range headers {
+		if i > 0 {
+			canonical.WriteByte(';')
+		}
+		canonical.WriteString(h.name)
+	}
+	canonical.WriteString("\n" + authHeader.PayloadHash)
+
+	var (
+		sum       = sha256.Sum256([]byte(canonical.String()))
+		scope     = t.UTC().Format("20060102") + "/" + authHeader.Region + "/" + authHeader.Service + "/aws4_request"
+		strToSign = signingAlgorithm + "\n" + t.UTC().Format(timeFormatISO8601) + "\n" + scope + "\n" + hex.EncodeToString(sum[:])
+	)
+
+	return signStr(secret, authHeader.Service, authHeader.Region, t, strToSign)
+}
+
+// canonicalHeaderValue trims the value and replaces sequential spaces with a
+// single one.
+func canonicalHeaderValue(value string) string {
+	value = strings.TrimSpace(value)
+	for strings.Contains(value, "  ") {
+		value = strings.ReplaceAll(value, "  ", " ")
+	}
+
+	return value
 }
 
 func signStr(secret, service, region string, t time.Time, strToSign string) string {
