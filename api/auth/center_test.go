@@ -6,11 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +24,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -693,4 +699,81 @@ func TestSignatureFromAuthHeader(t *testing.T) {
 	require.Equal(t, "2811ccb9e242f41426738fb1f", signatureFromAuthHeader(`AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request,SignedHeaders=host, signature = "2811ccb9e242f41426738fb1f" `))
 	require.Equal(t, "", signatureFromAuthHeader("AWS4-HMAC-SHA256 Credential=oid0cid/20210809/us-east-1/s3/aws4_request, XSignature=2811ccb9e242f41426738fb1f"))
 	require.Equal(t, "", signatureFromAuthHeader("Basic Signature=2811ccb9e242f41426738fb1f"))
+}
+
+type boxStub struct {
+	tokens.Credentials
+	box   *accessbox.Box
+	calls int
+}
+
+var errBoxStub = errors.New("box stub")
+
+func (s *boxStub) GetBox(context.Context, oid.Address) (*accessbox.Box, error) {
+	s.calls++
+	if s.box == nil {
+		return nil, errBoxStub
+	}
+	return s.box, nil
+}
+
+func TestAuthenticateClockSkew(t *testing.T) {
+	const accessKeyID = "vWqF8cMDRbJcvnPLALoQGnABPPhw8NyYMcGsfDPfZJM0HrgjonN8CgFvCZ3kh9BUXw4W2tJ5E7EAGhueSF122HB"
+
+	t.Run("header", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			offset time.Duration
+			err    error
+		}{
+			{name: "now", err: errBoxStub},
+			{name: "5 minutes ago", offset: -5 * time.Minute, err: errBoxStub},
+			{name: "5 minutes ahead", offset: 5 * time.Minute, err: errBoxStub},
+			{name: "30 minutes ago", offset: -30 * time.Minute, err: s3errors.GetAPIError(s3errors.ErrRequestTimeTooSkewed)},
+			{name: "30 minutes ahead", offset: 30 * time.Minute, err: s3errors.GetAPIError(s3errors.ErrRequestTimeTooSkewed)},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				date := time.Now().Add(tc.offset).UTC()
+				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				r.Header.Set(AmzDate, date.Format(timeFormatISO8601))
+				r.Header.Set(AuthorizationHdr, "AWS4-HMAC-SHA256 Credential="+accessKeyID+"/"+date.Format("20060102")+
+					"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=00")
+
+				cli := &boxStub{}
+				_, err := (&center{cli: cli}).Authenticate(r)
+				require.ErrorIs(t, err, tc.err)
+				if !errors.Is(tc.err, errBoxStub) {
+					require.Zero(t, cli.calls)
+				}
+			})
+		}
+	})
+
+	t.Run("presigned", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			offset time.Duration
+			err    error
+		}{
+			{name: "5 minutes ahead", offset: 5 * time.Minute, err: s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch)},
+			{name: "30 minutes ahead", offset: 30 * time.Minute, err: s3errors.GetAPIError(s3errors.ErrRequestNotReadyYet)},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				date := time.Now().Add(tc.offset).UTC()
+				query := url.Values{
+					AmzAlgorithm:     {"AWS4-HMAC-SHA256"},
+					AmzCredential:    {accessKeyID + "/" + date.Format("20060102") + "/us-east-1/s3/aws4_request"},
+					AmzDate:          {date.Format(timeFormatISO8601)},
+					AmzExpires:       {"3600"},
+					AmzSignedHeaders: {"host"},
+					AmzSignature:     {"00"},
+				}
+				r := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+
+				cli := &boxStub{box: &accessbox.Box{Gate: &accessbox.GateData{AccessKey: "secret"}}}
+				_, err := (&center{cli: cli}).Authenticate(r)
+				require.ErrorIs(t, err, tc.err)
+			})
+		}
+	})
 }

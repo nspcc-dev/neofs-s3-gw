@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 - Support for `STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER` uploads (#1399)
 
 ### Changed
+- Presigned URLs dated up to 15 minutes ahead of the gateway clock are accepted (#1409)
 
 ### Fixed
 - Endless loop on an empty multipart part (#1405)
@@ -15,6 +16,7 @@ This document outlines major changes between releases.
 - `ListParts` returning all parts for a marker at or after the last part (#1406)
 - Non-ASCII keys truncated in ListObjects responses with URL encoding (#1398)
 - Content-Encoding, Content-Disposition and Content-Language headers not stored and returned for objects (#1398)
+- Signed requests with `X-Amz-Date` more than 15 minutes off the gateway clock were accepted (#1409)
 
 ### Updated
 
