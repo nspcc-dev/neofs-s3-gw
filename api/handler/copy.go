@@ -190,8 +190,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 			srcObjInfo.Headers[api.ContentType] = srcObjInfo.ContentType
 		}
 		metadata = srcObjInfo.Headers
-	} else if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
-		metadata[api.ContentType] = contentType
+	} else {
+		if contentType := r.Header.Get(api.ContentType); len(contentType) > 0 {
+			metadata[api.ContentType] = contentType
+		}
+		copyStandardHeaders(metadata, r.Header)
 	}
 
 	params := &layer.CopyObjectParams{

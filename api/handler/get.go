@@ -116,11 +116,10 @@ func writeHeaders(h http.Header, requestHeader http.Header, info *data.ObjectInf
 		h.Set(api.AmzVersionID, info.Version)
 	}
 
-	if cacheControl := info.Headers[api.CacheControl]; cacheControl != "" {
-		h.Set(api.CacheControl, cacheControl)
-	}
-	if expires := info.Headers[api.Expires]; expires != "" {
-		h.Set(api.Expires, expires)
+	for _, name := range api.StandardObjectHeaders {
+		if value := info.Headers[name]; value != "" {
+			h.Set(name, value)
+		}
 	}
 
 	for key, val := range info.Headers {
