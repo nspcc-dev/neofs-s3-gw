@@ -709,7 +709,8 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 
 	var groupRecordsLeft int
 	var currentResource orderedAstResource
-	for i, record := range table.Records() {
+	records := table.Records()
+	for i, record := range records {
 		if serviceRec := tryServiceRecord(record); serviceRec != nil {
 			resInfo := resourceInfoFromName(serviceRec.Resource, bktName)
 			groupRecordsLeft = serviceRec.GroupRecordsLength
@@ -719,6 +720,9 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 		} else if groupRecordsLeft != 0 {
 			groupRecordsLeft--
 			addOperationsAndUpdateMap(currentResource, record, resourceMap)
+		} else if i+1 < len(records) && isWideSearchRecord(record, records[i+1]) {
+			// It belongs to the resource of the next record and is formed again from it.
+			continue
 		} else {
 			resInfo := resInfoFromFilters(bktName, record.Filters())
 			resource := getResourceOrCreate(resourceMap, i, resInfo)
@@ -729,6 +733,28 @@ func tableToAst(table *eacl.Table, bktName string) *ast {
 	return &ast{
 		Resources: formReverseOrderResources(resourceMap),
 	}
+}
+
+// isWideSearchRecord reports whether the record is the one without filters
+// that formRecords adds before the next Allow Search record with filters.
+func isWideSearchRecord(record, next eacl.Record) bool {
+	if record.Action() != eacl.ActionAllow ||
+		record.Operation() != eacl.OperationSearch ||
+		len(record.Filters()) != 0 {
+		return false
+	}
+
+	if next.Action() != eacl.ActionAllow ||
+		next.Operation() != eacl.OperationSearch ||
+		len(next.Filters()) == 0 {
+		return false
+	}
+
+	var cmpFunc = func(a, b eacl.Target) bool {
+		return a.Role() == b.Role() && slices.Equal(a.Accounts(), b.Accounts())
+	}
+
+	return slices.EqualFunc(record.Targets(), next.Targets(), cmpFunc)
 }
 
 func formReverseOrderResources(resourceMap map[string]orderedAstResource) []*astResource {
