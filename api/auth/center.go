@@ -259,6 +259,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
 	}
 
+	if needClientTime {
+		if skew := time.Since(signatureDateTime); skew > limits.MaxClockSkew || skew < -limits.MaxClockSkew {
+			return nil, s3errors.GetAPIError(s3errors.ErrRequestTimeTooSkewed)
+		}
+	}
+
 	if err := c.checkAccessKeyID(authHdr.AccessKeyID); err != nil {
 		return nil, err
 	}
