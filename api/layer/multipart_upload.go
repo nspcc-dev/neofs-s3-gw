@@ -1699,12 +1699,10 @@ func (n *layer) ListParts(ctx context.Context, p *ListPartsParams) (*ListPartsIn
 	})
 
 	if p.PartNumberMarker != 0 {
-		for i, part := range parts {
-			if part.PartNumber > p.PartNumberMarker {
-				parts = parts[i:]
-				break
-			}
-		}
+		// No part after the marker leaves an empty list.
+		parts = slices.DeleteFunc(parts, func(part *Part) bool {
+			return part.PartNumber <= p.PartNumberMarker
+		})
 	}
 
 	if len(parts) > p.MaxParts {
