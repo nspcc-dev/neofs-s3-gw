@@ -470,8 +470,8 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		if signatureDateTime.Add(authHeader.Expiration).Before(now) {
 			return s3errors.GetAPIError(s3errors.ErrExpiredPresignRequest)
 		}
-		if now.Before(signatureDateTime) {
-			return s3errors.GetAPIError(s3errors.ErrBadRequest)
+		if signatureDateTime.After(now.Add(limits.MaxClockSkew)) {
+			return s3errors.GetAPIError(s3errors.ErrRequestNotReadyYet)
 		}
 
 		signedURI, _, err = signer.PresignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime)

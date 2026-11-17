@@ -8,6 +8,7 @@ This document outlines major changes between releases.
 - Support for `STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER` uploads (#1399)
 
 ### Changed
+- Presigned URLs dated up to 15 minutes ahead of the gateway clock are accepted (#1409)
 
 ### Fixed
 - Endless loop on an empty multipart part (#1405)
