@@ -975,6 +975,10 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 		op := readOps[i]
 		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
 
+		if op == eacl.OperationSearch {
+			records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
+		}
+
 		applyFilters(record)
 		records = append(records, *record)
 	}

@@ -1015,6 +1015,12 @@ func formRecords(resource *astResource) ([]*eacl.Record, error) {
 			record.SetTargets(eacl.NewTargetByRole(eacl.RoleUser))
 		case astGranteeAccount:
 			record.SetTargets(eacl.NewTargetByAccounts(astOp.Users))
+
+			// Only wide EACL setting works for Allow Search.
+			if record.Action() == eacl.ActionAllow && astOp.Op == eacl.OperationSearch {
+				wideRecord := eacl.ConstructRecord(astOp.Action, astOp.Op, []eacl.Target{eacl.NewTargetByAccounts(astOp.Users)})
+				res = append(res, &wideRecord)
+			}
 		}
 
 		var filters []eacl.Filter

@@ -17,6 +17,7 @@ This document outlines major changes between releases.
 - Non-ASCII keys truncated in ListObjects responses with URL encoding (#1398)
 - Content-Encoding, Content-Disposition and Content-Language headers not stored and returned for objects (#1398)
 - Signed requests with `X-Amz-Date` more than 15 minutes off the gateway clock were accepted (#1409)
+- Bucket policy `Allow` for a `CanonicalUser` not letting that user read the object (#1407)
 
 ### Updated
 
