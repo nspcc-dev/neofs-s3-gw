@@ -13,7 +13,7 @@ require (
 	github.com/labstack/echo/v4 v4.16.1
 	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.5.1
-	github.com/nats-io/nats.go v1.49.0
+	github.com/nats-io/nats.go v1.56.0
 	github.com/nspcc-dev/neo-go v0.123.0
 	github.com/nspcc-dev/neofs-contract v0.28.0
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.24
@@ -50,7 +50,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mr-tron/base58 v1.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nats-io/nkeys v0.4.15 // indirect
+	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nspcc-dev/bbolt v0.0.0-20260404200350-24f70ceb2bd9 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20260826165212-78b9a86d413c // indirect
