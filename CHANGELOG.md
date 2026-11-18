@@ -11,6 +11,8 @@ This document outlines major changes between releases.
 - Presigned URLs dated up to 15 minutes ahead of the gateway clock are accepted (#1409)
 
 ### Fixed
+- `SignatureDoesNotMatch` for requests signing a zero `Content-Length` or `User-Agent` (#1400)
+- `SignatureDoesNotMatch` for presigned URLs signing headers besides `Host` (#1400)
 - Endless loop on an empty multipart part (#1405)
 - `ListParts` with `part-number-marker=0` answered with an internal error (#1406)
 - `ListParts` returning all parts for a marker at or after the last part (#1406)
