@@ -28,6 +28,7 @@ This document outlines major changes between releases.
 - github.com/aws/aws-sdk-go-v2/credentials v1.20.2 => v1.21.1 (#1416)
 - github.com/nats-io/nats.go v1.49.0 => v1.56.0 (#1416)
 - google.golang.org/grpc v1.83.2 => v1.85.0 (#1416)
+- github.com/labstack/echo/v4 v4.16.1 => v4.16.5 (#1416)
 
 ### Removed
 

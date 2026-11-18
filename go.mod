@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/klauspost/reedsolomon v1.14.2
-	github.com/labstack/echo/v4 v4.16.1
+	github.com/labstack/echo/v4 v4.16.5
 	github.com/minio/crc64nvme v1.1.1
 	github.com/minio/sio v0.5.1
 	github.com/nats-io/nats.go v1.56.0
