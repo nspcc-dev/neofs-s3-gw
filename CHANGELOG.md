@@ -25,6 +25,7 @@ This document outlines major changes between releases.
 - github.com/prometheus/client_golang v1.24.1 => v1.25.0 (#1416)
 - github.com/minio/sio v0.4.3 => v0.5.1 (#1416)
 - github.com/aws/aws-sdk-go-v2 v1.45.1 => v1.48.0 (#1416)
+- github.com/aws/aws-sdk-go-v2/credentials v1.20.2 => v1.21.1 (#1416)
 
 ### Removed
 
