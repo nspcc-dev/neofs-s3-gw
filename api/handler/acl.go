@@ -1139,7 +1139,7 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 
 	for _, state := range bktPolicy.Statement {
 		if len(state.NotPrincipal) != 0 || len(state.NotAction) != 0 || len(state.NotResource) != 0 {
-			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrMalformedPolicy, errors.New("NotPrincipal, NotAction and NotResource are not supported"))
+			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, errors.New("NotPrincipal, NotAction and NotResource are not supported"))
 		}
 
 		if state.Effect == "Allow" &&
@@ -1166,7 +1166,7 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 		}
 
 		if len(state.Condition) != 0 {
-			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrMalformedPolicy, errors.New("conditions are not supported"))
+			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, errors.New("conditions are not supported"))
 		}
 
 		if state.Principal.AWS != "" && state.Principal.AWS != allUsersWildcard ||

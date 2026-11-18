@@ -183,6 +183,7 @@ const (
 	ErrMalformedJSON
 	ErrInsecureClientRequest
 	ErrIncorrectContinuationToken
+	ErrUnsupportedPolicy
 
 	// S3 Select Errors.
 	ErrEmptyRequestBody
@@ -1161,6 +1162,12 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidArgument",
 		Description:    "The continuation token provided is incorrect",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedPolicy: {
+		ErrCode:        ErrUnsupportedPolicy,
+		Code:           "UnsupportedPolicy",
+		Description:    "Policy contains elements not supported by NeoFS S3 Gateway.",
+		HTTPStatusCode: http.StatusUnprocessableEntity,
 	},
 
 	// S3 Select API Errors

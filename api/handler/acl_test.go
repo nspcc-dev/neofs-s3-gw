@@ -209,7 +209,7 @@ func TestPolicyToAstUnsupportedElements(t *testing.T) {
 			require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{`+state+`}]}`), policy))
 
 			_, err := policyToAst(policy)
-			require.True(t, s3errors.IsS3Error(err, s3errors.ErrMalformedPolicy), err)
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrUnsupportedPolicy), err)
 		})
 	}
 
@@ -1601,7 +1601,7 @@ func TestBucketPolicy(t *testing.T) {
 
 	newPolicy.Statement[0].Resource.values[0] = arnAwsPrefix + bktName
 	newPolicy.Statement[0].Condition = map[string]map[string]string{"StringEquals": {s3ConditionXAmzACL: "public-read"}}
-	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusBadRequest)
+	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusUnprocessableEntity)
 
 	newPolicy.Statement[0].Condition = nil
 	putBucketPolicy(hc, bktName, newPolicy, box, http.StatusOK)
