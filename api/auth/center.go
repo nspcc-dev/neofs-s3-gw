@@ -9,13 +9,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
 
-	v4amz "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	v4 "github.com/nspcc-dev/neofs-s3-gw/api/auth/signer/v4"
@@ -421,7 +419,6 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		authHeader.PayloadHash = emptyStringSHA256
 	}
 
-	var signature string
 	if authHeader.IsPresigned {
 		var now = time.Now()
 		if signatureDateTime.Add(authHeader.Expiration).Before(now) {
@@ -430,52 +427,18 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		if signatureDateTime.After(now.Add(limits.MaxClockSkew)) {
 			return s3errors.GetAPIError(s3errors.ErrRequestNotReadyYet)
 		}
-
-		credProvider := credentials.NewStaticCredentialsProvider(authHeader.AccessKeyID, box.Gate.AccessKey, "")
-		awsCreds, err := credProvider.Retrieve(request.Context())
-		if err != nil {
-			return fmt.Errorf("get credentials: %w", err)
-		}
-
-		signer := v4amz.NewSigner(func(signer *v4amz.SignerOptions) {
-			signer.DisableURIPathEscaping = true
-		})
-
-		// Final content length is unknown, request.ContentLength == -1.
-		if !authHeader.signs("content-length") {
-			request.ContentLength = 0
-		}
-
-		signedURI, _, err := signer.PresignHTTP(request.Context(), awsCreds, request, authHeader.PayloadHash, authHeader.Service, authHeader.Region, signatureDateTime)
-		if err != nil {
-			return fmt.Errorf("failed to pre-sign temporary HTTP request: %w", err)
-		}
-
-		u, err := url.ParseRequestURI(signedURI)
-		if err != nil {
-			return fmt.Errorf("parse signed uri: %w", err)
-		}
-		signature = u.Query().Get(AmzSignature)
-	} else {
-		signature = signHeaders(box.Gate.AccessKey, authHeader, request, signatureDateTime)
 	}
 
-	if authHeader.SignatureV4 != signature {
+	if authHeader.SignatureV4 != signHeaders(box.Gate.AccessKey, authHeader, request, signatureDateTime) {
 		return s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch)
 	}
 
 	return nil
 }
 
-// signs reports whether the client has put the header into the signature.
-func (a *authHeader) signs(header string) bool {
-	return slices.ContainsFunc(a.SignedFields, func(name string) bool {
-		return strings.EqualFold(name, header)
-	})
-}
-
-// signHeaders returns the SigV4 signature of a request authenticated with the
-// Authorization header. It is calculated over the headers the client has signed.
+// signHeaders returns the SigV4 signature of a request, calculated over the
+// headers the client has signed. A presigned request must come without
+// X-Amz-Signature in its query, see [cloneRequest].
 func signHeaders(secret string, authHeader *authHeader, r *http.Request, t time.Time) string {
 	type header struct {
 		name   string

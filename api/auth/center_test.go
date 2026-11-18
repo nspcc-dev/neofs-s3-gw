@@ -1223,6 +1223,7 @@ func TestAuthenticatePresigned(t *testing.T) {
 		name          string
 		headers       map[string]string
 		signedHeaders string
+		noHoisting    bool
 	}{
 		{
 			name:          "host",
@@ -1236,6 +1237,14 @@ func TestAuthenticatePresigned(t *testing.T) {
 			},
 			signedHeaders: "content-type;host;x-amz-meta-key",
 		},
+		{
+			name: "header kept out of the query",
+			headers: map[string]string{
+				"X-Amz-Expected-Bucket-Owner": "owner",
+			},
+			signedHeaders: "host;x-amz-expected-bucket-owner",
+			noHoisting:    true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			presigned, err := http.NewRequest(http.MethodPut, "http://s3.example.com:8080/bucket/object?X-Amz-Expires=600", nil)
@@ -1244,7 +1253,9 @@ func TestAuthenticatePresigned(t *testing.T) {
 				presigned.Header.Set(k, v)
 			}
 
-			uri, _, err := signer.PresignHTTP(context.Background(), awsCreds, presigned, UnsignedPayload, "s3", "us-east-1", time.Now())
+			uri, _, err := signer.PresignHTTP(context.Background(), awsCreds, presigned, UnsignedPayload, "s3", "us-east-1", time.Now(), func(o *v4amz.SignerOptions) {
+				o.DisableHeaderHoisting = tc.noHoisting
+			})
 			require.NoError(t, err)
 
 			newRequest := func() *http.Request {
@@ -1272,5 +1283,59 @@ func TestAuthenticatePresigned(t *testing.T) {
 				require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch))
 			}
 		})
+	}
+}
+
+// The SDK signer never signs a zero Content-Length or User-Agent, the signature
+// is made by hand here.
+func TestAuthenticatePresignedContentLengthUserAgent(t *testing.T) {
+	const (
+		secret    = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+		userAgent = "client/1.0"
+	)
+
+	var (
+		accessKeyID = strings.ReplaceAll(oidtest.Address().String(), "/", "0")
+		c           = &center{cli: &boxStub{box: &accessbox.Box{Gate: &accessbox.GateData{AccessKey: secret}}}}
+		signTime    = time.Now().UTC()
+		date        = signTime.Format(timeFormatISO8601)
+		scope       = signTime.Format("20060102") + "/us-east-1/s3/aws4_request"
+		query       = "X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+			"&X-Amz-Credential=" + accessKeyID + "%2F" + strings.ReplaceAll(scope, "/", "%2F") +
+			"&X-Amz-Date=" + date +
+			"&X-Amz-Expires=600" +
+			"&X-Amz-SignedHeaders=content-length%3Bhost%3Buser-agent"
+		canonical = "PUT\n" +
+			"/bucket/object\n" +
+			query + "\n" +
+			"content-length:0\n" +
+			"host:s3.example.com:8080\n" +
+			"user-agent:" + userAgent + "\n" +
+			"\n" +
+			"content-length;host;user-agent\n" +
+			UnsignedPayload
+		sum       = sha256.Sum256([]byte(canonical))
+		strToSign = "AWS4-HMAC-SHA256\n" + date + "\n" + scope + "\n" + hex.EncodeToString(sum[:])
+		uri       = "http://s3.example.com:8080/bucket/object?" + query + "&X-Amz-Signature=" + signStr(secret, "s3", "us-east-1", signTime, strToSign)
+	)
+
+	newRequest := func() *http.Request {
+		r := httptest.NewRequest(http.MethodPut, uri, http.NoBody)
+		r.Header.Set("Content-Length", "0")
+		r.Header.Set("User-Agent", userAgent)
+		// Not signed, must not affect the result.
+		r.Header.Set("Content-Type", "text/plain")
+		return r
+	}
+
+	_, err := c.Authenticate(newRequest())
+	require.NoError(t, err)
+
+	for _, k := range []string{"Content-Length", "User-Agent"} {
+		r := newRequest()
+		r.Header.Set(k, "1")
+
+		_, err = c.Authenticate(r)
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch))
 	}
 }
