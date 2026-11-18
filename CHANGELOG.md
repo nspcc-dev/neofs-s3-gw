@@ -19,6 +19,7 @@ This document outlines major changes between releases.
 - Signed requests with `X-Amz-Date` more than 15 minutes off the gateway clock were accepted (#1409)
 
 ### Updated
+- golang.org/x/sync v0.23.0 => v0.25.0 (#1416)
 
 ### Removed
 
