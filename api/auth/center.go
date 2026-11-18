@@ -419,6 +419,11 @@ func (c *center) checkSign(authHeader *authHeader, box *accessbox.Box, request *
 		authHeader.PayloadHash = emptyStringSHA256
 	}
 
+	// With virtual-hosted-style addressing the bucket is in the host.
+	if !slices.ContainsFunc(authHeader.SignedFields, func(name string) bool { return strings.EqualFold(name, "host") }) {
+		return s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch)
+	}
+
 	if authHeader.IsPresigned {
 		var now = time.Now()
 		if signatureDateTime.Add(authHeader.Expiration).Before(now) {

@@ -1339,3 +1339,63 @@ func TestAuthenticatePresignedContentLengthUserAgent(t *testing.T) {
 		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch))
 	}
 }
+
+// A signature not covering the host is valid for any bucket addressed in the
+// virtual-hosted style, it must not be accepted even if it is correct.
+func TestAuthenticateHostNotSigned(t *testing.T) {
+	const secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+	var (
+		accessKeyID = strings.ReplaceAll(oidtest.Address().String(), "/", "0")
+		c           = &center{cli: &boxStub{box: &accessbox.Box{Gate: &accessbox.GateData{AccessKey: secret}}}}
+		signTime    = time.Now().UTC()
+		date        = signTime.Format(timeFormatISO8601)
+		scope       = signTime.Format("20060102") + "/us-east-1/s3/aws4_request"
+	)
+
+	sign := func(canonical string) string {
+		sum := sha256.Sum256([]byte(canonical))
+		return signStr(secret, "s3", "us-east-1", signTime, "AWS4-HMAC-SHA256\n"+date+"\n"+scope+"\n"+hex.EncodeToString(sum[:]))
+	}
+
+	for _, tc := range []struct {
+		name          string
+		signedHeaders string
+		err           error
+	}{
+		{name: "signed", signedHeaders: "host;x-amz-date"},
+		{name: "not signed", signedHeaders: "x-amz-date", err: s3errors.GetAPIError(s3errors.ErrSignatureDoesNotMatch)},
+	} {
+		var headers = "x-amz-date:" + date + "\n"
+		if tc.err == nil {
+			headers = "host:bucket.s3.example.com\n" + headers
+		}
+
+		t.Run("header/"+tc.name, func(t *testing.T) {
+			signature := sign("GET\n/object\n\n" + headers + "\n" + tc.signedHeaders + "\n" + emptyStringSHA256)
+
+			r := httptest.NewRequest(http.MethodGet, "http://bucket.s3.example.com/object", nil)
+			r.Header.Set(AmzDate, date)
+			r.Header.Set(AuthorizationHdr, "AWS4-HMAC-SHA256 Credential="+accessKeyID+"/"+scope+
+				", SignedHeaders="+tc.signedHeaders+", Signature="+signature)
+
+			_, err := c.Authenticate(r)
+			require.ErrorIs(t, err, tc.err)
+		})
+
+		t.Run("presigned/"+tc.name, func(t *testing.T) {
+			query := "X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+				"&X-Amz-Credential=" + accessKeyID + "%2F" + strings.ReplaceAll(scope, "/", "%2F") +
+				"&X-Amz-Date=" + date +
+				"&X-Amz-Expires=600" +
+				"&X-Amz-SignedHeaders=" + strings.ReplaceAll(tc.signedHeaders, ";", "%3B")
+			signature := sign("GET\n/object\n" + query + "\n" + headers + "\n" + tc.signedHeaders + "\n" + UnsignedPayload)
+
+			r := httptest.NewRequest(http.MethodGet, "http://bucket.s3.example.com/object?"+query+"&X-Amz-Signature="+signature, nil)
+			r.Header.Set(AmzDate, date)
+
+			_, err := c.Authenticate(r)
+			require.ErrorIs(t, err, tc.err)
+		})
+	}
+}
