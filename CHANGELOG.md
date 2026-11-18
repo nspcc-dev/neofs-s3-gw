@@ -22,6 +22,7 @@ This document outlines major changes between releases.
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)
 - golang.org/x/term v0.46.0 => v0.48.0 (#1416)
 - github.com/spf13/pflag v1.0.10 => v1.1.0 (#1416)
+- github.com/prometheus/client_golang v1.24.1 => v1.25.0 (#1416)
 
 ### Removed
 
