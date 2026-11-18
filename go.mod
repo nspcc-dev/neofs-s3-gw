@@ -12,7 +12,7 @@ require (
 	github.com/klauspost/reedsolomon v1.14.2
 	github.com/labstack/echo/v4 v4.16.1
 	github.com/minio/crc64nvme v1.1.1
-	github.com/minio/sio v0.4.3
+	github.com/minio/sio v0.5.1
 	github.com/nats-io/nats.go v1.49.0
 	github.com/nspcc-dev/neo-go v0.123.0
 	github.com/nspcc-dev/neofs-contract v0.28.0
