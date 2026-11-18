@@ -19,6 +19,16 @@ This document outlines major changes between releases.
 - Signed requests with `X-Amz-Date` more than 15 minutes off the gateway clock were accepted (#1409)
 
 ### Updated
+- golang.org/x/sync v0.23.0 => v0.25.0 (#1416)
+- golang.org/x/term v0.46.0 => v0.48.0 (#1416)
+- github.com/spf13/pflag v1.0.10 => v1.1.0 (#1416)
+- github.com/prometheus/client_golang v1.24.1 => v1.25.0 (#1416)
+- github.com/minio/sio v0.4.3 => v0.5.1 (#1416)
+- github.com/aws/aws-sdk-go-v2 v1.45.1 => v1.48.0 (#1416)
+- github.com/aws/aws-sdk-go-v2/credentials v1.20.2 => v1.21.1 (#1416)
+- github.com/nats-io/nats.go v1.49.0 => v1.56.0 (#1416)
+- google.golang.org/grpc v1.83.2 => v1.85.0 (#1416)
+- github.com/labstack/echo/v4 v4.16.1 => v4.16.5 (#1416)
 
 ### Removed
 

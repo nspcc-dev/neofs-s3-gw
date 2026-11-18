@@ -311,7 +311,7 @@ func (d *Decrypter) initNextDecReader() error {
 			MinVersion:     sio.Version20,
 			SequenceNumber: uint32(d.seqNumber),
 			Key:            d.encryption.Key(),
-			CipherSuites:   []byte{sio.AES_256_GCM},
+			CipherSuites:   []byte{sio.AES_GCM},
 		})
 	if err != nil {
 		return fmt.Errorf("couldn't create decrypter: %w", err)

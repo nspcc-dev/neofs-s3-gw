@@ -234,7 +234,7 @@ func encryptionReader(r io.Reader, size uint64, key []byte) (io.Reader, uint64, 
 		return nil, 0, fmt.Errorf("failed to compute enc size: %w", err)
 	}
 
-	r, err = sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, MaxVersion: sio.Version20, Key: key, CipherSuites: []byte{sio.AES_256_GCM}})
+	r, err = sio.EncryptReader(r, sio.Config{MinVersion: sio.Version20, MaxVersion: sio.Version20, Key: key, CipherSuites: []byte{sio.AES_GCM}})
 	if err != nil {
 		return nil, 0, fmt.Errorf("couldn't create encrypter: %w", err)
 	}
