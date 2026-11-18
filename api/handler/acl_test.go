@@ -211,6 +211,50 @@ func getReadOps(key *keys.PrivateKey, gt astGrantee, action eacl.Action) []*astO
 	return result
 }
 
+func TestPolicyUpdateKeepsObjectRecordsFirst(t *testing.T) {
+	const bktName = "bucket"
+
+	key, err := keys.NewPrivateKey()
+	require.NoError(t, err)
+
+	for name, principal := range map[string]string{
+		"wildcard":       `"*"`,
+		"canonical user": `{"CanonicalUser":"` + user.NewFromScriptHash(key.GetScriptHash()).String() + `"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			table, err := bucketACLToTable(&AccessControlPolicy{})
+			require.NoError(t, err)
+
+			for _, objName := range []string{"first", "second", "third"} {
+				policy := &bucketPolicy{Bucket: bktName}
+				require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"Allow","Principal":`+principal+
+					`,"Action":"s3:GetObject","Resource":"arn:aws:s3:::`+bktName+`/`+objName+`"}]}`), policy))
+
+				child, err := policyToAst(policy)
+				require.NoError(t, err)
+
+				resAst, updated := mergeAst(tableToAst(table, bktName), child)
+				require.True(t, updated)
+
+				table, err = astToTable(resAst)
+				require.NoError(t, err)
+
+				var denied bool
+				for _, record := range table.Records() {
+					if record.Action() == eacl.ActionDeny {
+						denied = true
+						continue
+					}
+					require.False(t, denied, "allow record after the deny ones")
+				}
+			}
+
+			// Wide search record and three ones with filters per object, deny record per operation.
+			require.Len(t, table.Records(), 3*(1+len(readOps))+len(fullOps))
+		})
+	}
+}
+
 func TestMergeAstUnModified(t *testing.T) {
 	key, err := keys.NewPrivateKey()
 	require.NoError(t, err)
@@ -974,6 +1018,10 @@ func allowedTableForPrivateObject(t *testing.T, key *keys.PrivateKey, resInfo *r
 	for i := range slices.Backward(readOps) {
 		op := readOps[i]
 		record := getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash()))
+
+		if op == eacl.OperationSearch {
+			records = append(records, *getAllowRecordWithUser(op, user.NewFromScriptHash(key.GetScriptHash())))
+		}
 
 		applyFilters(record)
 		records = append(records, *record)
