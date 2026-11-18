@@ -153,12 +153,15 @@ type bucketPolicy struct {
 }
 
 type statement struct {
-	Sid       string                       `json:"Sid"`
-	Effect    string                       `json:"Effect"`
-	Principal principal                    `json:"Principal"`
-	Action    stringOrSlice                `json:"Action"`
-	Resource  stringOrSlice                `json:"Resource"`
-	Condition map[string]map[string]string `json:"Condition"`
+	Sid          string                       `json:"Sid"`
+	Effect       string                       `json:"Effect"`
+	Principal    principal                    `json:"Principal"`
+	NotPrincipal json.RawMessage              `json:"NotPrincipal,omitempty"`
+	Action       stringOrSlice                `json:"Action"`
+	NotAction    json.RawMessage              `json:"NotAction,omitempty"`
+	Resource     stringOrSlice                `json:"Resource"`
+	NotResource  json.RawMessage              `json:"NotResource,omitempty"`
+	Condition    map[string]map[string]string `json:"Condition"`
 }
 
 type principal struct {
@@ -1135,11 +1138,15 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 	rr := make(map[string]*astResource)
 
 	for _, state := range bktPolicy.Statement {
+		if len(state.NotPrincipal) != 0 || len(state.NotAction) != 0 || len(state.NotResource) != 0 {
+			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, errors.New("NotPrincipal, NotAction and NotResource are not supported"))
+		}
+
 		if state.Effect == "Allow" &&
 			state.Action.Equal(stringOrSlice{values: []string{"s3:PutObject"}}) &&
 			state.Principal.AWS == "*" &&
 			state.Resource.Equal(stringOrSlice{values: []string{fmt.Sprintf("arn:aws:s3:::%s/*", bktPolicy.Bucket)}}) {
-			if cond, ok := state.Condition["StringEquals"]; ok {
+			if cond, ok := state.Condition["StringEquals"]; ok && len(state.Condition) == 1 && len(cond) == 1 {
 				if val := cond[s3ConditionXAmzACL]; val == cannedACLBucketOwnerFullControl {
 					rr[amzBucketOwnerEnforced] = &astResource{
 						resourceInfo: resourceInfo{
@@ -1156,6 +1163,10 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 					continue
 				}
 			}
+		}
+
+		if len(state.Condition) != 0 {
+			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, errors.New("conditions are not supported"))
 		}
 
 		if state.Principal.AWS != "" && state.Principal.AWS != allUsersWildcard ||
