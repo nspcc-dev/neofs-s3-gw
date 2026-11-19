@@ -75,6 +75,9 @@ Each `X-Amz-Meta-<name>` request header is stored as an attribute with the
 lowercased `<name>` as its key, without the prefix. It is returned as
 `X-Amz-Meta-<name>`.
 
+NeoFS does not allow attributes with an empty value, so a request with an empty
+metadata value is rejected, see [Metadata](./aws_s3_compat.md#metadata).
+
 ### `S3-Meta-DeleteMarker`
 
 Contains the server timestamp of object removal for versioned container. It is used for special object called

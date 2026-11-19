@@ -406,5 +406,15 @@ Tightly related to lifecycle support.
 
 ## Metadata
 
-Each meta parameter value must be non-empty. If any parameter value is an empty,
-then "Your metadata headers are not supported." error will be returned on the object put operation.
+User metadata (`X-Amz-Meta-*` headers) with an empty value is not supported,
+unlike in AWS S3, which stores such a key. Metadata is kept in NeoFS object
+attributes, and an attribute can not have an empty value. A value consisting
+of spaces only is empty too, because HTTP strips them.
+
+`PutObject` and `CopyObject` with the `REPLACE` metadata directive answer such
+a request with `400 InvalidArgument` ("Your metadata headers are not
+supported."). `CreateMultipartUpload` fails as well. Nothing is stored in any
+of these cases, the gateway never drops the key silently.
+
+An application that needs a key without a value has to omit the key or store
+some placeholder value of its own.
