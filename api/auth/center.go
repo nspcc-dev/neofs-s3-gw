@@ -301,6 +301,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	}
 
 	clonedRequest := cloneRequest(r, authHdr)
+	// AWS S3 rejects any unsigned x-amz-* header, the trailer declaration is the
+	// one the payload check relies on.
+	if r.Header.Get(AmzTrailer) != clonedRequest.Header.Get(AmzTrailer) {
+		return nil, s3errors.GetAPIError(s3errors.ErrUnsignedHeaders)
+	}
+
 	if err = c.checkSign(authHdr, box, clonedRequest, signatureDateTime); err != nil {
 		return nil, err
 	}
