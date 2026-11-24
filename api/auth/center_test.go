@@ -1687,6 +1687,7 @@ func TestAuthenticateTrailerDeclaration(t *testing.T) {
 		err     string
 	}{
 		{name: "signed trailer", trailer: trailer, signed: true},
+		{name: "unsigned trailer", trailer: trailer, err: s3errors.GetAPIError(s3errors.ErrUnsignedHeaders).Error()},
 		{name: "without trailer", err: "missing checksum trailer declaration"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

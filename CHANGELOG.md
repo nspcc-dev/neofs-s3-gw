@@ -27,6 +27,7 @@ This document outlines major changes between releases.
 - Presigned URLs and POST forms with a malformed `X-Amz-Date` answered with 403 instead of 400 (#1403)
 - Unsupported `x-amz-trailer` value answered with 403 instead of 400 (#1403)
 - Panic on a `STREAMING-UNSIGNED-PAYLOAD-TRAILER` upload without `x-amz-trailer`
+- Unsigned `x-amz-trailer` header ignored for signed requests
 
 ### Updated
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)
