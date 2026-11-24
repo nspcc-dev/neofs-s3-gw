@@ -695,8 +695,8 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 			tagResult, ok := tagsByVersion[version]
 			if !ok || psr.CreationTimestamp > tagResult.CreationTimestamp {
 				tagsByVersion[version] = psr
-				continue
 			}
+			continue
 		default:
 			// lock meta object.
 			if item.Attributes[6] != "" {

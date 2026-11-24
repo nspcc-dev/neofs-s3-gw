@@ -11,6 +11,7 @@ This document outlines major changes between releases.
 - Presigned URLs dated up to 15 minutes ahead of the gateway clock are accepted (#1409)
 
 ### Fixed
+- `GetObject` and `HeadObject` returning a tag object after several `PutObjectTagging` calls (#1418)
 - `SignatureDoesNotMatch` for requests signing a zero `Content-Length` or `User-Agent` (#1400)
 - `SignatureDoesNotMatch` for presigned URLs signing headers besides `Host` (#1400)
 - Endless loop on an empty multipart part (#1405)
