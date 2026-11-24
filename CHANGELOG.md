@@ -22,6 +22,7 @@ This document outlines major changes between releases.
 - Bucket policy `Allow` for a `CanonicalUser` not letting that user read the object (#1407)
 - Bucket policy update revoking object grants made by the previous policies (#1407)
 - Bucket policy conditions, `NotPrincipal`, `NotAction` and `NotResource` are rejected instead of being ignored (#1408)
+- Presigned URLs with a malformed or negative `X-Amz-Expires` or without a required parameter answered with 403 instead of 400 (#1403)
 
 ### Updated
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)

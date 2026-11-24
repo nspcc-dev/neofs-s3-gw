@@ -850,6 +850,68 @@ func TestAuthenticateClockSkew(t *testing.T) {
 	})
 }
 
+func TestAuthenticatePresignedParams(t *testing.T) {
+	const accessKeyID = "vWqF8cMDRbJcvnPLALoQGnABPPhw8NyYMcGsfDPfZJM0HrgjonN8CgFvCZ3kh9BUXw4W2tJ5E7EAGhueSF122HB"
+
+	for _, tc := range []struct {
+		name    string
+		expires []string
+		err     error
+	}{
+		{name: "valid", expires: []string{"3600"}, err: errBoxStub},
+		{name: "maximum", expires: []string{"604800"}, err: errBoxStub},
+		{name: "missing", err: s3errors.GetAPIError(s3errors.ErrInvalidQueryParams)},
+		{name: "empty", expires: []string{""}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "not a number", expires: []string{"abc"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "duration unit", expires: []string{"5m"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "fraction", expires: []string{"5.5"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "negative", expires: []string{"-5"}, err: s3errors.GetAPIError(s3errors.ErrNegativeExpires)},
+		{name: "above maximum", expires: []string{"604801"}, err: s3errors.GetAPIError(s3errors.ErrMaximumExpires)},
+		{name: "duration overflow", expires: []string{"9223372036854775807"}, err: s3errors.GetAPIError(s3errors.ErrMaximumExpires)},
+		// AWS S3 answers the same.
+		{name: "int64 overflow", expires: []string{"9223372036854775808"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			date := time.Now().UTC()
+			query := url.Values{
+				AmzAlgorithm:     {"AWS4-HMAC-SHA256"},
+				AmzCredential:    {accessKeyID + "/" + date.Format("20060102") + "/us-east-1/s3/aws4_request"},
+				AmzDate:          {date.Format(timeFormatISO8601)},
+				AmzSignedHeaders: {"host"},
+				AmzSignature:     {"00"},
+			}
+			if tc.expires != nil {
+				query[AmzExpires] = tc.expires
+			}
+			r := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+
+			_, err := (&center{cli: &boxStub{}}).Authenticate(r)
+			require.ErrorIs(t, err, tc.err)
+		})
+	}
+
+	for _, param := range []string{AmzCredential, AmzSignature, AmzSignedHeaders} {
+		t.Run("missing "+param, func(t *testing.T) {
+			date := time.Now().UTC()
+			query := url.Values{
+				AmzAlgorithm:     {"AWS4-HMAC-SHA256"},
+				AmzCredential:    {accessKeyID + "/" + date.Format("20060102") + "/us-east-1/s3/aws4_request"},
+				AmzDate:          {date.Format(timeFormatISO8601)},
+				AmzExpires:       {"3600"},
+				AmzSignedHeaders: {"host"},
+				AmzSignature:     {"00"},
+			}
+			query.Del(param)
+			r := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+
+			cli := &boxStub{}
+			_, err := (&center{cli: cli}).Authenticate(r)
+			require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidQueryParams))
+			require.Zero(t, cli.calls)
+		})
+	}
+}
+
 // Requests as sent by AWS SDK for Java 1.12.797: it signs every header it sends,
 // "user-agent" included.
 func TestCheckSignUserAgent(t *testing.T) {

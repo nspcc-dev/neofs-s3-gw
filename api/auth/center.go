@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,6 +202,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 
 	queryValues := r.URL.Query()
 	if queryValues.Get(AmzAlgorithm) == "AWS4-HMAC-SHA256" {
+		for _, param := range []string{AmzCredential, AmzSignature, AmzSignedHeaders, AmzExpires} {
+			if !queryValues.Has(param) {
+				return nil, s3errors.GetAPIError(s3errors.ErrInvalidQueryParams)
+			}
+		}
+
 		creds := strings.Split(queryValues.Get(AmzCredential), "/")
 		if len(creds) != 5 || creds[4] != "aws4_request" {
 			return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
@@ -219,14 +226,19 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		if authHdr.PayloadHash == "" {
 			authHdr.PayloadHash = UnsignedPayload
 		}
-		authHdr.Expiration, err = time.ParseDuration(queryValues.Get(AmzExpires) + "s")
+		expires, err := strconv.ParseInt(queryValues.Get(AmzExpires), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't parse X-Amz-Expires: %w", err)
+			return nil, fmt.Errorf("parse X-Amz-Expires: %w: %w", err, s3errors.GetAPIError(s3errors.ErrMalformedExpires))
 		}
 
-		if authHdr.Expiration > limits.MaxPreSignedLifetime {
+		if expires < 0 {
+			return nil, s3errors.GetAPIError(s3errors.ErrNegativeExpires)
+		}
+
+		if expires > int64(limits.MaxPreSignedLifetime/time.Second) {
 			return nil, s3errors.GetAPIError(s3errors.ErrMaximumExpires)
 		}
+		authHdr.Expiration = time.Duration(expires) * time.Second
 
 		signatureDateTimeStr = queryValues.Get(AmzDate)
 	} else {
