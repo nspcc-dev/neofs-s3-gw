@@ -1615,6 +1615,37 @@ func TestBucketPolicy(t *testing.T) {
 	}
 }
 
+func TestBucketPolicyOwnerFullControl(t *testing.T) {
+	hc := prepareHandlerContext(t)
+	bktName := "bucket-for-policy"
+
+	box, _ := createAccessBox(t)
+	createBucket(t, hc, bktName, box, nil)
+
+	putBucketPolicy(hc, bktName, &bucketPolicy{
+		Statement: []statement{{
+			Effect:    "Allow",
+			Principal: principal{AWS: allUsersWildcard},
+			Action:    stringOrSlice{values: []string{"s3:PutObject"}},
+			Resource:  stringOrSlice{values: []string{arnAwsPrefix + bktName + "/*"}},
+			Condition: map[string]map[string]string{"StringEquals": {s3ConditionXAmzACL: cannedACLBucketOwnerFullControl}},
+		}},
+	}, box, http.StatusOK)
+
+	put := func(acl string, status int) {
+		w, r := prepareTestPayloadRequest(hc, bktName, "object", bytes.NewReader([]byte("content")))
+		r = r.WithContext(context.WithValue(r.Context(), api.BoxData, box))
+		if acl != "" {
+			r.Header.Set(api.AmzACL, acl)
+		}
+		hc.Handler().PutObjectHandler(w, r)
+		assertStatus(t, w, status)
+	}
+
+	put("", http.StatusForbidden)
+	put(cannedACLBucketOwnerFullControl, http.StatusOK)
+}
+
 func getBucketPolicy(hc *handlerContext, bktName string) *bucketPolicy {
 	w, r := prepareTestRequest(hc, bktName, "", nil)
 	hc.Handler().GetBucketPolicyHandler(w, r)

@@ -523,7 +523,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	for i, res := range astPolicy.Resources {
 		if res.Version == cannedACLBucketOwnerFullControl &&
 			len(res.Operations) == 1 &&
-			len(res.Operations[0].Users) == 0 &&
+			len(res.Operations[0].Users) == 1 &&
 			res.Operations[0].Users[0] == ownerPreferredAndRestrictedUserID {
 			index = i
 			break
