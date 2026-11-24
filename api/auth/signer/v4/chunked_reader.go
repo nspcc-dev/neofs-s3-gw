@@ -76,6 +76,9 @@ func NewChunkedReaderWithTrail(r io.ReadCloser, amzTrailerHeader string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
+	if checksumAlgorithm == checksumNone {
+		return nil, errors.New("missing checksum trailer declaration")
+	}
 
 	return &chunkedReader{
 		r: bufio.NewReader(r),
