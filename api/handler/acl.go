@@ -523,7 +523,7 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	for i, res := range astPolicy.Resources {
 		if res.Version == cannedACLBucketOwnerFullControl &&
 			len(res.Operations) == 1 &&
-			len(res.Operations[0].Users) == 0 &&
+			len(res.Operations[0].Users) == 1 &&
 			res.Operations[0].Users[0] == ownerPreferredAndRestrictedUserID {
 			index = i
 			break
@@ -531,6 +531,22 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if index >= 0 {
+		astPolicy.Resources = slices.Delete(astPolicy.Resources, index, index+1)
+	}
+
+	if _, err = h.updateBucketACL(r, astPolicy, bktInfo, tokenv2); err != nil {
+		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
+		return
+	}
+
+	// The setting goes last, the rest of the policy may be rejected.
+	if index >= 0 {
+		// eACL update changes the container revision.
+		if bktInfo, err = h.obj.GetBucketInfo(r.Context(), reqInfo.BucketName); err != nil {
+			h.logAndSendError(w, "could not get bucket info", reqInfo, err)
+			return
+		}
+
 		newSettings := *bktInfo.Settings
 		newSettings.BucketOwner = data.BucketOwnerPreferredAndRestricted
 
@@ -543,13 +559,6 @@ func (h *handler) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request)
 			h.logAndSendError(w, "couldn't put bucket settings", reqInfo, err)
 			return
 		}
-
-		astPolicy.Resources = slices.Delete(astPolicy.Resources, index, index+1)
-	}
-
-	if _, err = h.updateBucketACL(r, astPolicy, bktInfo, tokenv2); err != nil {
-		h.logAndSendError(w, "could not update bucket acl", reqInfo, err)
-		return
 	}
 }
 
