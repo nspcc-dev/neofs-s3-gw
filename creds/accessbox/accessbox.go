@@ -21,6 +21,10 @@ const (
 	accessBoxVersionCurrent = accessBoxVersionHPKE
 )
 
+// ErrAuthorityCheck is returned when the authority of a gate token could not
+// be checked, it says nothing about the access box itself.
+var ErrAuthorityCheck = errors.New("failed to check authority")
+
 // Box represents friendly AccessBox.
 type Box struct {
 	Gate      *GateData
@@ -104,7 +108,7 @@ func (x *AccessBox) GetTokens(owner *keys.PrivateKey, resolver session.NNSResolv
 
 		ok, err := gateData.SessionTokenV2.AssertAuthority(ownerID, resolver)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check authority: %w", err)
+			return nil, fmt.Errorf("%w: %w", ErrAuthorityCheck, err)
 		}
 
 		// this token doesn't belong to this gate.

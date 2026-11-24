@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -94,6 +95,41 @@ func TestAccessBoxRoundTrip(t *testing.T) {
 	box2.Version = accessBoxVersionCurrent + 1
 	_, err = box2.GetTokens(gateKeys[0], nil)
 	require.ErrorContains(t, err, "unsupported access box version")
+}
+
+type failingResolver struct{}
+
+func (failingResolver) HasUser(string, user.ID) (bool, error) {
+	return false, errors.New("resolver failure")
+}
+
+// A failure to resolve an NNS subject of a gate token is told apart from an
+// unusable box.
+func TestGetTokensNNSSubject(t *testing.T) {
+	gateKeys, targets := newGateKeys(t)
+	targets = append([]session.Target{session.NewTargetNamed("gates.neofs")}, targets...)
+	secret := generateSecret()
+
+	appData := make([]byte, accessbox.EncryptedSecretLengthV2)
+	for _, gk := range gateKeys {
+		enc, err := accessbox.EncryptV2(gk.PublicKey(), secret)
+		require.NoError(t, err)
+		appData = append(appData, enc...)
+	}
+
+	gates, _ := newGates(t, targets, appData)
+
+	box, err := PackTokens(gates)
+	require.NoError(t, err)
+
+	for i, gk := range gateKeys {
+		_, err := box.GetTokens(gk, failingResolver{})
+		require.ErrorIs(t, err, ErrAuthorityCheck, "gate %d", i)
+
+		got, err := box.GetTokens(gk, nil)
+		require.NoError(t, err, "gate %d", i)
+		require.Equal(t, hex.EncodeToString(secret), got.AccessKey)
+	}
 }
 
 func generateSecret() []byte {
