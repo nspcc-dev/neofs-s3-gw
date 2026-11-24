@@ -26,9 +26,9 @@ func (r *NNSResolver) HasUser(name string, userID user.ID) (bool, error) {
 	return r.contractReader.HasNeoRecord(name, userID.ScriptHash())
 }
 
-// NewNoOpNNSResolver creates an NNSResolver with no contract reader that always denies access.
-func NewNoOpNNSResolver() *NNSResolver {
-	return &NNSResolver{}
+// NewNoOpNNSResolver creates a NoOpNNSResolver that always denies access.
+func NewNoOpNNSResolver() *NoOpNNSResolver {
+	return &NoOpNNSResolver{}
 }
 
 // HasUser always returns false; it is a no-op implementation.
