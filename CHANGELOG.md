@@ -21,6 +21,7 @@ This document outlines major changes between releases.
 - Signed requests with `X-Amz-Date` more than 15 minutes off the gateway clock were accepted (#1409)
 - Bucket policy `Allow` for a `CanonicalUser` not letting that user read the object (#1407)
 - Bucket policy update revoking object grants made by the previous policies (#1407)
+- 403 instead of 500 for requests whose access box could not be fetched (#1402)
 - Bucket policy conditions, `NotPrincipal`, `NotAction` and `NotResource` are rejected instead of being ignored (#1408)
 - Presigned URLs with a malformed or negative `X-Amz-Expires` or without a required parameter answered with 403 instead of 400 (#1403)
 - Presigned URLs and POST forms with a malformed `X-Amz-Date` answered with 403 instead of 400 (#1403)

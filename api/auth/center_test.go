@@ -797,6 +797,7 @@ func TestSignatureFromAuthHeader(t *testing.T) {
 type boxStub struct {
 	tokens.Credentials
 	box   *accessbox.Box
+	err   error
 	calls int
 }
 
@@ -804,10 +805,59 @@ var errBoxStub = errors.New("box stub")
 
 func (s *boxStub) GetBox(context.Context, oid.Address) (*accessbox.Box, error) {
 	s.calls++
+	if s.err != nil {
+		return nil, s.err
+	}
 	if s.box == nil {
 		return nil, errBoxStub
 	}
 	return s.box, nil
+}
+
+func TestAuthenticateGetBoxError(t *testing.T) {
+	accessKeyID := strings.ReplaceAll(oidtest.Address().String(), "/", "0")
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		code s3errors.ErrorCode
+	}{
+		{name: "invalid box", err: fmt.Errorf("read: %w", tokens.ErrInvalidAccessBox), code: s3errors.ErrAccessDenied},
+		{name: "fetch failure", err: errors.New("connection to the RPC node has been lost"), code: s3errors.ErrInternalError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &center{cli: &boxStub{err: tc.err}, postReg: NewRegexpMatcher(postPolicyCredentialRegexp)}
+
+			t.Run("header", func(t *testing.T) {
+				date := time.Now().UTC()
+				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				r.Header.Set(AmzDate, date.Format(timeFormatISO8601))
+				r.Header.Set(AuthorizationHdr, "AWS4-HMAC-SHA256 Credential="+accessKeyID+"/"+date.Format("20060102")+
+					"/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=00")
+
+				_, err := c.Authenticate(r)
+				require.ErrorIs(t, err, s3errors.GetAPIError(tc.code))
+				require.ErrorIs(t, err, tc.err)
+			})
+
+			t.Run("form", func(t *testing.T) {
+				var body bytes.Buffer
+				form := multipart.NewWriter(&body)
+				require.NoError(t, form.WriteField("policy", "e30="))
+				require.NoError(t, form.WriteField("x-amz-signature", "00"))
+				require.NoError(t, form.WriteField("x-amz-credential", accessKeyID+"/20151229/us-east-1/s3/aws4_request"))
+				require.NoError(t, form.WriteField("x-amz-date", "20151229T000000Z"))
+				require.NoError(t, form.Close())
+
+				r := httptest.NewRequest(http.MethodPost, "/bucket", &body)
+				r.Header.Set(ContentTypeHdr, form.FormDataContentType())
+
+				_, err := c.Authenticate(r)
+				require.ErrorIs(t, err, s3errors.GetAPIError(tc.code))
+				require.ErrorIs(t, err, tc.err)
+			})
+		})
+	}
 }
 
 func TestAuthenticateClockSkew(t *testing.T) {

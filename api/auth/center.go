@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -290,9 +291,9 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		return nil, err
 	}
 
-	box, err := c.cli.GetBox(r.Context(), addr)
+	box, err := c.getBox(r.Context(), addr)
 	if err != nil {
-		return nil, fmt.Errorf("get box: %w", err)
+		return nil, err
 	}
 
 	if err = c.checkNamespace(box.Namespace); err != nil {
@@ -357,6 +358,22 @@ func (c center) checkAccessKeyID(accessKeyID string) error {
 	return s3errors.GetAPIError(s3errors.ErrAccessDenied)
 }
 
+// getBox fetches the access box. Access is denied only if the box itself is
+// invalid, any other failure is an internal error.
+func (c *center) getBox(ctx context.Context, addr oid.Address) (*accessbox.Box, error) {
+	box, err := c.cli.GetBox(ctx, addr)
+	if err != nil {
+		var code = s3errors.ErrInternalError
+		if errors.Is(err, tokens.ErrInvalidAccessBox) {
+			code = s3errors.ErrAccessDenied
+		}
+
+		return nil, fmt.Errorf("get box: %w: %w", s3errors.GetAPIError(code), err)
+	}
+
+	return box, nil
+}
+
 func (c *center) checkFormData(r *http.Request) (*Box, error) {
 	if err := r.ParseMultipartForm(maxFormSizeMemory); err != nil {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidArgument)
@@ -390,9 +407,9 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, s3errors.GetAPIError(s3errors.ErrInvalidAccessKeyID)
 	}
 
-	box, err := c.cli.GetBox(r.Context(), addr)
+	box, err := c.getBox(r.Context(), addr)
 	if err != nil {
-		return nil, fmt.Errorf("get box: %w", err)
+		return nil, err
 	}
 
 	if err = c.checkNamespace(box.Namespace); err != nil {
