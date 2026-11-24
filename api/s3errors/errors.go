@@ -279,6 +279,8 @@ const (
 	ErrCORSWildcardExposeHeaders
 
 	ErrAccessControlListNotSupported
+
+	ErrUnsupportedTrailer
 )
 
 // error code to Error structure, these fields carry respective
@@ -1709,6 +1711,12 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrAccessControlListNotSupported,
 		Code:           "AccessControlListNotSupported",
 		Description:    "The bucket does not allow ACLs.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedTrailer: {
+		ErrCode:        ErrUnsupportedTrailer,
+		Code:           "InvalidRequest",
+		Description:    "The value specified in the x-amz-trailer header is not supported",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.

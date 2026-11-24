@@ -1549,3 +1549,61 @@ func TestAuthenticateHostNotSigned(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthenticateUnsupportedTrailer(t *testing.T) {
+	const (
+		secret  = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+		trailer = "x-amz-checksum-bogus"
+	)
+
+	var (
+		accessKeyID = strings.ReplaceAll(oidtest.Address().String(), "/", "0")
+		c           = &center{cli: &boxStub{box: &accessbox.Box{Gate: &accessbox.GateData{AccessKey: secret}}}}
+		signTime    = time.Now().UTC()
+		date        = signTime.Format(timeFormatISO8601)
+		scope       = signTime.Format("20060102") + "/us-east-1/s3/aws4_request"
+	)
+
+	t.Run("anonymous", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPut, "http://bucket.s3.example.com/object", nil)
+		r.Header.Set(AmzContentSha256, UnsignedPayloadMultipleChunks)
+		r.Header.Set(AmzTrailer, trailer)
+
+		_, err := c.Authenticate(r)
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
+	})
+
+	for _, tc := range []struct {
+		name          string
+		contentSHA256 string
+		trailer       string
+	}{
+		{name: "unsigned payload", contentSHA256: UnsignedPayloadMultipleChunks, trailer: trailer},
+		{name: "signed payload", contentSHA256: ContentEncodingChunkedTrailer, trailer: trailer},
+		{name: "signed payload without trailer", contentSHA256: ContentEncodingChunkedTrailer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The trailer is taken into account only if signed.
+			headers, signedHeaders := "host:bucket.s3.example.com\nx-amz-date:"+date+"\n", "host;x-amz-date"
+			if tc.trailer != "" {
+				headers += "x-amz-trailer:" + tc.trailer + "\n"
+				signedHeaders += ";x-amz-trailer"
+			}
+			canonical := "PUT\n/object\n\n" + headers + "\n" + signedHeaders + "\n" + tc.contentSHA256
+			sum := sha256.Sum256([]byte(canonical))
+			signature := signStr(secret, "s3", "us-east-1", signTime, "AWS4-HMAC-SHA256\n"+date+"\n"+scope+"\n"+hex.EncodeToString(sum[:]))
+
+			r := httptest.NewRequest(http.MethodPut, "http://bucket.s3.example.com/object", nil)
+			r.Header.Set(AmzDate, date)
+			r.Header.Set(AmzContentSha256, tc.contentSHA256)
+			if tc.trailer != "" {
+				r.Header.Set(AmzTrailer, tc.trailer)
+			}
+			r.Header.Set(AuthorizationHdr, "AWS4-HMAC-SHA256 Credential="+accessKeyID+"/"+scope+
+				", SignedHeaders="+signedHeaders+", Signature="+signature)
+
+			_, err := c.Authenticate(r)
+			require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
+		})
+	}
+}

@@ -251,7 +251,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			if r.Header.Get(AmzContentSha256) == UnsignedPayloadMultipleChunks {
 				r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, r.Header.Get(AmzTrailer))
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("%w: %w", err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 				}
 			}
 
@@ -323,7 +323,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		if amzContent == ContentEncodingChunkedTrailer {
 			r.Body, err = v4.NewChunkedReaderWithSignedTrail(r.Body, chunkSigner, clonedRequest.Header.Get(AmzTrailer))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%w: %w", err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 			}
 		} else {
 			r.Body = v4.NewChunkedReader(r.Body, chunkSigner)
@@ -331,7 +331,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	case UnsignedPayloadMultipleChunks:
 		r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, clonedRequest.Header.Get(AmzTrailer))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 		}
 	}
 
