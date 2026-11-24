@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api/cache"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
@@ -64,6 +65,7 @@ type NeoFS interface {
 	// into memory.
 	//
 	// It returns any error encountered which prevented the object payload from being read.
+	// It wraps [ErrInvalidAccessBox] if reading is denied or the object is too big.
 	ReadObject(context.Context, oid.Address) ([]byte, *object.Object, error)
 }
 
@@ -76,6 +78,10 @@ var (
 	ErrEmptyPublicKeys = errors.New("HCS public keys could not be empty")
 	// ErrEmptyBearerToken is returned when no bearer token is provided.
 	ErrEmptyBearerToken = errors.New("bearer token could not be empty")
+	// ErrInvalidAccessBox is returned when the object is not an access box
+	// usable by this gateway: missing, unreadable, malformed or issued for
+	// other gateways.
+	ErrInvalidAccessBox = errors.New("invalid access box")
 )
 
 var _ = New
@@ -98,6 +104,9 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 
 	cachedBox, err = box.GetBox(c.key, c.resolver)
 	if err != nil {
+		if !errors.Is(err, accessbox.ErrAuthorityCheck) {
+			err = fmt.Errorf("%w: %w", ErrInvalidAccessBox, err)
+		}
 		return nil, fmt.Errorf("get box: %w", err)
 	}
 
@@ -113,13 +122,19 @@ func (c *cred) GetBox(ctx context.Context, addr oid.Address) (*accessbox.Box, er
 func (c *cred) getAccessBox(ctx context.Context, addr oid.Address) (*accessbox.AccessBox, string, error) {
 	data, head, err := c.neoFS.ReadObject(ctx, addr)
 	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectNotFound) ||
+			errors.Is(err, apistatus.ErrObjectAlreadyRemoved) ||
+			errors.Is(err, apistatus.ErrContainerNotFound) ||
+			errors.Is(err, apistatus.ErrObjectOutOfRange) {
+			err = fmt.Errorf("%w: %w", ErrInvalidAccessBox, err)
+		}
 		return nil, "", fmt.Errorf("read payload: %w", err)
 	}
 
 	// decode access box
 	var box accessbox.AccessBox
 	if err = box.Unmarshal(data); err != nil {
-		return nil, "", fmt.Errorf("unmarhal access box: %w", err)
+		return nil, "", fmt.Errorf("unmarhal access box: %w: %w", ErrInvalidAccessBox, err)
 	}
 
 	var namespace string

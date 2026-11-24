@@ -5,17 +5,21 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
 	"strconv"
 	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
 	"github.com/nspcc-dev/neofs-s3-gw/api/s3headers"
+	"github.com/nspcc-dev/neofs-s3-gw/creds/tokens"
+	"github.com/nspcc-dev/neofs-s3-gw/internal/limits"
 	"github.com/nspcc-dev/neofs-sdk-go/client"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
@@ -26,6 +30,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	netmaptest "github.com/nspcc-dev/neofs-sdk-go/netmap/test"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
+	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/pool"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
@@ -291,5 +296,64 @@ func TestObjectNonce(t *testing.T) {
 	// each ID is uniq
 	for _, v := range m {
 		require.Equal(t, 1, v)
+	}
+}
+
+type authmateNeoFSStub struct {
+	layer.NeoFS
+	res *layer.ObjectPart
+	err error
+}
+
+func (s *authmateNeoFSStub) ReadObject(context.Context, layer.PrmObjectRead) (*layer.ObjectPart, error) {
+	return s.res, s.err
+}
+
+type payloadStub struct {
+	io.Reader
+}
+
+func (payloadStub) Close() error { return nil }
+
+func (p payloadStub) WriteTo(w io.Writer) (int64, error) { return io.Copy(w, p.Reader) }
+
+func TestAuthmateNeoFSReadObject(t *testing.T) {
+	var (
+		errDenied = fmt.Errorf("%w: some reason", layer.ErrAccessDenied)
+		errOther  = errors.New("connection refused")
+		payload   = []byte("payload")
+	)
+
+	newPart := func(size uint64, r io.Reader) *layer.ObjectPart {
+		var hdr object.Object
+		hdr.SetPayloadSize(size)
+		return &layer.ObjectPart{Head: &hdr, Payload: payloadStub{r}}
+	}
+
+	t.Run("valid", func(t *testing.T) {
+		neoFS := NewAuthmateNeoFS(&authmateNeoFSStub{res: newPart(uint64(len(payload)), bytes.NewReader(payload))})
+
+		data, hdr, err := neoFS.ReadObject(context.Background(), oid.Address{})
+		require.NoError(t, err)
+		require.Equal(t, payload, data)
+		require.EqualValues(t, len(payload), hdr.PayloadSize())
+	})
+
+	for _, tc := range []struct {
+		name    string
+		stub    authmateNeoFSStub
+		invalid bool
+	}{
+		{name: "access denied", stub: authmateNeoFSStub{err: errDenied}, invalid: true},
+		{name: "access denied on payload read", stub: authmateNeoFSStub{res: newPart(1, iotest.ErrReader(errDenied))}, invalid: true},
+		{name: "too big", stub: authmateNeoFSStub{res: newPart(limits.MaxAccessBoxSize+1, bytes.NewReader(nil))}, invalid: true},
+		{name: "other failure", stub: authmateNeoFSStub{err: errOther}},
+		{name: "other failure on payload read", stub: authmateNeoFSStub{res: newPart(1, iotest.ErrReader(errOther))}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := NewAuthmateNeoFS(&tc.stub).ReadObject(context.Background(), oid.Address{})
+			require.Error(t, err)
+			require.Equal(t, tc.invalid, errors.Is(err, tokens.ErrInvalidAccessBox), err)
+		})
 	}
 }

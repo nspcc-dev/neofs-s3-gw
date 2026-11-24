@@ -666,18 +666,28 @@ func (x *AuthmateNeoFS) ReadObject(ctx context.Context, addr oid.Address) ([]byt
 		PayloadRange: layer.NewPayloadRangeBounds(0, limits.MaxAccessBoxSize-1),
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, accessDeniedToInvalidBox(err)
 	}
 
 	defer res.Payload.Close()
 
 	if sz := res.Head.PayloadSize(); sz > limits.MaxAccessBoxSize {
-		return nil, nil, fmt.Errorf("access box object is too big: %d > %d", sz, limits.MaxAccessBoxSize)
+		return nil, nil, fmt.Errorf("%w: object is too big: %d > %d", tokens.ErrInvalidAccessBox, sz, limits.MaxAccessBoxSize)
 	}
 
 	pl, err := io.ReadAll(res.Payload)
 
-	return pl, res.Head, err
+	return pl, res.Head, accessDeniedToInvalidBox(err)
+}
+
+// accessDeniedToInvalidBox marks an access denial for tokens package, which
+// cannot import layer.
+func accessDeniedToInvalidBox(err error) error {
+	if errors.Is(err, layer.ErrAccessDenied) {
+		return fmt.Errorf("%w: %w", tokens.ErrInvalidAccessBox, err)
+	}
+
+	return err
 }
 
 // CreateObject implements authmate.NeoFS interface method.
