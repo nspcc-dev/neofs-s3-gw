@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,6 +202,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 
 	queryValues := r.URL.Query()
 	if queryValues.Get(AmzAlgorithm) == "AWS4-HMAC-SHA256" {
+		for _, param := range []string{AmzCredential, AmzSignature, AmzSignedHeaders, AmzDate, AmzExpires} {
+			if !queryValues.Has(param) {
+				return nil, s3errors.GetAPIError(s3errors.ErrInvalidQueryParams)
+			}
+		}
+
 		creds := strings.Split(queryValues.Get(AmzCredential), "/")
 		if len(creds) != 5 || creds[4] != "aws4_request" {
 			return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
@@ -219,14 +226,19 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		if authHdr.PayloadHash == "" {
 			authHdr.PayloadHash = UnsignedPayload
 		}
-		authHdr.Expiration, err = time.ParseDuration(queryValues.Get(AmzExpires) + "s")
+		expires, err := strconv.ParseInt(queryValues.Get(AmzExpires), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't parse X-Amz-Expires: %w", err)
+			return nil, fmt.Errorf("parse X-Amz-Expires: %w: %w", err, s3errors.GetAPIError(s3errors.ErrMalformedExpires))
 		}
 
-		if authHdr.Expiration > limits.MaxPreSignedLifetime {
+		if expires < 0 {
+			return nil, s3errors.GetAPIError(s3errors.ErrNegativeExpires)
+		}
+
+		if expires > int64(limits.MaxPreSignedLifetime/time.Second) {
 			return nil, s3errors.GetAPIError(s3errors.ErrMaximumExpires)
 		}
+		authHdr.Expiration = time.Duration(expires) * time.Second
 
 		signatureDateTimeStr = queryValues.Get(AmzDate)
 	} else {
@@ -239,7 +251,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 			if r.Header.Get(AmzContentSha256) == UnsignedPayloadMultipleChunks {
 				r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, r.Header.Get(AmzTrailer))
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("%w: %w", err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 				}
 			}
 
@@ -255,7 +267,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 
 	signatureDateTime, err := time.Parse(timeFormatISO8601, signatureDateTimeStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
+		// As AWS S3 does: 400 for a presigned URL, 403 for the header.
+		code := s3errors.ErrMissingDateHeader
+		if authHdr.IsPresigned {
+			code = s3errors.ErrMalformedPresignedDate
+		}
+		return nil, fmt.Errorf("parse X-Amz-Date: %w: %w", err, s3errors.GetAPIError(code))
 	}
 
 	if needClientTime {
@@ -306,7 +323,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 		if amzContent == ContentEncodingChunkedTrailer {
 			r.Body, err = v4.NewChunkedReaderWithSignedTrail(r.Body, chunkSigner, clonedRequest.Header.Get(AmzTrailer))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%w: %w", err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 			}
 		} else {
 			r.Body = v4.NewChunkedReader(r.Body, chunkSigner)
@@ -314,7 +331,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 	case UnsignedPayloadMultipleChunks:
 		r.Body, err = v4.NewChunkedReaderWithTrail(r.Body, clonedRequest.Header.Get(AmzTrailer))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 		}
 	}
 
@@ -363,9 +380,9 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
 	}
 
-	signatureDateTime, err := time.Parse("20060102T150405Z", MultipartFormValue(r, "x-amz-date"))
+	signatureDateTime, err := time.Parse(timeFormatISO8601, MultipartFormValue(r, "x-amz-date"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
+		return nil, fmt.Errorf("parse x-amz-date field: %w: %w", err, s3errors.GetAPIError(s3errors.ErrMalformedDate))
 	}
 
 	addr, err := oid.DecodeAddressString(strings.ReplaceAll(submatches["access_key_id"], "0", "/"))

@@ -275,6 +275,27 @@ func TestCheckFormDataNoSignature(t *testing.T) {
 	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidArgument))
 }
 
+func TestCheckFormDataMalformedDate(t *testing.T) {
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	require.NoError(t, form.WriteField("key", "foo.txt"))
+	require.NoError(t, form.WriteField("policy", "e30="))
+	require.NoError(t, form.WriteField("x-amz-credential", "key/20151229/us-east-1/s3/aws4_request"))
+	require.NoError(t, form.WriteField("x-amz-date", "not-a-date"))
+	require.NoError(t, form.WriteField("x-amz-signature", "00"))
+	require.NoError(t, form.Close())
+
+	r, err := http.NewRequest(http.MethodPost, "/bucket", &body)
+	require.NoError(t, err)
+	r.Header.Set(ContentTypeHdr, form.FormDataContentType())
+
+	cli := &boxStub{}
+	c := &center{cli: cli, postReg: NewRegexpMatcher(postPolicyCredentialRegexp)}
+	_, err = c.checkFormData(r)
+	require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrMalformedDate))
+	require.Zero(t, cli.calls)
+}
+
 // TestAwsEncodedChunkReaderSignedTrailer checks the example from
 // https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming-trailers.html
 func TestAwsEncodedChunkReaderSignedTrailer(t *testing.T) {
@@ -850,6 +871,135 @@ func TestAuthenticateClockSkew(t *testing.T) {
 	})
 }
 
+func TestAuthenticatePresignedParams(t *testing.T) {
+	const accessKeyID = "vWqF8cMDRbJcvnPLALoQGnABPPhw8NyYMcGsfDPfZJM0HrgjonN8CgFvCZ3kh9BUXw4W2tJ5E7EAGhueSF122HB"
+
+	for _, tc := range []struct {
+		name    string
+		expires []string
+		err     error
+	}{
+		{name: "valid", expires: []string{"3600"}, err: errBoxStub},
+		{name: "maximum", expires: []string{"604800"}, err: errBoxStub},
+		{name: "missing", err: s3errors.GetAPIError(s3errors.ErrInvalidQueryParams)},
+		{name: "empty", expires: []string{""}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "not a number", expires: []string{"abc"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "duration unit", expires: []string{"5m"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "fraction", expires: []string{"5.5"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+		{name: "negative", expires: []string{"-5"}, err: s3errors.GetAPIError(s3errors.ErrNegativeExpires)},
+		{name: "above maximum", expires: []string{"604801"}, err: s3errors.GetAPIError(s3errors.ErrMaximumExpires)},
+		{name: "duration overflow", expires: []string{"9223372036854775807"}, err: s3errors.GetAPIError(s3errors.ErrMaximumExpires)},
+		// AWS S3 answers the same.
+		{name: "int64 overflow", expires: []string{"9223372036854775808"}, err: s3errors.GetAPIError(s3errors.ErrMalformedExpires)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			date := time.Now().UTC()
+			query := url.Values{
+				AmzAlgorithm:     {"AWS4-HMAC-SHA256"},
+				AmzCredential:    {accessKeyID + "/" + date.Format("20060102") + "/us-east-1/s3/aws4_request"},
+				AmzDate:          {date.Format(timeFormatISO8601)},
+				AmzSignedHeaders: {"host"},
+				AmzSignature:     {"00"},
+			}
+			if tc.expires != nil {
+				query[AmzExpires] = tc.expires
+			}
+			r := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+
+			_, err := (&center{cli: &boxStub{}}).Authenticate(r)
+			require.ErrorIs(t, err, tc.err)
+		})
+	}
+
+	for _, param := range []string{AmzCredential, AmzSignature, AmzSignedHeaders} {
+		t.Run("missing "+param, func(t *testing.T) {
+			date := time.Now().UTC()
+			query := url.Values{
+				AmzAlgorithm:     {"AWS4-HMAC-SHA256"},
+				AmzCredential:    {accessKeyID + "/" + date.Format("20060102") + "/us-east-1/s3/aws4_request"},
+				AmzDate:          {date.Format(timeFormatISO8601)},
+				AmzExpires:       {"3600"},
+				AmzSignedHeaders: {"host"},
+				AmzSignature:     {"00"},
+			}
+			query.Del(param)
+			r := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+
+			cli := &boxStub{}
+			_, err := (&center{cli: cli}).Authenticate(r)
+			require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrInvalidQueryParams))
+			require.Zero(t, cli.calls)
+		})
+	}
+}
+
+func TestAuthenticateMalformedDate(t *testing.T) {
+	const (
+		accessKeyID = "vWqF8cMDRbJcvnPLALoQGnABPPhw8NyYMcGsfDPfZJM0HrgjonN8CgFvCZ3kh9BUXw4W2tJ5E7EAGhueSF122HB"
+		rfc1123     = "Tue, 24 Nov 2026 07:00:00 GMT"
+	)
+
+	t.Run("header", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			date []string
+		}{
+			{name: "missing"},
+			{name: "empty", date: []string{""}},
+			{name: "malformed", date: []string{"not-a-date"}},
+			{name: "RFC1123", date: []string{rfc1123}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				// Not supported as a replacement.
+				r.Header.Set("Date", rfc1123)
+				if tc.date != nil {
+					r.Header[AmzDate] = tc.date
+				}
+				r.Header.Set(AuthorizationHdr, "AWS4-HMAC-SHA256 Credential="+accessKeyID+
+					"/20261124/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=00")
+
+				cli := &boxStub{}
+				_, err := (&center{cli: cli}).Authenticate(r)
+				require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrMissingDateHeader))
+				require.Zero(t, cli.calls)
+			})
+		}
+	})
+
+	t.Run("presigned", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			date []string
+			err  error
+		}{
+			{name: "missing", err: s3errors.GetAPIError(s3errors.ErrInvalidQueryParams)},
+			{name: "empty", date: []string{""}, err: s3errors.GetAPIError(s3errors.ErrMalformedPresignedDate)},
+			{name: "malformed", date: []string{"not-a-date"}, err: s3errors.GetAPIError(s3errors.ErrMalformedPresignedDate)},
+			{name: "RFC1123", date: []string{rfc1123}, err: s3errors.GetAPIError(s3errors.ErrMalformedPresignedDate)},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				query := url.Values{
+					AmzAlgorithm:     {"AWS4-HMAC-SHA256"},
+					AmzCredential:    {accessKeyID + "/20261124/us-east-1/s3/aws4_request"},
+					AmzExpires:       {"3600"},
+					AmzSignedHeaders: {"host"},
+					AmzSignature:     {"00"},
+				}
+				if tc.date != nil {
+					query[AmzDate] = tc.date
+				}
+				r := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+
+				cli := &boxStub{}
+				_, err := (&center{cli: cli}).Authenticate(r)
+				require.ErrorIs(t, err, tc.err)
+				require.Zero(t, cli.calls)
+			})
+		}
+	})
+}
+
 // Requests as sent by AWS SDK for Java 1.12.797: it signs every header it sends,
 // "user-agent" included.
 func TestCheckSignUserAgent(t *testing.T) {
@@ -1396,6 +1546,64 @@ func TestAuthenticateHostNotSigned(t *testing.T) {
 
 			_, err := c.Authenticate(r)
 			require.ErrorIs(t, err, tc.err)
+		})
+	}
+}
+
+func TestAuthenticateUnsupportedTrailer(t *testing.T) {
+	const (
+		secret  = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+		trailer = "x-amz-checksum-bogus"
+	)
+
+	var (
+		accessKeyID = strings.ReplaceAll(oidtest.Address().String(), "/", "0")
+		c           = &center{cli: &boxStub{box: &accessbox.Box{Gate: &accessbox.GateData{AccessKey: secret}}}}
+		signTime    = time.Now().UTC()
+		date        = signTime.Format(timeFormatISO8601)
+		scope       = signTime.Format("20060102") + "/us-east-1/s3/aws4_request"
+	)
+
+	t.Run("anonymous", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPut, "http://bucket.s3.example.com/object", nil)
+		r.Header.Set(AmzContentSha256, UnsignedPayloadMultipleChunks)
+		r.Header.Set(AmzTrailer, trailer)
+
+		_, err := c.Authenticate(r)
+		require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
+	})
+
+	for _, tc := range []struct {
+		name          string
+		contentSHA256 string
+		trailer       string
+	}{
+		{name: "unsigned payload", contentSHA256: UnsignedPayloadMultipleChunks, trailer: trailer},
+		{name: "signed payload", contentSHA256: ContentEncodingChunkedTrailer, trailer: trailer},
+		{name: "signed payload without trailer", contentSHA256: ContentEncodingChunkedTrailer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The trailer is taken into account only if signed.
+			headers, signedHeaders := "host:bucket.s3.example.com\nx-amz-date:"+date+"\n", "host;x-amz-date"
+			if tc.trailer != "" {
+				headers += "x-amz-trailer:" + tc.trailer + "\n"
+				signedHeaders += ";x-amz-trailer"
+			}
+			canonical := "PUT\n/object\n\n" + headers + "\n" + signedHeaders + "\n" + tc.contentSHA256
+			sum := sha256.Sum256([]byte(canonical))
+			signature := signStr(secret, "s3", "us-east-1", signTime, "AWS4-HMAC-SHA256\n"+date+"\n"+scope+"\n"+hex.EncodeToString(sum[:]))
+
+			r := httptest.NewRequest(http.MethodPut, "http://bucket.s3.example.com/object", nil)
+			r.Header.Set(AmzDate, date)
+			r.Header.Set(AmzContentSha256, tc.contentSHA256)
+			if tc.trailer != "" {
+				r.Header.Set(AmzTrailer, tc.trailer)
+			}
+			r.Header.Set(AuthorizationHdr, "AWS4-HMAC-SHA256 Credential="+accessKeyID+"/"+scope+
+				", SignedHeaders="+signedHeaders+", Signature="+signature)
+
+			_, err := c.Authenticate(r)
+			require.ErrorIs(t, err, s3errors.GetAPIError(s3errors.ErrUnsupportedTrailer))
 		})
 	}
 }
