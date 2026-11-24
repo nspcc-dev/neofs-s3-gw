@@ -202,7 +202,7 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 
 	queryValues := r.URL.Query()
 	if queryValues.Get(AmzAlgorithm) == "AWS4-HMAC-SHA256" {
-		for _, param := range []string{AmzCredential, AmzSignature, AmzSignedHeaders, AmzExpires} {
+		for _, param := range []string{AmzCredential, AmzSignature, AmzSignedHeaders, AmzDate, AmzExpires} {
 			if !queryValues.Has(param) {
 				return nil, s3errors.GetAPIError(s3errors.ErrInvalidQueryParams)
 			}
@@ -267,7 +267,12 @@ func (c *center) Authenticate(r *http.Request) (*Box, error) {
 
 	signatureDateTime, err := time.Parse(timeFormatISO8601, signatureDateTimeStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse x-amz-date header field: %w", err)
+		// As AWS S3 does: 400 for a presigned URL, 403 for the header.
+		code := s3errors.ErrMissingDateHeader
+		if authHdr.IsPresigned {
+			code = s3errors.ErrMalformedPresignedDate
+		}
+		return nil, fmt.Errorf("parse X-Amz-Date: %w: %w", err, s3errors.GetAPIError(code))
 	}
 
 	if needClientTime {
@@ -375,9 +380,9 @@ func (c *center) checkFormData(r *http.Request) (*Box, error) {
 		return nil, s3errors.GetAPIError(s3errors.ErrCredMalformed)
 	}
 
-	signatureDateTime, err := time.Parse("20060102T150405Z", MultipartFormValue(r, "x-amz-date"))
+	signatureDateTime, err := time.Parse(timeFormatISO8601, MultipartFormValue(r, "x-amz-date"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse x-amz-date field: %w", err)
+		return nil, fmt.Errorf("parse x-amz-date field: %w: %w", err, s3errors.GetAPIError(s3errors.ErrMalformedDate))
 	}
 
 	addr, err := oid.DecodeAddressString(strings.ReplaceAll(submatches["access_key_id"], "0", "/"))

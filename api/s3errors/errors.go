@@ -664,8 +664,8 @@ var errorCodes = errorCodeMap{
 	},
 	ErrMalformedDate: {
 		ErrCode:        ErrMalformedDate,
-		Code:           "MalformedDate",
-		Description:    "Invalid date format header, expected to be in ISO8601, RFC1123 or RFC1123Z time format.",
+		Code:           "InvalidArgument",
+		Description:    "X-Amz-Date must be formated via ISO8601 Long format",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedPresignedDate: {
@@ -750,7 +750,7 @@ var errorCodes = errorCodeMap{
 		ErrCode:        ErrMissingDateHeader,
 		Code:           "AccessDenied",
 		Description:    "AWS authentication requires a valid Date or x-amz-date header",
-		HTTPStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrInvalidQuerySignatureAlgo: {
 		ErrCode:        ErrInvalidQuerySignatureAlgo,
