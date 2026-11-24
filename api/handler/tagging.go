@@ -49,23 +49,6 @@ func (h *handler) PutObjectTaggingHandler(w http.ResponseWriter, r *http.Request
 		TagSet: tagSet,
 	}
 
-	if tagPrm.ObjectVersion.VersionID == "" {
-		shortInfoParams := &layer.ShortInfoParams{
-			Owner:           bktInfo.Owner,
-			CID:             bktInfo.CID,
-			Object:          reqInfo.ObjectName,
-			FindNullVersion: true,
-		}
-
-		ei, err := h.obj.GetIDForVersioningContainer(r.Context(), shortInfoParams)
-		if err != nil {
-			h.logAndSendError(w, "could not find object", reqInfo, err)
-			return
-		}
-
-		tagPrm.ObjectVersion.VersionID = ei.EncodeToString()
-	}
-
 	if err = h.obj.PutObjectTagging(r.Context(), tagPrm); err != nil {
 		h.logAndSendError(w, "could not put object tagging", reqInfo, err)
 		return

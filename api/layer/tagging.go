@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 	"github.com/nspcc-dev/neofs-sdk-go/session/v2"
+	"go.uber.org/zap"
 )
 
 type GetObjectTaggingParams struct {
@@ -43,6 +44,35 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 		return fmt.Errorf("could not marshal tag set: %w", err)
 	}
 
+	var oldTagIDs []oid.ID
+	if p.ObjectVersion.VersionID == "" {
+		// The version is unknown, so resolve it and collect tag objects of the
+		// previous tag sets with a single search.
+		var id oid.ID
+		id, oldTagIDs, err = n.getIDForVersioningContainer(ctx, &ShortInfoParams{
+			CID:             p.ObjectVersion.BktInfo.CID,
+			Owner:           p.ObjectVersion.BktInfo.Owner,
+			Object:          p.ObjectVersion.ObjectName,
+			FindNullVersion: true,
+		}, true)
+		if err != nil {
+			return err
+		}
+
+		p.ObjectVersion.VersionID = id.EncodeToString()
+	} else {
+		// Remember tag objects created by the previous calls, so they can be
+		// removed once the new tag set is stored. The cleanup is best-effort,
+		// its failure must not fail the tagging itself.
+		oldTagIDs, err = n.searchTagObjects(ctx, p.ObjectVersion)
+		if err != nil {
+			n.log.Warn("couldn't search previous tag objects",
+				zap.Stringer("cid", p.ObjectVersion.BktInfo.CID),
+				zap.String("object", p.ObjectVersion.ObjectName),
+				zap.Error(err))
+		}
+	}
+
 	prm := PrmObjectCreate{
 		Container:    p.ObjectVersion.BktInfo.CID,
 		Creator:      p.ObjectVersion.BktInfo.Owner,
@@ -62,6 +92,15 @@ func (n *layer) PutObjectTagging(ctx context.Context, p *PutObjectTaggingParams)
 
 	if _, _, err = n.objectPutAndHash(ctx, prm, p.ObjectVersion.BktInfo); err != nil {
 		return fmt.Errorf("create tagging object: %w", err)
+	}
+
+	for _, id := range oldTagIDs {
+		if err = n.objectDelete(ctx, p.ObjectVersion.BktInfo, id); err != nil && !errors.Is(err, apistatus.ErrObjectAlreadyRemoved) {
+			n.log.Warn("couldn't delete previous tag object",
+				zap.Stringer("cid", p.ObjectVersion.BktInfo.CID),
+				zap.Stringer("oid", id),
+				zap.Error(err))
+		}
 	}
 
 	n.cache.PutTagging(n.Owner(ctx), objectTaggingCacheKey(p.ObjectVersion), p.TagSet)
@@ -231,30 +270,17 @@ func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id o
 }
 
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
-	fs := make(object.SearchFilters, 0, 4)
-	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
-	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
-	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	fs.AddFilter(object.AttributeAssociatedObject, p.VersionID, object.MatchStringEqual)
-
-	var opts client.SearchObjectsOptions
-	attachTokenToParams(ctx, p.BktInfo.Owner, &opts)
-
-	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
+	tagIDs, err := n.searchTagObjects(ctx, p)
 	if err != nil {
-		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return s3errors.GetAPIError(s3errors.ErrAccessDenied)
-		}
-
-		return fmt.Errorf("search object version: %w", err)
+		return err
 	}
 
-	if len(res) == 0 {
+	if len(tagIDs) == 0 {
 		return nil
 	}
 
-	for i := range res {
-		if err = n.objectDelete(ctx, p.BktInfo, res[i].ID); err != nil {
+	for i := range tagIDs {
+		if err = n.objectDelete(ctx, p.BktInfo, tagIDs[i]); err != nil {
 			return fmt.Errorf("couldn't delete object: %w", err)
 		}
 	}
@@ -269,6 +295,34 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 	}
 
 	return n.PutObjectTagging(ctx, &putObjectTaggingParams)
+}
+
+// searchTagObjects returns IDs of tag meta objects stored for the given object version.
+func (n *layer) searchTagObjects(ctx context.Context, p *ObjectVersion) ([]oid.ID, error) {
+	fs := make(object.SearchFilters, 0, 4)
+	fs.AddFilter(object.AttributeFilePath, p.ObjectName, object.MatchStringEqual)
+	fs.AddFilter(s3headers.MetaType, s3headers.TypeTags, object.MatchStringEqual)
+	fs.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
+	fs.AddFilter(object.AttributeAssociatedObject, p.VersionID, object.MatchStringEqual)
+
+	var opts client.SearchObjectsOptions
+	attachTokenToParams(ctx, p.BktInfo.Owner, &opts)
+
+	res, err := n.neoFS.SearchObjectsV2(ctx, p.BktInfo.CID, fs, nil, opts)
+	if err != nil {
+		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
+			return nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+		}
+
+		return nil, fmt.Errorf("search object version: %w", err)
+	}
+
+	ids := make([]oid.ID, 0, len(res))
+	for i := range res {
+		ids = append(ids, res[i].ID)
+	}
+
+	return ids, nil
 }
 
 func (n *layer) GetBucketTagging(_ context.Context, bktInfo *data.BucketInfo) (map[string]string, error) {
