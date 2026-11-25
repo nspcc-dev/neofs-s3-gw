@@ -100,7 +100,7 @@ var s3ErrorResponseMap = map[string]string{
 	"MalformedPOSTRequest":              "The body of your POST request is not well-formed multipart/form-data.",
 	"BucketNotEmpty":                    "The bucket you tried to delete is not empty",
 	"AllAccessDisabled":                 "All access to this bucket has been disabled.",
-	"MalformedPolicy":                   "Policy has invalid resource.",
+	"MalformedPolicy":                   "Policy is malformed.",
 	"MissingFields":                     "Missing fields in request.",
 	"AuthorizationQueryParametersError": "Error parsing the X-Amz-Credential parameter; the Credential is mal-formed; expecting \"<YOUR-AKID>/YYYYMMDD/REGION/SERVICE/aws4_request\".",
 	"MalformedDate":                     "Invalid date format header, expected to be in ISO8601, RFC1123 or RFC1123Z time format.",

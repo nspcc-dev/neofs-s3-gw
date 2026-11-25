@@ -60,7 +60,9 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
   ]
 }
 ```
-* Resource in bucket policy is a string value or array of strings. Each item MUST contain bucket name, CAN contain object name (wildcards are not supported):
+* Resource in bucket policy is a string value or array of strings. Each item MUST contain bucket name, CAN contain object name. `bucket/*` is the same as `bucket`,
+any other wildcard is rejected with `422 UnsupportedPolicy`. Statements for an object take precedence over the ones for
+the bucket, so `Deny` for `bucket` or `bucket/*` does not revoke `Allow` given for `bucket/object`:
 ```json
 {
   "Statement": [
@@ -102,7 +104,10 @@ Principal must be `"AWS": "*"` or `"*"` (to refer all users) or `"CanonicalUser"
   ]
 }
 ```
-* AWS conditions and wildcard are not supported in [resources](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-arn-format.html)
+* Supported actions are `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket`, `s3:GetObjectTagging`,
+`s3:PutObjectTagging` and the `s3:*` and `*` wildcards. Any other action is ignored in `Allow` statements and
+rejected with `422 UnsupportedPolicy` in `Deny` ones. Within one policy, `Deny` wins if the same grantee is both allowed and denied on the same resource.
+* `Effect` must be exactly `Allow` or `Deny`, anything else is rejected with `400 MalformedPolicy`
 * Policy statements with `Condition` (except exactly the `bucket-owner-full-control` one described in
 [Policy and replication](#policy-and-replication)), `NotPrincipal`, `NotAction` or `NotResource`
 are rejected with `422 UnsupportedPolicy`

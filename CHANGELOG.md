@@ -9,6 +9,7 @@ This document outlines major changes between releases.
 
 ### Changed
 - Presigned URLs dated up to 15 minutes ahead of the gateway clock are accepted (#1409)
+- Bucket policy `Allow` for `s3:*` or `*` grants all operations instead of being ignored (#1413)
 
 ### Fixed
 - `SignatureDoesNotMatch` for requests signing a zero `Content-Length` or `User-Agent` (#1400)
@@ -29,6 +30,12 @@ This document outlines major changes between releases.
 - Panic on a `STREAMING-UNSIGNED-PAYLOAD-TRAILER` upload without `x-amz-trailer`
 - Unsigned `x-amz-trailer` header ignored for signed requests
 - 500 instead of 403 when the storage node denies an object search, e.g. `ListParts` for another user's upload (#1411)
+- Bucket policy `Deny` for `s3:*` or an unsupported action saved without denying anything (#1413)
+- Bucket policy `Deny` following an `Allow` for the same operation stored as `Allow` (#1413)
+- Bucket policy statement with an `Effect` other than `Allow` or `Deny` dropping the existing eACL records (#1413)
+- Bucket policy for the `bucket/*` resource applied to the object named `*` only (#1413)
+- Bucket policy statement without `Action` or `Resource` accepted and ignored (#1413)
+- Duplicate accounts in eACL records of a bucket policy with overlapping actions (#1413)
 
 ### Updated
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)

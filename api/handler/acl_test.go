@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -222,6 +223,234 @@ func TestPolicyToAstUnsupportedElements(t *testing.T) {
 		require.Len(t, actualAst.Resources, 1)
 		require.Equal(t, s3ConditionXAmzACL, actualAst.Resources[0].Object)
 	})
+}
+
+func TestPolicyToAstActions(t *testing.T) {
+	policyWith := func(t *testing.T, effect, action string) *bucketPolicy {
+		policy := &bucketPolicy{Bucket: "bucketName"}
+		require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"`+effect+`","Principal":"*","Action":`+action+
+			`,"Resource":"arn:aws:s3:::bucketName/*"}]}`), policy))
+		return policy
+	}
+
+	for _, effect := range []string{"Allow", "Deny"} {
+		for name, tc := range map[string]struct {
+			action string
+			ops    []eacl.Operation
+		}{
+			"s3 wildcard":       {action: `"s3:*"`, ops: fullOps},
+			"wildcard":          {action: `"*"`, ops: fullOps},
+			"wildcard in list":  {action: `["s3:GetObject","s3:*"]`, ops: fullOps},
+			"supported actions": {action: `["s3:PutObject","s3:DeleteObject"]`, ops: writeOps},
+		} {
+			t.Run(effect+" "+name, func(t *testing.T) {
+				actualAst, err := policyToAst(policyWith(t, effect, tc.action))
+				require.NoError(t, err)
+				require.Len(t, actualAst.Resources, 1)
+
+				var ops []eacl.Operation
+				for _, op := range actualAst.Resources[0].Operations {
+					require.Equal(t, effectToAction(effect), op.Action)
+					require.Equal(t, astGranteeRoleOthers, op.Grantee)
+					ops = append(ops, op.Op)
+				}
+				require.ElementsMatch(t, tc.ops, ops)
+			})
+		}
+	}
+
+	for name, action := range map[string]string{
+		"unknown":           `"s3:GetBucketLocation"`,
+		"object version":    `"s3:GetObjectVersion"`,
+		"multipart uploads": `["s3:ListBucket","s3:ListBucketMultipartUploads"]`,
+		"prefix wildcard":   `"s3:Get*"`,
+		"unknown in list":   `["s3:GetObject","s3:Bogus"]`,
+		"wildcard and list": `["s3:*","s3:Bogus"]`,
+	} {
+		t.Run("Deny "+name, func(t *testing.T) {
+			_, err := policyToAst(policyWith(t, "Deny", action))
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrUnsupportedPolicy), err)
+		})
+
+		t.Run("Allow "+name, func(t *testing.T) {
+			_, err := policyToAst(policyWith(t, "Allow", action))
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPolicyToAstInvalidEffect(t *testing.T) {
+	for _, effect := range []string{"", "deny", "allow", "Reject"} {
+		t.Run(effect, func(t *testing.T) {
+			policy := &bucketPolicy{Bucket: "bucketName"}
+			require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"`+effect+
+				`","Principal":"*","Action":"s3:*","Resource":"arn:aws:s3:::bucketName"}]}`), policy))
+
+			_, err := policyToAst(policy)
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrMalformedPolicy), err)
+		})
+	}
+}
+
+func TestPolicyToAstWildcardResource(t *testing.T) {
+	policyWith := func(t *testing.T, resource string) *bucketPolicy {
+		policy := &bucketPolicy{Bucket: "bucketName"}
+		require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"`+
+			resource+`"}]}`), policy))
+		return policy
+	}
+
+	t.Run("all objects", func(t *testing.T) {
+		actualAst, err := policyToAst(policyWith(t, "arn:aws:s3:::bucketName/*"))
+		require.NoError(t, err)
+		require.Len(t, actualAst.Resources, 1)
+		require.True(t, actualAst.Resources[0].IsBucket())
+		require.Len(t, actualAst.Resources[0].Operations, len(readOps))
+	})
+
+	for _, resource := range []string{
+		"arn:aws:s3:::bucketName/prefix/*",
+		"arn:aws:s3:::bucketName/obj?",
+		"arn:aws:s3:::bucketName*",
+		"arn:aws:s3:::*",
+		"*",
+	} {
+		t.Run(resource, func(t *testing.T) {
+			_, err := policyToAst(policyWith(t, resource))
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrUnsupportedPolicy), err)
+		})
+	}
+}
+
+func TestPolicyToAstEmptyStatement(t *testing.T) {
+	for name, state := range map[string]string{
+		"empty action":   `"Action":[],"Resource":"arn:aws:s3:::bucketName"`,
+		"no action":      `"Resource":"arn:aws:s3:::bucketName"`,
+		"empty resource": `"Action":"s3:GetObject","Resource":[]`,
+		"no resource":    `"Action":"s3:GetObject"`,
+		"blank action":   `"Action":"","Resource":"arn:aws:s3:::bucketName"`,
+		"blank in list":  `"Action":["s3:GetObject",""],"Resource":"arn:aws:s3:::bucketName"`,
+		"blank resource": `"Action":"s3:GetObject","Resource":""`,
+	} {
+		for _, effect := range []string{"Allow", "Deny"} {
+			t.Run(effect+" "+name, func(t *testing.T) {
+				policy := &bucketPolicy{Bucket: "bucketName"}
+				require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"`+effect+`","Principal":"*",`+state+`}]}`), policy))
+
+				_, err := policyToAst(policy)
+				require.True(t, s3errors.IsS3Error(err, s3errors.ErrMalformedPolicy), err)
+			})
+		}
+	}
+}
+
+func TestPolicyToAstDenyWins(t *testing.T) {
+	const (
+		userA = "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"
+		userB = "NbUgTSFvPmsRxmGeWpuuGeJUoRoi6PErcM"
+	)
+
+	statement := func(effect, principal, action string) string {
+		return `{"Effect":"` + effect + `","Principal":` + principal + `,"Action":"` + action + `","Resource":"arn:aws:s3:::bucketName"}`
+	}
+	canonical := func(id string) string { return `{"CanonicalUser":"` + id + `"}` }
+
+	idA, err := user.DecodeString(userA)
+	require.NoError(t, err)
+	idB, err := user.DecodeString(userB)
+	require.NoError(t, err)
+
+	type opKey struct {
+		op     eacl.Operation
+		action eacl.Action
+	}
+
+	for name, tc := range map[string]struct {
+		statements []string
+		grantee    astGrantee
+		expected   map[opKey][]user.ID
+	}{
+		"different users": {
+			statements: []string{statement("Allow", canonical(userA), "s3:GetObject"), statement("Deny", canonical(userB), "s3:*")},
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionAllow}:    {idA},
+				{eacl.OperationHead, eacl.ActionAllow}:   {idA},
+				{eacl.OperationSearch, eacl.ActionAllow}: {idA},
+				{eacl.OperationGet, eacl.ActionDeny}:     {idB},
+				{eacl.OperationHead, eacl.ActionDeny}:    {idB},
+				{eacl.OperationSearch, eacl.ActionDeny}:  {idB},
+				{eacl.OperationPut, eacl.ActionDeny}:     {idB},
+				{eacl.OperationDelete, eacl.ActionDeny}:  {idB},
+			},
+		},
+		"same user, deny last": {
+			statements: []string{statement("Allow", canonical(userA), "s3:*"), statement("Deny", canonical(userA), "s3:PutObject")},
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionAllow}:    {idA},
+				{eacl.OperationHead, eacl.ActionAllow}:   {idA},
+				{eacl.OperationSearch, eacl.ActionAllow}: {idA},
+				{eacl.OperationDelete, eacl.ActionAllow}: {idA},
+				{eacl.OperationPut, eacl.ActionDeny}:     {idA},
+			},
+		},
+		"same user, deny first": {
+			statements: []string{statement("Deny", canonical(userA), "s3:PutObject"), statement("Allow", canonical(userA), "s3:*")},
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionAllow}:    {idA},
+				{eacl.OperationHead, eacl.ActionAllow}:   {idA},
+				{eacl.OperationSearch, eacl.ActionAllow}: {idA},
+				{eacl.OperationDelete, eacl.ActionAllow}: {idA},
+				{eacl.OperationPut, eacl.ActionDeny}:     {idA},
+			},
+		},
+		"overlapping actions": {
+			statements: []string{statement("Deny", canonical(userA), "s3:GetObject"), statement("Deny", canonical(userA), "s3:ListBucket")},
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionDeny}:    {idA},
+				{eacl.OperationHead, eacl.ActionDeny}:   {idA},
+				{eacl.OperationSearch, eacl.ActionDeny}: {idA},
+			},
+		},
+		"others, deny last": {
+			statements: []string{statement("Allow", `"*"`, "s3:GetObject"), statement("Deny", `"*"`, "s3:*")},
+			grantee:    astGranteeRoleOthers,
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionDeny}:    nil,
+				{eacl.OperationHead, eacl.ActionDeny}:   nil,
+				{eacl.OperationSearch, eacl.ActionDeny}: nil,
+				{eacl.OperationPut, eacl.ActionDeny}:    nil,
+				{eacl.OperationDelete, eacl.ActionDeny}: nil,
+			},
+		},
+		"others, deny first": {
+			statements: []string{statement("Deny", `"*"`, "s3:PutObject"), statement("Allow", `"*"`, "s3:*")},
+			grantee:    astGranteeRoleOthers,
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionAllow}:    nil,
+				{eacl.OperationHead, eacl.ActionAllow}:   nil,
+				{eacl.OperationSearch, eacl.ActionAllow}: nil,
+				{eacl.OperationDelete, eacl.ActionAllow}: nil,
+				{eacl.OperationPut, eacl.ActionDeny}:     nil,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			policy := &bucketPolicy{Bucket: "bucketName"}
+			require.NoError(t, json.Unmarshal([]byte(`{"Statement":[`+strings.Join(tc.statements, ",")+`]}`), policy))
+
+			actualAst, err := policyToAst(policy)
+			require.NoError(t, err)
+			require.Len(t, actualAst.Resources, 1)
+
+			actual := make(map[opKey][]user.ID)
+			for _, op := range actualAst.Resources[0].Operations {
+				require.Equal(t, tc.grantee, op.Grantee)
+				require.NotContains(t, actual, opKey{op.Op, op.Action})
+				actual[opKey{op.Op, op.Action}] = op.Users
+			}
+			require.Equal(t, tc.expected, actual)
+		})
+	}
 }
 
 func getReadOps(key *keys.PrivateKey, gt astGrantee, action eacl.Action) []*astOperation {
@@ -1613,6 +1842,45 @@ func TestBucketPolicy(t *testing.T) {
 			require.ElementsMatch(t, []string{s3GetObject, s3ListBucket}, st.Action.values)
 		}
 	}
+}
+
+func TestBucketPolicyDenyActions(t *testing.T) {
+	hc := prepareHandlerContext(t)
+	bktName := "bucket-for-policy"
+
+	box, _ := createAccessBox(t)
+	bktInfo := createBucket(t, hc, bktName, box, map[string]string{api.AmzACL: "public-read-write"})
+
+	deniedOps := func() []eacl.Operation {
+		bucketACL, err := hc.Layer().GetBucketACL(hc.Context(), bktInfo)
+		require.NoError(t, err)
+
+		var ops []eacl.Operation
+		for _, record := range bucketACL.EACL.Records() {
+			if record.Action() != eacl.ActionDeny || len(record.Filters()) != 0 {
+				continue
+			}
+			if targets := record.Targets(); len(targets) == 1 && targets[0].Role() == eacl.RoleOthers {
+				ops = append(ops, record.Operation())
+			}
+		}
+		return ops
+	}
+
+	policy := &bucketPolicy{
+		Statement: []statement{{
+			Effect:    "Deny",
+			Principal: principal{AWS: allUsersWildcard},
+			Action:    stringOrSlice{values: []string{"s3:GetBucketLocation"}},
+			Resource:  stringOrSlice{values: []string{arnAwsPrefix + bktName + "/*"}},
+		}},
+	}
+	putBucketPolicy(hc, bktName, policy, box, http.StatusUnprocessableEntity)
+	require.Empty(t, deniedOps())
+
+	policy.Statement[0].Action.values[0] = "s3:*"
+	putBucketPolicy(hc, bktName, policy, box, http.StatusOK)
+	require.ElementsMatch(t, fullOps, deniedOps())
 }
 
 func TestBucketPolicyOwnerFullControl(t *testing.T) {

@@ -643,7 +643,7 @@ var errorCodes = errorCodeMap{
 	ErrMalformedPolicy: {
 		ErrCode:        ErrMalformedPolicy,
 		Code:           "MalformedPolicy",
-		Description:    "Policy has invalid resource.",
+		Description:    "Policy is malformed.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingFields: {
