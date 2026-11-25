@@ -322,6 +322,28 @@ func TestPolicyToAstWildcardResource(t *testing.T) {
 	}
 }
 
+func TestPolicyToAstEmptyStatement(t *testing.T) {
+	for name, state := range map[string]string{
+		"empty action":   `"Action":[],"Resource":"arn:aws:s3:::bucketName"`,
+		"no action":      `"Resource":"arn:aws:s3:::bucketName"`,
+		"empty resource": `"Action":"s3:GetObject","Resource":[]`,
+		"no resource":    `"Action":"s3:GetObject"`,
+		"blank action":   `"Action":"","Resource":"arn:aws:s3:::bucketName"`,
+		"blank in list":  `"Action":["s3:GetObject",""],"Resource":"arn:aws:s3:::bucketName"`,
+		"blank resource": `"Action":"s3:GetObject","Resource":""`,
+	} {
+		for _, effect := range []string{"Allow", "Deny"} {
+			t.Run(effect+" "+name, func(t *testing.T) {
+				policy := &bucketPolicy{Bucket: "bucketName"}
+				require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"`+effect+`","Principal":"*",`+state+`}]}`), policy))
+
+				_, err := policyToAst(policy)
+				require.True(t, s3errors.IsS3Error(err, s3errors.ErrMalformedPolicy), err)
+			})
+		}
+	}
+}
+
 func TestPolicyToAstDenyWins(t *testing.T) {
 	const (
 		userA = "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"

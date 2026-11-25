@@ -1157,6 +1157,11 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, errors.New("NotPrincipal, NotAction and NotResource are not supported"))
 		}
 
+		if len(state.Action.values) == 0 || slices.Contains(state.Action.values, "") ||
+			len(state.Resource.values) == 0 || slices.Contains(state.Resource.values, "") {
+			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrMalformedPolicy, errors.New("statement must have Action and Resource"))
+		}
+
 		if state.Effect == "Allow" &&
 			state.Action.Equal(stringOrSlice{values: []string{"s3:PutObject"}}) &&
 			state.Principal.AWS == "*" &&
