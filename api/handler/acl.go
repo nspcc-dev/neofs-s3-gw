@@ -108,6 +108,8 @@ const (
 	allUsersWildcard = "*"
 	allUsersGroup    = "http://acs.amazonaws.com/groups/global/AllUsers"
 
+	allActionsWildcard           = "*"
+	s3AllActions                 = "s3:*"
 	s3DeleteObject               = "s3:DeleteObject"
 	s3GetObject                  = "s3:GetObject"
 	s3PutObject                  = "s3:PutObject"
@@ -1199,7 +1201,12 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 				}
 			}
 			for _, action := range state.Action.values {
-				for _, op := range actionToOpMap[action] {
+				ops, err := policyActionOps(action, state.Effect == "Deny")
+				if err != nil {
+					return nil, err
+				}
+
+				for _, op := range ops {
 					toAction := effectToAction(state.Effect)
 
 					var (
@@ -1227,6 +1234,18 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 	}
 
 	return res, nil
+}
+
+func policyActionOps(action string, deny bool) ([]eacl.Operation, error) {
+	if action == allActionsWildcard || action == s3AllActions {
+		return fullOps, nil
+	}
+
+	if ops, ok := actionToOpMap[action]; ok || !deny {
+		return ops, nil
+	}
+
+	return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, fmt.Errorf("action '%s' is not supported in Deny statements", action))
 }
 
 func resourceInfoFromName(name, bucketName string) resourceInfo {
@@ -1323,10 +1342,31 @@ func triageOperations(operations []*astOperation) ([]*astOperation, []*astOperat
 }
 
 func addTo(list []*astOperation, userID user.ID, op eacl.Operation, gt astGrantee, action eacl.Action) []*astOperation {
-	var found *astOperation
+	var found, opposite *astOperation
 	for _, astop := range list {
 		if astop.Op == op && astop.Grantee == gt {
-			found = astop
+			if astop.Action == action {
+				found = astop
+			} else {
+				opposite = astop
+			}
+		}
+	}
+
+	// Deny wins if the grantee is both allowed and denied.
+	if opposite != nil && (gt != astGranteeAccount || slices.Contains(opposite.Users, userID)) {
+		if action != eacl.ActionDeny {
+			return list
+		}
+
+		if gt != astGranteeAccount {
+			opposite.Action = action
+			return list
+		}
+
+		opposite.Users = slices.DeleteFunc(opposite.Users, func(u user.ID) bool { return u == userID })
+		if len(opposite.Users) == 0 {
+			list = slices.DeleteFunc(list, func(o *astOperation) bool { return o == opposite })
 		}
 	}
 
@@ -1460,12 +1500,18 @@ func getAllowStatement(resInfo *resourceInfo, id string, permission amazonS3Perm
 }
 
 func getDenyStatement(resInfo *resourceInfo, id string, permission amazonS3Permission) statement {
+	// Only the actions with eACL operations can be denied.
+	actions := slices.DeleteFunc(getActions(permission, resInfo.IsBucket()), func(a string) bool {
+		_, ok := actionToOpMap[a]
+		return !ok
+	})
+
 	state := statement{
 		Effect: "Deny",
 		Principal: principal{
 			CanonicalUser: id,
 		},
-		Action:   stringOrSlice{values: getActions(permission, resInfo.IsBucket())},
+		Action:   stringOrSlice{values: actions},
 		Resource: stringOrSlice{values: []string{arnAwsPrefix + resInfo.Name()}},
 	}
 
