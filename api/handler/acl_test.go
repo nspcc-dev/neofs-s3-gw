@@ -292,6 +292,36 @@ func TestPolicyToAstInvalidEffect(t *testing.T) {
 	}
 }
 
+func TestPolicyToAstWildcardResource(t *testing.T) {
+	policyWith := func(t *testing.T, resource string) *bucketPolicy {
+		policy := &bucketPolicy{Bucket: "bucketName"}
+		require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"`+
+			resource+`"}]}`), policy))
+		return policy
+	}
+
+	t.Run("all objects", func(t *testing.T) {
+		actualAst, err := policyToAst(policyWith(t, "arn:aws:s3:::bucketName/*"))
+		require.NoError(t, err)
+		require.Len(t, actualAst.Resources, 1)
+		require.True(t, actualAst.Resources[0].IsBucket())
+		require.Len(t, actualAst.Resources[0].Operations, len(readOps))
+	})
+
+	for _, resource := range []string{
+		"arn:aws:s3:::bucketName/prefix/*",
+		"arn:aws:s3:::bucketName/obj?",
+		"arn:aws:s3:::bucketName*",
+		"arn:aws:s3:::*",
+		"*",
+	} {
+		t.Run(resource, func(t *testing.T) {
+			_, err := policyToAst(policyWith(t, resource))
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrUnsupportedPolicy), err)
+		})
+	}
+}
+
 func TestPolicyToAstDenyWins(t *testing.T) {
 	const (
 		userA = "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"
@@ -1812,7 +1842,7 @@ func TestBucketPolicyDenyActions(t *testing.T) {
 			Effect:    "Deny",
 			Principal: principal{AWS: allUsersWildcard},
 			Action:    stringOrSlice{values: []string{"s3:GetBucketLocation"}},
-			Resource:  stringOrSlice{values: []string{arnAwsPrefix + bktName}},
+			Resource:  stringOrSlice{values: []string{arnAwsPrefix + bktName + "/*"}},
 		}},
 	}
 	putBucketPolicy(hc, bktName, policy, box, http.StatusUnprocessableEntity)

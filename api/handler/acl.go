@@ -1194,6 +1194,12 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 		}
 		for _, resource := range state.Resource.values {
 			trimmedResource := strings.TrimPrefix(resource, arnAwsPrefix)
+			if trimmedResource == bktPolicy.Bucket+"/*" {
+				// Bucket records cover all its objects.
+				trimmedResource = bktPolicy.Bucket
+			} else if strings.ContainsAny(trimmedResource, "*?") {
+				return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, fmt.Errorf("wildcards are not supported in resource '%s'", resource))
+			}
 			r, ok := rr[trimmedResource]
 			if !ok {
 				if !strings.HasPrefix(trimmedResource, bktPolicy.Bucket) {
