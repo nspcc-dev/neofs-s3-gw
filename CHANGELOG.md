@@ -28,6 +28,7 @@ This document outlines major changes between releases.
 - Unsupported `x-amz-trailer` value answered with 403 instead of 400 (#1403)
 - Panic on a `STREAMING-UNSIGNED-PAYLOAD-TRAILER` upload without `x-amz-trailer`
 - Unsigned `x-amz-trailer` header ignored for signed requests
+- 500 instead of 403 when the storage node denies an object search, e.g. `ListParts` for another user's upload (#1411)
 
 ### Updated
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)

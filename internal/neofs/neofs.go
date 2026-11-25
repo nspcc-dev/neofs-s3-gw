@@ -746,6 +746,11 @@ func (x *NeoFS) SearchObjectsV2(ctx context.Context, cid cid.ID, filters object.
 func (x *NeoFS) SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error) {
 	items, cursor, err := x.pool.Load().SearchObjects(ctx, cid, filters, attributes, cursor, x.signer(ctx), opts)
 	if err != nil && !errors.Is(err, apistatus.ErrIncomplete) {
+		if _, ok := isErrAccessDenied(err); ok {
+			// Keep the original status in the chain, callers check it.
+			return nil, "", fmt.Errorf("search objects: %w: %w", layer.ErrAccessDenied, err)
+		}
+
 		return nil, "", fmt.Errorf("search objects: %w", err)
 	}
 

@@ -393,9 +393,13 @@ type NeoFS interface {
 	CurrentEpoch() uint64
 
 	// SearchObjectsV2 searches objects with corresponding filters and return objectID with requested attributes.
+	//
+	// It returns ErrAccessDenied on search access violation.
 	SearchObjectsV2(context.Context, cid.ID, object.SearchFilters, []string, client.SearchObjectsOptions) ([]client.SearchResultItem, error)
 
 	// SearchObjectsV2WithCursor searches objects with corresponding filters and return objectID with requested attributes. It uses cursor to start from required point.
+	//
+	// It returns ErrAccessDenied on search access violation.
 	SearchObjectsV2WithCursor(ctx context.Context, cid cid.ID, filters object.SearchFilters, attributes []string, cursor string, opts client.SearchObjectsOptions) ([]client.SearchResultItem, string, error)
 
 	// SetContainerAttribute sets corresponding container attribute. It requires session token with VerbContainerSetAttribute verb.
