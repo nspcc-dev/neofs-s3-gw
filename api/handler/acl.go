@@ -1149,6 +1149,10 @@ func policyToAst(bktPolicy *bucketPolicy) (*ast, error) {
 	rr := make(map[string]*astResource)
 
 	for _, state := range bktPolicy.Statement {
+		if state.Effect != "Allow" && state.Effect != "Deny" {
+			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrMalformedPolicy, fmt.Errorf("invalid effect '%s'", state.Effect))
+		}
+
 		if len(state.NotPrincipal) != 0 || len(state.NotAction) != 0 || len(state.NotResource) != 0 {
 			return nil, s3errors.GetAPIErrorWithError(s3errors.ErrUnsupportedPolicy, errors.New("NotPrincipal, NotAction and NotResource are not supported"))
 		}

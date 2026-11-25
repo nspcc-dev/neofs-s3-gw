@@ -32,6 +32,7 @@ This document outlines major changes between releases.
 - 500 instead of 403 when the storage node denies an object search, e.g. `ListParts` for another user's upload (#1411)
 - Bucket policy `Deny` for `s3:*` or an unsupported action saved without denying anything (#1413)
 - Bucket policy `Deny` following an `Allow` for the same operation stored as `Allow` (#1413)
+- Bucket policy statement with an `Effect` other than `Allow` or `Deny` dropping the existing eACL records (#1413)
 
 ### Updated
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)

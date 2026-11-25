@@ -279,6 +279,19 @@ func TestPolicyToAstActions(t *testing.T) {
 	}
 }
 
+func TestPolicyToAstInvalidEffect(t *testing.T) {
+	for _, effect := range []string{"", "deny", "allow", "Reject"} {
+		t.Run(effect, func(t *testing.T) {
+			policy := &bucketPolicy{Bucket: "bucketName"}
+			require.NoError(t, json.Unmarshal([]byte(`{"Statement":[{"Effect":"`+effect+
+				`","Principal":"*","Action":"s3:*","Resource":"arn:aws:s3:::bucketName"}]}`), policy))
+
+			_, err := policyToAst(policy)
+			require.True(t, s3errors.IsS3Error(err, s3errors.ErrMalformedPolicy), err)
+		})
+	}
+}
+
 func TestPolicyToAstDenyWins(t *testing.T) {
 	const (
 		userA = "NiskPF9pfRMzg7V7PeB4d6ogLzu74a1L2Q"
