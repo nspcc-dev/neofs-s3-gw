@@ -147,6 +147,11 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Respond to a request with an unsupported subresource.
+func notImplementedHandler(w http.ResponseWriter, r *http.Request) {
+	WriteErrorResponse(w, GetReqInfo(r.Context()), s3errors.GetAPIError(s3errors.ErrNotImplemented))
+}
+
 // Write http common headers.
 func setCommonHeaders(w http.ResponseWriter) {
 	w.Header().Set(hdrServerInfo, version.Server)

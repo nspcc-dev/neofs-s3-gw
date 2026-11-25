@@ -36,6 +36,7 @@ This document outlines major changes between releases.
 - Bucket policy for the `bucket/*` resource applied to the object named `*` only (#1413)
 - Bucket policy statement without `Action` or `Resource` accepted and ignored (#1413)
 - Duplicate accounts in eACL records of a bucket policy with overlapping actions (#1413)
+- Bucket requests with an unsupported subresource were served as `DeleteBucket`, `CreateBucket` or `ListObjects` (#1417)
 
 ### Updated
 - golang.org/x/sync v0.23.0 => v0.25.0 (#1416)
