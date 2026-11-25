@@ -1386,7 +1386,7 @@ func addTo(list []*astOperation, userID user.ID, op eacl.Operation, gt astGrante
 	}
 
 	if found != nil {
-		if gt == astGranteeAccount && !userID.IsZero() {
+		if gt == astGranteeAccount && !userID.IsZero() && !slices.Contains(found.Users, userID) {
 			found.Users = append(found.Users, userID)
 		}
 	} else {

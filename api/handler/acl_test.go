@@ -403,6 +403,14 @@ func TestPolicyToAstDenyWins(t *testing.T) {
 				{eacl.OperationPut, eacl.ActionDeny}:     {idA},
 			},
 		},
+		"overlapping actions": {
+			statements: []string{statement("Deny", canonical(userA), "s3:GetObject"), statement("Deny", canonical(userA), "s3:ListBucket")},
+			expected: map[opKey][]user.ID{
+				{eacl.OperationGet, eacl.ActionDeny}:    {idA},
+				{eacl.OperationHead, eacl.ActionDeny}:   {idA},
+				{eacl.OperationSearch, eacl.ActionDeny}: {idA},
+			},
+		},
 		"others, deny last": {
 			statements: []string{statement("Allow", `"*"`, "s3:GetObject"), statement("Deny", `"*"`, "s3:*")},
 			grantee:    astGranteeRoleOthers,
