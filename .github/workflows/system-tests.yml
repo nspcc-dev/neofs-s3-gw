@@ -21,7 +21,9 @@ on:
         required: false
         default: ''
 
-permissions: write-all
+permissions:
+  contents: read
+  statuses: write
 
 jobs:
   run_system_tests:
@@ -37,4 +39,6 @@ jobs:
       tests_path: 'pytest_tests/tests/s3'
       tests_parallel_level: 3
       os: '[{runner: "ubuntu-latest", binary: "linux-amd64"}, {runner: "macos-latest", binary: "darwin-arm64"}]'
-    secrets: inherit
+    secrets:
+      TEST_RESULTS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
+      TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
