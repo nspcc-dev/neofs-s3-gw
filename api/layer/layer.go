@@ -705,9 +705,10 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 			}
 
 			return &data.ComprehensiveObjectInfo{
-				ID:       cached.ID,
-				TagSet:   tagSet,
-				LockInfo: cached.LockInfo,
+				ID:           cached.ID,
+				TagSet:       tagSet,
+				HasTagObject: cached.HasTagObject,
+				LockInfo:     cached.LockInfo,
 			}, nil
 		}
 	}
@@ -789,17 +790,19 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 
 	if isEmptyVersion {
 		n.cache.PutObjectByName(n.Owner(ctx), p.BktInfo.CID, p.Object, &data.ComprehensiveObjectInfo{
-			ID:       id,
-			TagSet:   maps.Clone(tagSet),
-			LockInfo: lockInfo,
+			ID:           id,
+			TagSet:       maps.Clone(tagSet),
+			HasTagObject: !tagsObjectOID.IsZero(),
+			LockInfo:     lockInfo,
 		})
 	}
 
 	return &data.ComprehensiveObjectInfo{
-		ID:         id,
-		TagSet:     tagSet,
-		LockInfo:   lockInfo,
-		ObjectInfo: objInfo,
+		ID:           id,
+		TagSet:       tagSet,
+		HasTagObject: !tagsObjectOID.IsZero(),
+		LockInfo:     lockInfo,
+		ObjectInfo:   objInfo,
 	}, nil
 }
 

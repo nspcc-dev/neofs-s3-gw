@@ -82,6 +82,7 @@ func TestEmptyTagValue(t *testing.T) {
 
 func TestDeleteObjectTaggingInlineTags(t *testing.T) {
 	hc := prepareHandlerContext(t)
+	enableNamesCache(hc)
 
 	bktName, objName := "bucket-inline-tags", "object"
 	createTestBucket(hc, bktName)
@@ -94,6 +95,13 @@ func TestDeleteObjectTaggingInlineTags(t *testing.T) {
 
 	deleteObjectTagging(t, hc, bktName, objName)
 	require.Empty(t, getObjectTagging(t, hc, bktName, objName, "").TagSet)
+	requireTaggingCount(t, hc, bktName, objName, "0")
+
+	putObjectTagging(t, hc, bktName, objName, map[string]string{"k": "v"})
+	requireTaggingCount(t, hc, bktName, objName, "1")
+
+	putObjectTagging(t, hc, bktName, objName, nil)
+	requireTaggingCount(t, hc, bktName, objName, "0")
 
 	// An object without inline tags.
 	objName = "object-no-inline-tags"
@@ -104,6 +112,22 @@ func TestDeleteObjectTaggingInlineTags(t *testing.T) {
 	putObjectTagging(t, hc, bktName, objName, map[string]string{"k": "v"})
 	deleteObjectTagging(t, hc, bktName, objName)
 	require.Empty(t, getObjectTagging(t, hc, bktName, objName, "").TagSet)
+}
+
+// requireTaggingCount checks x-amz-tagging-count of HeadObject and GetObject,
+// with and without the name cache.
+func requireTaggingCount(t *testing.T, hc *handlerContext, bktName, objName, expected string) {
+	for range 2 {
+		w, r := prepareTestRequest(hc, bktName, objName, nil)
+		hc.Handler().HeadObjectHandler(w, r)
+		assertStatus(t, w, http.StatusOK)
+		require.Equal(t, expected, w.Header().Get(api.AmzTaggingCount))
+
+		w, r = prepareTestRequest(hc, bktName, objName, nil)
+		hc.Handler().GetObjectHandler(w, r)
+		assertStatus(t, w, http.StatusOK)
+		require.Equal(t, expected, w.Header().Get(api.AmzTaggingCount))
+	}
 }
 
 func deleteObjectTagging(t *testing.T, hc *handlerContext, bktName, objName string) {
