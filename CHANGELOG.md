@@ -12,6 +12,7 @@ This document outlines major changes between releases.
 - Bucket policy `Allow` for `s3:*` or `*` grants all operations instead of being ignored (#1413)
 
 ### Fixed
+- `GetObject` and `HeadObject` returning a tag object after several `PutObjectTagging` calls (#1418)
 - `SignatureDoesNotMatch` for requests signing a zero `Content-Length` or `User-Agent` (#1400)
 - `SignatureDoesNotMatch` for presigned URLs signing headers besides `Host` (#1400)
 - Endless loop on an empty multipart part (#1405)

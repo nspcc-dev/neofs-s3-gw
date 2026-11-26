@@ -805,6 +805,14 @@ func (n *layer) ComprehensiveObjectInfo(ctx context.Context, p *HeadObjectParams
 
 // GetIDForVersioningContainer returns actual oid.ID for object in versioned container.
 func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoParams) (oid.ID, error) {
+	id, _, err := n.getIDForVersioningContainer(ctx, p, false)
+	return id, err
+}
+
+// getIDForVersioningContainer returns actual oid.ID for object in versioned container.
+// If withTagObjects is set, IDs of tag meta objects of the returned version are
+// fetched by the same search and returned as well.
+func (n *layer) getIDForVersioningContainer(ctx context.Context, p *ShortInfoParams, withTagObjects bool) (oid.ID, []oid.ID, error) {
 	var (
 		filters             = make(object.SearchFilters, 0, 3)
 		returningAttributes = []string{
@@ -816,11 +824,17 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 		opts client.SearchObjectsOptions
 	)
 
+	if withTagObjects {
+		returningAttributes = append(returningAttributes, s3headers.MetaType, object.AttributeAssociatedObject)
+	}
+
 	attachTokenToParams(ctx, p.Owner, &opts)
 
 	filters.AddFilter(object.AttributeFilePath, p.Object, object.MatchStringEqual)
 	filters.AddTypeFilter(object.MatchStringEqual, object.TypeRegular)
-	filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
+	if !withTagObjects {
+		filters.AddFilter(s3headers.MetaType, "", object.MatchNotPresent)
+	}
 
 	if !p.FindNullVersion {
 		filters.AddFilter(s3headers.AttributeVersioningState, data.VersioningEnabled, object.MatchStringEqual)
@@ -829,19 +843,35 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 	ids, err := n.neoFS.SearchObjectsV2(ctx, p.CID, filters, returningAttributes, opts)
 	if err != nil {
 		if errors.Is(err, apistatus.ErrObjectAccessDenied) {
-			return oid.ID{}, s3errors.GetAPIError(s3errors.ErrAccessDenied)
+			return oid.ID{}, nil, s3errors.GetAPIError(s3errors.ErrAccessDenied)
 		}
 
-		return oid.ID{}, fmt.Errorf("search objects: %w", err)
+		return oid.ID{}, nil, fmt.Errorf("search objects: %w", err)
 	}
 
 	if len(ids) == 0 {
-		return oid.ID{}, ErrNodeNotFound
+		return oid.ID{}, nil, ErrNodeNotFound
 	}
 
-	var searchResults = make([]versioningContainerIDSearchResult, 0, len(ids))
+	var (
+		searchResults   = make([]versioningContainerIDSearchResult, 0, len(ids))
+		tagIDsByVersion = make(map[string][]oid.ID)
+	)
 
 	for _, item := range ids {
+		if withTagObjects {
+			switch item.Attributes[3] {
+			case s3headers.TypeTags:
+				tagIDsByVersion[item.Attributes[4]] = append(tagIDsByVersion[item.Attributes[4]], item.ID)
+				continue
+			case "":
+				// the object itself.
+			default:
+				// skip other meta objects, e.g. locks.
+				continue
+			}
+		}
+
 		var psr = versioningContainerIDSearchResult{
 			ID:       item.ID,
 			FilePath: item.Attributes[0],
@@ -850,13 +880,17 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 		if item.Attributes[1] != "" {
 			psr.CreationTimestamp, err = strconv.ParseInt(item.Attributes[1], 10, 64)
 			if err != nil {
-				return oid.ID{}, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
+				return oid.ID{}, nil, fmt.Errorf("invalid creation timestamp %s: %w", item.Attributes[1], err)
 			}
 		}
 
 		psr.IsDeleteMarker = item.Attributes[2] != ""
 
 		searchResults = append(searchResults, psr)
+	}
+
+	if len(searchResults) == 0 {
+		return oid.ID{}, nil, ErrNodeNotFound
 	}
 
 	sortFunc := func(a, b versioningContainerIDSearchResult) int {
@@ -871,10 +905,12 @@ func (n *layer) GetIDForVersioningContainer(ctx context.Context, p *ShortInfoPar
 	slices.SortFunc(searchResults, sortFunc)
 
 	if searchResults[0].IsDeleteMarker {
-		return oid.ID{}, ErrNodeNotFound
+		return oid.ID{}, nil, ErrNodeNotFound
 	}
 
-	return searchResults[0].ID, nil
+	id := searchResults[0].ID
+
+	return id, tagIDsByVersion[id.EncodeToString()], nil
 }
 
 // CopyObject from one bucket into another bucket.
