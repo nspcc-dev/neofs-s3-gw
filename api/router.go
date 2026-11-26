@@ -296,6 +296,7 @@ func Attach(r *mux.Router, domains []string, m MaxClients, h Handler, center aut
 		handlers[op.name] = f
 	}
 	handlers[listBucketsOperation] = m.Handle(metrics.APIStats("listbuckets", h.ListBucketsHandler))
+	handlers[notImplementedOperation] = metrics.APIStats("notimplemented", notImplementedHandler)
 
 	var (
 		notFound = metrics.APIStats("notfound", errorResponseHandler)

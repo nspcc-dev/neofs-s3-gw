@@ -180,6 +180,7 @@ func (h *captureHandler) ListObjectsV2MHandler(w http.ResponseWriter, r *http.Re
 	h.capture(w, r)
 }
 func (h *captureHandler) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) { h.capture(w, r) }
+func (h *captureHandler) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) { h.capture(w, r) }
 
 func TestRouterOperationPrecedence(t *testing.T) {
 	copySource := http.Header{hdrAmzCopySource: {"bucket/other"}}
@@ -204,6 +205,24 @@ func TestRouterOperationPrecedence(t *testing.T) {
 		{method: http.MethodGet, target: "/bucket?uploads", route: "ListMultipartUploads", bucket: "bucket"},
 		{method: http.MethodHead, target: "/bucket", route: "HeadBucket", bucket: "bucket"},
 		{method: http.MethodPut, target: "/bucket", route: "CreateBucket", bucket: "bucket"},
+		{method: http.MethodPut, target: "/bucket?x-id=CreateBucket", route: "CreateBucket", bucket: "bucket"},
+		{method: http.MethodPut, target: "/bucket?X-Amz-Algorithm=a&X-Amz-Credential=c&X-Amz-Date=d&X-Amz-Expires=1&X-Amz-SignedHeaders=host&X-Amz-Signature=s", route: "CreateBucket", bucket: "bucket"},
+		{method: http.MethodPut, target: "/bucket?requestPayment", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodPut, target: "/bucket?website", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodDelete, target: "/bucket", route: "DeleteBucket", bucket: "bucket"},
+		{method: http.MethodDelete, target: "/bucket?x-id=DeleteBucket", route: "DeleteBucket", bucket: "bucket"},
+		{method: http.MethodDelete, target: "/bucket?x-user=ci", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodDelete, target: "/bucket?publicAccessBlock", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodDelete, target: "/bucket?replication", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodDelete, target: "/bucket?analytics&id=x", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodDelete, target: "/bucket?unknown=1", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodGet, target: "/bucket?prefix=a&delimiter=/&marker=b&max-keys=1&encoding-type=url", route: "ListObjectsV1", bucket: "bucket"},
+		{method: http.MethodGet, target: "/bucket?analytics&id=x", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodGet, target: "/bucket?inventory&id=x", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodGet, target: "/bucket?metrics&id=x", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodGet, target: "/bucket?intelligent-tiering&id=x", bucket: "bucket", status: http.StatusNotImplemented},
+		{method: http.MethodGet, target: "/bucket?bucket=bucket&key=k&etag=e", route: "ListObjectsV1", bucket: "bucket"},
+		{method: http.MethodGet, target: "/bucket?list-type=2&unknown", route: "ListObjectsV2", bucket: "bucket"},
 		{method: http.MethodGet, target: "/bucket/key", route: "GetObject", bucket: "bucket", object: "key"},
 		{method: http.MethodGet, target: "/bucket/key?location", route: "GetObject", bucket: "bucket", object: "key"},
 		{method: http.MethodGet, target: "/bucket/key?acl=private", route: "GetObjectACL", bucket: "bucket", object: "key"},

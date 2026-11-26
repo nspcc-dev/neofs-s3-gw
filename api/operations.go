@@ -3,7 +3,10 @@ package api
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+
+	"github.com/nspcc-dev/neofs-s3-gw/api/auth"
 )
 
 type (
@@ -19,6 +22,7 @@ type (
 		header     string            // header that must be present
 		uploadPart bool              // numeric partNumber together with uploadId
 		formData   bool              // multipart/form-data body
+		strict     bool              // any query parameter besides commonQueryParams is not implemented
 		handler    func(Handler, http.ResponseWriter, *http.Request)
 		unlimited  bool // served outside the max clients limiter
 	}
@@ -26,7 +30,13 @@ type (
 
 const (
 	listBucketsOperation = "ListBuckets"
+	// notImplementedOperation is for requests with an unsupported subresource.
+	notImplementedOperation = "NotImplemented"
 )
+
+func notImplemented(_ Handler, w http.ResponseWriter, r *http.Request) {
+	notImplementedHandler(w, r)
+}
 
 var (
 	operations = []operation{
@@ -463,6 +473,38 @@ var (
 			handler:    Handler.GetBucketOwnershipControlsHandler,
 		},
 		{
+			name:       notImplementedOperation,
+			metric:     "notimplemented",
+			method:     http.MethodGet,
+			bucketPath: true,
+			query:      "analytics",
+			handler:    notImplemented,
+		},
+		{
+			name:       notImplementedOperation,
+			metric:     "notimplemented",
+			method:     http.MethodGet,
+			bucketPath: true,
+			query:      "inventory",
+			handler:    notImplemented,
+		},
+		{
+			name:       notImplementedOperation,
+			metric:     "notimplemented",
+			method:     http.MethodGet,
+			bucketPath: true,
+			query:      "metrics",
+			handler:    notImplemented,
+		},
+		{
+			name:       notImplementedOperation,
+			metric:     "notimplemented",
+			method:     http.MethodGet,
+			bucketPath: true,
+			query:      "intelligent-tiering",
+			handler:    notImplemented,
+		},
+		{
 			name:       "ListObjectsV1",
 			metric:     "listobjectsv1",
 			method:     http.MethodGet,
@@ -546,6 +588,7 @@ var (
 			metric:     "createbucket",
 			method:     http.MethodPut,
 			bucketPath: true,
+			strict:     true,
 			handler:    Handler.CreateBucketHandler,
 		},
 		{
@@ -602,8 +645,21 @@ var (
 			metric:     "deletebucket",
 			method:     http.MethodDelete,
 			bucketPath: true,
+			strict:     true,
 			handler:    Handler.DeleteBucketHandler,
 		},
+	}
+
+	// commonQueryParams are the query parameters any operation may carry: the ones
+	// of a presigned URL and the operation name SDKs add.
+	commonQueryParams = []string{
+		auth.AmzAlgorithm,
+		auth.AmzCredential,
+		auth.AmzDate,
+		auth.AmzExpires,
+		auth.AmzSignedHeaders,
+		auth.AmzSignature,
+		"x-id",
 	}
 )
 
@@ -638,6 +694,17 @@ func (op *operation) matches(q url.Values, hdr http.Header) bool {
 	return true
 }
 
+// hasUnknownQuery reports a query parameter besides the common ones.
+func hasUnknownQuery(q url.Values) bool {
+	for key := range q {
+		if !slices.Contains(commonQueryParams, key) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // isUploadPart reports a numeric partNumber together with an uploadId.
 func isUploadPart(q url.Values) bool {
 	vals, ok := q["partNumber"]
@@ -665,6 +732,10 @@ func resolveOperation(r *http.Request, hasObject bool) (name string, bucketOp bo
 		}
 
 		if op.matches(query, r.Header) {
+			if op.strict && hasUnknownQuery(query) {
+				return notImplementedOperation, false
+			}
+
 			return op.name, hasObject && op.bucketPath
 		}
 	}
