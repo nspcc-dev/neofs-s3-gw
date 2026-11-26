@@ -270,13 +270,42 @@ func (n *layer) getTagsByOID(ctx context.Context, bktInfo *data.BucketInfo, id o
 }
 
 func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error {
+	var hasInlineTags bool
+
+	// Tag objects of the null version are associated with its literal name.
+	if p.VersionID != data.UnversionedObjectVersionID {
+		var id oid.ID
+		if err := id.DecodeString(p.VersionID); err != nil {
+			return s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+		}
+
+		header, err := n.objectHead(ctx, p.BktInfo, id)
+		if err != nil {
+			if IsErrObjectGone(err) {
+				return s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+
+			return fmt.Errorf("get object head: %w", err)
+		}
+
+		if filepathFromObject(header) != p.ObjectName {
+			return s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+		}
+
+		for _, attr := range header.Attributes() {
+			if attr.Key() == s3headers.MetaType {
+				return s3errors.GetAPIError(s3errors.ErrNoSuchVersion)
+			}
+
+			if strings.HasPrefix(attr.Key(), s3headers.NeoFSSystemMetadataTagPrefix) {
+				hasInlineTags = true
+			}
+		}
+	}
+
 	tagIDs, err := n.searchTagObjects(ctx, p)
 	if err != nil {
 		return err
-	}
-
-	if len(tagIDs) == 0 {
-		return nil
 	}
 
 	for i := range tagIDs {
@@ -285,16 +314,18 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 		}
 	}
 
+	if hasInlineTags {
+		// An empty tag object overrides the tags stored in the object itself.
+		return n.PutObjectTagging(ctx, &PutObjectTaggingParams{
+			ObjectVersion: p,
+			TagSet:        make(map[string]string),
+		})
+	}
+
 	n.cache.DeleteTagging(objectTaggingCacheKey(p))
 	n.cache.DeleteObjectName(p.BktInfo.CID, p.ObjectName)
 
-	// Put an empty tag list to override tags inside the object itself.
-	putObjectTaggingParams := PutObjectTaggingParams{
-		ObjectVersion: p,
-		TagSet:        make(map[string]string),
-	}
-
-	return n.PutObjectTagging(ctx, &putObjectTaggingParams)
+	return nil
 }
 
 // searchTagObjects returns IDs of tag meta objects stored for the given object version.
