@@ -169,6 +169,11 @@ func (h *handler) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err = checkUnsupportedSSEHeaders(r.Header); err != nil {
+		h.logAndSendError(w, "unsupported sse headers", reqInfo, err)
+		return
+	}
+
 	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)

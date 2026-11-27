@@ -6,7 +6,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strconv"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/api/layer"
+	"github.com/nspcc-dev/neofs-s3-gw/api/s3errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -295,5 +298,73 @@ func setEncryptHeaders(r *http.Request) {
 func setHeaders(r *http.Request, header map[string]string) {
 	for key, val := range header {
 		r.Header.Set(key, val)
+	}
+}
+
+func TestUnsupportedSSE(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-unsupported-sse", "object"
+	bktInfo := createTestBucket(hc, bktName)
+	putObjectContent(hc, bktName, "source", "content")
+
+	notImplemented := s3errors.GetAPIError(s3errors.ErrNotImplemented)
+	assertNotStored := func(t *testing.T) {
+		_, err := hc.Layer().GetObjectInfo(hc.Context(), &layer.HeadObjectParams{BktInfo: bktInfo, Object: objName})
+		require.Error(t, err)
+	}
+
+	for _, headers := range []map[string]string{
+		{api.AmzServerSideEncryption: "AES256"},
+		{api.AmzServerSideEncryption: "aws:kms", api.AmzServerSideEncryptionAwsKmsKeyID: "alias/key"},
+		{api.AmzServerSideEncryptionAwsKmsKeyID: "alias/key"},
+		{api.AmzServerSideEncryptionContext: "e30="},
+		{api.AmzServerSideEncryptionBucketKeyEnabled: "true"},
+	} {
+		t.Run(fmt.Sprint(headers), func(t *testing.T) {
+			t.Run("put", func(t *testing.T) {
+				w, r := prepareTestPayloadRequest(hc, bktName, objName, bytes.NewReader([]byte("content")))
+				setHeaders(r, headers)
+				hc.Handler().PutObjectHandler(w, r)
+				assertS3Error(t, w, notImplemented)
+				assertNotStored(t)
+			})
+
+			t.Run("copy", func(t *testing.T) {
+				w, r := prepareTestRequest(hc, bktName, objName, nil)
+				r.Header.Set(api.AmzCopySource, bktName+"/source")
+				setHeaders(r, headers)
+				hc.Handler().CopyObjectHandler(w, r)
+				assertS3Error(t, w, notImplemented)
+				assertNotStored(t)
+			})
+
+			t.Run("create multipart upload", func(t *testing.T) {
+				w, r := prepareTestRequest(hc, bktName, objName, nil)
+				setHeaders(r, headers)
+				hc.Handler().CreateMultipartUploadHandler(w, r)
+				assertS3Error(t, w, notImplemented)
+			})
+
+			t.Run("post", func(t *testing.T) {
+				form := map[string][]string{
+					"key":  {objName},
+					"file": {"content"},
+				}
+				for key, val := range headers {
+					form[strings.ToLower(key)] = []string{val}
+				}
+
+				w := httptest.NewRecorder()
+				r := httptest.NewRequest(http.MethodPost, defaultURL, nil)
+				r.MultipartForm = &multipart.Form{Value: form}
+				reqInfo := api.NewReqInfo(w, r, api.ObjectRequest{Bucket: bktName, Object: objName})
+				r = r.WithContext(api.SetReqInfo(hc.Context(), reqInfo))
+
+				hc.Handler().PostObject(w, r)
+				assertS3Error(t, w, notImplemented)
+				assertNotStored(t)
+			})
+		})
 	}
 }

@@ -228,6 +228,8 @@ Requires a separate entity to generate/upload data daily.
 ## Encryption
 
 Methods below are related to AWS SSE-S3 and SSE-KMS encryption. S3 gateway supports SSE-C only for now.
+Object uploads requesting SSE-S3 or SSE-KMS (`x-amz-server-side-encryption` and the related KMS headers or
+POST form fields) are answered with `501 NotImplemented`.
 
 |    | Method                 | Comments |
 |----|------------------------|----------|
