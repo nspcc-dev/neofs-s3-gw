@@ -309,7 +309,12 @@ func (n *layer) DeleteObjectTagging(ctx context.Context, p *ObjectVersion) error
 	}
 
 	for i := range tagIDs {
-		if err = n.objectDelete(ctx, p.BktInfo, tagIDs[i]); err != nil {
+		// The tag object may be removed by a concurrent request.
+		if err = n.objectDelete(ctx, p.BktInfo, tagIDs[i]); err != nil && !errors.Is(err, apistatus.ErrObjectAlreadyRemoved) {
+			// The previous tag objects are removed already.
+			n.cache.DeleteTagging(objectTaggingCacheKey(p))
+			n.cache.DeleteObjectName(p.BktInfo.CID, p.ObjectName)
+
 			return fmt.Errorf("couldn't delete object: %w", err)
 		}
 	}
