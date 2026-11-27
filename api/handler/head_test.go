@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neofs-s3-gw/api"
 	"github.com/nspcc-dev/neofs-s3-gw/creds/accessbox"
+	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
@@ -101,4 +103,22 @@ func newTestAccessBox(t *testing.T, key *keys.PrivateKey) *accessbox.Box {
 			SessionTokenV2: newTestSessionTokenV2(t, signer),
 		},
 	}
+}
+
+func TestHeadObjectWithOnlyTagObjects(t *testing.T) {
+	hc := prepareHandlerContext(t)
+
+	bktName, objName := "bucket-only-tags", "object"
+	createTestBucket(hc, bktName)
+
+	// Tagging of an explicit version does not check that it exists.
+	query := make(url.Values)
+	query.Add(api.QueryVersionID, oidtest.ID().EncodeToString())
+	w, r := prepareTestFullRequest(hc, bktName, objName, query, &Tagging{TagSet: []Tag{{Key: "k", Value: "v"}}})
+	hc.Handler().PutObjectTaggingHandler(w, r)
+	assertStatus(t, w, http.StatusOK)
+
+	w, r = prepareTestRequest(hc, bktName, objName, nil)
+	hc.Handler().HeadObjectHandler(w, r)
+	assertStatus(t, w, http.StatusNotFound)
 }

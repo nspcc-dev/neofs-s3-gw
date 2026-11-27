@@ -245,7 +245,7 @@ func (h *handler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// There are no tags in separate objects. Try to get tags from the object headers.
-	if len(comprehensiveObjectInfo.TagSet) == 0 {
+	if !comprehensiveObjectInfo.HasTagObject {
 		for k, v := range info.Headers {
 			if after, ok := strings.CutPrefix(k, s3headers.NeoFSSystemMetadataTagPrefix); ok {
 				comprehensiveObjectInfo.TagSet[after] = s3headers.DecodeTagValue(v)

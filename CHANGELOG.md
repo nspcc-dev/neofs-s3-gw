@@ -12,6 +12,8 @@ This document outlines major changes between releases.
 - Bucket policy `Allow` for `s3:*` or `*` grants all operations instead of being ignored (#1413)
 
 ### Fixed
+- `DeleteObjectTagging` not removing tags set by `PutObject` (#1429)
+- `x-amz-tagging-count` counting tags set by `PutObject` after they were removed (#1429)
 - `GetObject` and `HeadObject` returning a tag object after several `PutObjectTagging` calls (#1418)
 - `SignatureDoesNotMatch` for requests signing a zero `Content-Length` or `User-Agent` (#1400)
 - `SignatureDoesNotMatch` for presigned URLs signing headers besides `Host` (#1400)

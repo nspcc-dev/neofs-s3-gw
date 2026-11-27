@@ -725,19 +725,22 @@ func (n *layer) comprehensiveSearchAllVersionsInNeoFS(ctx context.Context, bkt *
 		searchResults = append(searchResults, psr)
 	}
 
+	// Only tag and lock objects are left of the removed object.
+	if len(searchResults) == 0 {
+		return nil, oid.ID{}, nil, ErrNodeNotFound
+	}
+
 	slices.SortFunc(searchResults, sortFunc)
 
-	if len(searchResults) > 0 {
-		var firstID = searchResults[0].ID.EncodeToString()
-		var lockVersions []locksSearchResult
+	var firstID = searchResults[0].ID.EncodeToString()
+	var lockVersions []locksSearchResult
 
-		// Tags and locks are always stored with AssociatedObject = OID string, regardless of versioning.
-		tagsObjectOID = tagsByVersion[firstID]
-		lockVersions = locksByVersions[firstID]
+	// Tags and locks are always stored with AssociatedObject = OID string, regardless of versioning.
+	tagsObjectOID = tagsByVersion[firstID]
+	lockVersions = locksByVersions[firstID]
 
-		slices.SortFunc(lockVersions, locksSearchResultsSortFunc)
-		lockInfo = extractLockInfoFromSearch(lockVersions)
-	}
+	slices.SortFunc(lockVersions, locksSearchResultsSortFunc)
+	lockInfo = extractLockInfoFromSearch(lockVersions)
 
 	return searchResults, tagsObjectOID.ID, lockInfo, nil
 }
