@@ -46,6 +46,15 @@ type (
 	}
 )
 
+var (
+	unsupportedSSEHeaders = []string{
+		api.AmzServerSideEncryption,
+		api.AmzServerSideEncryptionAwsKmsKeyID,
+		api.AmzServerSideEncryptionContext,
+		api.AmzServerSideEncryptionBucketKeyEnabled,
+	}
+)
+
 func (p *postPolicy) CheckContentLength(size int64) bool {
 	if p.empty {
 		return true
@@ -311,6 +320,11 @@ func (h *handler) putObjectAttempt(w http.ResponseWriter, r *http.Request, attem
 	}
 	copyStandardHeaders(metadata, r.Header)
 
+	if err = checkUnsupportedSSEHeaders(r.Header); err != nil {
+		h.logAndSendError(w, "unsupported sse headers", reqInfo, err)
+		return nil, nil, false
+	}
+
 	encryptionParams, err := formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)
@@ -495,6 +509,26 @@ func (m *md5Reader) WriteTo(w io.Writer) (int64, error) {
 	return n, nil
 }
 
+func checkUnsupportedSSEHeaders(header http.Header) error {
+	for _, name := range unsupportedSSEHeaders {
+		if header.Get(name) != "" {
+			return fmt.Errorf("%s: %w", name, s3errors.GetAPIError(s3errors.ErrNotImplemented))
+		}
+	}
+
+	return nil
+}
+
+func checkUnsupportedSSEForm(r *http.Request) error {
+	for _, name := range unsupportedSSEHeaders {
+		if auth.MultipartFormValue(r, strings.ToLower(name)) != "" {
+			return fmt.Errorf("%s: %w", name, s3errors.GetAPIError(s3errors.ErrNotImplemented))
+		}
+	}
+
+	return nil
+}
+
 func formEncryptionParams(r *http.Request) (enc encryption.Params, err error) {
 	sseCustomerAlgorithm := r.Header.Get(api.AmzServerSideEncryptionCustomerAlgorithm)
 	sseCustomerKey := r.Header.Get(api.AmzServerSideEncryptionCustomerKey)
@@ -549,6 +583,11 @@ func (h *handler) PostObject(w http.ResponseWriter, r *http.Request) {
 	policy, err := checkPostPolicy(r, reqInfo, metadata)
 	if err != nil {
 		h.logAndSendError(w, "failed check policy", reqInfo, err)
+		return
+	}
+
+	if err = checkUnsupportedSSEForm(r); err != nil {
+		h.logAndSendError(w, "unsupported sse form fields", reqInfo, err)
 		return
 	}
 

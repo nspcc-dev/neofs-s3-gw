@@ -52,6 +52,10 @@ const (
 	AmzMaxParts                  = "X-Amz-Max-Parts"
 	AmzPartNumberMarker          = "X-Amz-Part-Number-Marker"
 
+	AmzServerSideEncryption                  = "X-Amz-Server-Side-Encryption"
+	AmzServerSideEncryptionAwsKmsKeyID       = "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"
+	AmzServerSideEncryptionContext           = "X-Amz-Server-Side-Encryption-Context"
+	AmzServerSideEncryptionBucketKeyEnabled  = "X-Amz-Server-Side-Encryption-Bucket-Key-Enabled"
 	AmzServerSideEncryptionCustomerAlgorithm = "x-amz-server-side-encryption-customer-algorithm"
 	AmzServerSideEncryptionCustomerKey       = "x-amz-server-side-encryption-customer-key"
 	AmzServerSideEncryptionCustomerKeyMD5    = "x-amz-server-side-encryption-customer-key-MD5"

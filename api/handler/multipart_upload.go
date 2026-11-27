@@ -137,6 +137,11 @@ func (h *handler) CreateMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	if err = checkUnsupportedSSEHeaders(r.Header); err != nil {
+		h.logAndSendError(w, "unsupported sse headers", reqInfo, err, additional...)
+		return
+	}
+
 	p.Info.Encryption, err = formEncryptionParams(r)
 	if err != nil {
 		h.logAndSendError(w, "invalid sse headers", reqInfo, err)

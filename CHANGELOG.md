@@ -10,6 +10,7 @@ This document outlines major changes between releases.
 ### Changed
 - Presigned URLs dated up to 15 minutes ahead of the gateway clock are accepted (#1409)
 - Bucket policy `Allow` for `s3:*` or `*` grants all operations instead of being ignored (#1413)
+- SSE-S3 and SSE-KMS requests are answered with 501 instead of storing the object unencrypted (#1431)
 
 ### Fixed
 - `GetObject` and `HeadObject` returning a tag object after several `PutObjectTagging` calls (#1418)
